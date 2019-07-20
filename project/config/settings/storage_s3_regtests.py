@@ -54,3 +54,5 @@ MEDIA_URL = 'https://{domain}/{subdir}/'.format(
 # django-storages setting
 # S3 bucket subdirectory in which to store media.
 AWS_LOCATION = AWS_S3_MEDIA_SUBDIR
+
+ALLOWED_HOSTS = ['testserver', '127.0.0.1']

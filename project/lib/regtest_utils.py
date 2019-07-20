@@ -9,8 +9,6 @@ import os.path as osp
 
 from io import BytesIO
 
-from PIL import Image as PILImage
-
 from django.core import management
 from django.core.files.base import ContentFile
 from django.core.urlresolvers import reverse
@@ -21,42 +19,39 @@ from django.contrib.auth import get_user_model
 
 from test_utils import ClientTest
 
-from images.models import Source, Image
+from images.models import Source
 from labels.models import LabelGroup, Label, LabelSet, LocalLabel
 from lib.utils import direct_s3_read
 
 
-
-class RegressionTest(ClientTest):
+class VisionBackendRegressionTest(ClientTest):
     """
-    Managment class for vision backend regression tests.
+    Management class for vision backend regression tests.
     This class relies on a specific regression test fixture layout.
     """
-    
+
     def __init__(self, source_id, name_suffix):
-        """
-        Initialize class instance.
-        """
 
         self.client = Client()
         # Create a superuser.
-        User = get_user_model()
-        if not User.objects.filter(username='superuser').exists():
-            management.call_command('createsuperuser',
+        user = get_user_model()
+        if not user.objects.filter(username='superuser').exists():
+            management.call_command(
+                'createsuperuser',
                 '--noinput', username='superuser',
                 email='superuser@example.com', verbosity=0)
-        self.user = User.objects.get(username='superuser')
+        self.user = user.objects.get(username='superuser')
 
         # Create other users.
         for username in [settings.IMPORTED_USERNAME, settings.ROBOT_USERNAME, settings.ALLEVIATE_USERNAME]:
-            if not User.objects.filter(username = username).exists():
-                user = User(username=username)
+            if not user.objects.filter(username=username).exists():
+                user = user(username=username)
                 user.save()
         
         # Setup path to source_id fixtures.
-        self.annfile = 'sources/s{}/imdict.p'.format(source_id)
-        self.imdir = 'sources/s{}/imgs/'.format(source_id)
-        self.sourcename = 'REGTEST_CUSTOM_SOURCE_{}_{}'.format(source_id, name_suffix)
+        self.ann_file = 'sources/s{}/imdict.p'.format(source_id)
+        self.im_dir = 'sources/s{}/imgs/'.format(source_id)
+        self.source_name = 'REGTEST_CUSTOM_SOURCE_{}_{}'.format(source_id, name_suffix)
         self.global_labelfile = 'labels.json'
 
         # List images.
@@ -65,33 +60,33 @@ class RegressionTest(ClientTest):
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
         )
         bucket = conn.get_bucket(settings.REGTEST_BUCKET)
-        imfiles = bucket.list(prefix = self.imdir)
-        self.imfiles = [member.name for member in imfiles][1:] #starting from 1 to skip root folder.
+        imfiles = bucket.list(prefix=self.im_dir)
+        self.imfiles = [member.name for member in imfiles][1:]  # Starting from 1 to skip root folder.
 
-        # Create source and labelset.
+        # Create source and label-set.
         self._setup_source()
 
-        # Load annotations to memory and prepre for upload.
+        # Load annotations to memory and prepare for upload.
         self._make_labelcode_dict()
         self._parse_annotations()
 
         # Initialize the image counter of how many images have been uploaded.
         self.cur = 0
     
-    def upload_all_images(self, with_anns = True):
+    def upload_all_images(self, with_anns=True):
         """
         Upload all images available in fixtures.
         """
-        self.upload_images(len(self.imfiles), with_anns = with_anns)
+        self.upload_images(len(self.imfiles), with_anns=with_anns)
 
-    def upload_images(self, nbr, with_anns = True):
+    def upload_images(self, nbr, with_anns=True):
         """
         Upload INPUT nbr images.
         """
         for i in range(nbr):
-            self.upload_image(with_anns = with_anns)
+            self.upload_one_image(with_anns=with_anns)
 
-    def upload_image(self, with_anns = True):
+    def upload_one_image(self, with_anns=True):
         """
         Upload an image.
         """
@@ -114,18 +109,18 @@ class RegressionTest(ClientTest):
         """
         Creates source and labelset. Also creates global labels if needed.
         """
-        print "Setting up: {}".format(self.sourcename)
-        if Source.objects.filter(name = self.sourcename).exists():
-            Source.objects.filter(name = self.sourcename).delete()
+        print "Setting up: {}".format(self.source_name)
+        if Source.objects.filter(name=self.source_name).exists():
+            Source.objects.filter(name=self.source_name).delete()
         
         # Create new source.
         self.source = self.create_source()
         
         # Find all labelnames in exported annotation file.
-        anns = direct_s3_read(self.annfile, 'pickle', bucketname = settings.REGTEST_BUCKET)
+        anns = direct_s3_read(self.ann_file, 'pickle', bucketname=settings.REGTEST_BUCKET)
         labellist = set()
         for key in anns.keys():
-            for [labelname, row, col] in anns[key][0]:
+            for [labelname, _, _] in anns[key][0]:
                 labellist.add(labelname)
 
         # Create global labels if needed                
@@ -137,27 +132,25 @@ class RegressionTest(ClientTest):
         self.source.labelset = labelset
         self.source.save()
         for name in labellist:
-            label = Label.objects.get(name = name)
+            label = Label.objects.get(name=name)
             LocalLabel(
-                global_label = label,
-                code = label.default_code,
-                labelset = labelset
+                global_label=label,
+                code=label.default_code,
+                labelset=labelset
             ).save()   
 
     def create_source(self):
         """
-        Create a source.
-        :param user: User who is creating this source.
-        :param name: Source name. "Source <number>" if not given.
+        Creates a source.
         """
         post_dict = dict()
         post_dict.update(self.source_defaults)
-        post_dict['name'] = self.sourcename
+        post_dict['name'] = self.source_name
 
         self.client.force_login(self.user)
         self.client.post(reverse('source_new'), post_dict)
         self.client.logout()
-        return Source.objects.get(name = self.sourcename)
+        return Source.objects.get(name=self.source_name)
 
     def _make_labelcode_dict(self):
         """
@@ -165,7 +158,7 @@ class RegressionTest(ClientTest):
         This is needed b/c the upload form needs codes but the fixtures lists
         label names.
         """
-        (_, lbls) = direct_s3_read(self.global_labelfile, 'json', bucketname = settings.REGTEST_BUCKET)
+        (_, lbls) = direct_s3_read(self.global_labelfile, 'json', bucketname=settings.REGTEST_BUCKET)
 
         codedict = dict()
         for lbl in lbls:
@@ -178,15 +171,15 @@ class RegressionTest(ClientTest):
         """
         Parses exported annotation file and returns a dictionary ready to be uploaded.
         """
-        anns = direct_s3_read(self.annfile, 'pickle', bucketname = settings.REGTEST_BUCKET)
-        newanns = dict()
-        for imname in anns.keys():
-            newanns[imname] = []
-            for [labelname, row, col] in anns[imname][0]:
+        anns = direct_s3_read(self.ann_file, 'pickle', bucketname=settings.REGTEST_BUCKET)
+        new_anns = dict()
+        for im_name in anns.keys():
+            new_anns[im_name] = []
+            for [labelname, row, col] in anns[im_name][0]:
                 labelcode = self.codedict[labelname]
-                newanns[imname].append((row, col, labelcode))
+                new_anns[im_name].append((row, col, labelcode))
         
-        self.anns = newanns
+        self.anns = new_anns
 
     def _add_global_labels(self, labellist):
         """
@@ -194,7 +187,7 @@ class RegressionTest(ClientTest):
         "vision_backend/scripts.export_labels_json".
         """
         
-        (grps, lbls) = direct_s3_read(self.global_labelfile, 'json', bucketname = settings.REGTEST_BUCKET)
+        (grps, lbls) = direct_s3_read(self.global_labelfile, 'json', bucketname=settings.REGTEST_BUCKET)
 
         for grp in grps:
             self._add_functional_group(grp[0], grp[1])
@@ -203,30 +196,32 @@ class RegressionTest(ClientTest):
             if lbl[0] in labellist:
                 self._add_label(lbl[0], lbl[1], lbl[2])     
 
-    def _add_functional_group(self, name, code):
+    @staticmethod
+    def _add_functional_group(name, code):
         """
         Adds functional group to DB.
         """
-        if LabelGroup.objects.filter(name = name).count() > 0:
+        if LabelGroup.objects.filter(name=name).count() > 0:
             return
         LabelGroup(
-            name = name,
-            code = code
+            name=name,
+            code=code
         ).save()
-        
-    def _add_label(self, name, code, group):
+
+    @staticmethod
+    def _add_label(name, code, group):
         """
         Adds label to DB.
         """
-        if Label.objects.filter(name = name).count() > 0:
+        if Label.objects.filter(name=name).count() > 0:
             return
         Label(
-            name = name,
-            default_code = code,
-            group = LabelGroup.objects.get(name = group)
+            name=name,
+            default_code=code,
+            group=LabelGroup.objects.get(name=group)
         ).save()
 
-    def _upload_annotations(self, imfile, anns):
+    def _upload_annotations(self, im_file, anns):
         """
         Annotations on all specified points.
         """
@@ -248,30 +243,27 @@ class RegressionTest(ClientTest):
             writer = csv.writer(stream)
             writer.writerow(['Name', 'Row', 'Column', 'Label'])
             for ann in anns:
-                writer.writerow([imfile, ann[0], ann[1], ann[2]])
+                writer.writerow([im_file, ann[0], ann[1], ann[2]])
             
             f = ContentFile(stream.getvalue(), name='ann_upload' + '.csv')
-            preview_response = preview_anns(f)
-            upload_response = upload_anns()
+            _ = preview_anns(f)
+            _ = upload_anns()
 
-    def _upload_image(self, imfile):
+    def _upload_image(self, im_file):
         """
         Upload a data image.
-        :param user: User to upload as.
-        :param source: Source to upload to.
-        :param imfile: path to the image file to upload.
+        :param im_file: path to the image file to upload.
         :return: The new image object.
         """
         post_dict = dict()        
-        post_dict['file'] = ContentFile(direct_s3_read(imfile, 'none', bucketname = settings.REGTEST_BUCKET), name=imfile)
+        post_dict['file'] = ContentFile(direct_s3_read(im_file, 'none', bucketname=settings.REGTEST_BUCKET),
+                                        name=im_file)
         post_dict['name'] = post_dict['file'].name
 
         # Send the upload form
         self.client.force_login(self.user)
-        response = self.client.post(
+        _ = self.client.post(
             reverse('upload_images_ajax', kwargs={'source_id': self.source.id}),
             post_dict,
         )
         self.client.logout()
-
-    
