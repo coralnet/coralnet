@@ -298,7 +298,8 @@ class GoogleAnalyticsTest(ClientTest):
         del settings.GOOGLE_ANALYTICS_CODE
         response = self.client.get(reverse('about'))
         self.assertContains(response, "Goggle Analytics not included because you haven't set the settings.GOOGLE_ANALYTICS_CODE variable!")
-    
+
+    @skipIf(settings.GOOGLE_ANALYTICS_CODE=='', reason='Without the code, we get the "havent set the code error"')
     @override_settings(DEBUG=True)
     def test_debug(self):
         """
@@ -307,6 +308,7 @@ class GoogleAnalyticsTest(ClientTest):
         response = self.client.get(reverse('about'))
         self.assertContains(response, 'Goggle Analytics not included because you are in Debug mode!')
 
+    @skipIf(settings.GOOGLE_ANALYTICS_CODE == '', reason='Without the code, we get the "havent set the code error"')
     def test_staffuser(self):
         """
         Do not inlude google analytics if in superuser mode.
