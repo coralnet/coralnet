@@ -1,6 +1,3 @@
-import pickle
-import json
-import glob
 import csv
 import sys
 import boto
@@ -34,18 +31,18 @@ class VisionBackendRegressionTest(ClientTest):
 
         self.client = Client()
         # Create a superuser.
-        user = get_user_model()
-        if not user.objects.filter(username='superuser').exists():
+        User = get_user_model()
+        if not User.objects.filter(username='superuser').exists():
             management.call_command(
                 'createsuperuser',
                 '--noinput', username='superuser',
                 email='superuser@example.com', verbosity=0)
-        self.user = user.objects.get(username='superuser')
+        self.user = User.objects.get(username='superuser')
 
         # Create other users.
         for username in [settings.IMPORTED_USERNAME, settings.ROBOT_USERNAME, settings.ALLEVIATE_USERNAME]:
-            if not user.objects.filter(username=username).exists():
-                user = user(username=username)
+            if not User.objects.filter(username=username).exists():
+                user = User(username=username)
                 user.save()
         
         # Setup path to source_id fixtures.
@@ -84,9 +81,9 @@ class VisionBackendRegressionTest(ClientTest):
         Upload INPUT nbr images.
         """
         for i in range(nbr):
-            self.upload_one_image(with_anns=with_anns)
+            self.upload_image(with_anns=with_anns)
 
-    def upload_one_image(self, with_anns=True):
+    def upload_image(self, with_anns=True):
         """
         Upload an image.
         """
@@ -246,8 +243,10 @@ class VisionBackendRegressionTest(ClientTest):
                 writer.writerow([im_file, ann[0], ann[1], ann[2]])
             
             f = ContentFile(stream.getvalue(), name='ann_upload' + '.csv')
-            _ = preview_anns(f)
-            _ = upload_anns()
+            preview_response = preview_anns(f)
+            upload_response = upload_anns()
+
+        self.client.logout()
 
     def _upload_image(self, im_file):
         """
@@ -262,7 +261,7 @@ class VisionBackendRegressionTest(ClientTest):
 
         # Send the upload form
         self.client.force_login(self.user)
-        _ = self.client.post(
+        reponse = self.client.post(
             reverse('upload_images_ajax', kwargs={'source_id': self.source.id}),
             post_dict,
         )
