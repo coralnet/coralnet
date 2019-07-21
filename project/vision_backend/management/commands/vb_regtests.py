@@ -11,7 +11,6 @@ class Command(BaseCommand):
                             help='Chose size: Small ~ 50 images; medium ~ 400 images; large ~ 1600 images')
 
     def handle(self, *args, **options):
-        raise NotImplementedError("The with_anns flag doesn't work currently. All images are uploaded without anns.")
         scope = options['scope']
         if scope == 'small':
             # Only use a small fraction of each source

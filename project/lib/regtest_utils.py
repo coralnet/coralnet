@@ -257,7 +257,7 @@ class VisionBackendRegressionTest(ClientTest):
         post_dict = dict()        
         post_dict['file'] = ContentFile(direct_s3_read(im_file, 'none', bucketname=settings.REGTEST_BUCKET),
                                         name=im_file)
-        post_dict['name'] = post_dict['file'].name
+        post_dict['name'] = osp.basename(im_file)
 
         # Send the upload form
         self.client.force_login(self.user)
