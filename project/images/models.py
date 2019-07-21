@@ -395,7 +395,7 @@ class Source(models.Model):
         imnames = [i.metadata.name for i in Image.objects.filter(source=self)] 
         return list(set([name for name in imnames if imnames.count(name) > 1]))
 
-    def as_dict(self):
+    def to_dict(self):
         field_names = ['name', 'longitude', 'latitude', 'create_date', 'nbr_confirmed_images',
                        'nbr_images', 'description', 'affiliation', 'nbr_valid_robots']
         return {field: str(getattr(self, field)) for field in field_names}

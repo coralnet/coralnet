@@ -30,7 +30,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def source_meta_json(source):
-        return json.dumps(source.as_dict(), indent=2)
+        return json.dumps(source.to_dict(), indent=2)
 
     @staticmethod
     def image_meta_json(metadata):
