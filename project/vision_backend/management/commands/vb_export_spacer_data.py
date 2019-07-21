@@ -89,3 +89,4 @@ class Command(BaseCommand):
                 if image.features.extracted:
                     features_path = settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path=image_path)
                     bucket.copy_key(image_prefix + '.features.json', settings.AWS_STORAGE_BUCKET_NAME, features_path)
+
