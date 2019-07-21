@@ -286,6 +286,19 @@ class Source(models.Model):
     def get_all_images(self):
         return Image.objects.filter(source=self)
 
+    @property
+    def nbr_confirmed_images(self):
+        qs = self.get_all_images()
+        return qs.exclude(confirmed=False).count()
+
+    @property
+    def nbr_images(self):
+        return self.get_all_images().count()
+
+    @property
+    def nbr_valid_robots(self):
+        return len(self.get_valid_robots())
+
     def image_annotation_area_display(self):
         """
         Display the annotation-area parameters in templates.
@@ -382,6 +395,11 @@ class Source(models.Model):
         imnames = [i.metadata.name for i in Image.objects.filter(source=self)] 
         return list(set([name for name in imnames if imnames.count(name) > 1]))
 
+    def as_dict(self):
+        field_names = ['name', 'longitude', 'latitude', 'create_date', 'nbr_confirmed_images',
+                       'nbr_images', 'description', 'affiliation', 'nbr_valid_robots']
+        return {field: str(getattr(self, field)) for field in field_names}
+
     def __unicode__(self):
         """
         To-string method.
@@ -477,6 +495,9 @@ class Metadata(models.Model):
 
     def __unicode__(self):
         return "Metadata of " + self.name
+
+    def to_dict(self):
+        return {field: str(getattr(self, field)) for field in self.EDIT_FORM_FIELDS}
 
 
 def get_original_image_upload_path(instance, filename):

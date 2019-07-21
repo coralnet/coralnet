@@ -512,3 +512,5 @@ SELENIUM_TIMEOUTS = {
     # get an error.
     'page_load': 20,
 }
+
+SKIP_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check']

@@ -53,7 +53,7 @@ def submit_features(image_id, force=False):
     payload = {
         'bucketname': settings.AWS_STORAGE_BUCKET_NAME,
         'imkey': full_image_path,
-        'outputkey': settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path = full_image_path),
+        'outputkey': settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path=full_image_path),
         'modelname': 'vgg16_coralnet_ver1',
         'rowcols': rowcols,
         'pk': image_id

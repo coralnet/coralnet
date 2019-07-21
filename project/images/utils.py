@@ -4,7 +4,6 @@ import math
 import random
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.urlresolvers import reverse
 from django.db.models import Count
 
@@ -14,8 +13,6 @@ from annotations.models import Annotation
 from vision_backend.models import Features, Classifier
 from .model_utils import PointGen
 from .models import Source, Point, Image, Metadata
-
-
 
 
 def get_next_image(current_image, image_queryset, ordering, wrap=False):
@@ -385,8 +382,9 @@ def source_robot_status(source_id):
 
 
 def filter_out_test_sources(source_queryset):
-    return source_queryset.exclude(
-        name__icontains=['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check'])
+    for possible_test_substring in settings.SKIP_SOURCE_NAMES:
+        source_queryset = source_queryset.exclude(name__icontains=possible_test_substring)
+    return source_queryset
 
 
 def get_map_sources():
