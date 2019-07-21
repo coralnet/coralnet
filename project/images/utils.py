@@ -382,7 +382,7 @@ def source_robot_status(source_id):
 
 
 def filter_out_test_sources(source_queryset):
-    for possible_test_substring in settings.SKIP_SOURCE_NAMES:
+    for possible_test_substring in settings.LIKELY_TEST_SOURCE_NAMES:
         source_queryset = source_queryset.exclude(name__icontains=possible_test_substring)
     return source_queryset
 

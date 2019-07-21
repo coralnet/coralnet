@@ -513,4 +513,5 @@ SELENIUM_TIMEOUTS = {
     'page_load': 20,
 }
 
-SKIP_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check']
+# We filter on sources that contains these strings for map and some exports.
+LIKELY_TEST_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check']
