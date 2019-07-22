@@ -14,7 +14,7 @@
     
     <p class="abstract">
         CoralNet is a repository and a resource for benthic images analysis.
-        The site deploys deep neural network to allow fully- and semi- automated annotation of image data.
+        The site deploys deep neural networks which allow fully and semi automated annotation of images.
         It also serves as a repository and collaboration platform.
         CoralNet is free to use thanks to generous support from NSF and NOAA.
     </p>
@@ -32,42 +32,69 @@
     <h4>Introduction</h4>
     <p>
         A catastrophic decline of biodiversity and coral cover is occuring at coral reefs across the world.
-        To monitor the changes and inform action plans large spatio-temporal surveys are needed. Data
+        To monitor the changes and inform action plans large spatiotemporal surveys are needed. Data
         collection methods are typically sufficient to meet this need but the subsequent image analysis
-        remains slow as manual inspection of each photo is required. This creates a 'manual annotation bottleneck'.
+        remains slow as manual inspection of each photo is required, effectively creating "manual annotation bottleneck".
     </p>
     <p>
-        CoralNet reduces this bottleneck by allowing modern computer vision algorithms to be deployed
+        CoralNet reduces this bottleneck by deploying state of the art computer vision methods
         alongside human experts. Often 50-100% automation can be achieved with minimal reduction in the
-        quality of the final data-product (see <a href="#acknowledgments">acknowledgments</a> for details).
+        quality of the final data-product (see <a href="#acknowledgments">acknowledgments</a> for references).
         CoralNet, by its nature, also provides a platform for collaboration & sharing of data.
     </p>
     <h4>CoralNet Begins</h4>
     <p>
-        CoralNet was founded by Oscar Beijbom, then PhD student at the UCSD computer science department.
-        Oscar was studying computer vision methods for classifying coral reef
-        images and saw an opportunity.
+        The idea of CoralNet was conceived by Oscar Beijbom, then PhD student at the UCSD computer science department.
+        Oscar was studying computer vision methods for classifying coral reef images and saw an opportunity to
+        deploy his research.
         Given sufficient training-data, it would be possible to create an automated annotation system which would allow
         a vast increase in productivity for benthic surveys.
-        Alas, the lack of organized data-sets and standards made collection of the required training-data difficult.
-        So CoralNet was born for the dual purpose of organizing the world's coral reef survey data, and then
-        using that data to create and deploy automated annotation engines.
+        Alas, the lack of organized data-sets and label-set standards made collection of the required training-data difficult.
+        So CoralNet was born for the dual purpose of organizing the world's coral reef survey data, and
+        using that data to create and deploy automated annotation methods.
     </p>
     <h4>CoralNet Alpha</h4>
     <p>
-        The CoralNet Alpha server was developed by then UCSD undergrads Stephen Chan and Devang Sampat along with Oscar.
+        The CoralNet Alpha server was developed by then UCSD undergrads Stephen Chan and Devang Sampat along with
+        Oscar Beijbom. It first came online fall 2011.
         Funding came from NSF through a grant to PIs Greg Mitchell, David Kriegman and Serge Belongie.
         The Alpha server was single desktop computer housed at the UCSD computer science department.
         It was a scrappy effort but it worked!
         CoralNet Alpha deployed a <a href="http://vision.ucsd.edu/sites/default/files/automated_coral_annotation.pdf">
-        research method from Oscar</a> which worked fine, but not on par with human annotators.
+        research method</a> which worked well, but not on par with human annotators.
         At the time, most users did not use the automated annotation engine, but were happy to have access to a free,
         web-based annotation tool.
     </p>
     <h4>CoralNet Beta</h4>
     <p>
-        We made some major changes to CoralNet with our Beta launch in November 2016.
-        Check out the <a href="{% url 'release' %}">release-notes</a> for details.
+        A few years down the road there were over 300.000 images on CoralNet -- more than enough to train the computer
+        vision system Oscar had originally dream of. The state of computer vision technology
+        had also leapfrogged with the discovery of <a href="https://www.nature.com/articles/nature14539">deep learning</a>.
+        We has also out-grown our desktop at UCSD.
+        So stars were aligned, and with funding from NOAA, we decided to release CoralNet Beta in November 2016.
+        The beta launch was a significant efforts and we have provide detailed <a href="{% url 'release' %}">release-notes</a>.
+        The main changes were threefold. 1) The server and database were moved to the cloud to enable continuous growth;
+        2) the site UI and features received a large overhaul; and 3) a much more powerful computer vision backend
+        was deployed. The new backend is also hosted in the cloud and can engage 100 computers in parallel to annotate
+        image on CoralNet. Further the core algorithm was replaced by a much more powerful deep-learning based method.
+        The method was presented at
+        <a href="https://drive.google.com/file/d/1fr73WMMEOmca8QHy4Ejz6dcg4PNW_i6l/view?usp=sharing">ICRS 2016</a> and
+        performs on par with human expert annotators. Interestingly, super-human accuracy was observed when the human
+        experts collaborated with the autonomous system.
+        CoralNet lead developer Stephen Chan lead the software updates for the beta release, while Oscar Beijbom
+        developed the computer vision backend.
+    </p>
+    <h4>CoralNet Gamma</h4>
+    <p>
+        In early 2019 the study by
+        <a href="https://www.frontiersin.org/articles/10.3389/fmars.2019.00222/full">Williams et al.</a> at NOAA
+        conducted a large-scale study and concluded that the automated annotation capacity of CoralNet Beta was
+        strong enough to deploy with full automation on survey imagery. Following these results a second grant
+        was received from NOAA to develop CoralNet Gamma. This work will proceed along two main avenues. First, an API
+        will be developed to allow the deployment of a trained classifier on vast number of images. This, in turn,
+        enables the creation of a repository of trained classifiers from which users can choose from. Second,
+        we will take another look at the core technology behind the computer vision system to see if we can push
+        performance even further.
     </p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
