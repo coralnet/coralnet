@@ -14,17 +14,13 @@
     
     <p class="abstract">
         CoralNet is a repository and a resource for benthic images analysis.
-        The site implements computer vision algorithms which allow fully- and semi- automated annotation.
+        The site deploys deep neural network to allow fully- and semi- automated annotation of image data.
         It also serves as a repository and collaboration platform.
-    </p>
-
-    <p class="abstract">
-        We made some major changes to CoralNet with our Beta launch in November 2016.
-        Check out the <a href="{% url 'release' %}">release-notes</a> for details.
+        CoralNet is free to use thanks to generous support from NSF and NOAA.
     </p>
 
     <ul class="indexlist">
-    <li class="first-item"><a href="#background">background</a></li>
+    <li class="first-item"><a href="#story">story</a></li>
     <li><a href="#site">site</a></li>
     <li><a href="#datapolicy">data policy</a></li>
     <li><a href="#acknowledgments">acknowledgments</a></li>
@@ -32,18 +28,47 @@
     <li><a href="#press">press</a></li>
     </ul>
 
-    <h2 id="background">Background<a class="section-anchor" data-scroll-name="#background"></a></h2>
+    <h2 id="background">Story<a class="section-anchor" data-scroll-name="#story"></a></h2>
+    <h4>Introduction</h4>
     <p>
-        Global and local stressors have caused a rapid decline of coral reefs across the world.
-        To monitor the changes and take appropriate action large spatio-temporal surveys are needed. Data
-        collection speeds are typically sufficient to meet this need but the subsequent image analysis
+        A catastrophic decline of biodiversity and coral cover is occuring at coral reefs across the world.
+        To monitor the changes and inform action plans large spatio-temporal surveys are needed. Data
+        collection methods are typically sufficient to meet this need but the subsequent image analysis
         remains slow as manual inspection of each photo is required. This creates a 'manual annotation bottleneck'.
     </p>
     <p>
         CoralNet reduces this bottleneck by allowing modern computer vision algorithms to be deployed
         alongside human experts. Often 50-100% automation can be achieved with minimal reduction in the
-        quality of the final data-product. CoralNet, by its nature, also provides a platform for collaboration
-        & sharing of data.</p>
+        quality of the final data-product (see <a href="#acknowledgments">acknowledgments</a> for details).
+        CoralNet, by its nature, also provides a platform for collaboration & sharing of data.
+    </p>
+    <h4>CoralNet Begins</h4>
+    <p>
+        CoralNet was founded by Oscar Beijbom, then PhD student at the UCSD computer science department.
+        Oscar was studying computer vision methods for classifying coral reef
+        images and saw an opportunity.
+        Given sufficient training-data, it would be possible to create an automated annotation system which would allow
+        a vast increase in productivity for benthic surveys.
+        Alas, the lack of organized data-sets and standards made collection of the required training-data difficult.
+        So CoralNet was born for the dual purpose of organizing the world's coral reef survey data, and then
+        using that data to create and deploy automated annotation engines.
+    </p>
+    <h4>CoralNet Alpha</h4>
+    <p>
+        The CoralNet Alpha server was developed by then UCSD undergrads Stephen Chan and Devang Sampat along with Oscar.
+        Funding came from NSF through a grant to PIs Greg Mitchell, David Kriegman and Serge Belongie.
+        The Alpha server was single desktop computer housed at the UCSD computer science department.
+        It was a scrappy effort but it worked!
+        CoralNet Alpha deployed a <a href="http://vision.ucsd.edu/sites/default/files/automated_coral_annotation.pdf">
+        research method from Oscar</a> which worked fine, but not on par with human annotators.
+        At the time, most users did not use the automated annotation engine, but were happy to have access to a free,
+        web-based annotation tool.
+    </p>
+    <h4>CoralNet Beta</h4>
+    <p>
+        We made some major changes to CoralNet with our Beta launch in November 2016.
+        Check out the <a href="{% url 'release' %}">release-notes</a> for details.
+    </p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
 
@@ -118,50 +143,91 @@
     <p class="uparrow border"><a href="#main">&#9650</a></p>
     
     <h2 id="acknowledgments">Acknowledgments<a class="section-anchor" data-scroll-name="#acknowledgments"></a></h2>
-    <p> CoralNet development is support by the NSF Computer Vision Coral Ecology grant #ATM-0941760 and by the National Oceanic and Atmospheric Administration (NOAA) grant No. NA10OAR4320156. The following papers are relevant to the development of CoralNet. We ask that you cite the appropriate papers if you use CoralNet in your work.</p>
-    <ul>
-    <li><p>O. Beijbom, P.J. Edmunds, D.I. Kline, G.B. Mitchell, D. Kriegman. <a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6247798&tag=1">"Automated Annotation of Coral Reef Survey Images"</a>. IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Providence, Rhode Island, June, 2012.</p></li>
-
-    <li><p>O. Beijbom, P. J. Edmunds, C. Roelfsema, J. Smith, D. I. Kline, B. Neal, M. J. Dunlap, V. Moriarty, T-Y. Fan, C-J. Tan, S. Chan, T. Treibitz, A. Gamst, B. G. Mitchell, D. Kriegman. <a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">"Towards automated annotation of benthic survey images: variability of human experts and operational modes of automation"</a>. PLOS One, July 2015.</p></li>
-
-    <li><p>O. Beijbom, <a href="http://roger.ucsd.edu/record=b8984742~S9">"Automated Annotation of Coral Reef Survey Images"</a>. PhD Thesis UCSD, June 2015.</p></li>
+    <p>
+        CoralNet has been supported from the following grants.
+    </p>
+    <ul style="list-style-type:disc;">
+    <li> 2012 - 2015: NSF <i>Computer Vision Coral Ecology grant #ATM-0941760</i> </li>
+    <li> 2014 - 2016: NOAA <i>Grant #NA10OAR4320156 </i></li>
+    <li> 2019 - 2020: NOAA <i>CoralNet: Tackling Bottlenecks in Coral Reef Image Analysis with
+        Next Gen Deep Networks for Photographs to Large Mosaics.</i> </li>
+    </ul>
+    <p>
+        The following papers are relevant to the development of CoralNet.
+        We ask that you cite the appropriate papers if you use CoralNet in your work.
+    </p>
+    <ul style="list-style-type:disc;">
+    <li><p>
+        O. Beijbom, P.J. Edmunds, D.I. Kline, G.B. Mitchell, D. Kriegman.
+        <i><a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6247798&tag=1">
+            "Automated Annotation of Coral Reef Survey Images"</a></i>.
+        IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Providence, Rhode Island, June, 2012.</p></li>
+    <li><p>
+        O. Beijbom, P. J. Edmunds, C. Roelfsema, J. Smith, D. I. Kline, B. Neal, M. J. Dunlap,
+        V. Moriarty, T-Y. Fan, C-J. Tan, S. Chan, T. Treibitz, A. Gamst, B. G. Mitchell, D. Kriegman.
+        <i><a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">
+            "Towards automated annotation of benthic survey images: variability of human experts and operational modes of automation"</a></i>.
+        PLOS One, July 2015.
+    </p></li>
+    <li><p>
+        I. D. Williams, C. S. Couch, O. Beijbom, T. A. Oliver, B. Vargas-Angel, B. D. Schumacher, R. E. Brainard.
+        <i><a href="https://www.frontiersin.org/articles/10.3389/fmars.2019.00222/full">
+            "Leveraging Automated Image Analysis Tools to Transform Our Capacity to Assess Status and Trends of Coral Reefs"</a></i>.
+        Frontiers in Marine Science, May 2019.
+    </p></li>
+    <li><p>
+        O. Beijbom,
+        <i><a href="http://roger.ucsd.edu/record=b8984742~S9">
+            "Automated Annotation of Coral Reef Survey Images"</a></i>.
+        PhD Thesis UCSD, June 2015.
+    </p></li>
     </ul>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
     <h2 id="people">People<a class="section-anchor" data-scroll-name="#people"></a></h2>
-    
-    <ul>        
-        <li>Oscar Beijbom - Project Manager [<a href="http://eecs.berkeley.edu/~obeijbom/">www</a>]</li>
-        <li>Stephen Chan - Lead Developer</li>
-        <li>David Kriegman - PI [<a href="http://cseweb.ucsd.edu/~kriegman/">www</a>]</li>
-        <li>TBD - Labelset Committee </li>
-        <li>TBD - Labelset Committee </li>
-        <li>Serge Belongie - Academic advisor [<a href="https://vision.cornell.edu/se3/people/serge-belongie/">www</a>]</li>
-        <li>David Kline - Academic advisor [<a href="http://scrippsscholars.ucsd.edu/dkline/biocv">www</a>]</li>
-		<li>Ben Neal - Academic advisor [<a href="http://catlinseaviewsurvey.com/benjamin-neal">www</a>]</li>
-        <li>Gregory Mitchell - Academic advisor [<a href="http://spg.ucsd.edu/People/Greg/">www</a>]</li>
-        <li>Devang Sampat - developer (Alumni)</li>
-        <li>Andrew Hu - developer (Alumni)</li>
-        <li>Jeff Sandvik - developer (Alumni)</li>  
-    </ul>
+    <h3>Current</h3>
+        <ul style="list-style-type:disc;">
+            <li>Oscar Beijbom - Director [<a href="https://beijbom.github.io/">www</a>]</li>
+            <li>Stephen Chan - Lead Developer [<a href="https://github.com/StephenChan">www</a>]</li>
+            <li>David Kriegman - Academic advisor [<a href="http://cseweb.ucsd.edu/~kriegman/">www</a>]</li>
+            <li>Qimin Chen - Vision research [<a href="http://jessbm.weebly.com">www</a>]</li>
+            <li>Jessica Bouwmeester - LabelSet curation [<a href="http://jessbm.weebly.com">www</a>]</li>
+        </ul>
+    <h3>Alumni</h3>
+        <ul style="list-style-type:disc;">
+            <li>Serge Belongie - Academic advisor [<a href="https://vision.cornell.edu/se3/people/serge-belongie/">www</a>]</li>
+            <li>David Kline - Academic advisor [<a href="http://scrippsscholars.ucsd.edu/dkline/biocv">www</a>]</li>
+            <li>Ben Neal - Academic advisor [<a href="https://www.livingoceansfoundation.org/profile/bneal/">www</a>]</li>
+            <li>Gregory Mitchell - Academic advisor [<a href="http://spg.ucsd.edu/People/Greg/">www</a>]</li>
+            <li>Devang Sampat - Developer</li>
+            <li>Andrew Hu - Developer</li>
+            <li>Jeff Sandvik - Developer</li>
+        </ul>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
     <h2 id="press">Press<a class="section-anchor" data-scroll-name="#press"></a></h2>
     <ul >
-    <li>January 2017: Our beta launch featured in phys.org [<a href="http://phys.org/news/2017-01-software-coral-reef-images.html">www</a>]. </li>
+    <li>January 2017: Our beta launch featured in phys.org
+        [<a href="http://phys.org/news/2017-01-software-coral-reef-images.html">www</a>]. </li>
 
-    <li>September 2016: CoralNet featured in the GTC keynote (at 0:0:52) [<a href = "https://www.youtube.com/watch?v=npzRyTimcZo">www</a>]. </li>
+    <li>September 2016: CoralNet featured in the GTC keynote (at 0:0:52)
+        [<a href = "https://www.youtube.com/watch?v=npzRyTimcZo">www</a>]. </li>
 
-    <li>August 2016: CoralNet featured in the Nature Toolbox section [<a href = "http://www.nature.com/news/computers-on-the-reef-1.20497">www</a>]. </li>
+    <li>August 2016: CoralNet featured in the Nature Toolbox section
+        [<a href = "http://www.nature.com/news/computers-on-the-reef-1.20497">www</a>]. </li>
 
-    <li>June 2016: NVIDIA blog post about Oscar's work on deep learning for coral ecology [<a href = "https://blogs.nvidia.com/blog/2016/06/22/deep-learning-save-coral-reefs/">www</a>]. </li>
+    <li>June 2016: NVIDIA blog post about Oscar's work on deep learning for coral ecology
+        [<a href = "https://blogs.nvidia.com/blog/2016/06/22/deep-learning-save-coral-reefs/">www</a>]. </li>
 
-    <li >Nov 2014: Jonathan Cohen at NVIDIA highlights CoralNet in his talk at the SuperComputer conference. CoralNet section starts at 9.30 [<a href="http://on-demand.gputechconf.com/supercomputing/2014/video/SC411-machine-learning-computational-researchers.html">www</a>].</li>
+    <li >Nov 2014: Jonathan Cohen at NVIDIA highlights CoralNet in his talk at the SuperComputer conference.
+        CoralNet section starts at 9.30
+        [<a href="http://on-demand.gputechconf.com/supercomputing/2014/video/SC411-machine-learning-computational-researchers.html">www</a>].</li>
 
-    <li >May 2014: Destin at SmarterEveryDay follows the data collected by the Catlin Seaview Survey all the way to CoralNet [<a href="https://www.youtube.com/watch?v=az1PTIehYKI">www</a>].</li> 
+    <li >May 2014: Destin at SmarterEveryDay follows the data collected by the Catlin Seaview Survey
+        all the way to CoralNet [<a href="https://www.youtube.com/watch?v=az1PTIehYKI">www</a>].</li>
             
-    <li >September 2013: Greenwire covers CoralNet [<a href="http://www.eenews.net/greenwire/stories/1059986651">www</a>]. </li>
-
+    <li >September 2013: Greenwire covers CoralNet
+        [<a href="http://www.eenews.net/greenwire/stories/1059986651">www</a>]. </li>
     </ul>
 
     <p class="uparrow-final border"><a href="#main">&#9650</a></p>
