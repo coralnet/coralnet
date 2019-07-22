@@ -12,9 +12,16 @@
 <a class="section-anchor section-anchor-top" data-scroll-name="#main"></a>
 <h1>About CoralNet</h1>
     
-    <p class="abstract">CoralNet is a repository and a resource for benthic images analysis. The site implements computer vision algorithms which allow fully- and semi- automated annotation. It also serves as a repository and collaboration platform.</p>
+    <p class="abstract">
+        CoralNet is a repository and a resource for benthic images analysis.
+        The site implements computer vision algorithms which allow fully- and semi- automated annotation.
+        It also serves as a repository and collaboration platform.
+    </p>
 
-    <p class="abstract">We made some major changes to CoralNet with our Beta launch in November 2016. Check out the <a href="{% url 'release' %}">release-notes</a> for details.</p>
+    <p class="abstract">
+        We made some major changes to CoralNet with our Beta launch in November 2016.
+        Check out the <a href="{% url 'release' %}">release-notes</a> for details.
+    </p>
 
     <ul class="indexlist">
     <li class="first-item"><a href="#background">background</a></li>
@@ -26,53 +33,83 @@
     </ul>
 
     <h2 id="background">Background<a class="section-anchor" data-scroll-name="#background"></a></h2>
-    <p>Global and local stressors have caused a rapid decline of coral reefs across the world.
-    To monitor the changes and take appropriate action large spatio-temporal surveys are needed. Data
-    collection speeds are typically sufficient to meet this need but the subsequent image analysis remains slow as manual inspection of each photo is required. This creates a 'manual annotation bottleneck'.</p>
-    <p>CoralNet reduces this bottleneck by allowing modern computer vision algorithms to be deployed alongside human experts. Often 50-100% automation can be achieved with minimal reduction in the quality of the final data-product. CoralNet, by its nature, also provides a platform for collaboration & sharing of data.</p>
+    <p>
+        Global and local stressors have caused a rapid decline of coral reefs across the world.
+        To monitor the changes and take appropriate action large spatio-temporal surveys are needed. Data
+        collection speeds are typically sufficient to meet this need but the subsequent image analysis
+        remains slow as manual inspection of each photo is required. This creates a 'manual annotation bottleneck'.
+    </p>
+    <p>
+        CoralNet reduces this bottleneck by allowing modern computer vision algorithms to be deployed
+        alongside human experts. Often 50-100% automation can be achieved with minimal reduction in the
+        quality of the final data-product. CoralNet, by its nature, also provides a platform for collaboration
+        & sharing of data.</p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
 
     <h2 id="site">The site<a class="section-anchor" data-scroll-name="#site"></a></h2>
     <p>
-        The CoralNet website consist of several modules outlined below. For some (slightly outdated) information, check out our <a href="http://vimeo.com/channels/coralnet">Vimeo channel</a>.
+        The CoralNet website consist of several modules outlined below.
+        For some (slightly outdated) information, check out
+        our <a href="http://vimeo.com/channels/coralnet">Vimeo channel</a>.
     </p>
     <p>
-        <b>Source:</b> Main organizational element for a benthic survey or image "source". Here you specify your labelset, your privacy settings, and invite collaborators.
+        <b>Source:</b> Main organizational element for a benthic survey or image "source".
+        Here you specify your labelset, your privacy settings, and invite collaborators.
     </p>
     <p>
-        <b>Labelset:</b> Specify what labels you want to use in your analysis. Choose from a set of existing labels or create your own.
+        <b>Labelset:</b> Specify what labels you want to use in your analysis.
+        Choose from a set of existing labels or create your own.
     </p>
     <p>
         <b>Import:</b> Upload images, metadata and archived annotations to the site.
     </p>
     <p>
-        <b>Annotation:</b> Annotate your image right in the web browser using a point count interface. When enough images are manually annotated, an automated annotator is trained. This automated annotator is integrated directly into the annotation tool and makes the remaining annotation work easier.
+        <b>Annotation:</b> Annotate your image right in the web browser using a point count interface.
+        When enough images are manually annotated, an automated annotator is trained.
+        This automated annotator is integrated directly into the annotation tool and
+        makes the remaining annotation work easier.
     </p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
 
     <h2 id="datapolicy">Data Policy<a class="section-anchor" data-scroll-name="#datapolicy"></a></h2>
 
-    <p>We at CoralNet highly encourage public sharing of research data for the greater good. However, we realize that data privacy is preferred in some cases, especially for newer projects. So, sources have two visibility options, Public or Private.</p>
+    <p>
+        We at CoralNet highly encourage public sharing of research data for the greater good.
+        However, we realize that data privacy is preferred in some cases, especially for newer projects.
+        So, sources have two visibility options, Public or Private.
+    </p>
 
     <h4>Public sources</h4>
     <ul>
-      <li>All of your source's images and annotation data are available for the public to browse and download (including original images in full resolution).</li>
+      <li>All of your source's images and annotation data are available for the public
+          to browse and download (including original images in full resolution).</li>
       <li>Only members of the source can add or edit content.</li>
     </ul>
 
     <h4>Private sources</h4>
     <ul>
-      <li>All users can still see your source on the world map, based on the source's latitude and longitude settings. Here, they can also see the name, description, affiliation, and total number of images in your source - but no example images.</li>
-      <li>Label information pages - public to all users - list the names of all sources that use the label, including private sources. Also, these label pages show example image 'patches' (small thumbnail cut-outs of a larger image) of point annotations using that label. These patches can come from any source using the label, but if a particular patch is from a private source, the name of the patch's source will not be given.</li>
-      <li>Only members of the source (invited with View, Edit, or Admin permissions) can browse all of the source's data, including full images and their annotations. Other users will be unable to browse pages and images within the source, even if they know the URLs.</li>
+      <li>All users can still see your source on the world map,
+          based on the source's latitude and longitude settings.
+          Here, they can also see the name, description, affiliation,
+          and total number of images in your source - but no example images.</li>
+      <li>Label information pages - public to all users - list the names of all sources that use the label,
+          including private sources. Also, these label pages show example image 'patches'
+          (small thumbnail cut-outs of a larger image) of point annotations using that label.
+          These patches can come from any source using the label, but if a particular patch is from a private source,
+          the name of the patch's source will not be given.</li>
+      <li>Only members of the source (invited with View, Edit, or Admin permissions) can browse all of the
+          source's data, including full images and their annotations.
+          Other users will be unable to browse pages and images within the source,
+          even if they know the URLs.</li>
     </ul>
 
     <h4>User privacy</h4>
     <ul>
       <li>Your username (handle) is public on CoralNet through the list of profiles.</li>
-      <li>You may choose to make your user profile (including first name, last name, and affiliation) public for everyone, public for registered users only, or private.</li>
+      <li>You may choose to make your user profile (including first name, last name, and affiliation)
+          public for everyone, public for registered users only, or private.</li>
       <li>The email address associated with your account is not publicly viewable.</li>
       <li>We'll never ask you for your password. If you get an email asking you for your password, it didn't come from us.</li>
       <li>The CoralNet website uses cookies for login and for analytics (via Google).</li>
