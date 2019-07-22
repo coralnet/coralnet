@@ -32,7 +32,11 @@
       <th>Name</th>
       <th>Functional Group</th>
       <th>Popularity</th>
-      <th>Verified</th>
+      <th>Verified
+        <div class="tutorial-message">
+          {% include 'labels/label_list_verified_help.html' %}
+        </div>
+      </th>
       <th>Default<br/>Short Code</th>
     </tr>
     {% for label in labels %}
