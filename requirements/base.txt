@@ -80,9 +80,6 @@ mock==2.0.0
 # World timezone definitions
 pytz==2016.3
 
-# Handle the YAML format, e.g. for fixtures
-PyYAML==3.10
-
 # More elegant filepath calculations compared to os.path.
 # pathlib has become part of the Python 3 standard library. pathlib2, an
 # unofficial backport of pathlib to Python 2, is the best bet for migrating
@@ -114,13 +111,6 @@ billiard==3.3.0.23
 celery==3.1.23
 kombu==3.0.35
 redis==2.10.5
-
-# Task monitor "flower". Not required but a nice monitor.
-backports.ssl-match-hostname==3.5.0.1
-certifi==2016.8.31
-flower==0.9.1
-futures==3.0.5
-tornado==4.2
 
 # Supervisord to manage celery.
 # supervisor has no Python 3.x support yet (as of supervisor 3.3.1);
