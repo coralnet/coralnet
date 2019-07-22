@@ -570,14 +570,13 @@ class Image(models.Model):
 
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
 
-    def _isvalset(self):
+    @property
+    def valset(self):
         return self.pk % 8 == 0
 
-    def _istrainset(self):
+    @property
+    def trainset(self):
         return not self.valset
-    
-    valset = property(_isvalset)
-    trainset = property(_istrainset)
 
     def __unicode__(self):
         return self.metadata.name
