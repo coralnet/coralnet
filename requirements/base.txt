@@ -120,4 +120,6 @@ tornado==4.2
 # supervisor has no Python 3.x support yet (as of supervisor 3.3.1);
 # it's planned for supervisor 4.0.
 supervisor==3.3.1
+
+# Progress bar for CLI
 tqdm==4.32.2

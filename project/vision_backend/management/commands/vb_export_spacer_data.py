@@ -59,7 +59,7 @@ class Command(BaseCommand):
         # Iterate over sources
         for itt, source in enumerate(sources):
             print("Exporting source id:{}. [{}({})] with {} images...".format(source.pk, itt+1, len(sources),
-                                                                              source.nbr_images))
+                                                                              source.nbr_confirmed_images))
             source_prefix = options['name']+'/'+'s'+str(source.pk)
 
             # Export source meta
@@ -71,6 +71,10 @@ class Command(BaseCommand):
             for image in tqdm(Image.objects.filter(source=source, confirmed=True, features__extracted=True)):
 
                 image_prefix = images_prefix + '/i' + str(image.pk)
+                image_key = Key(bucket, name=image_prefix+'.jpg')
+                if image_key.exists():
+                    # Since we write the image file last, if this exists, we have already exported this image.
+                    continue
 
                 # Export image meta
                 source_meta_key = Key(bucket, name=image_prefix + '.meta.json')
@@ -80,13 +84,13 @@ class Command(BaseCommand):
                 source_meta_key = Key(bucket, name=image_prefix + '.anns.json')
                 source_meta_key.set_contents_from_string(self.image_annotations_json(image))
 
-                # Copy image file
-                image_path = os.path.join(settings.AWS_LOCATION, image.original_file.name)
-                bucket.copy_key(image_prefix + '.jpg', settings.AWS_STORAGE_BUCKET_NAME, image_path)
-
                 # Copy image features
                 # Check again since state may have changed since the filtering was applied
+                image_path = os.path.join(settings.AWS_LOCATION, image.original_file.name)
                 if image.features.extracted:
                     features_path = settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path=image_path)
                     bucket.copy_key(image_prefix + '.features.json', settings.AWS_STORAGE_BUCKET_NAME, features_path)
+
+                # Copy image file
+                bucket.copy_key(image_prefix + '.jpg', settings.AWS_STORAGE_BUCKET_NAME, image_path)
 
