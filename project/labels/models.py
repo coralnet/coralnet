@@ -4,6 +4,7 @@ import random
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import models
 from easy_thumbnails.fields import ThumbnailerImageField
 from lib.utils import rand_string
@@ -62,6 +63,7 @@ class Label(models.Model):
         LabelGroup, on_delete=models.PROTECT, verbose_name='Functional Group')
     description = models.TextField(null=True)
     verified = models.BooleanField(default=False)
+    duplicate = models.ForeignKey("Label", on_delete=models.SET_DEFAULT, default=None)
 
     # easy_thumbnails reference:
     # http://packages.python.org/easy-thumbnails/ref/processors.html
@@ -85,6 +87,12 @@ class Label(models.Model):
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL,
         verbose_name='Created by', editable=False, null=True)
+
+    def clean(self):
+        if self.duplicate is not None and not self.duplicate.verified:
+            raise ValidationError("A label can only be a Duplicate of a Verified label")
+        if self.duplicate is not None and self.verified:
+            raise ValidationError("A label can not both be a Duplicate and Verified.")
 
     def __unicode__(self):
         """
