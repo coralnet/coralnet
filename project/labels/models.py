@@ -63,7 +63,7 @@ class Label(models.Model):
         LabelGroup, on_delete=models.PROTECT, verbose_name='Functional Group')
     description = models.TextField(null=True)
     verified = models.BooleanField(default=False)
-    duplicate = models.ForeignKey("Label", on_delete=models.SET_DEFAULT, default=None)
+    duplicate = models.ForeignKey("Label", on_delete=models.SET_NULL, blank=True, null=True)
 
     # easy_thumbnails reference:
     # http://packages.python.org/easy-thumbnails/ref/processors.html
