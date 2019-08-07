@@ -136,10 +136,6 @@ class Label(models.Model):
         return popularity
 
 
-def verified_labels():
-    return Label.objects.filter(verified=True)
-
-
 class LabelSet(models.Model):
     # description and location are obsolete if we're staying with a 1-to-1
     # correspondence between labelsets and sources.
