@@ -32,7 +32,12 @@
     <p>Name: {{ label.name }}</p>
     <p>Functional Group: {{ label.group.name }}</p>
     <p>Default Short Code: {{ label.default_code }}</p>
-
+    {% if label.duplicate %}
+    <p>
+      <font color="red">This label is a duplicate of: <a href="{% url 'label_main' label.duplicate.id %}" style="color: green">
+      {{ label.duplicate }}</a></font>
+    </p>
+    {% endif %}
     <div class="line">Verified:
       {{ label.verified|yesno|title }}
       {% verified_icon label %}

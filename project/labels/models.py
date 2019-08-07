@@ -63,7 +63,8 @@ class Label(models.Model):
         LabelGroup, on_delete=models.PROTECT, verbose_name='Functional Group')
     description = models.TextField(null=True)
     verified = models.BooleanField(default=False)
-    duplicate = models.ForeignKey("Label", on_delete=models.SET_NULL, blank=True, null=True)
+    duplicate = models.ForeignKey("Label", on_delete=models.SET_NULL, blank=True, null=True,
+                                  limit_choices_to={'verified': True})
 
     # easy_thumbnails reference:
     # http://packages.python.org/easy-thumbnails/ref/processors.html
@@ -93,6 +94,8 @@ class Label(models.Model):
             raise ValidationError("A label can only be a Duplicate of a Verified label")
         if self.duplicate is not None and self.verified:
             raise ValidationError("A label can not both be a Duplicate and Verified.")
+        if self.duplicate is not None and self.duplicate == self:
+            raise ValidationError("A label can not be a duplicate of itself.")
 
     def __unicode__(self):
         """
@@ -131,6 +134,10 @@ class Label(models.Model):
         cache.set(cache_key, popularity, POPULARITY_CACHE_DURATION)
 
         return popularity
+
+
+def verified_labels():
+    return Label.objects.filter(verified=True)
 
 
 class LabelSet(models.Model):

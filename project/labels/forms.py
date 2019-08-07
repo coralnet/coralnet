@@ -259,6 +259,14 @@ class LabelForm(ModelForm):
             ))
         raise ValidationError(msg, code='unique')
 
+    def clean_duplicate(self):
+        ver = self.cleaned_data['verified']
+        dup = self.cleaned_data['duplicate']
+        if ver and dup is not None:
+            raise ValidationError("A label can not both be a Duplicate and Verified.")
+        else:
+            return self.cleaned_data['duplicate']
+
     @staticmethod
     def send_label_creation_email(request, new_label):
         """Email the committee about the label creation, and CC the creator."""
@@ -293,8 +301,7 @@ class LabelFormWithVerified(LabelForm):
     class Meta:
         model = Label
         fields = [
-            'name', 'default_code', 'group', 'description', 'thumbnail',
-            'verified'
+            'name', 'default_code', 'group', 'description', 'thumbnail', 'verified', 'duplicate'
         ]
 
 
