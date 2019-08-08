@@ -1,13 +1,10 @@
 import json
-import datetime
 import csv
 
 import numpy as np
 
-from django.contrib.auth.decorators import permission_required
 from django.shortcuts import render
-from django.urls import reverse
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import  HttpResponse
 from django.contrib.auth.decorators import permission_required
 from celery.task.control import inspect
 
@@ -15,7 +12,6 @@ from lib.decorators import source_visibility_required
 
 from images.models import Source, Image
 from images.utils import source_robot_status
-from labels.models import LocalLabel, Label
 
 from .forms import TreshForm, CmTestForm
 from .confmatrix import ConfMatrix

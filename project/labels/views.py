@@ -33,9 +33,19 @@ from .models import Label, LocalLabel, LabelSet
 from .utils import search_labels_by_text, is_label_editable_by_user
 
 
+@login_required
 def duplicates_overview(request):
+    """
+    Renders the view for the duplicates overview.
+    """
+
+    dups = Label.objects.exclude(duplicate=None)
     return render(request, 'labels/list_duplicates.html', {
-        'tmp': 'hello'
+        'labels': dups,
+        'stats': {
+            'ann_count': sum([dup.ann_count for dup in dups]),
+            'dup_count': len(dups),
+        }
     })
 
 @login_required
