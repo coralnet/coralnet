@@ -33,6 +33,11 @@ from .models import Label, LocalLabel, LabelSet
 from .utils import search_labels_by_text, is_label_editable_by_user
 
 
+def duplicates_overview(request):
+    return render(request, 'labels/list_duplicates.html', {
+        'tmp': 'hello'
+    })
+
 @login_required
 def label_new(request):
     """

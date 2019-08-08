@@ -9,6 +9,8 @@ label_general_urlpatterns = [
     url(r'^new_ajax/$', views.label_new_ajax, name="label_new_ajax"),
     url(r'^add_search_ajax/$', views.labelset_add_search_ajax,
         name="labelset_add_search_ajax"),
+    url(r'^duplicates/$', views.duplicates_overview,
+        name="labelset_duplicates"),
 ]
 
 label_specific_urlpatterns = [
