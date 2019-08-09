@@ -5,6 +5,16 @@
 # that use models.py should go in the general utility functions
 # file, utils.py.
 
+
+def to_ascii_str(entry):
+    if isinstance(entry, unicode):
+        return entry.encode('ascii', 'ignore')
+    elif not isinstance(entry, str):
+        return str(entry)
+    else:
+        return entry
+
+
 class PointGen():
     """
     - Defines types of point generation.

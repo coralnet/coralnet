@@ -11,7 +11,7 @@ from easy_thumbnails.fields import ThumbnailerImageField
 from guardian.shortcuts import (
     get_objects_for_user, get_users_with_perms, get_perms, assign, remove_perm)
 
-from .model_utils import PointGen
+from .model_utils import PointGen, to_ascii_str
 from accounts.utils import is_robot_user
 from annotations.model_utils import AnnotationAreaUtils
 from labels.models import LabelSet
@@ -396,9 +396,17 @@ class Source(models.Model):
         return list(set([name for name in imnames if imnames.count(name) > 1]))
 
     def to_dict(self):
-        field_names = ['name', 'longitude', 'latitude', 'create_date', 'nbr_confirmed_images',
-                       'nbr_images', 'description', 'affiliation', 'nbr_valid_robots']
-        return {field: str(getattr(self, field)) for field in field_names}
+        """
+        Returns the model as python dict of the form:
+            {field_name: field_value}
+        Both field name and values are strings.
+        """
+        field_names = ['name', 'longitude', 'latitude', 'create_date',
+                       'nbr_confirmed_images', 'nbr_images', 'description',
+                       'affiliation', 'nbr_valid_robots']
+
+        return {field: to_ascii_str(getattr(self, field)) for
+                field in field_names}
 
     def __unicode__(self):
         """
@@ -497,7 +505,13 @@ class Metadata(models.Model):
         return "Metadata of " + self.name
 
     def to_dict(self):
-        return {field: str(getattr(self, field)) for field in self.EDIT_FORM_FIELDS}
+        """
+        Returns the model as python dict of the form:
+            {field_name: field_value}
+        Both field name and values are strings.
+        """
+        return {field: to_ascii_str(getattr(self, field)) for
+                field in self.EDIT_FORM_FIELDS}
 
 
 def get_original_image_upload_path(instance, filename):

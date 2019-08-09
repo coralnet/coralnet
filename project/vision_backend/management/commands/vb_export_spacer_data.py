@@ -20,6 +20,8 @@ class Command(BaseCommand):
                             help="Min number of confirmed images required to include a source.")
         parser.add_argument('--bucket', type=str, default='spacer-trainingdata', help="bucket name to export to")
         parser.add_argument('--name', type=str, default='debug-export', help="Export name")
+        parser.add_argument('--skip_to', type=int, default=0,
+                            help="Index of source to skip to.")
 
     @property
     def labelset_json(self):
@@ -54,7 +56,9 @@ class Command(BaseCommand):
         # Filter sources
         sources = Source.objects.filter()
         sources = filter_out_test_sources(sources)
-        sources = [s for s in sources if s.nbr_confirmed_images > options['min_required_imgs']]
+        sources = [s for s in sources if
+                   s.nbr_confirmed_images > options['min_required_imgs']]
+        sources = sources[options['skip_to']:]
 
         # Iterate over sources
         for itt, source in enumerate(sources):
@@ -68,12 +72,15 @@ class Command(BaseCommand):
 
             images_prefix = source_prefix + '/' + 'images'
 
-            for image in tqdm(Image.objects.filter(source=source, confirmed=True, features__extracted=True)):
+            for image in tqdm(Image.objects.filter(source=source,
+                                                   confirmed=True,
+                                                   features__extracted=True)):
 
                 image_prefix = images_prefix + '/i' + str(image.pk)
                 image_key = Key(bucket, name=image_prefix+'.jpg')
                 if image_key.exists():
-                    # Since we write the image file last, if this exists, we have already exported this image.
+                    # Since we write the image file last, if this exists,
+                    # we have already exported this image.
                     continue
 
                 # Export image meta
@@ -85,12 +92,18 @@ class Command(BaseCommand):
                 source_meta_key.set_contents_from_string(self.image_annotations_json(image))
 
                 # Copy image features
-                # Check again since state may have changed since the filtering was applied
-                image_path = os.path.join(settings.AWS_LOCATION, image.original_file.name)
+                # Check again since state may have changed
+                # since the filtering was applied
+                image_path = os.path.join(settings.AWS_LOCATION,
+                                          image.original_file.name)
                 if image.features.extracted:
                     features_path = settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path=image_path)
-                    bucket.copy_key(image_prefix + '.features.json', settings.AWS_STORAGE_BUCKET_NAME, features_path)
+                    bucket.copy_key(image_prefix + '.features.json',
+                                    settings.AWS_STORAGE_BUCKET_NAME,
+                                    features_path)
 
                 # Copy image file
-                bucket.copy_key(image_prefix + '.jpg', settings.AWS_STORAGE_BUCKET_NAME, image_path)
+                bucket.copy_key(image_prefix + '.jpg',
+                                settings.AWS_STORAGE_BUCKET_NAME,
+                                image_path)
 
