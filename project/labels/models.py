@@ -63,7 +63,8 @@ class Label(models.Model):
         LabelGroup, on_delete=models.PROTECT, verbose_name='Functional Group')
     description = models.TextField(null=True)
     verified = models.BooleanField(default=False)
-    duplicate = models.ForeignKey("Label", on_delete=models.SET_NULL, blank=True, null=True,
+    duplicate = models.ForeignKey("Label", on_delete=models.SET_NULL,
+                                  blank=True, null=True,
                                   limit_choices_to={'verified': True})
 
     # easy_thumbnails reference:
