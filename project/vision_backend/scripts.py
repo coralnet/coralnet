@@ -3,9 +3,10 @@ import json
 import pickle
 import random
 import shutil
-from images.models import Source, Image, Point
+from images.models import Source, Point
 from .models import Score
 from labels.models import Label, LabelGroup, LabelSet, LocalLabel
+
 
 def print_image_scores(image_id):
     """
@@ -34,6 +35,7 @@ def export_labels_json(filename):
     with open(filename, 'w') as f:
         json.dump((grps, lbls), f)
 
+
 def import_labels_json(filename):
     """
     Imports all labels and groups from a json file. See 
@@ -46,6 +48,7 @@ def import_labels_json(filename):
 
     for lbl in lbls:
         add_label(lbl[0], lbl[1], lbl[2])        
+
 
 def add_functional_group(name, code):
     """
@@ -131,7 +134,6 @@ def chunkify_source_for_image_import(chunklist, source_path):
             shutil.copyfile(
                 os.path.join(source_path, 'imgs', im),
                 os.path.join(source_path, chunkname, im))
-
 
 
 def export_images_and_annotations(source_idlist, outdir):

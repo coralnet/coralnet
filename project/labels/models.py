@@ -111,13 +111,18 @@ class Label(models.Model):
             return cached_value
         return self._compute_popularity()
 
+    @property
+    def ann_count(self):
+        """ Returns the number of annotations for this label """
+        return self.annotation_set.count()
+
     def _compute_popularity(self):
         # TODO: This formula is most likely garbage; make a better one
         raw_score = (
             # Labelset count
             self.locallabel_set.count()
             # Square root of annotation count
-            * math.sqrt(self.annotation_set.count())
+            * math.sqrt(self.ann_count)
         )
 
         if raw_score == 0:

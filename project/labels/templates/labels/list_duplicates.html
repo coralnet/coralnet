@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>This page lists all labels that have been identified as duplicates of a verified label.</p>
+
+<p>A duplicate label can still be used, but we encourage using the verified label instead.</p>
+
+<p>In total {{stats.dup_count}} duplicates has been identified with a total of {{stats.ann_count}} annotations.</p>
+<table class="detail_table_popup">
+<tr>
+    <th>Label</th>
+    <th>is duplicate of</th>
+    <th>Annotation count</th>
+</tr>
+{% for dup in labels %}
+    <tr>
+        <th><a href="{% url 'label_main' dup.id %}" style="color: green">{{ dup }}</a></th>
+        <th><a href="{% url 'label_main' dup.duplicate.id %}" style="color: green">{{ dup.duplicate }}</a></th>
+        <th>{{ dup.ann_count }}</th>
+    </tr>
+
+{% endfor %}
+
+</table>
+
+{% endblock %}
