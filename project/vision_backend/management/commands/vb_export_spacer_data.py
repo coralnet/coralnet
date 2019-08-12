@@ -4,11 +4,13 @@ import os
 from boto.s3.key import Key
 from tqdm import tqdm
 
-from images.models import Source, Image, Point
-from annotations.models import Label
+from django.db.models import F
 from django.core.management.base import BaseCommand
 from django.conf import settings
+
+from images.models import Source, Image
 from images.utils import filter_out_test_sources
+from annotations.models import Label, Annotation
 
 
 class Command(BaseCommand):
@@ -41,8 +43,11 @@ class Command(BaseCommand):
     @staticmethod
     def image_annotations_json(image):
         rowcols = []
-        for point in Point.objects.filter(image=image).order_by('id'):
-            rowcols.append({'row': point.row, 'col': point.column, 'label': point.annotation.label.pk})
+        for ann in Annotation.objects.filter(image=image).\
+                annotate(row=F('point__row'),
+                         col=F('point__column'),
+                         label_id=F('label__pk')):
+            rowcols.append({'row': ann.row, 'col': ann.col, 'label': ann.label_id})
         return json.dumps(rowcols, indent=2)
 
     def handle(self, *args, **options):
