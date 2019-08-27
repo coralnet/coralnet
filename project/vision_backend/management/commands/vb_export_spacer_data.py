@@ -29,7 +29,13 @@ class Command(BaseCommand):
     def labelset_json(self):
         cont = []
         for label in Label.objects.filter():
-            cont.append([label.pk, label.name, label.default_code, label.group.name])
+            cont.append({'id': label.pk,
+                         'name': label.name,
+                         'code': label.default_code,
+                         'group': label.group.name,
+                         'duplicate_of': str(label.duplicate),
+                         'is_verified': label.verified,
+                         'ann_count': label.ann_count})
         return json.dumps(cont, indent=2)
 
     @staticmethod
