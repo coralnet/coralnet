@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<table class="detail_table_popup">
+    <tr>
+        <th>time</th>
+        <th>event</th>
+    </tr>
+    {% for news in newslist %}
+        <tr>
+            <td> {{news.datetime}} </td>
+            <td> {{news.message}} </td>
+        </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}
