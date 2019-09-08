@@ -22,6 +22,7 @@ from annotations.model_utils import AnnotationAreaUtils
 from annotations.utils import image_annotation_area_is_editable, image_has_any_human_annotations
 from labels.models import LabelGroup
 from annotations.models import Annotation
+from newsfeed.models import NewsItem
 from lib.decorators import source_permission_required, image_visibility_required, image_permission_required, source_visibility_required
 from visualization.utils import image_search_kwargs_to_queryset
 import vision_backend.tasks as backend_tasks
@@ -204,6 +205,8 @@ def source_main(request, source_id):
         'image_stats': image_stats,
         'robot_stats': robot_stats,
         'min_nbr_annotated_images': settings.MIN_NBR_ANNOTATED_IMAGES,
+        'news_items': [item.render_view() for item in
+                       NewsItem.objects.filter(source_id=source.id)][::-1]
     })
 
 @source_permission_required('source_id', perm=Source.PermTypes.ADMIN.code)

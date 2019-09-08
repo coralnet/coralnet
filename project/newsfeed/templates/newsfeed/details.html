@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h3>Main event</h3>
+<table class="detail_table_popup">
+    <tr>
+        <th>time</th>
+        <th>app</th>
+        <th>source</th>
+        <th>event</th>
+    </tr>
+
+    <tr>
+        <td> {{ main.datetime }} </td>
+        <td> {{ main.app }} </td>
+        {% if main.source_exists %}
+            <td> <a href="{% url 'source_main' main.source_id %}">{{main.source_name}}</a></td>
+        {% else %}
+            <td> {{ main.source_name }} (deleted) </td>
+        {% endif %}
+        <td> {{ main.message }} </td>
+    </tr>
+</table>
+<h3>Sub events</h3>
+<table class="detail_table_popup">
+    <tr>
+        <th>time</th>
+        <th>event</th>
+    </tr>
+    {% for sub in subs %}
+    <tr>
+        <td> {{ sub.datetime }} </td>
+        <td> {{ sub.message }} </td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}

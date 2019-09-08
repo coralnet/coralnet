@@ -1,4 +1,4 @@
-{% extends "images/base_source.html" %}
+    {% extends "images/base_source.html" %}
 {% load guardian_tags %}
 {% load thumbnail %}
 
@@ -180,6 +180,20 @@ $(document).ready(function() {
               {{ image_stats.total }}</a></td></tr>
         </table>
       </div>
+    </div>
+
+    <div style="float:left; width:100%;">
+        <div class="detail_box">
+        <h3 style="text-align:center">Events</h3>
+        <table class="detail_table_popup">
+        {% for news in news_items %}
+            <tr>
+                <td> {{ news.datetime }} </td>
+                <td> {{ news.message }} </td>
+            </tr>
+        {% endfor %}
+        </table>
+        </div>
     </div>
 
 

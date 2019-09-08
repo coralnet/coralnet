@@ -155,6 +155,7 @@ INSTALLED_APPS = [
     'upload',
     'visualization',
     'vision_backend',
+    'newsfeed',
 
     # Admin site (<domain>/admin)
     'django.contrib.admin',

@@ -5,12 +5,20 @@
 <table class="detail_table_popup">
     <tr>
         <th>time</th>
+        <th>app</th>
+        <th>source</th>
         <th>event</th>
     </tr>
-    {% for news in newslist %}
+    {% for news in news_items %}
         <tr>
-            <td> {{news.datetime}} </td>
-            <td> {{news.message}} </td>
+            <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
+            <td> {{ news.app }} </td>
+            {% if news.source_exists %}
+                <td> <a href="{% url 'source_main' news.source_id %}">{{news.source_name}}</a></td>
+            {% else %}
+                <td> {{ news.source_name }} (deleted) </td>
+            {% endif %}
+            <td> {{ news.message }} </td>
         </tr>
     {% endfor %}
 </table>
