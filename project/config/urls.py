@@ -1,12 +1,11 @@
 from django.conf import settings
 from django.conf.urls import include, url
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.views.generic import TemplateView
-from django.conf.urls.static import static
 
 import lib.views as lib_views
 import vision_backend.views as backend_views
-import newsfeed.views as newsfeed_views
 
 urlpatterns = [
     # These apps don't have uniform prefixes. We'll trust them to provide
@@ -26,7 +25,6 @@ urlpatterns = [
     url(r'^source/(?P<source_id>\d+)/upload/', include('upload.urls')),
     url(r'^source/(?P<source_id>\d+)/backend/', include('vision_backend.urls')),
 
-
     url(r'^admin/doc/', include('django.contrib.admindocs.urls')),
     url(r'^admin/', include(admin.site.urls)),
 
@@ -40,7 +38,6 @@ urlpatterns = [
         name='release',
     ),
     url(r'^contact/$', lib_views.contact, name='contact'),
-
 
     # "Secret" dev views
     url(r'^nav_test/(?P<source_id>\d+)/$', lib_views.nav_test, name="nav_test"),

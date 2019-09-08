@@ -1,4 +1,4 @@
-    {% extends "images/base_source.html" %}
+{% extends "images/base_source.html" %}
 {% load guardian_tags %}
 {% load thumbnail %}
 
@@ -188,7 +188,7 @@ $(document).ready(function() {
         <table class="detail_table_popup">
         {% for news in news_items %}
             <tr>
-                <td> {{ news.datetime }} </td>
+                <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
                 <td> {{ news.message }} </td>
             </tr>
         {% endfor %}
