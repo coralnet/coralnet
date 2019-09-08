@@ -12,7 +12,8 @@ def global_feed(request):
     print('in main')
     return render(request, 'newsfeed/global.html', {
         'news_items':
-            [item.render_view() for item in NewsItem.objects.filter()][::-1]
+            [item.render_view() for item in
+             NewsItem.objects.filter().order_by('-pk')]
     })
 
 

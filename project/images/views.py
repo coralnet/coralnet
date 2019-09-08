@@ -132,8 +132,6 @@ def source_new(request):
     })
 
 
-
-
 @source_visibility_required('source_id')
 def source_main(request, source_id):
     """
@@ -206,8 +204,9 @@ def source_main(request, source_id):
         'robot_stats': robot_stats,
         'min_nbr_annotated_images': settings.MIN_NBR_ANNOTATED_IMAGES,
         'news_items': [item.render_view() for item in
-                       NewsItem.objects.filter(source_id=source.id)][::-1]
+                       NewsItem.objects.filter(source_id=source.id).order_by('-pk')]
     })
+
 
 @source_permission_required('source_id', perm=Source.PermTypes.ADMIN.code)
 def source_edit(request, source_id):
@@ -274,7 +273,6 @@ def source_detail_box(request, source_id):
         'source': source,
         'example_images': example_images,
     })
-
 
 
 @source_permission_required('source_id', perm=Source.PermTypes.ADMIN.code)
