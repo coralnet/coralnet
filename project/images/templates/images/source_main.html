@@ -185,7 +185,7 @@ $(document).ready(function() {
     <div style="float:left; width:100%;">
         <div class="detail_box">
         <h3 style="text-align:center">Events</h3>
-        <table class="detail_table_popup">
+        <table class="detail_table_scroll">
         {% for news in news_items %}
             <tr>
                 <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
