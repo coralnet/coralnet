@@ -52,10 +52,7 @@ class NewsItem(models.Model):
             'id': self.id,
         }
         sources = Source.objects.filter(id=self.source_id)
-        if len(sources) == 0:
-            curated['source_exists'] = False
-        else:
-            curated['source_exists'] = True
+        curated['source_exists'] = sources.count() > 0
         return curated
 
     def clean(self):
