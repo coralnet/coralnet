@@ -1,6 +1,7 @@
 {% extends "images/base_source.html" %}
 {% load guardian_tags %}
 {% load thumbnail %}
+{% load show_markdown %}
 
 {% block title %}{{ source.name }} | CoralNet{% endblock %}
 
@@ -189,7 +190,7 @@ $(document).ready(function() {
         {% for news in news_items %}
             <tr>
                 <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
-                <td> {{ news.message }} </td>
+                <td> {{ news.message|show_markdown|safe }} </td>
             </tr>
         {% endfor %}
         </table>

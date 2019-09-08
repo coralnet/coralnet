@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('source_id', models.IntegerField()),
                 ('source_name', models.CharField(max_length=200)),
-                ('message', models.CharField(max_length=500)),
+                ('message', models.TextField(max_length=500)),
                 ('app', models.CharField(choices=[(b'accounts', b'accounts'), (b'annotations', b'annotations'), (b'async_media', b'async_media'), (b'blog', b'blog'), (b'bug_reporting', b'bug_reporting'), (b'errorlogs.apps.ErrorlogsConfig', b'errorlogs.apps.ErrorlogsConfig'), (b'export', b'export'), (b'images', b'images'), (b'labels', b'labels'), (b'lib', b'lib'), (b'upload', b'upload'), (b'visualization', b'visualization'), (b'vision_backend', b'vision_backend'), (b'newsfeed', b'newsfeed'), (b'andablog', b'andablog'), (b'easy_thumbnails', b'easy_thumbnails'), (b'guardian', b'guardian'), (b'reversion', b'reversion'), (b'storages', b'storages'), (b'taggit', b'taggit')], max_length=50)),
                 ('datetime', models.DateTimeField(auto_now_add=True)),
             ],
@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
             name='NewsSubItem',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('message', models.CharField(max_length=500)),
+                ('message', models.TextField(max_length=500)),
                 ('datetime', models.DateTimeField(auto_now_add=True)),
                 ('news_item', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='newsfeed.NewsItem')),
             ],

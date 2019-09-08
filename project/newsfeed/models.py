@@ -32,7 +32,7 @@ class NewsItem(models.Model):
     # source is deleted.
     source_id = models.IntegerField(null=False, blank=False)
     source_name = models.CharField(null=False, blank=False, max_length=200)
-    message = models.CharField(null=False, blank=False, max_length=500)
+    message = models.TextField(null=False, blank=False, max_length=500)
     app = models.CharField(null=False, blank=False, max_length=50,
                            choices=[(a, b) for a, b in
                                     zip(settings.INSTALLED_APPS,
@@ -70,7 +70,7 @@ class NewsSubItem(models.Model):
     images annotated as part of a annotation session. """
 
     news_item = models.ForeignKey(NewsItem)
-    message = models.CharField(null=False, blank=False, max_length=500)
+    message = models.TextField(null=False, blank=False, max_length=500)
     datetime = models.DateTimeField(auto_now_add=True, editable=False)
 
     def render_view(self):

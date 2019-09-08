@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% load show_markdown %}
+
 {% block content %}
 
 <table class="detail_table_scroll">
@@ -18,7 +20,7 @@
             {% else %}
                 <td> {{ news.source_name }} (deleted) </td>
             {% endif %}
-            <td> {{ news.message }} </td>
+            <td> {{ news.message|show_markdown|safe }} </td>
         </tr>
     {% endfor %}
 </table>

@@ -6,7 +6,6 @@ from django.contrib.auth.decorators import permission_required
 
 from .models import NewsItem, NewsSubItem
 
-
 @permission_required('is_superuser')
 def global_feed(request):
     print('in main')
