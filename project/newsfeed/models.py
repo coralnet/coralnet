@@ -55,6 +55,10 @@ class NewsItem(models.Model):
         curated['source_exists'] = sources.count() > 0
         return curated
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super(NewsItem, self).save(*args, **kwargs)
+
     def clean(self):
         if self.app not in settings.INSTALLED_APPS:
             raise ValidationError(
