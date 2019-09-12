@@ -18,7 +18,7 @@
         <td> {{ main.datetime }} </td>
         <td> {{ main.category }} </td>
         {% if main.user_exists %}
-            <td> <a href="{% url 'profile_detail' main.user_id %}">{{main.user_name}}</a></td>
+            <td> <a href="{% url 'profile_detail' main.user_id %}">{{main.user_username}}</a></td>
         {% else %}
             <td> {{ main.user_name }} (deleted) </td>
         {% endif %}

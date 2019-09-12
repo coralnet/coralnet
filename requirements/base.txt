@@ -124,3 +124,6 @@ supervisor==3.3.1
 
 # Progress bar for CLI
 tqdm==4.32.2
+
+# Support for rendering markdown as HTML 
+django-markdownx==2.0.28

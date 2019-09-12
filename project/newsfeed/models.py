@@ -11,14 +11,14 @@ from django.contrib.auth.models import User
 # Create your models here.
 
 
-def log_item(source, user, app, message):
+def log_item(source, user, category, message):
     """ Convenience method for creating a new NewsItem. """
     ns = NewsItem(source_name=source.name,
                   source_id=source.id,
                   user_id=user.id,
                   user_username=user.username,
                   message=message,
-                  app=app)
+                  category=category)
     ns.save()
     return ns
 

@@ -81,7 +81,6 @@ def source_permission_for_news_item(news_item, request, perm):
     news_item_permission_required decorator. """
 
     sources = Source.objects.filter(id=news_item.source_id)
-    print("found {} sources".format(sources.count()))
     if sources.count() == 1:
         return request.user.has_perm(perm, sources[0])
     else:
