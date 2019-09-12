@@ -4,6 +4,8 @@ from django.utils.functional import wraps
 
 from annotations.utils import image_annotation_area_is_editable
 from images.models import Source, Image
+from newsfeed.models import NewsItem
+
 
 class ModelViewDecorator():
     """
@@ -60,15 +62,31 @@ class ModelViewDecorator():
             return wraps(view_func)(_wrapped_view)
         return decorator
 
+
 def image_get_extra_context(image):
     return dict(
         image=image,
         source=image.source,
     )
+
+
 def source_get_extra_context(source):
     return dict(
         source=source,
     )
+
+
+def source_permission_for_news_item(news_item, request, perm):
+    """ Helper method for meets_requirements function of
+    news_item_permission_required decorator. """
+
+    sources = Source.objects.filter(id=news_item.source_id)
+    print("found {} sources".format(sources.count()))
+    if sources.count() == 1:
+        return request.user.has_perm(perm, sources[0])
+    else:
+        return request.user.is_superuser
+
 
 # @image_annotation_area_must_be_editable('image_id')
 image_annotation_area_must_be_editable = ModelViewDecorator(
@@ -132,6 +150,14 @@ source_permission_required = ModelViewDecorator(
     default_message="You don't have permission to access this part of this source."
 )
 
+# @news_item_permission_required('news_item_id', perm=Source.PermTypes.<YOUR_PERMISSION_TYPE_HERE>.code)
+news_item_permission_required = ModelViewDecorator(
+    model_class=NewsItem,
+    meets_requirements=lambda news_item, request, perm:
+    source_permission_for_news_item(news_item, request, perm),
+    template='permission_denied.html',
+    default_message="You don't have permission to view this news item."
+)
 
 # Version of login_required that can be used on Ajax views.
 # @login_required_ajax
