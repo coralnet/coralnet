@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% load markdown_to_html %}
+
 {% block content %}
 
 <h3>Main event</h3>
@@ -19,7 +21,7 @@
         {% else %}
             <td> {{ main.source_name }} (deleted) </td>
         {% endif %}
-        <td> {{ main.message }} </td>
+        <td> {{ main.message | markdown_to_html }} </td>
     </tr>
 </table>
 <h3>Sub events</h3>
@@ -31,7 +33,7 @@
     {% for sub in subs %}
     <tr>
         <td> {{ sub.datetime }} </td>
-        <td> {{ sub.message }} </td>
+        <td> {{ sub.message | markdown_to_html }} </td>
     </tr>
     {% endfor %}
 </table>

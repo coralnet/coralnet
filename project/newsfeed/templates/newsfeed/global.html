@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% load show_markdown %}
+{% load markdown_to_html %}
 
 {% block content %}
 
@@ -20,7 +20,7 @@
             {% else %}
                 <td> {{ news.source_name }} (deleted) </td>
             {% endif %}
-            <td> {{ news.message|show_markdown|safe }} </td>
+            <td> {{ news.message | markdown_to_html }} </td>
         </tr>
     {% endfor %}
 </table>
