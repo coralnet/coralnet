@@ -8,14 +8,20 @@
 <table class="detail_table_popup">
     <tr>
         <th>time</th>
-        <th>app</th>
+        <th>category</th>
+        <th>user</th>
         <th>source</th>
         <th>event</th>
     </tr>
 
     <tr>
         <td> {{ main.datetime }} </td>
-        <td> {{ main.app }} </td>
+        <td> {{ main.category }} </td>
+        {% if main.user_exists %}
+            <td> <a href="{% url 'profile_detail' main.user_id %}">{{main.user_name}}</a></td>
+        {% else %}
+            <td> {{ main.user_name }} (deleted) </td>
+        {% endif %}
         {% if main.source_exists %}
             <td> <a href="{% url 'source_main' main.source_id %}">{{main.source_name}}</a></td>
         {% else %}

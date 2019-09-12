@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from images.models import Source
+from django.contrib.auth.models import User
 
 # Create your models here.
 
@@ -42,11 +43,10 @@ class NewsItem(models.Model):
     user_username = models.CharField(null=False, blank=False, max_length=50)
 
     message = models.TextField(null=False, blank=False, max_length=500)
-    app = models.CharField(null=False, blank=False, max_length=50,
-                           choices=[(a, b) for a, b in
-                                    zip(settings.INSTALLED_APPS,
-                                        settings.INSTALLED_APPS)
-                                    if not a.startswith('django')])
+    category = models.CharField(null=False, blank=False, max_length=50,
+                                choices=[(a, b) for a, b in
+                                         zip(settings.NEWS_ITEM_CATEGORIES,
+                                             settings.NEWS_ITEM_CATEGORIES)])
     datetime = models.DateTimeField(auto_now_add=True, editable=False)
 
     def render_view(self):
@@ -57,7 +57,7 @@ class NewsItem(models.Model):
             'source_id': self.source_id,
             'user_username': self.user_username,
             'user_id': self.user_id,
-            'app': self.app,
+            'category': self.category,
             'message': self.message.format(subcount=NewsSubItem.objects.
                                            filter(news_item=self).count()),
             'datetime': self.datetime.strftime("%c"),
@@ -65,6 +65,9 @@ class NewsItem(models.Model):
         }
         sources = Source.objects.filter(id=self.source_id)
         curated['source_exists'] = sources.count() > 0
+
+        users = User.objects.filter(id=self.user_id)
+        curated['user_exists'] = users.count() > 0
         return curated
 
     def save(self, *args, **kwargs):
@@ -72,9 +75,10 @@ class NewsItem(models.Model):
         super(NewsItem, self).save(*args, **kwargs)
 
     def clean(self):
-        if self.app not in settings.INSTALLED_APPS:
+        if self.category not in settings.NEWS_ITEM_CATEGORIES:
             raise ValidationError(
-                "Doesn't recognize {} as an installed app.".format(self.app))
+                "Doesn't recognize {} as an installed app.".format(
+                    self.category))
 
 
 class NewsSubItem(models.Model):
