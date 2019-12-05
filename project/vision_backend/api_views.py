@@ -11,6 +11,8 @@ from images.models import Source
 
 class Deploy(APIView):
 
+    throttle_scope = 'deploy'
+
     def post(self, request, source_id):
         try:
             # Limit to public sources for now

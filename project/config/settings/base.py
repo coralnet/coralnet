@@ -447,18 +447,29 @@ MARKDOWNX_MARKDOWN_EXTENSIONS = [
 
 # Django REST Framework setting.
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
+    'DEFAULT_AUTHENTICATION_CLASSES': [
         # Log in, get cookies, and browse. Like any non-API website. This is
         # intended for use by the CoralNet website frontend.
         'rest_framework.authentication.SessionAuthentication',
         # Token authentication without OAuth. This is intended for use by
         # non-website applications, such as command line.
         'rest_framework.authentication.TokenAuthentication',
-    ),
-    'DEFAULT_PERMISSION_CLASSES': (
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
         # Must be authenticated to use the API.
         'rest_framework.permissions.IsAuthenticated',
-    ),
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        # There are multiple throttle scopes, with each scope covering a
+        # different set of API views.
+        'api.utils.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        # Each of these rates are tracked per user. That means per registered
+        # user, or per IP address if not logged in.
+        'deploy': '500/hour',
+        'token': '100/hour',
+    },
 }
 
 
