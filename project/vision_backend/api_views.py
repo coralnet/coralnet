@@ -1,37 +1,30 @@
 from __future__ import unicode_literals
 
-from django.http import Http404, JsonResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
 
 from images.models import Source
 
 
-def deploy(request, source_id):
+class Deploy(APIView):
 
-    try:
-        # Limit to public sources for now
-        source = get_object_or_404(
-            Source, id=source_id, visibility=Source.VisibilityTypes.PUBLIC)
-    except Http404:
-        return JsonResponse(
-            dict(errors=[
-                dict(title="No matching source found")
-            ]),
-            status=404
-        )
-
-    if request.method == 'GET':
+    def post(self, request, source_id):
+        try:
+            # Limit to public sources for now
+            source = get_object_or_404(
+                Source, id=source_id, visibility=Source.VisibilityTypes.PUBLIC)
+        except Http404:
+            return Response(
+                dict(errors=[
+                    dict(title="No matching source found")
+                ]),
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         data = dict(
             name=source.name
         )
-        return JsonResponse(dict(data=data))
-
-    else:
-
-        return JsonResponse(
-            dict(errors=[
-                dict(title="Unsupported request method")
-            ]),
-            status=400
-        )
+        return Response(dict(data=data))

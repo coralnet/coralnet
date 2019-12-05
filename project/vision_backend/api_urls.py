@@ -7,5 +7,5 @@ from . import api_views
 
 urlpatterns = [
     url(r'^sources/(?P<source_id>\d+)/deploy/$',
-        api_views.deploy, name='deploy'),
+        api_views.Deploy.as_view(), name='deploy'),
 ]

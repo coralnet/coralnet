@@ -3,6 +3,7 @@ from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.views.generic import TemplateView
+from rest_framework.authtoken import views as authtoken_views
 
 import lib.views as lib_views
 import vision_backend.views as backend_views
@@ -45,6 +46,9 @@ urlpatterns = [
 
     # API
     url(r'^api/', include('vision_backend.api_urls', namespace='api')),
+    # Token authentication for the API
+    url(r'^api/token-auth/',
+        authtoken_views.obtain_auth_token, name='api_token_auth'),
 
     # "Secret" dev views
     url(r'^nav_test/(?P<source_id>\d+)/$', lib_views.nav_test, name="nav_test"),
