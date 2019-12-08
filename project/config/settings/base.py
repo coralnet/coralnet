@@ -1,6 +1,7 @@
 # Base settings for any type of server.
 
 import json
+import os
 
 from unipath import Path
 
@@ -26,22 +27,25 @@ SITE_DIR = PROJECT_DIR.ancestor(2)
 LOG_DIR = SITE_DIR.child('log')
 
 # JSON-based secrets module, expected to be in the SETTINGS_DIR
-with open(SETTINGS_DIR.child('secrets.json')) as f:
-    secrets = json.loads(f.read())
+if os.path.exists(SETTINGS_DIR.child('secrets.json')):
+    with open(SETTINGS_DIR.child('secrets.json')) as f:
+        secrets = json.loads(f.read())
 
-    def get_secret(setting, secrets_=secrets, required=True):
-        """
-        Get the secret variable. If the variable is required,
-        raise an error if it's not present.
-        """
-        try:
-            return secrets_[setting]
-        except KeyError:
-            if required:
-                error_msg = "Set the {setting} setting in secrets.json".format(
-                    setting=setting)
-                raise ImproperlyConfigured(error_msg)
-            return ""
+        def get_secret(setting, secrets_=secrets, required=True):
+            """
+            Get the secret variable. If the variable is required,
+            raise an error if it's not present.
+            """
+            try:
+                return secrets_[setting]
+            except KeyError:
+                if required:
+                    error_msg = "Set the {setting} setting in secrets.json".format(
+                        setting=setting)
+                    raise ImproperlyConfigured(error_msg)
+                return ""
+else:
+    print("Couldn't find secrets file.")
 
 
 # In general, first come Django settings, then 3rd-party app settings,

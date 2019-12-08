@@ -4,8 +4,6 @@
 
 from .base import *
 
-
-
 DEBUG = True
 
 # Instead of routing emails through a mail server,

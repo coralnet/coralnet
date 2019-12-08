@@ -4,7 +4,6 @@ from .base import *
 from .storage_s3 import *
 
 
-
 DEBUG = False
 
 # [Custom setting]

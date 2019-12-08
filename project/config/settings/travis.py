@@ -1,20 +1,20 @@
-# Partial settings definition for setups using local file storage.
-# Note that the MEDIA_URL definition assumes DEBUG is True.
+# Settings to be used for Travis CI.
+# Here we don't use secrets.json since these settings are just for testing
 
-from .base import get_secret, SITE_DIR, DATABASES
+from .base_devserver import *
 
 
 DATABASES['default'].update({
     # Database name, or path to database file if using sqlite3.
-    'NAME': get_secret("LOCAL_STORAGE_DATABASE_NAME"),
+    'NAME': 'travis_ci_test',
     # Not used with sqlite3.
-    'USER': get_secret("LOCAL_STORAGE_DATABASE_USER"),
+    'USER': 'mr_travis',
     # Not used with sqlite3.
-    'PASSWORD': get_secret("LOCAL_STORAGE_DATABASE_PASSWORD", required=False),
+    'PASSWORD': "",
     # Set to empty string for localhost. Not used with sqlite3.
-    'HOST': get_secret("LOCAL_STORAGE_DATABASE_HOST", required=False),
+    'HOST': "",
     # Set to empty string for default. Not used with sqlite3.
-    'PORT': get_secret("LOCAL_STORAGE_DATABASE_PORT", required=False),
+    'PORT': "",
 })
 
 # Default file storage mechanism that holds media.
