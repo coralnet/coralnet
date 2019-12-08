@@ -157,7 +157,7 @@ class UnicodeTest(BaseExportTest):
         response = self.export_image_covers(post_data)
 
         expected_lines = [
-            'Name,Annotation status,Annotation area,A,い',
+            'Name,Annotation status,Annotation area,い,A',
             'あ.jpg,Confirmed,X: 0 - 100% / Y: 0 - 100%,60.000,40.000',
         ]
         self.assert_csv_content_equal(
