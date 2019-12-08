@@ -382,12 +382,13 @@ class TempStorageTestRunner(DiscoverRunner):
 
         # Run tests with the above storage settings applied.
         with override_settings(**test_storage_settings):
-            super(TempStorageTestRunner, self).run_tests(
+            return_code = super(TempStorageTestRunner, self).run_tests(
                 test_labels, extra_tests=extra_tests, **kwargs)
 
         # Clean up the temp dirs after the tests are done.
         storage_manager.remove_temp_dir(test_storage_dir)
         storage_manager.remove_temp_dir(post_setuptestdata_state_dir)
+        return return_code
 
 
 @override_settings(**test_settings)
