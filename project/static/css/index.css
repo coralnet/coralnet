@@ -61,11 +61,6 @@
     margin: 0 0 0 10px;
 }
 
-p.map-explanation {
-    text-align: center;
-    margin: 0.9em 0;    /* top/bottom left/right */
-}
-
 div.index-container-after-map {
     display: flex;
     flex-wrap: wrap;
