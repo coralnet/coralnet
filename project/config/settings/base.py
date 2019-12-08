@@ -342,6 +342,8 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 # generates a random secret key and puts it in settings, so use that.
 if has_secrets:
     SECRET_KEY = get_secret("DJANGO_SECRET_KEY")
+else:
+    SECRET_KEY = "NOT_SECRET_KEY"
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'source_list'
