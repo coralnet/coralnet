@@ -1,5 +1,5 @@
 # CoralNet
-
+Dummy edit
 CoralNet is a website which serves as a repository and resource for benthic image analysis.
 
 Website home: https://coralnet.ucsd.edu
