@@ -158,7 +158,7 @@ class UnicodeTest(BaseExportTest):
 
         expected_lines = [
             'Name,Annotation status,Annotation area,い,A',
-            'あ.jpg,Confirmed,X: 0 - 100% / Y: 0 - 100%,60.000,40.000',
+            'あ.jpg,Confirmed,X: 0 - 100% / Y: 0 - 100%,40.000,60.000',
         ]
         self.assert_csv_content_equal(
             response.content.decode('utf-8'), expected_lines)
