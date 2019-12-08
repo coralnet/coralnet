@@ -86,8 +86,8 @@ class GeneralTest(BaseExportTest, LabelTest):
         # Lines are sorted by short code
         expected_lines = [
             'Label ID,Short Code',
-            '{id_C},C'.format(id_C=self.labels['C'].pk),
             '{id_A},あ'.format(id_A=self.labels['A'].pk),
+            '{id_C},C'.format(id_C=self.labels['C'].pk),
         ]
         self.assert_csv_content_equal(
             response.content.decode('utf-8'), expected_lines)
