@@ -2,6 +2,7 @@
 
 {% load humanize %}
 {% load thumbnail %}
+{% load static from staticfiles %}
 
 {% block js-includes %}
     {% include "javascript-includes.html" with jquery_form="yes" jquery_ui="yes" bootstrap_carousel="yes" map="yes" %}
@@ -47,19 +48,18 @@
     </div>
 
     <h1>CoralNet <span class="beta">BETA</span></h1>
-    <h2>A Web solution for coral reef analysis</h2>
+    <h2>A Web solution for coral reef analysis
+    <a href="https://github.com/beijbom/coralnet">
+            <img border="0" alt="GitHub" src={% static "img/GitHub-Mark-32px.png" %} width="30"></a></h2>
 
     <p>Upload coral reef images, organize and annotate images, and view annotation statistics.</p>
 
     <a class="sign-in" href="{% url 'login' %}">Sign In</a>
     <a class="register" href="{% url 'django_registration_register' %}">Register</a>
-    <a class="about" href="{% url 'about' %}">What is CoralNet?</a>
+    <a class="about" href="{% url 'about' %}">About</a>
 
 
 </div><!-- /intro-->
-
-<p class="map-explanation">Visit data sources from around the world using the map below.</p>
-<p class="map-explanation">Click on public sources (green) and browse their image and annotation data.</p>
 
 {% include 'lib/map.html' %}
 
