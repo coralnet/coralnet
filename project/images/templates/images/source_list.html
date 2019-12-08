@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+ {% load humanize %} 
+
 {% block js-includes %}
   {% include "javascript-includes.html" with map="yes" %}
 {% endblock %}
@@ -41,6 +43,18 @@
   <h2>Other Public Sources</h2>
 
   {% include 'lib/map.html' %}
+
+  <div class="index-container-after-map">
+  <div class="site-stats">
+    <h2>Sitewide Statistics</h2>
+    <ul>
+      <li>Number of sources: {{ total_sources|intcomma}}</li>
+      <li>Number of images: {{ total_images|intcomma}}</li>
+      <li>Number of point annotations: {{ total_annotations|intcomma}}</li>
+    </ul>
+  </div>
+  </div>
+  <hr />
 
   <ul class="object_list">
     {% for source in other_public_sources %}

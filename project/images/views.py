@@ -19,7 +19,7 @@ from .models import Source, Image, SourceInvite, Metadata
 from .utils import get_map_sources
 from annotations.forms import AnnotationAreaPercentsForm
 from annotations.model_utils import AnnotationAreaUtils
-from annotations.utils import image_annotation_area_is_editable, image_has_any_human_annotations
+from annotations.utils import image_annotation_area_is_editable, image_has_any_human_annotations, get_sitewide_annotation_count
 from labels.models import LabelGroup
 from annotations.models import Annotation
 from newsfeed.models import NewsItem
@@ -45,10 +45,18 @@ def source_list(request):
                           for s in your_sources]
     other_public_sources = Source.get_other_public_sources(request.user)
 
+    # Gather some stats
+    total_sources = Source.objects.all().count()
+    total_images = Image.objects.all().count()
+    total_annotations = get_sitewide_annotation_count()
+
     return render(request, 'images/source_list.html', {
         'your_sources': your_sources_dicts,
         'map_sources': get_map_sources(),
         'other_public_sources': other_public_sources,
+        'total_sources': total_sources,
+        'total_images': total_images,
+        'total_annotations': total_annotations,
     })
 
 
