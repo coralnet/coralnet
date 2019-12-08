@@ -13,20 +13,48 @@
 <h1>About CoralNet</h1>
     
     <p class="abstract">
-        CoralNet is a repository and a resource for benthic images analysis.
+        CoralNet is a resource for benthic images analysis.
         The site deploys deep neural networks which allow fully and semi automated annotation of images.
-        It also serves as a repository and collaboration platform.
-        CoralNet is free to use thanks to generous support from NSF and NOAA.
+        It also serves as a data repository and collaboration platform.
+        CoralNet is <a href="https://github.com/beijbom/coralnet">open source</a> and
+        free to use thanks to generous support from NSF and NOAA.
     </p>
 
     <ul class="indexlist">
-    <li class="first-item"><a href="#story">story</a></li>
-    <li><a href="#site">site</a></li>
+    <li class="first-item"><a href="#site">site</a></li>
+    <li><a href="#story">story</a></li>
     <li><a href="#datapolicy">data policy</a></li>
     <li><a href="#acknowledgments">acknowledgments</a></li>
     <li><a href="#people">people</a></li>
+
     <li><a href="#press">press</a></li>
     </ul>
+
+    <h2 id="site">The site<a class="section-anchor" data-scroll-name="#site"></a></h2>
+    <p>
+        The CoralNet website consist of several modules outlined below.
+        For some (slightly outdated) information, check out
+        our <a href="http://vimeo.com/channels/coralnet">Vimeo channel</a>.
+    </p>
+    <p>
+        <b>Source:</b> Main organizational element for a benthic survey or image "source".
+        Here you specify your labelset, your privacy settings, and invite collaborators.
+    </p>
+    <p>
+        <b>Labelset:</b> Specify what labels you want to use in your analysis.
+        Choose from a set of existing labels or create your own.
+    </p>
+    <p>
+        <b>Import:</b> Upload images, metadata and archived annotations to the site.
+    </p>
+    <p>
+        <b>Annotation:</b> Annotate your image right in the web browser using a point count interface.
+        When enough images are manually annotated, an automated annotator is trained.
+        This automated annotator is integrated directly into the annotation tool and
+        makes the remaining annotation work easier.
+    </p>
+
+    <p class="uparrow border"><a href="#main">&#9650</a></p>
 
     <h2 id="background">Story<a class="section-anchor" data-scroll-name="#story"></a></h2>
     <h4>Introduction</h4>
@@ -49,7 +77,7 @@
         were made available to reef researchers, managers and enthusiasts.
         However, deploying such methods is not trivial. They require significant compute resources,
         integration to the user-interface has to be done just right, and they require a lot of training data.
-        In particular, getting a hold of large amounts of well-organized annotation data was difficult.
+        In particular, getting a hold of large amounts of annotated data was very difficult at the time.
         For all those reasons releasing code or developing a desktop application was not going to cut it,
         it needed to be a fully managed web-server.
     </p>
@@ -101,44 +129,18 @@
         <a href="https://www.frontiersin.org/articles/10.3389/fmars.2019.00222/full">Williams et al.</a> at NOAA
         conducted a large study and showed that the automated annotations for CoralNet Beta produced benthic cover
         estimates highly correlated with those derived from human annotators.
-        This study thus suggests that CoralNet was finally accurate enough to address the manual annotation bottleneck!
+        This study thus suggests that CoralNet was finally accurate enough to fully address the manual annotation bottleneck!
     </p>
     <p>
         Following these results a second grant was received from NOAA to develop CoralNet Beta 2.
         This work will proceed along two main avenues.
-        First, an API will be developed to allow the deployment of a trained classifier on vast number of images.
-        This, in turn, enables the creation of a repository of trained classifiers from which users can choose from.
+        First, an API will be developed to allow easy and automated deployment of a trained classifier on new images.
+        This also enables the creation of a repository of trained classifiers from which users can choose from.
         Second, we will take another look at the core technology behind the computer vision system to see if we can push
         performance even further.
     </p>
     <p>
       CoralNet is open source. You can visit our <a href="https://github.com/beijbom/coralnet">GitHub repository</a> to see what we're working on, learn how the website works, or even contribute improvements.
-    </p>
-
-    <p class="uparrow border"><a href="#main">&#9650</a></p>
-
-    <h2 id="site">The site<a class="section-anchor" data-scroll-name="#site"></a></h2>
-    <p>
-        The CoralNet website consist of several modules outlined below.
-        For some (slightly outdated) information, check out
-        our <a href="http://vimeo.com/channels/coralnet">Vimeo channel</a>.
-    </p>
-    <p>
-        <b>Source:</b> Main organizational element for a benthic survey or image "source".
-        Here you specify your labelset, your privacy settings, and invite collaborators.
-    </p>
-    <p>
-        <b>Labelset:</b> Specify what labels you want to use in your analysis.
-        Choose from a set of existing labels or create your own.
-    </p>
-    <p>
-        <b>Import:</b> Upload images, metadata and archived annotations to the site.
-    </p>
-    <p>
-        <b>Annotation:</b> Annotate your image right in the web browser using a point count interface.
-        When enough images are manually annotated, an automated annotator is trained.
-        This automated annotator is integrated directly into the annotation tool and
-        makes the remaining annotation work easier.
     </p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
@@ -250,6 +252,7 @@
         </ul>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
+
     <h2 id="press">Press<a class="section-anchor" data-scroll-name="#press"></a></h2>
     <ul >
     <li>January 2017: Our beta launch featured in phys.org
