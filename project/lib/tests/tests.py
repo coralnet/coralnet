@@ -19,13 +19,6 @@ from ..utils import direct_s3_write, direct_s3_read
 from .utils import BaseTest, ClientTest, sample_image_as_file
 
 
-class FailingTest(ClientTest):
-
-    def test_will_fail(self):
-
-        self.assertEqual(True, False)
-
-
 class IndexTest(ClientTest):
     """
     Test the site index page.
