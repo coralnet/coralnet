@@ -482,10 +482,14 @@ MAP_IMAGE_COUNT_TIERS = [100, 500, 1500]
 # It seems that development servers don't need an API key though.
 if has_secrets:
     GOOGLE_MAPS_API_KEY = get_secret("GOOGLE_MAPS_API_KEY", required=False)
+else:
+    GOOGLE_MAPS_API_KEY = ""
 
 # [Custom settings]
 if has_secrets:
     GOOGLE_ANALYTICS_CODE = get_secret("GOOGLE_ANALYTICS_CODE", required=False)
+else:
+    GOOGLE_ANALYTICS_CODE = ""
 
 # Celery
 BROKER_URL = 'redis://localhost:6379'

@@ -30,8 +30,9 @@ install:
 before_script:
   - psql -c "CREATE DATABASE travis_ci_test;" -U postgres
   - mkdir ../log
+  - mkdir ../tmp
   - cd project
 
 script:
-  - python manage.py syncdb --noinput
+  - python manage.py migrate
   - python manage.py test
