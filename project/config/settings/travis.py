@@ -8,7 +8,7 @@ DATABASES['default'].update({
     # Database name, or path to database file if using sqlite3.
     'NAME': 'travis_ci_test',
     # Not used with sqlite3.
-    'USER': 'mr_travis',
+    'USER': "",
     # Not used with sqlite3.
     'PASSWORD': "",
     # Set to empty string for localhost. Not used with sqlite3.
