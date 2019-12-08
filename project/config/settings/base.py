@@ -44,8 +44,10 @@ if os.path.exists(SETTINGS_DIR.child('secrets.json')):
                         setting=setting)
                     raise ImproperlyConfigured(error_msg)
                 return ""
+    has_secrets = True
 else:
     print("Couldn't find secrets file.")
+    has_secrets = False
 
 
 # In general, first come Django settings, then 3rd-party app settings,
@@ -338,7 +340,8 @@ SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
 # hashing algorithms.
 # Make this unique. Django's manage.py startproject command automatically
 # generates a random secret key and puts it in settings, so use that.
-SECRET_KEY = get_secret("DJANGO_SECRET_KEY")
+if has_secrets:
+    SECRET_KEY = get_secret("DJANGO_SECRET_KEY")
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'source_list'
@@ -475,10 +478,12 @@ MAP_IMAGE_COUNT_TIERS = [100, 500, 1500]
 # [Custom setting]
 # https://developers.google.com/maps/faq - "How do I get a new API key?"
 # It seems that development servers don't need an API key though.
-GOOGLE_MAPS_API_KEY = get_secret("GOOGLE_MAPS_API_KEY", required=False)
+if has_secrets:
+    GOOGLE_MAPS_API_KEY = get_secret("GOOGLE_MAPS_API_KEY", required=False)
 
 # [Custom settings]
-GOOGLE_ANALYTICS_CODE = get_secret("GOOGLE_ANALYTICS_CODE", required=False)
+if has_secrets:
+    GOOGLE_ANALYTICS_CODE = get_secret("GOOGLE_ANALYTICS_CODE", required=False)
 
 # Celery
 BROKER_URL = 'redis://localhost:6379'
