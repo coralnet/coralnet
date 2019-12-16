@@ -8,5 +8,5 @@ from . import views
 urlpatterns = [
     url(r'^token-auth/$',
         views.ObtainAuthToken.as_view(), name='token_auth'),
-    url(r'', include('vision_backend.api_urls')),
+    url(r'', include('vision_backend_api.urls')),
 ]
