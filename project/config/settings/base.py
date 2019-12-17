@@ -462,7 +462,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_CLASSES': [
         # There are multiple throttle scopes, with each scope covering a
         # different set of API views.
-        'api.utils.ScopedRateThrottle',
+        'api_core.utils.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         # Each of these rates are tracked per user. That means per registered
