@@ -42,8 +42,9 @@ SELENIUM_BROWSERS = [
 
 # I'll uncomment this for running our Selenium tests, since those tests
 # require an in-memory database like SQLite.
-if 'test' in sys.argv:
-    DATABASES['default']['ENGINE'] = 'django.db.backends.sqlite3'
+# TODO: SQLite won't work as long as JSONField is PostgreSQL-only.
+#if 'test' in sys.argv:
+#    DATABASES['default']['ENGINE'] = 'django.db.backends.sqlite3'
 
 # If I ever test with DEBUG = False, I'll want to:
 # - Set an ALLOWED_HOSTS, otherwise runserver gets a CommandError

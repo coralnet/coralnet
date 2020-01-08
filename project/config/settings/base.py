@@ -148,6 +148,7 @@ DATABASES = {
 INSTALLED_APPS = [
     'accounts',
     'annotations',
+    'api_core',
     'async_media',
     'blog',
     'bug_reporting',
