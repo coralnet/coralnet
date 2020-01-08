@@ -87,9 +87,9 @@ class ClientUtilsMixin(object):
     PERMISSION_DENIED_TEMPLATE = 'permission_denied.html'
     NOT_FOUND_TEMPLATE = '404.html'
 
-    def assertStatusOK(self, response):
+    def assertStatusOK(self, response, msg=None):
         """Assert that an HTTP response's status is 200 OK."""
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 200, msg)
 
     @classmethod
     def create_superuser(cls):
