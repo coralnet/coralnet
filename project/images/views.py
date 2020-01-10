@@ -160,9 +160,11 @@ def source_main(request, source_id):
 
     # Images' annotation status
     browse_url_base = reverse('browse_images', args=[source.id])
+
     def image_count_by_status(annotation_status):
         return image_search_kwargs_to_queryset(
             dict(annotation_status=annotation_status), source).count()
+
     def browse_link_filtered_by_status(annotation_status):
         return browse_url_base + '?' + urllib.urlencode(dict(
             image_form_type='search', annotation_status=annotation_status))
