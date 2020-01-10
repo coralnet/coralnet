@@ -587,3 +587,8 @@ LIKELY_TEST_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check']
 
 # NewsItem categories used in NewsItem app.
 NEWS_ITEM_CATEGORIES = ['ml', 'source', 'image', 'annotation', 'account']
+
+# Label patch settings
+LABELPATCH_NCOLS = 150  # Size of patch (after scaling)
+LABELPATCH_NROWS = 150  # Size of patch (after scaling)
+LABELPATCH_SIZE_FRACTION = 0.2  # Patch covers this proportion of the original image's greater dimension
