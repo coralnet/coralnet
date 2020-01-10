@@ -1,7 +1,6 @@
 from io import BytesIO
 import operator
 import re
-import numpy as np
 
 from django.conf import settings
 from django.core.files.storage import get_storage_class
@@ -35,8 +34,7 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
             pass
         elif value == '(none)':
             # Get images with an empty value for this field
-            if isinstance(
-              Metadata._meta.get_field(field_name), model_fields.CharField):
+            if isinstance(Metadata._meta.get_field(field_name), model_fields.CharField):
                 metadata_kwargs['metadata__' + field_name] = ''
             else:
                 metadata_kwargs['metadata__' + field_name] = None
