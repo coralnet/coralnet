@@ -34,7 +34,8 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
             pass
         elif value == '(none)':
             # Get images with an empty value for this field
-            if isinstance(Metadata._meta.get_field(field_name), model_fields.CharField):
+            if isinstance(Metadata._meta.get_field(field_name),
+                          model_fields.CharField):
                 metadata_kwargs['metadata__' + field_name] = ''
             else:
                 metadata_kwargs['metadata__' + field_name] = None
@@ -114,7 +115,8 @@ def generate_patch_if_doesnt_exist(point_id):
     original_image_file = storage.open(original_image_relative_path)
 
     # Figure out the patch size to crop, and which to resize to.
-    patch_size = int(max(point.image.original_width, point.image.original_height)
+    patch_size = int(max(point.image.original_width,
+                         point.image.original_height)
                      * settings.LABELPATCH_SIZE_FRACTION)
 
     # Load the image convert to RGB
@@ -133,8 +135,10 @@ def generate_patch_if_doesnt_exist(point_id):
                             settings.LABELPATCH_NROWS))
 
     # Save the image.
-    # First use Pillow's save() method on an IO stream (so we don't have to create a temporary file).
-    # Then save the image, using the path constructed earlier and the contents of the stream.
+    # First use Pillow's save() method on an IO stream
+    # (so we don't have to create a temporary file).
+    # Then save the image, using the path constructed earlier
+    # and the contents of the stream.
     # This approach should work with both local and remote storage.
     with BytesIO() as stream:
         region.save(stream, 'JPEG')
