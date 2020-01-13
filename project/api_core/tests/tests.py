@@ -1,4 +1,5 @@
 from __future__ import unicode_literals
+import copy
 from datetime import timedelta
 
 from django.conf import settings
@@ -64,13 +65,6 @@ class AuthTest(ClientTest):
             "Token auth should work")
 
 
-# Alter throttle rates for this test.
-throttle_test_settings = settings.REST_FRAMEWORK.copy()
-throttle_test_settings['DEFAULT_THROTTLE_RATES'] = {
-    'deploy': '3/hour',
-    'token': '5/hour',
-}
-@override_settings(REST_FRAMEWORK=throttle_test_settings)
 class ThrottleTest(ClientTest):
     """
     Test API throttling.
@@ -93,81 +87,98 @@ class ThrottleTest(ClientTest):
         # test. So we clear the cache between tests.
         cache.clear()
 
-    def test_token_view_throttling(self):
-        token = None
-        for _ in range(5):
-            response = self.client.post(
-                reverse('api:token_auth'),
-                dict(username='testuser', password='SamplePassword'))
-            self.assertStatusOK(
-                response, "1st-5th requests should be permitted")
-            token = response.json()['token']
-
-        # .
+    def request_token(self, username='testuser'):
         response = self.client.post(
             reverse('api:token_auth'),
-            dict(username='testuser', password='SamplePassword'))
-        self.assertEqual(
-            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
-            "6th request should be denied by throttling")
+            dict(username=username, password='SamplePassword'))
+        return response
 
-        response = self.client.post(
-            reverse('api:deploy', args=[self.source.pk]),
-            HTTP_AUTHORIZATION='Token {token}'.format(token=token))
-        # This response might not be OK, if there's some requirement missing
-        # for deploy, but at least it shouldn't be throttled.
-        self.assertNotEqual(
-            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
-            "Throttle scopes besides 'token' should not be affected"
-            " by the previous requests")
+    # Alter throttle rates for the following test. Use deepcopy to avoid
+    # altering the original setting, since it's a nested data structure.
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['burst'] = '3/min'
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['sustained'] = '100/hour'
 
-    def test_throttling_tracked_per_registered_user(self):
-        # Get a token for testuser.
-        response = self.client.post(
-            reverse('api:token_auth'),
-            dict(username='testuser', password='SamplePassword'))
-        token = response.json()['token']
-
-        # 1st-3rd requests.
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_burst_throttling(self):
+        """Test that we get throttled if we hit the burst rate but not the
+        sustained rate."""
         for _ in range(3):
-            self.client.post(
-                reverse('api:deploy', args=[self.source.pk]),
-                HTTP_AUTHORIZATION='Token {token}'.format(token=token))
+            response = self.request_token()
+            self.assertStatusOK(
+                response, "1st-3rd requests should be permitted")
 
-        response = self.client.post(
-            reverse('api:deploy', args=[self.source.pk]),
-            HTTP_AUTHORIZATION='Token {token}'.format(token=token))
+        response = self.request_token()
         self.assertEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "4th request should be denied by throttling")
 
-        # Get a token for testuser2.
-        response = self.client.post(
-            reverse('api:token_auth'),
-            dict(username='testuser2', password='SamplePassword'))
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['burst'] = '100/min'
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['sustained'] = '3/hour'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_sustained_throttling(self):
+        """Test that we get throttled if we hit the sustained rate but not the
+        burst rate."""
+        for _ in range(3):
+            response = self.request_token()
+            self.assertStatusOK(
+                response, "1st-3rd requests should be permitted")
+
+        response = self.request_token()
+        self.assertEqual(
+            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+            "4th request should be denied by throttling")
+
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['burst'] = '3/min'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_throttling_tracked_per_registered_user(self):
+        response = self.request_token(username='testuser')
         token = response.json()['token']
+
+        for _ in range(3):
+            response = self.client.post(
+                reverse('api:deploy', args=[self.source.pk]),
+                HTTP_AUTHORIZATION='Token {token}'.format(token=token))
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "1st-3rd testuser requests should not be throttled")
 
         response = self.client.post(
             reverse('api:deploy', args=[self.source.pk]),
             HTTP_AUTHORIZATION='Token {token}'.format(token=token))
-        self.assertNotEqual(
-            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
-            "testuser2 should not be affected by testuser's"
-            " previous requests")
-
-    def test_throttling_tracked_per_anonymous_ip(self):
-        # 1st-5th requests.
-        for _ in range(5):
-            self.client.post(
-                reverse('api:token_auth'),
-                dict(username='testuser', password='SamplePassword'))
-
-        response = self.client.post(
-            reverse('api:token_auth'),
-            dict(username='testuser', password='SamplePassword'))
         self.assertEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
-            "6th request should be denied by throttling")
+            "4th testuser request should be throttled")
+
+        response = self.request_token(username='testuser2')
+        token_2 = response.json()['token']
+
+        for _ in range(3):
+            response = self.client.post(
+                reverse('api:deploy', args=[self.source.pk]),
+                HTTP_AUTHORIZATION='Token {token}'.format(token=token_2))
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "testuser2 should not be affected by testuser's requests")
+
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['burst'] = '3/min'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_throttling_tracked_per_anonymous_ip(self):
+        for _ in range(3):
+            response = self.request_token()
+            self.assertStatusOK(
+                response, "1st-3rd anon-1 requests should be permitted")
+
+        response = self.request_token()
+        self.assertEqual(
+            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+            "4th anon-1 request should be denied by throttling")
 
         # When anonymous users are making API requests, DRF distinguishes
         # those users by IP address for rate limiting purposes. So we simulate
@@ -176,12 +187,12 @@ class ThrottleTest(ClientTest):
             reverse('api:token_auth'),
             dict(username='testuser', password='SamplePassword')]
         kwargs = dict(REMOTE_ADDR='1.2.3.4')
-        for _ in range(5):
+        for _ in range(3):
             response = self.client.post(*args, **kwargs)
             self.assertStatusOK(
                 response,
-                "Different anonymous IP should not be affected by the"
-                " first anonymous IP's requests")
+                "Different anon IP should not be affected by the"
+                " first anon IP's requests")
 
 
 class JobCleanupTest(ClientTest):

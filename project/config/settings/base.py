@@ -461,15 +461,16 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_THROTTLE_CLASSES': [
-        # There are multiple throttle scopes, with each scope covering a
-        # different set of API views.
-        'api_core.utils.ScopedRateThrottle',
+        # These classes allow us to define multiple throttle rates. If either
+        # rate is met, subsequent requests are throttled.
+        'api_core.utils.BurstRateThrottle',
+        'api_core.utils.SustainedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         # Each of these rates are tracked per user. That means per registered
         # user, or per IP address if not logged in.
-        'deploy': '500/hour',
-        'token': '100/hour',
+        'burst': '50/min',
+        'sustained': '500/hour',
     },
 }
 

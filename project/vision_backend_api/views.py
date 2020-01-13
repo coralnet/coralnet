@@ -18,8 +18,6 @@ class Deploy(APIView):
     """
     Request a classifier deployment on a specified set of images.
     """
-    throttle_scope = 'deploy'
-
     def post(self, request, classifier_id):
         # The classifier must exist and be visible to the user.
         try:

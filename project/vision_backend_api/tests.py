@@ -125,7 +125,7 @@ class DeployAccessTest(BaseAPIPermissionTest):
     # Alter throttle rates for the following test. Use deepcopy to avoid
     # altering the original setting, since it's a nested data structure.
     throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
-    throttle_test_settings['DEFAULT_THROTTLE_RATES']['deploy'] = '3/hour'
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['sustained'] = '3/hour'
 
     @override_settings(REST_FRAMEWORK=throttle_test_settings)
     def test_throttling(self):
@@ -204,6 +204,26 @@ class DeployStatusAccessTest(BaseAPIPermissionTest):
         url = reverse('api:deploy_status', args=[job.pk])
         self.assertNotFound(url, self.user_admin_token_headers)
 
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['sustained'] = '3/hour'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_throttling(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+
+        for _ in range(3):
+            response = self.client.get(url, **self.user_token_headers)
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "1st-3rd requests should not be throttled")
+
+        response = self.client.get(url, **self.user_token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+            "4th request should be denied by throttling")
+
 
 class DeployResultAccessTest(BaseAPIPermissionTest):
 
@@ -264,6 +284,26 @@ class DeployResultAccessTest(BaseAPIPermissionTest):
         job.save()
         url = reverse('api:deploy_result', args=[job.pk])
         self.assertNotFound(url, self.user_admin_token_headers)
+
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['sustained'] = '3/hour'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
+    def test_throttling(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+
+        for _ in range(3):
+            response = self.client.get(url, **self.user_token_headers)
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "1st-3rd requests should not be throttled")
+
+        response = self.client.get(url, **self.user_token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+            "4th request should be denied by throttling")
 
 
 class DeployImagesParamErrorTest(DeployBaseTest):
