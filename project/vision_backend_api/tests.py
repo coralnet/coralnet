@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 from abc import ABCMeta
+import copy
 import json
 import six
 
@@ -12,8 +13,10 @@ from mock import patch
 from rest_framework import status
 
 from api_core.models import ApiJob, ApiJobUnit
+from api_core.tests.utils import BaseAPIPermissionTest
 from images.models import Source
 from lib.tests.utils import ClientTest
+from vision_backend.models import Classifier
 from .tasks import deploy_extract_features, deploy_classify
 
 
@@ -23,6 +26,8 @@ class DeployBaseTest(ClientTest):
     longMessage = True
 
     def setUp(self):
+        super(DeployBaseTest, self).setUp()
+
         # DRF implements throttling by tracking usage counts in the cache.
         # We don't want usages in one test to trigger throttling in another
         # test. So we clear the cache between tests.
@@ -41,8 +46,8 @@ class DeployBaseTest(ClientTest):
             cls.user, visibility=Source.VisibilityTypes.PUBLIC)
         cls.labels = cls.create_labels(cls.user, ['A'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
-        cls.create_robot(cls.source)
-        cls.deploy_url = reverse('api:deploy', args=[cls.source.pk])
+        cls.classifier = cls.create_robot(cls.source)
+        cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])
 
         # Get a token
         response = cls.client.post(
@@ -57,59 +62,208 @@ class DeployBaseTest(ClientTest):
             HTTP_AUTHORIZATION='Token {token}'.format(token=token))
 
 
-# Alter throttle rates for this test.
-throttle_test_settings = settings.REST_FRAMEWORK.copy()
-throttle_test_settings['DEFAULT_THROTTLE_RATES'] = {
-    'deploy': '3/hour',
-    'token': '5/hour',
-}
-@override_settings(REST_FRAMEWORK=throttle_test_settings)
-class DeployAccessErrorTest(DeployBaseTest):
+class DeployAccessTest(BaseAPIPermissionTest):
 
-    def test_nonexistent_source(self):
-        # To ensure we have an ID which corresponds to no source, we'll
-        # create a source, get its ID, and then delete it.
-        source = self.create_source(self.user)
-        url = reverse('api:deploy', args=[source.pk])
-        source.delete()
-
-        response = self.client.post(url, **self.token_headers)
+    def assertNotFound(self, url, token_headers):
+        response = self.client.post(url, **token_headers)
         self.assertEqual(
             response.status_code, status.HTTP_404_NOT_FOUND,
             "Should get 404")
+        detail = "This classifier doesn't exist or is not accessible"
         self.assertDictEqual(
             response.json(),
-            dict(errors=[dict(detail="No matching source found")]),
+            dict(errors=[dict(detail=detail)]),
             "Response JSON should be as expected")
+
+    def assertPermissionGranted(self, url, token_headers):
+        response = self.client.post(url, **token_headers)
+        self.assertNotEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should not get 404")
+        self.assertNotEqual(
+            response.status_code, status.HTTP_403_FORBIDDEN,
+            "Should not get 403")
+
+    def test_get_method_not_allowed(self):
+        classifier = self.create_robot(self.public_source)
+        url = reverse('api:deploy', args=[classifier.pk])
+
+        response = self.client.get(url, **self.user_token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED,
+            "Should get 405")
+
+    def test_nonexistent_classifier(self):
+        # To secure an ID which corresponds to no classifier, we
+        # delete a previously existing classifier.
+        classifier = self.create_robot(self.public_source)
+        url = reverse('api:deploy', args=[classifier.pk])
+        classifier.delete()
+
+        self.assertNotFound(url, self.user_token_headers)
 
     def test_private_source(self):
-        source = self.create_source(
-            self.user, visibility=Source.VisibilityTypes.PRIVATE)
-        url = reverse('api:deploy', args=[source.pk])
+        classifier = self.create_robot(self.private_source)
+        url = reverse('api:deploy', args=[classifier.pk])
 
-        response = self.client.post(url, **self.token_headers)
-        self.assertEqual(
-            response.status_code, status.HTTP_404_NOT_FOUND,
-            "Should get 404")
-        self.assertDictEqual(
-            response.json(),
-            dict(errors=[dict(detail="No matching source found")]),
-            "Response JSON should be as expected")
+        self.assertNeedsAuth(url)
+        self.assertNotFound(url, self.user_outsider_token_headers)
+        self.assertPermissionGranted(url, self.user_viewer_token_headers)
+        self.assertPermissionGranted(url, self.user_editor_token_headers)
+        self.assertPermissionGranted(url, self.user_admin_token_headers)
 
+    def test_public_source(self):
+        classifier = self.create_robot(self.public_source)
+        url = reverse('api:deploy', args=[classifier.pk])
+
+        self.assertNeedsAuth(url)
+        self.assertPermissionGranted(url, self.user_outsider_token_headers)
+        self.assertPermissionGranted(url, self.user_viewer_token_headers)
+        self.assertPermissionGranted(url, self.user_editor_token_headers)
+        self.assertPermissionGranted(url, self.user_admin_token_headers)
+
+    # Alter throttle rates for the following test. Use deepcopy to avoid
+    # altering the original setting, since it's a nested data structure.
+    throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
+    throttle_test_settings['DEFAULT_THROTTLE_RATES']['deploy'] = '3/hour'
+
+    @override_settings(REST_FRAMEWORK=throttle_test_settings)
     def test_throttling(self):
-        source = self.create_source(self.user)
-        url = reverse('api:deploy', args=[source.pk])
+        classifier = self.create_robot(self.public_source)
+        url = reverse('api:deploy', args=[classifier.pk])
 
         for _ in range(3):
-            response = self.client.post(url, **self.token_headers)
+            response = self.client.post(url, **self.user_token_headers)
             self.assertNotEqual(
                 response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
                 "1st-3rd requests should not be throttled")
 
-        response = self.client.post(url, **self.token_headers)
+        response = self.client.post(url, **self.user_token_headers)
         self.assertEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "4th request should be denied by throttling")
+
+
+class DeployStatusAccessTest(BaseAPIPermissionTest):
+
+    def assertNotFound(self, url, token_headers):
+        response = self.client.get(url, **token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should get 404")
+        detail = "This deploy job doesn't exist or is not accessible"
+        self.assertDictEqual(
+            response.json(),
+            dict(errors=[dict(detail=detail)]),
+            "Response JSON should be as expected")
+
+    def assertPermissionGranted(self, url, token_headers):
+        response = self.client.get(url, **token_headers)
+        self.assertNotEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should not get 404")
+        self.assertNotEqual(
+            response.status_code, status.HTTP_403_FORBIDDEN,
+            "Should not get 403")
+
+    def test_nonexistent_job(self):
+        # To secure an ID which corresponds to no job, we
+        # delete a previously existing job.
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+        job.delete()
+
+        self.assertNotFound(url, self.user_token_headers)
+
+    def test_needs_auth(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+        self.assertNeedsAuth(url)
+
+    def test_post_method_not_allowed(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+
+        response = self.client.post(url, **self.user_token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED,
+            "Should get 405")
+
+    def test_job_of_same_user(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+        self.assertPermissionGranted(url, self.user_token_headers)
+
+    def test_job_of_other_user(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_status', args=[job.pk])
+        self.assertNotFound(url, self.user_admin_token_headers)
+
+
+class DeployResultAccessTest(BaseAPIPermissionTest):
+
+    def assertNotFound(self, url, token_headers):
+        response = self.client.get(url, **token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should get 404")
+        detail = "This deploy job doesn't exist or is not accessible"
+        self.assertDictEqual(
+            response.json(),
+            dict(errors=[dict(detail=detail)]),
+            "Response JSON should be as expected")
+
+    def assertPermissionGranted(self, url, token_headers):
+        response = self.client.get(url, **token_headers)
+        self.assertNotEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should not get 404")
+        self.assertNotEqual(
+            response.status_code, status.HTTP_403_FORBIDDEN,
+            "Should not get 403")
+
+    def test_nonexistent_job(self):
+        # To secure an ID which corresponds to no job, we
+        # delete a previously existing job.
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+        job.delete()
+
+        self.assertNotFound(url, self.user_token_headers)
+
+    def test_needs_auth(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+        self.assertNeedsAuth(url)
+
+    def test_post_method_not_allowed(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+
+        response = self.client.post(url, **self.user_token_headers)
+        self.assertEqual(
+            response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED,
+            "Should get 405")
+
+    def test_job_of_same_user(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+        self.assertPermissionGranted(url, self.user_token_headers)
+
+    def test_job_of_other_user(self):
+        job = ApiJob(type='deploy', user=self.user)
+        job.save()
+        url = reverse('api:deploy_result', args=[job.pk])
+        self.assertNotFound(url, self.user_admin_token_headers)
 
 
 class DeployImagesParamErrorTest(DeployBaseTest):
@@ -318,28 +472,6 @@ class DeployImagesParamErrorTest(DeployBaseTest):
                 source=dict(pointer='/images/0/points/1')))
 
 
-class DeployOtherErrorTest(DeployBaseTest):
-    """Other errors that might happen when requesting a deploy."""
-
-    def test_source_has_no_robot(self):
-        robot = self.source.get_latest_robot()
-        robot.delete()
-
-        data = dict(images=json.dumps(
-            [dict(url='URL 1', points=[dict(row=10, column=10)])]
-        ))
-        response = self.client.post(
-            self.deploy_url, data, **self.token_headers)
-
-        self.assertEqual(
-            response.status_code, status.HTTP_400_BAD_REQUEST,
-            "Should get 400")
-        self.assertDictEqual(
-            response.json(),
-            dict(errors=[dict(detail="This source doesn't have a robot")]),
-            "Response JSON should be as expected")
-
-
 # During tests, we use CELERY_ALWAYS_EAGER = True to run tasks synchronously,
 # so that we don't have to wait for tasks to finish before checking their
 # results. To test state before all tasks finish, we'll mock the task
@@ -426,7 +558,7 @@ class SuccessTest(DeployBaseTest):
         self.assertDictEqual(
             job_unit.request_json,
             dict(
-                source_id=self.source.pk,
+                classifier_id=self.classifier.pk,
                 url='URL 1',
                 points=[dict(row=10, column=10)],
                 image_order=0),
@@ -472,7 +604,7 @@ class SuccessTest(DeployBaseTest):
         self.assertDictEqual(
             classify_unit.request_json,
             dict(
-                source_id=self.source.pk,
+                classifier_id=self.classifier.pk,
                 url='URL 1',
                 points=[dict(row=10, column=10)],
                 image_order=0,
@@ -562,7 +694,7 @@ class TaskErrorsTest(DeployBaseTest):
             self.assertIn(error_message, log_messages)
 
     @patch('vision_backend_api.views.deploy_extract_features.run', noop)
-    def test_classify_source_deleted(self):
+    def test_classify_classifier_deleted(self):
         data = dict(images=json.dumps(
             [dict(url='URL 1', points=[dict(row=10, column=10)])]
         ))
@@ -581,10 +713,10 @@ class TaskErrorsTest(DeployBaseTest):
             request_json=features_unit.request_json)
         classify_unit.save()
 
-        # Delete the source.
-        source_id = classify_unit.request_json['source_id']
-        source = Source.objects.get(pk=source_id)
-        source.delete()
+        # Delete the classifier.
+        classifier_id = classify_unit.request_json['classifier_id']
+        classifier = Classifier.objects.get(pk=classifier_id)
+        classifier.delete()
 
         # Run the classify task.
         deploy_classify.delay(classify_unit.pk)
@@ -594,12 +726,11 @@ class TaskErrorsTest(DeployBaseTest):
         self.assertEqual(
             classify_unit.status, ApiJobUnit.FAILURE,
             "Classify unit should have failed")
+        message = "Classifier of id {pk} does not exist.".format(
+            pk=classifier_id)
         self.assertDictEqual(
             classify_unit.result_json,
-            dict(
-                url='URL 1',
-                errors=[
-                    "Source of id {pk} does not exist.".format(pk=source_id)]))
+            dict(url='URL 1', errors=[message]))
 
 
 class DeployStatusEndpointTest(DeployBaseTest):
@@ -806,7 +937,6 @@ class DeployResultEndpointTest(DeployBaseTest):
 
     def deploy(self):
         self.client.post(self.deploy_url, self.data, **self.token_headers)
-
         job = ApiJob.objects.latest('pk')
         return job
 
@@ -936,7 +1066,7 @@ class DeployResultEndpointTest(DeployBaseTest):
         unit_1.save()
 
         unit_2.status = ApiJobUnit.FAILURE
-        url_2_errors = ["Source of id 33 does not exist."]
+        url_2_errors = ["Classifier of id 33 does not exist."]
         unit_2.result_json = dict(
             url='URL 2', errors=url_2_errors)
         unit_2.save()

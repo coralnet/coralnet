@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.views import APIView
 
-from images.models import Source
+from vision_backend.models import Classifier
 from api_core.exceptions import ApiRequestDataError
 from api_core.models import ApiJob, ApiJobUnit
 from .forms import validate_deploy
@@ -20,22 +20,17 @@ class Deploy(APIView):
     """
     throttle_scope = 'deploy'
 
-    def post(self, request, source_id):
+    def post(self, request, classifier_id):
+        # The classifier must exist and be visible to the user.
         try:
-            # Limit to public sources for now
-            source = get_object_or_404(
-                Source, id=source_id, visibility=Source.VisibilityTypes.PUBLIC)
+            classifier = get_object_or_404(Classifier, id=classifier_id)
+            if not classifier.source.visible_to_user(request.user):
+                raise Http404
         except Http404:
+            detail = "This classifier doesn't exist or is not accessible"
             return Response(
-                dict(errors=[
-                    dict(detail="No matching source found")]),
+                dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
-
-        if not source.has_robot():
-            return Response(
-                dict(errors=[
-                    dict(detail="This source doesn't have a robot")]),
-                status=status.HTTP_400_BAD_REQUEST)
 
         try:
             cleaned_data = validate_deploy(request.POST)
@@ -60,7 +55,7 @@ class Deploy(APIView):
                 job=deploy_job,
                 type='deploy_extract_features',
                 request_json=dict(
-                    source_id=int(source_id),
+                    classifier_id=int(classifier_id),
                     url=image_json['url'],
                     points=image_json['points'],
                     image_order=image_index))
@@ -80,12 +75,15 @@ class DeployStatus(APIView):
     Check the status of an existing deployment job.
     """
     def get(self, request, job_id):
+        # The job must exist and it must have been requested by the user.
         try:
             deploy_job = get_object_or_404(ApiJob, id=job_id, type='deploy')
+            if deploy_job.user.pk != request.user.pk:
+                raise Http404
         except Http404:
+            detail = "This deploy job doesn't exist or is not accessible"
             return Response(
-                dict(errors=[
-                    dict(detail="No matching deploy job found")]),
+                dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
 
         job_units = deploy_job.apijobunit_set
@@ -123,12 +121,15 @@ class DeployResult(APIView):
     Check the result of a finished deployment job.
     """
     def get(self, request, job_id):
+        # The job must exist and it must have been requested by the user.
         try:
             deploy_job = get_object_or_404(ApiJob, id=job_id, type='deploy')
+            if deploy_job.user.pk != request.user.pk:
+                raise Http404
         except Http404:
+            detail = "This deploy job doesn't exist or is not accessible"
             return Response(
-                dict(errors=[
-                    dict(detail="No matching deploy job found")]),
+                dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
 
         classify_units = deploy_job.apijobunit_set.filter(

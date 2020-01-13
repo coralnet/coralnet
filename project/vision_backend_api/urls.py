@@ -6,7 +6,7 @@ from . import views
 
 
 urlpatterns = [
-    url(r'^sources/(?P<source_id>\d+)/deploy/$',
+    url(r'^classifiers/(?P<classifier_id>\d+)/deploy/$',
         views.Deploy.as_view(), name='deploy'),
     url(r'^deploy_statuses/(?P<job_id>\d+)/$',
         views.DeployStatus.as_view(), name='deploy_status'),

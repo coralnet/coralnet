@@ -9,8 +9,8 @@ from django.utils import timezone
 from rest_framework import status
 
 from lib.tests.utils import ClientTest
-from .models import ApiJob, ApiJobUnit
-from .tasks import clean_up_old_api_jobs
+from ..models import ApiJob, ApiJobUnit
+from ..tasks import clean_up_old_api_jobs
 
 
 class AuthTest(ClientTest):

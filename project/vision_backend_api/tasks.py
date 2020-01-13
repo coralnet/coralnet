@@ -7,7 +7,7 @@ from celery.decorators import task
 from django.conf import settings
 
 from api_core.models import ApiJobUnit
-from images.models import Source
+from vision_backend.models import Classifier
 
 logger = logging.getLogger(__name__)
 
@@ -54,23 +54,24 @@ def deploy_classify(job_unit_id):
     job_unit.status = ApiJobUnit.WORKING
     job_unit.save()
 
-    source_id = job_unit.request_json['source_id']
+    classifier_id = job_unit.request_json['classifier_id']
     try:
-        source = Source.objects.get(pk=source_id)
-    except Source.DoesNotExist:
+        classifier = Classifier.objects.get(pk=classifier_id)
+    except Classifier.DoesNotExist:
+        message = "Classifier of id {pk} does not exist.".format(
+            pk=classifier_id)
         job_unit.result_json = dict(
-            url=job_unit.request_json['url'],
-            errors=["Source of id {pk} does not exist.".format(pk=source_id)])
+            url=job_unit.request_json['url'], errors=[message])
         job_unit.status = ApiJobUnit.FAILURE
         job_unit.save()
         return
 
-    labels = source.labelset.get_globals()
-    # Copy this list
-    result_points = job_unit.request_json['points'][:]
-
     # TODO: The following code generates random scores. We should instead
     # use the selected backend (e.g. spacer) to classify.
+
+    labels = classifier.source.labelset.get_globals()
+    # Copy this list
+    result_points = job_unit.request_json['points'][:]
 
     for point in result_points:
 
