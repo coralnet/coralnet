@@ -756,7 +756,7 @@ class BasePermissionTest(ClientTest):
         self.assertIn("permission", response['error'])
 
 
-def create_sample_image(width=200, height=200, cols=10, rows=10):
+def create_sample_image(width=200, height=200, cols=10, rows=10, mode='RGB'):
     """
     Create a test image. The image content is a color grid.
     Optionally specify pixel width/height, and the color grid cols/rows.
@@ -783,7 +783,7 @@ def create_sample_image(width=200, height=200, cols=10, rows=10):
     min_rgb = 0
     max_rgb = 255
 
-    im = PILImage.new('RGB', (width, height))
+    im = PILImage.new(mode, (width, height))
 
     const_color_value = int(round(
         const_color*(max_rgb - min_rgb) + min_rgb
@@ -817,10 +817,12 @@ def create_sample_image(width=200, height=200, cols=10, rows=10):
 
             # The dict's keys should be the literals 0, 1, and 2.
             # We interpret these as R, G, and B respectively.
-            rgb_color = (color_dict[0], color_dict[1], color_dict[2])
-
-            # Write the RGB color to the range of pixels.
-            im.paste(rgb_color, (left_x, upper_y, right_x, lower_y))
+            if mode in ['L', '1', 'P']:
+                # Gray scale, just grab one of the channels.
+                im.paste(color_dict[0], (left_x, upper_y, right_x, lower_y))
+            else:
+                rgb_color = (color_dict[0], color_dict[1], color_dict[2])
+                im.paste(rgb_color, (left_x, upper_y, right_x, lower_y))
 
     return im
 

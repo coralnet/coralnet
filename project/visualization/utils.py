@@ -111,19 +111,19 @@ def generate_patch_if_doesnt_exist(point_id):
 
     # Load image and convert to numpy array.
     point = Point.objects.get(pk=point_id)
-    original_image_relative_path = point.image.original_file.name
+    image = point.image
+    original_image_relative_path = image.original_file.name
     original_image_file = storage.open(original_image_relative_path)
 
     # Figure out the patch size to crop, and which to resize to.
-    patch_size = int(max(point.image.original_width,
-                         point.image.original_height)
+    patch_size = int(max(image.original_width, image.original_height)
                      * settings.LABELPATCH_SIZE_FRACTION)
 
-    # Load the image convert to RGB
+    # Load the image convert to RGB.
     im = PILImage.open(original_image_file)
     im = im.convert('RGB')
 
-    # Crop
+    # Crop.
     region = im.crop((
         point.column - patch_size // 2,
         point.row - patch_size // 2,
@@ -131,6 +131,7 @@ def generate_patch_if_doesnt_exist(point_id):
         point.row + patch_size // 2
     ))
 
+    # Resize to the desired size.
     region = region.resize((settings.LABELPATCH_NCOLS,
                             settings.LABELPATCH_NROWS))
 
