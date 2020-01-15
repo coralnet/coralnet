@@ -21,7 +21,7 @@ def deploy_extract_features(job_unit_id):
         logger.info("Job unit of id {} does not exist.".format(job_unit_id))
         return
 
-    features_job_unit.status = ApiJobUnit.WORKING
+    features_job_unit.status = ApiJobUnit.IN_PROGRESS
     features_job_unit.save()
 
     # TODO: Download the image from the provided URL (maybe in a separate
@@ -51,7 +51,7 @@ def deploy_classify(job_unit_id):
         logger.info("Job unit of id {} does not exist.".format(job_unit_id))
         return
 
-    job_unit.status = ApiJobUnit.WORKING
+    job_unit.status = ApiJobUnit.IN_PROGRESS
     job_unit.save()
 
     classifier_id = job_unit.request_json['classifier_id']

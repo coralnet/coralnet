@@ -810,7 +810,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status=ApiJob.PENDING,
+                    status="Pending",
                     classify_successes=0,
                     classify_failures=0,
                     total=2)),
@@ -823,7 +823,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
         # Mark one feature-extract unit's status as working
         features_job_unit = ApiJobUnit.objects.filter(
             job=job, type='deploy_extract_features').latest('pk')
-        features_job_unit.status = ApiJobUnit.WORKING
+        features_job_unit.status = ApiJobUnit.IN_PROGRESS
         features_job_unit.save()
 
         response = self.get_job_status(job)
@@ -834,7 +834,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status=ApiJob.WORKING,
+                    status="In Progress",
                     classify_successes=0,
                     classify_failures=0,
                     total=2)),
@@ -851,7 +851,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status=ApiJob.WORKING,
+                    status="In Progress",
                     classify_successes=0,
                     classify_failures=0,
                     total=2)),
@@ -875,7 +875,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status=ApiJob.WORKING,
+                    status="In Progress",
                     classify_successes=1,
                     classify_failures=0,
                     total=2)),
@@ -899,7 +899,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status=ApiJob.WORKING,
+                    status="In Progress",
                     classify_successes=0,
                     classify_failures=1,
                     total=2)),
@@ -913,17 +913,14 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.status_code, status.HTTP_303_SEE_OTHER,
             "Should get 303")
 
-        self.assertDictEqual(
-            response.json(),
-            dict(
-                data=dict(
-                    status=ApiJob.DONE,
-                    classify_successes=2,
-                    classify_failures=0,
-                    total=2,
-                    location=reverse(
-                        'api:deploy_result', args=[job.pk]))),
-            "Response JSON should be as expected")
+        self.assertEqual(
+            response.content, '',
+            "Response content should be empty")
+
+        self.assertEqual(
+            response['Location'],
+            reverse('api:deploy_result', args=[job.pk]),
+            "Location header should be as expected")
 
     @patch('vision_backend_api.tasks.deploy_classify.run', noop)
     def test_failure(self):
@@ -947,17 +944,14 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.status_code, status.HTTP_303_SEE_OTHER,
             "Should get 303")
 
-        self.assertDictEqual(
-            response.json(),
-            dict(
-                data=dict(
-                    status=ApiJob.DONE,
-                    classify_successes=1,
-                    classify_failures=1,
-                    total=2,
-                    location=reverse(
-                        'api:deploy_result', args=[job.pk]))),
-            "Response JSON should be as expected")
+        self.assertEqual(
+            response.content, '',
+            "Response content should be empty")
+
+        self.assertEqual(
+            response['Location'],
+            reverse('api:deploy_result', args=[job.pk]),
+            "Location header should be as expected")
 
 
 class DeployResultEndpointTest(DeployBaseTest):
@@ -1010,7 +1004,7 @@ class DeployResultEndpointTest(DeployBaseTest):
         # Mark one feature-extract unit's status as working
         features_job_unit = ApiJobUnit.objects.filter(
             job=job, type='deploy_extract_features').latest('pk')
-        features_job_unit.status = ApiJobUnit.WORKING
+        features_job_unit.status = ApiJobUnit.IN_PROGRESS
         features_job_unit.save()
 
         response = self.get_job_result(job)

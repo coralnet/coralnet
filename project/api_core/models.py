@@ -15,9 +15,11 @@ class ApiJob(models.Model):
     # Status can be computed from the statuses of this job's job units. So,
     # saving status as a field here would be redundant. However, we'll define
     # constants for reporting the computed status.
-    PENDING = 'PN'
-    WORKING = 'WK'
-    DONE = 'DN'
+    # Note that "Done" isn't here, because if it's done, we'll respond with
+    # 303 Other with a Location header and no data in the body. That seems to
+    # be standard for 303 responses.
+    PENDING = "Pending"
+    IN_PROGRESS = "In Progress"
 
     # User who requested this job. Can be used for permissions on viewing
     # job status and results.
@@ -44,13 +46,13 @@ class ApiJobUnit(models.Model):
     type = models.CharField(max_length=30)
 
     PENDING = 'PN'
-    WORKING = 'WK'
+    IN_PROGRESS = 'IP'
     SUCCESS = 'SC'
     FAILURE = 'FL'
 
     STATUS_CHOICES = [
         (PENDING, "Pending"),
-        (WORKING, "Working"),
+        (IN_PROGRESS, "In Progress"),
         (SUCCESS, "Success"),
         (FAILURE, "Failure"),
     ]

@@ -97,9 +97,15 @@ class DeployStatus(APIView):
             job_status = ApiJob.PENDING
         elif success_count + failure_count < total_image_count:
             # Some units haven't finished yet, so the job isn't done yet
-            job_status = ApiJob.WORKING
+            job_status = ApiJob.IN_PROGRESS
         else:
-            job_status = ApiJob.DONE
+            # Job is done
+            return Response(
+                status=status.HTTP_303_SEE_OTHER,
+                headers={
+                    'Location': reverse('api:deploy_result', args=[job_id]),
+                },
+            )
 
         data = dict(
             status=job_status,
@@ -107,11 +113,7 @@ class DeployStatus(APIView):
             classify_failures=failure_count,
             total=total_image_count)
 
-        if job_status == ApiJob.DONE:
-            data['location'] = reverse('api:deploy_result', args=[job_id])
-            return Response(dict(data=data), status=status.HTTP_303_SEE_OTHER)
-        else:
-            return Response(dict(data=data), status=status.HTTP_200_OK)
+        return Response(dict(data=data), status=status.HTTP_200_OK)
 
 
 class DeployResult(APIView):
@@ -138,7 +140,7 @@ class DeployResult(APIView):
             classify_units.exists()
             and
             not classify_units.filter(
-                status__in=[ApiJobUnit.PENDING, ApiJobUnit.WORKING]).exists()
+                status__in=[ApiJobUnit.PENDING, ApiJobUnit.IN_PROGRESS]).exists()
         )
 
         if job_done:
