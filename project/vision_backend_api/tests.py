@@ -684,12 +684,15 @@ class SuccessTest(DeployBaseTest):
             classify_unit.status, ApiJobUnit.SUCCESS,
             "Classify unit should be done")
 
+        classifications = [dict(
+            label_id=self.labels[0].pk, label_name='A',
+            default_code='A', score=1.0)]
         self.assertDictEqual(
             classify_unit.result_json,
             dict(
                 url='URL 1',
-                points=[dict(row=10, column=10, classifications=[
-                    dict(label_id=self.labels[0].pk, score=1.0)])]),
+                points=[dict(
+                    row=10, column=10, classifications=classifications)]),
             "Classify unit's result_json should be as expected"
             " (labelset with 1 label makes the scores deterministic)")
 
@@ -1054,19 +1057,22 @@ class DeployResultEndpointTest(DeployBaseTest):
 
         self.assertStatusOK(response)
 
+        classifications = [dict(
+            label_id=self.labels[0].pk, label_name='A',
+            default_code='A', score=1.0)]
         points_1 = [
             dict(
                 row=10, column=10,
-                classifications=[dict(label_id=self.labels[0].pk, score=1.0)],
+                classifications=classifications,
             ),
             dict(
                 row=20, column=5,
-                classifications=[dict(label_id=self.labels[0].pk, score=1.0)],
+                classifications=classifications,
             ),
         ]
         points_2 = [dict(
             row=10, column=10,
-            classifications=[dict(label_id=self.labels[0].pk, score=1.0)],
+            classifications=classifications,
         )]
         self.assertDictEqual(
             response.json(),
@@ -1087,14 +1093,17 @@ class DeployResultEndpointTest(DeployBaseTest):
             job=job, type='deploy_classify').order_by('pk')
 
         unit_1.status = ApiJobUnit.SUCCESS
+        classifications = [dict(
+            label_id=self.labels[0].pk, label_name='A',
+            default_code='A', score=1.0)]
         points_1 = [
             dict(
                 row=10, column=10,
-                classifications=[dict(label_id=self.labels[0].pk, score=1.0)],
+                classifications=classifications,
             ),
             dict(
                 row=20, column=5,
-                classifications=[dict(label_id=self.labels[0].pk, score=1.0)],
+                classifications=classifications,
             ),
         ]
         unit_1.result_json = dict(

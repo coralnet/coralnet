@@ -90,7 +90,9 @@ def deploy_classify(job_unit_id):
         top_results = sorted_label_score_pairs[:nbr_scores]
 
         point['classifications'] = [
-            dict(label_id=label.pk, score=score)
+            dict(
+                label_id=label.pk, label_name=label.name,
+                default_code=label.default_code, score=score)
             for label, score in top_results]
 
     job_unit.result_json = dict(
