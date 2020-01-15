@@ -355,6 +355,16 @@ class DeployImagesParamErrorTest(DeployBaseTest):
                 detail="Ensure this array is non-empty.",
                 source=dict(pointer='/images')))
 
+    def test_too_many_images(self):
+        data = dict(images=json.dumps([{}]*101))
+        response = self.client.post(
+            self.deploy_url, data, **self.token_headers)
+
+        self.assert_expected_400_error(
+            response, dict(
+                detail="This array exceeds the max length of 100.",
+                source=dict(pointer='/images')))
+
     def test_image_not_hash(self):
         data = dict(images=json.dumps(
             ['abc']
@@ -425,6 +435,18 @@ class DeployImagesParamErrorTest(DeployBaseTest):
         self.assert_expected_400_error(
             response, dict(
                 detail="Ensure this array is non-empty.",
+                source=dict(pointer='/images/0/points')))
+
+    def test_too_many_points(self):
+        data = dict(images=json.dumps(
+            [dict(url='URL 1', points=[{}]*1001)]
+        ))
+        response = self.client.post(
+            self.deploy_url, data, **self.token_headers)
+
+        self.assert_expected_400_error(
+            response, dict(
+                detail="This array exceeds the max length of 1000.",
                 source=dict(pointer='/images/0/points')))
 
     def test_point_not_hash(self):

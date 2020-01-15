@@ -31,7 +31,7 @@ def validate_json(s, param_name):
             "Could not parse as JSON.", parameter=param_name)
 
 
-def validate_array(element, json_path, check_non_empty=False):
+def validate_array(element, json_path, check_non_empty=False, max_length=None):
     # We use MutableSequence instead of Sequence to avoid matching strings.
     if not isinstance(element, collections_abc.MutableSequence):
         raise ApiRequestDataError(
@@ -40,6 +40,11 @@ def validate_array(element, json_path, check_non_empty=False):
         if len(element) == 0:
             raise ApiRequestDataError(
                 "Ensure this array is non-empty.", json_path)
+    if max_length:
+        if len(element) > max_length:
+            message = "This array exceeds the max length of {max}.".format(
+                max=max_length)
+            raise ApiRequestDataError(message, json_path)
 
 
 def validate_hash(element, json_path, expected_keys=None):
