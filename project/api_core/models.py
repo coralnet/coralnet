@@ -25,12 +25,8 @@ class ApiJob(models.Model):
     # job status and results.
     user = models.ForeignKey(User, on_delete=models.CASCADE)
 
-    # This can be used to report how long the job took or is taking
-    # (including time waiting on the queue).
+    # This can be used to report how long the job took or is taking.
     create_date = models.DateTimeField("Date created", auto_now_add=True)
-
-    # We can clean up old jobs if they haven't been modified in a while.
-    modify_date = models.DateTimeField("Date last modified", auto_now=True)
 
 
 class ApiJobUnit(models.Model):
@@ -66,3 +62,10 @@ class ApiJobUnit(models.Model):
     # JSON results of the job unit when it's done. The exact format depends
     # on the type of job.
     result_json = JSONField(null=True)
+
+    # This can be used to report how long the job unit took or is taking
+    # (including time waiting on the queue).
+    create_date = models.DateTimeField("Date created", auto_now_add=True)
+
+    # We can clean up old jobs if they haven't been modified in a while.
+    modify_date = models.DateTimeField("Date last modified", auto_now=True)

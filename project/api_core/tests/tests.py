@@ -209,40 +209,86 @@ class JobCleanupTest(ClientTest):
 
     def test_job_selection(self):
         """
-        Only jobs that were last modified over 30 days ago should be
-        cleaned up by the task.
+        Only jobs eligible for cleanup should be cleaned up.
         """
         thirty_one_days_ago = timezone.now() - timedelta(days=31)
 
-        job = ApiJob(type='new', user=self.user)
+        job = ApiJob(type='new job, no units', user=self.user)
         job.save()
 
-        job = ApiJob(type='create date old', user=self.user)
+        job = ApiJob(type='old job, no units', user=self.user)
         job.save()
         job.create_date = thirty_one_days_ago
         job.save()
 
-        job = ApiJob(type='create and modify dates old', user=self.user)
+        job = ApiJob(type='new job, recent unit work', user=self.user)
+        job.save()
+        unit_1 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_1.save()
+        unit_2 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_2.save()
+
+        job = ApiJob(type='old job, recent unit work', user=self.user)
         job.save()
         job.create_date = thirty_one_days_ago
         job.save()
+        unit_1 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_1.save()
+        unit_2 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_2.save()
+
+        job = ApiJob(
+            type='old job, mixed units', user=self.user)
+        job.save()
+        job.create_date = thirty_one_days_ago
+        job.save()
+        unit_1 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_1.save()
+        unit_2 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_2.save()
         # Use QuerySet.update() instead of Model.save() so that the modify
         # date doesn't get auto-updated to the current date.
-        ApiJob.objects.filter(pk=job.pk).update(
+        ApiJobUnit.objects.filter(pk=unit_1.pk).update(
+            modify_date=thirty_one_days_ago)
+
+        job = ApiJob(
+            type='old job, old units', user=self.user)
+        job.save()
+        job.create_date = thirty_one_days_ago
+        job.save()
+        unit_1 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_1.save()
+        unit_2 = ApiJobUnit(job=job, type='', request_json=[])
+        unit_2.save()
+        ApiJobUnit.objects.filter(pk=unit_1.pk).update(
+            modify_date=thirty_one_days_ago)
+        ApiJobUnit.objects.filter(pk=unit_2.pk).update(
             modify_date=thirty_one_days_ago)
 
         clean_up_old_api_jobs()
 
         self.assertTrue(
-            ApiJob.objects.filter(type='new').exists(),
-            "Shouldn't clean up new jobs")
-        self.assertTrue(
-            ApiJob.objects.filter(type='create date old').exists(),
-            "Shouldn't clean up jobs that were created a while ago,"
-            " but modified recently")
+            ApiJob.objects.filter(type='new job, no units').exists(),
+            "Shouldn't clean up new jobs with no units yet")
         self.assertFalse(
-            ApiJob.objects.filter(type='create and modify dates old').exists(),
-            "Should clean up jobs that were last modified a while ago")
+            ApiJob.objects.filter(type='old job, no units').exists(),
+            "Should clean up old jobs with no units")
+        self.assertTrue(
+            ApiJob.objects.filter(
+                type='new job, recent unit work').exists(),
+            "Shouldn't clean up new jobs with units")
+        self.assertTrue(
+            ApiJob.objects.filter(
+                type='old job, recent unit work').exists(),
+            "Shouldn't clean up old jobs if units were modified recently")
+        self.assertTrue(
+            ApiJob.objects.filter(
+                type='old job, mixed units').exists(),
+            "Shouldn't clean up old jobs if some units were modified recently")
+        self.assertFalse(
+            ApiJob.objects.filter(
+                type='old job, old units').exists(),
+            "Should clean up old jobs if no units were modified recently")
 
     def test_unit_cleanup(self):
         """
@@ -260,13 +306,13 @@ class JobCleanupTest(ClientTest):
         job.save()
         job.create_date = thirty_one_days_ago
         job.save()
-        # Use QuerySet.update() instead of Model.save() so that the modify
-        # date doesn't get auto-updated to the current date.
-        ApiJob.objects.filter(pk=job.pk).update(
-            modify_date=thirty_one_days_ago)
         for _ in range(5):
             unit = ApiJobUnit(job=job, type='old_unit', request_json=[])
             unit.save()
+            # Use QuerySet.update() instead of Model.save() so that the modify
+            # date doesn't get auto-updated to the current date.
+            ApiJobUnit.objects.filter(pk=unit.pk).update(
+                modify_date=thirty_one_days_ago)
 
         clean_up_old_api_jobs()
 
