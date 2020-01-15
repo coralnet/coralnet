@@ -551,11 +551,13 @@ class SuccessTest(DeployBaseTest):
 
         deploy_job = ApiJob.objects.latest('pk')
 
-        self.assertDictEqual(
-            response.json(),
-            dict(data=dict(
-                links=dict(
-                    self=reverse('api:deploy_status', args=[deploy_job.pk])))),
+        self.assertEqual(
+            response.content, '',
+            "Response content should be empty")
+
+        self.assertEqual(
+            response['Location'],
+            reverse('api:deploy_status', args=[deploy_job.pk]),
             "Response should contain status endpoint URL")
 
     @patch('vision_backend_api.views.deploy_extract_features.run', noop)

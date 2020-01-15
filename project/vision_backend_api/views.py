@@ -61,11 +61,13 @@ class Deploy(APIView):
 
             deploy_extract_features.delay(features_job_unit.pk)
 
-        # Return the status endpoint's URL.
-        data = dict(
-            links=dict(
-                self=reverse('api:deploy_status', args=[deploy_job.pk])))
-        return Response(dict(data=data), status=status.HTTP_202_ACCEPTED)
+        # Respond with the status endpoint's URL.
+        return Response(
+            status=status.HTTP_202_ACCEPTED,
+            headers={
+                'Location': reverse('api:deploy_status', args=[deploy_job.pk]),
+            },
+        )
 
 
 class DeployStatus(APIView):
