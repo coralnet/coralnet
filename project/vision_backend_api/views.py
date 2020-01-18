@@ -8,10 +8,14 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 from vision_backend.models import Classifier
+from vision_backend.tasks import deploy
 from api_core.exceptions import ApiRequestDataError
 from api_core.models import ApiJob, ApiJobUnit
 from .forms import validate_deploy
-from .tasks import deploy_extract_features
+
+from django.utils.timezone import now
+
+from datetime import timedelta
 
 
 class Deploy(APIView):
@@ -59,7 +63,8 @@ class Deploy(APIView):
                     image_order=image_index))
             features_job_unit.save()
 
-            deploy_extract_features.delay(features_job_unit.pk)
+            deploy.apply_async(args=[features_job_unit.pk],
+                               eta=now() + timedelta(seconds=10))
 
         # Respond with the status endpoint's URL.
         return Response(

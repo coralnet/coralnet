@@ -15,6 +15,7 @@ from .models import Classifier, Score
 from annotations.models import Annotation
 from images.models import Source, Image, Point
 from labels.models import LabelSet, Label
+from api_core.models import ApiJobUnit
 
 from lib.utils import direct_s3_read, direct_s3_write
 from accounts.utils import get_robot_user
@@ -151,6 +152,43 @@ def submit_classifier(source_id, nbr_images=1e5, force=False):
     return messagebody
  
 
+@task(name="Deploy")
+def deploy(job_unit_id):
+
+    try:
+        job_unit = ApiJobUnit.objects.get(pk=job_unit_id)
+    except ApiJobUnit.DoesNotExist:
+        logger.info("Job unit of id {} does not exist.".format(job_unit_id))
+        return
+
+    job_unit.status = ApiJobUnit.IN_PROGRESS
+    job_unit.save()
+
+    rowcols = [[point['row'], point['column']] for point in
+               job_unit.request_json['points']]
+
+    payload = {
+        'bucketname': settings.AWS_STORAGE_BUCKET_NAME,
+        'im_url': job_unit.request_json['url'],
+        'modelname': 'vgg16_coralnet_ver1',
+        'rowcols': rowcols,
+        'model': settings.ROBOT_MODEL_FILE_PATTERN.format(
+            pk=job_unit.request_json['classifier_id'],
+            media=settings.AWS_LOCATION),
+    }
+
+    # Assemble message body.
+    messagebody = {
+        'task': 'deploy',
+        'payload': payload
+    }
+
+    logger.info(u"Submitted image at url: {} for deploy with job unit {}.".
+                format(job_unit.request_json['url'], job_unit.pk))
+
+    print(messagebody)
+
+
 @task(name="Classify Image")
 def classify_image(image_id):
 
@@ -169,27 +207,33 @@ def classify_image(image_id):
 
     # Load model
     classifier_model = direct_s3_read(
-        settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk, media=settings.AWS_LOCATION),
-        'pickle' )
+        settings.ROBOT_MODEL_FILE_PATTERN.format(
+            pk=classifier.pk, media=settings.AWS_LOCATION), 'pickle')
     
     feats = direct_s3_read(
-        settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path = os.path.join(settings.AWS_LOCATION, img.original_file.name)),
-        'json' )
+        settings.FEATURE_VECTOR_FILE_PATTERN.format(
+            full_image_path=os.path.join(settings.AWS_LOCATION,
+                                         img.original_file.name)), 'json')
 
     # Classify.
     scores = classifier_model.predict_proba(feats)
 
     # Pre-fetch label objects
     label_objs = []
-    for _class in classifier_model.classes_:
-        label_objs.append(Label.objects.get(pk = _class))
+    for class_ in classifier_model.classes_:
+        label_objs.append(Label.objects.get(pk=class_))
 
     # Add annotations if image isn't already confirmed    
     if not img.confirmed:
         try:
             th._add_annotations(image_id, scores, label_objs, classifier)
         except IntegrityError:
-            logger.info(u"Failed to classify Image {} [Source: {} [{}] with classifier {}. There might have been a race condition when trying to save annotations. Will try again later.".format(img.id, img.source, img.source_id, classifier.id))
+            logger_message = u"Failed to classify Image {} [Source: {} [{}] " \
+                             u"with classifier {}. There might have been a race" \
+                             u" condition when trying to save annotations. " \
+                             u"Will try again later."
+            logger.info(logger_message.format(img.id, img.source,
+                                              img.source_id, classifier.id))
             classify_image.apply_async(args=[image_id], eta=now() + timedelta(seconds=10))
             return
     
@@ -199,7 +243,8 @@ def classify_image(image_id):
     img.features.classified = True
     img.features.save()
 
-    logger.info(u"Classified Image {} [Source: {} [{}]] with classifier {}".format(img.id, img.source, img.source_id, classifier.id))
+    logger.info(u"Classified Image {} [Source: {} [{}]] with classifier {}".
+                format(img.id, img.source, img.source_id, classifier.id))
 
 
 @periodic_task(run_every=timedelta(seconds=60), name='Collect all jobs', ignore_result=True)
@@ -229,12 +274,13 @@ def collectjob():
         logger.info("Job pertains to wrong bucket [%]".format(messagebody['original_job']['payload']['bucketname']))
         return 1
 
-    # Delete message (at this point, if it is not handled correctly, we still want to delete it from queue.)
+    # Delete message (at this point, if it is not handled correctly,
+    # we still want to delete it from queue.)
     message.delete()
 
     # Handle message
-    pk = messagebody['original_job']['payload']['pk']
     task = messagebody['original_job']['task']
+    pk = messagebody['original_job']['payload']['pk']
     
     if task == 'extract_features':
         if th._featurecollector(messagebody): 
@@ -247,6 +293,10 @@ def collectjob():
             classifier = Classifier.objects.get(pk=pk)
             for image in Image.objects.filter(source=classifier.source, features__extracted=True, confirmed=False):
                 classify_image.apply_async(args=[image.id], eta=now() + timedelta(seconds = 10))
+    elif task == 'deploy':
+        # TODO, make the colletors public
+        th._deploycollector(messagebody)
+
     else:
         logger.error('Job task type {} not recognized'.format(task))
     

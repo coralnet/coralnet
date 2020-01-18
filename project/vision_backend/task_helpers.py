@@ -17,9 +17,11 @@ from django.db import transaction
 from reversion import revisions
 
 from images.models import Image, Point
-from annotations.models import Annotation
+from annotations.models import Label, Annotation
+from api_core.models import ApiJobUnit
 
 from .models import Classifier, Score
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ def _add_annotations(image_id, scores, label_objs, classifier):
     So we must save annotations one by one.
     """
     img = Image.objects.get(pk = image_id)
-    points = Point.objects.filter(image = img).order_by('id')
+    points = Point.objects.filter(image=img).order_by('id')
     estlabels = [np.argmax(score) for score in scores]
     with transaction.atomic():
         for pt, estlabel in zip(points, estlabels):
@@ -222,5 +224,57 @@ def _classifiercollector(messagebody):
     return 1
 
 
+def _deploycollector(messagebody):
 
+    def build_points_dicts(scores, classes, rowcols):
+        """ Converts scores from the deploy call to the dictionary
+        structure required by the API. """
 
+        # Figure out how many of the (top) scores to store.
+        nbr_scores = min(settings.NBR_SCORES_PER_ANNOTATION, len(scores[0]))
+
+        # Pre-fetch label objects
+        label_objs = []
+        for class_ in classes:
+            label_objs.append(Label.objects.get(pk=class_))
+
+        data = []
+        for score, rowcol in zip(scores, rowcols):
+            # grab the index of the highest indices
+            inds = np.argsort(score)[::-1][:nbr_scores]
+            classifications = []
+            for ind in inds:
+                label_obj = label_objs[ind]
+                classifications.append(dict(
+                    label_id=label_obj.pk,
+                    label_name=label_obj.name,
+                    label_code=label_obj.default_code,
+                    score=score[ind]))
+            data.append(dict(
+                row=rowcol[0],
+                column=rowcol[1],
+                classifications=classifications
+            ))
+
+    result = messagebody['result']
+
+    pk = messagebody['original_job']['payload']['pk']
+    try:
+        job_unit = ApiJobUnit.objects.get(pk=pk)
+    except ApiJobUnit.DoesNotExist:
+        logger.info("Job unit of id {} does not exist.".format(pk))
+        return
+
+    if not result['ok']:
+        job_unit.status = ApiJobUnit.FAILURE
+        job_unit.save()
+    else:
+        job_unit.request_json = dict(
+            url=job_unit.request_json['url'],
+            points=build_points_dicts(
+                result['scores'],
+                result['classes'],
+                messagebody['original_job']['rowcols'])
+        )
+        job_unit.status = ApiJobUnit.SUCCESS
+        job_unit.save()
