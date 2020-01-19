@@ -257,6 +257,7 @@ def _deploycollector(messagebody):
                 column=rowcol[1],
                 classifications=classifications
             ))
+        return data
 
     result = messagebody['result']
     org_payload = messagebody['original_job']['payload']
@@ -274,7 +275,7 @@ def _deploycollector(messagebody):
     #     job_unit.status = ApiJobUnit.FAILURE
     #     job_unit.save()
     # else:
-    job_unit.request_json = dict(
+    job_unit.result_json = dict(
         url=job_unit.request_json['url'],
         points=build_points_dicts(
             result['scores'],
