@@ -288,7 +288,7 @@ def collectjob():
     task = messagebody['original_job']['task']
     pk = messagebody['original_job']['payload']['pk']
 
-    logger.debug("Collectinhg job with messagebody: {}".format(messagebody))
+    logger.debug("Collecting job with messagebody: {}".format(messagebody))
     if task == 'extract_features':
         if th._featurecollector(messagebody): 
             # If job was entered into DB, submit a classify job.
@@ -301,7 +301,7 @@ def collectjob():
             for image in Image.objects.filter(source=classifier.source, features__extracted=True, confirmed=False):
                 classify_image.apply_async(args=[image.id], eta=now() + timedelta(seconds = 10))
     elif task == 'deploy':
-        # TODO, make the colletors public
+        # TODO, make the collectors public
         th._deploycollector(messagebody)
 
     else:
