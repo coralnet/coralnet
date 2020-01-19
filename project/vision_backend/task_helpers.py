@@ -227,8 +227,10 @@ def _classifiercollector(messagebody):
 def _deploycollector(messagebody):
 
     def build_points_dicts(scores, classes, rowcols):
-        """ Converts scores from the deploy call to the dictionary
-        structure required by the API. """
+        """
+        Converts scores from the deploy call to the dictionary returned
+        by the API
+        """
 
         # Figure out how many of the (top) scores to store.
         nbr_scores = min(settings.NBR_SCORES_PER_ANNOTATION, len(scores[0]))

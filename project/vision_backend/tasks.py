@@ -183,10 +183,12 @@ def deploy(job_unit_id):
         'payload': payload
     }
 
+    th._submit_job(messagebody)
+
     logger.info(u"Submitted image at url: {} for deploy with job unit {}.".
                 format(job_unit.request_json['url'], job_unit.pk))
 
-    print(messagebody)
+    return messagebody
 
 
 @task(name="Classify Image")
