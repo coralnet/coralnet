@@ -55,7 +55,7 @@ class Deploy(APIView):
 
             features_job_unit = ApiJobUnit(
                 job=deploy_job,
-                type='deploy_extract_features',
+                type='deploy',
                 request_json=dict(
                     classifier_id=int(classifier_id),
                     url=image_json['url'],

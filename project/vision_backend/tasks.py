@@ -168,6 +168,7 @@ def deploy(job_unit_id):
                job_unit.request_json['points']]
 
     payload = {
+        'pk': job_unit_id,
         'bucketname': settings.AWS_STORAGE_BUCKET_NAME,
         'im_url': job_unit.request_json['url'],
         'modelname': 'vgg16_coralnet_ver1',
@@ -187,6 +188,9 @@ def deploy(job_unit_id):
 
     logger.info(u"Submitted image at url: {} for deploy with job unit {}.".
                 format(job_unit.request_json['url'], job_unit.pk))
+    logger.debug(u"Submitted image at url: {} for deploy with job unit {}. "
+                 u"Message: {}".format(job_unit.request_json['url'],
+                                       job_unit.pk, messagebody))
 
     return messagebody
 
@@ -283,7 +287,8 @@ def collectjob():
     # Handle message
     task = messagebody['original_job']['task']
     pk = messagebody['original_job']['payload']['pk']
-    
+
+    logger.debug("Collectinhg job with messagebody: {}".format(messagebody))
     if task == 'extract_features':
         if th._featurecollector(messagebody): 
             # If job was entered into DB, submit a classify job.
