@@ -276,8 +276,12 @@ def collectjob():
     messagebody = json.loads(message.get_body())
 
     # Check that the message pertains to this server
-    if not messagebody['original_job']['payload']['bucketname'] == settings.AWS_STORAGE_BUCKET_NAME:
-        logger.info("Job pertains to wrong bucket [%]".format(messagebody['original_job']['payload']['bucketname']))
+    if not messagebody['original_job']['payload']['bucketname'] == \
+            settings.AWS_STORAGE_BUCKET_NAME:
+        logger.info("Job pertains to wrong bucket. This: {}, expected: {}".
+                    format(settings.AWS_STORAGE_BUCKET_NAME,
+                           messagebody['original_job']['payload']['bucketname']
+                           ))
         return 1
 
     # Delete message (at this point, if it is not handled correctly,

@@ -23,6 +23,7 @@ class Deploy(APIView):
     Request a classifier deployment on a specified set of images.
     """
     def post(self, request, classifier_id):
+
         # The classifier must exist and be visible to the user.
         try:
             classifier = get_object_or_404(Classifier, id=classifier_id)
@@ -53,17 +54,18 @@ class Deploy(APIView):
         # operations (one per image).
         for image_index, image_json in enumerate(images_json):
 
-            features_job_unit = ApiJobUnit(
+            job_unit = ApiJobUnit(
                 job=deploy_job,
                 type='deploy',
                 request_json=dict(
                     classifier_id=int(classifier_id),
                     url=image_json['url'],
                     points=image_json['points'],
-                    image_order=image_index))
-            features_job_unit.save()
-
-            deploy.apply_async(args=[features_job_unit.pk],
+                    image_order=image_index
+                )
+            )
+            job_unit.save()
+            deploy.apply_async(args=[job_unit .pk],
                                eta=now() + timedelta(seconds=10))
 
         # Respond with the status endpoint's URL.
@@ -93,11 +95,11 @@ class DeployStatus(APIView):
 
         job_units = deploy_job.apijobunit_set
         success_count = job_units.filter(
-            type='deploy_classify', status=ApiJobUnit.SUCCESS).count()
+            type='deploy', status=ApiJobUnit.SUCCESS).count()
         failure_count = job_units.filter(
-            type='deploy_classify', status=ApiJobUnit.FAILURE).count()
+            type='deploy', status=ApiJobUnit.FAILURE).count()
         total_image_count = job_units.filter(
-            type='deploy_extract_features').count()
+            type='deploy').count()
 
         if not job_units.exclude(status=ApiJobUnit.PENDING).exists():
             # All units are still pending, so the job as a whole is pending
@@ -116,8 +118,8 @@ class DeployStatus(APIView):
 
         data = dict(
             status=job_status,
-            classify_successes=success_count,
-            classify_failures=failure_count,
+            successes=success_count,
+            failures=failure_count,
             total=total_image_count)
 
         return Response(dict(data=data), status=status.HTTP_200_OK)
@@ -139,16 +141,11 @@ class DeployResult(APIView):
                 dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
 
-        classify_units = deploy_job.apijobunit_set.filter(
-            type='deploy_classify')
+        classify_units = deploy_job.apijobunit_set.filter(type='deploy')
         # If classify units were created, and none of them are pending/working,
         # then the job is done.
-        job_done = (
-            classify_units.exists()
-            and
-            not classify_units.filter(
-                status__in=[ApiJobUnit.PENDING, ApiJobUnit.IN_PROGRESS]).exists()
-        )
+        job_done = (classify_units.exists() and not classify_units.filter(
+            status__in=[ApiJobUnit.PENDING, ApiJobUnit.IN_PROGRESS]).exists())
 
         if job_done:
             images_json = []

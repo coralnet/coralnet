@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import copy
 import json
+from unittest import skip
 
 from django.conf import settings
 from django.test import override_settings
@@ -120,7 +121,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
         response = self.client.get(status_url, **self.token_headers)
         return response
 
-    @patch('vision_backend_api.views.deploy_extract_features.run', noop_task)
+    @patch('vision_backend_api.views.deploy.run', noop_task)
     def test_no_progress_yet(self):
         job = self.deploy()
         response = self.get_job_status(job)
@@ -132,18 +133,18 @@ class DeployStatusEndpointTest(DeployBaseTest):
             dict(
                 data=dict(
                     status="Pending",
-                    classify_successes=0,
-                    classify_failures=0,
+                    successes=0,
+                    failures=0,
                     total=2)),
             "Response JSON should be as expected")
 
-    @patch('vision_backend_api.views.deploy_extract_features.run', noop_task)
+    @patch('vision_backend_api.views.deploy.run', noop_task)
     def test_some_images_working(self):
         job = self.deploy()
 
         # Mark one feature-extract unit's status as working
         features_job_unit = ApiJobUnit.objects.filter(
-            job=job, type='deploy_extract_features').latest('pk')
+            job=job, type='deploy').latest('pk')
         features_job_unit.status = ApiJobUnit.IN_PROGRESS
         features_job_unit.save()
 
@@ -156,12 +157,12 @@ class DeployStatusEndpointTest(DeployBaseTest):
             dict(
                 data=dict(
                     status="In Progress",
-                    classify_successes=0,
-                    classify_failures=0,
+                    successes=0,
+                    failures=0,
                     total=2)),
             "Response JSON should be as expected")
 
-    @patch('vision_backend_api.tasks.deploy_classify.run', noop_task)
+    @patch('vision_backend.tasks.deploy.run', noop_task)
     def test_features_extracted(self):
         job = self.deploy()
         response = self.get_job_status(job)
@@ -172,21 +173,24 @@ class DeployStatusEndpointTest(DeployBaseTest):
             response.json(),
             dict(
                 data=dict(
-                    status="In Progress",
-                    classify_successes=0,
-                    classify_failures=0,
+                    status="Pending",
+                    successes=0,
+                    failures=0,
                     total=2)),
             "Response JSON should be as expected")
 
-    @patch('vision_backend_api.tasks.deploy_classify.run', noop_task)
+    @patch('vision_backend.tasks.deploy.run', noop_task)
     def test_some_images_success(self):
         job = self.deploy()
 
         # Mark one classify unit's status as success
-        classify_job_unit = ApiJobUnit.objects.filter(
-            job=job, type='deploy_classify').latest('pk')
-        classify_job_unit.status = ApiJobUnit.SUCCESS
-        classify_job_unit.save()
+        job_units = ApiJobUnit.objects.filter(job=job, type='deploy')
+
+        self.assertEqual(job_units.count(), 2)
+
+        ju = job_units[0]
+        ju.status = ApiJobUnit.SUCCESS
+        ju.save()
 
         response = self.get_job_status(job)
 
@@ -197,18 +201,18 @@ class DeployStatusEndpointTest(DeployBaseTest):
             dict(
                 data=dict(
                     status="In Progress",
-                    classify_successes=1,
-                    classify_failures=0,
+                    successes=1,
+                    failures=0,
                     total=2)),
             "Response JSON should be as expected")
 
-    @patch('vision_backend_api.tasks.deploy_classify.run', noop_task)
+    @patch('vision_backend.tasks.deploy.run', noop_task)
     def test_some_images_failure(self):
         job = self.deploy()
 
         # Mark one classify unit's status as failure
         classify_job_unit = ApiJobUnit.objects.filter(
-            job=job, type='deploy_classify').latest('pk')
+            job=job, type='deploy').latest('pk')
         classify_job_unit.status = ApiJobUnit.FAILURE
         classify_job_unit.save()
 
@@ -221,11 +225,12 @@ class DeployStatusEndpointTest(DeployBaseTest):
             dict(
                 data=dict(
                     status="In Progress",
-                    classify_successes=0,
-                    classify_failures=1,
+                    successes=0,
+                    failures=1,
                     total=2)),
             "Response JSON should be as expected")
 
+    @skip("Need to have a mock backend before testing.")
     def test_success(self):
         job = self.deploy()
         response = self.get_job_status(job)
@@ -243,7 +248,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             reverse('api:deploy_result', args=[job.pk]),
             "Location header should be as expected")
 
-    @patch('vision_backend_api.tasks.deploy_classify.run', noop_task)
+    @patch('vision_backend.tasks.deploy.run', noop_task)
     def test_failure(self):
         job = self.deploy()
 
@@ -253,7 +258,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
         # attribute using an index access (like units[0].status = 'SC')
         # doesn't seem to work as desired (the attribute doesn't change).
         unit_1, unit_2 = ApiJobUnit.objects.filter(
-            job=job, type='deploy_classify')
+            job=job, type='deploy')
         unit_1.status = ApiJobUnit.SUCCESS
         unit_1.save()
         unit_2.status = ApiJobUnit.FAILURE
