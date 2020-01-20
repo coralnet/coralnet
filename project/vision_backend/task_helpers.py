@@ -5,6 +5,7 @@ import boto.sqs
 import os
 import json
 import logging
+import json
 
 import numpy as np
 
@@ -266,6 +267,7 @@ def _deploycollector(messagebody):
     try:
         job_unit = ApiJobUnit.objects.get(pk=pk)
     except ApiJobUnit.DoesNotExist:
+        print('oops')
         logger.info("Job unit of id {} does not exist.".format(pk))
         return
 
@@ -275,12 +277,13 @@ def _deploycollector(messagebody):
     #     job_unit.status = ApiJobUnit.FAILURE
     #     job_unit.save()
     # else:
-    job_unit.result_json = dict(
-        url=job_unit.request_json['url'],
-        points=build_points_dicts(
-            result['scores'],
-            result['classes'],
-            org_payload['rowcols'])
+    job_unit.result_json = json.dumps(
+        dict(url=json.loads(job_unit.request_json)['url'],
+             points=build_points_dicts(
+                 result['scores'],
+                 result['classes'],
+                 org_payload['rowcols'])
+        )
     )
     job_unit.status = ApiJobUnit.SUCCESS
     job_unit.save()
