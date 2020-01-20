@@ -382,7 +382,7 @@ class SuccessTest(DeployBaseTest):
             # There should be just one job unit: extracting features for the
             # only image
             job_unit = ApiJobUnit.objects.latest('pk')
-        except ApiJobUnit.DoesNotExist:j
+        except ApiJobUnit.DoesNotExist:
             self.fail("Job unit should be created")
 
         self.assertEqual(
