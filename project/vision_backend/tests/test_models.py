@@ -5,7 +5,7 @@ from django.conf import settings
 from lib.tests.utils import ClientTest
 from labels.models import Label
 from images.models import Source, Point
-from .models import Score
+from vision_backend.models import Score
 
 import vision_backend.task_helpers as th
 

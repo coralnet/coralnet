@@ -8,8 +8,8 @@ from images.models import Image, Point
 from images.model_utils import PointGen
 from annotations.models import Annotation
 from accounts.utils import is_robot_user
-from .models import Score, Classifier
-from .tasks import reset_after_labelset_change
+from vision_backend.models import Score, Classifier
+from vision_backend.tasks import reset_after_labelset_change
 
 import vision_backend.task_helpers as th
 
