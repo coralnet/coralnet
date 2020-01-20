@@ -355,9 +355,8 @@ class SuccessTest(DeployBaseTest):
             reverse('api:deploy_status', args=[deploy_job.pk]),
             "Response should contain status endpoint URL")
 
-    @skip("Deprecated since deploy now a single call.")
     @patch('vision_backend_api.views.deploy.run', noop_task)
-    def test_pre_extract(self):
+    def test_pre_deploy(self):
         """
         Test pre-extract-features state. To do this, we disable the
         extract-features task by patching it.
@@ -388,8 +387,7 @@ class SuccessTest(DeployBaseTest):
         self.assertEqual(
             job_unit.job.pk, deploy_job.pk, "Unit job should be correct")
         self.assertEqual(
-            job_unit.type, 'deploy_extract_features',
-            "Unit type should be feature extraction")
+            job_unit.type, 'deploy', "Unit type should be deploy")
         self.assertEqual(
             job_unit.status, ApiJobUnit.PENDING,
             "Unit status should be pending")
@@ -401,54 +399,6 @@ class SuccessTest(DeployBaseTest):
                 points=[dict(row=10, column=10)],
                 image_order=0),
             "Unit's request_json should be correct")
-
-    @skip("Deprecated since deploy now a single call.")
-    @patch('vision_backend_api.tasks.deploy.run', noop_task)
-    def test_pre_classify(self):
-        """
-        Test state after extracting features, but before classifying.
-        To do this, we disable the classify task by patching it.
-        """
-        data = dict(images=json.dumps(
-            [dict(url='URL 1', points=[dict(row=10, column=10)])]
-        ))
-        self.client.post(self.deploy_url, data, **self.token_headers)
-
-        deploy_job = ApiJob.objects.latest('pk')
-
-        # There should be two job units: extracting features, and classify,
-        # for the only image
-        try:
-            extract_unit = ApiJobUnit.objects.filter(
-                type='deploy_extract_features').latest('pk')
-        except ApiJobUnit.DoesNotExist:
-            self.fail("Features job unit should be created")
-
-        self.assertEqual(
-            extract_unit.status, ApiJobUnit.SUCCESS,
-            "Extract unit status should be success")
-
-        try:
-            classify_unit = ApiJobUnit.objects.filter(
-                type='deploy_classify').latest('pk')
-        except ApiJobUnit.DoesNotExist:
-            self.fail("Classify job unit should be created")
-
-        self.assertEqual(
-            classify_unit.job.pk, deploy_job.pk,
-            "Classify unit job should be correct")
-        self.assertEqual(
-            classify_unit.status, ApiJobUnit.PENDING,
-            "Classify unit status should be pending")
-        self.assertDictEqual(
-            classify_unit.request_json,
-            dict(
-                classifier_id=self.classifier.pk,
-                url='URL 1',
-                points=[dict(row=10, column=10)],
-                image_order=0,
-                features_path=''),
-            "Classify unit's request_json should be correct")
 
     @skip("We need to have a mock backend before we can test this.")
     def test_done(self):
