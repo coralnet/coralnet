@@ -91,5 +91,3 @@ class TestSuccess(ClientTest):
         self.assertEqual(point['classifications'][0]['label_code'], 'B')
         self.assertEqual(point['classifications'][1]['label_code'], 'D')
         self.assertEqual(point['classifications'][2]['label_code'], 'A')
-
-
