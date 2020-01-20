@@ -267,23 +267,24 @@ def _deploycollector(messagebody):
     try:
         job_unit = ApiJobUnit.objects.get(pk=pk)
     except ApiJobUnit.DoesNotExist:
-        print('oops')
         logger.info("Job unit of id {} does not exist.".format(pk))
         return
 
-    # TODO add result status to spacer, and read here.
-    # For now assume job was successful.
-    # if not result['ok']:
-    #     job_unit.status = ApiJobUnit.FAILURE
-    #     job_unit.save()
-    # else:
-    job_unit.result_json = json.dumps(
-        dict(url=json.loads(job_unit.request_json)['url'],
-             points=build_points_dicts(
-                 result['scores'],
-                 result['classes'],
-                 org_payload['rowcols'])
+    if result['ok']:
+        job_unit.result_json = json.dumps(
+            dict(url=json.loads(job_unit.request_json)['url'],
+                 points=build_points_dicts(
+                     result['scores'],
+                     result['classes'],
+                     org_payload['rowcols'])
+                 )
         )
-    )
-    job_unit.status = ApiJobUnit.SUCCESS
+        job_unit.status = ApiJobUnit.SUCCESS
+    else:
+        job_unit.result_json = json.dumps(
+            dict(url=json.loads(job_unit.request_json)['url'],
+                 error=result['error']
+                 )
+        )
+        job_unit.status = ApiJobUnit.FAILURE
     job_unit.save()
