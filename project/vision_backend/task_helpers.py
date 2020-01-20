@@ -3,13 +3,10 @@ This file contains helper functions to vision_backend.tasks.
 """
 import boto.sqs
 import os
-import json
 import logging
 import json
 
 import numpy as np
-
-from sklearn import linear_model
 
 from django.conf import settings
 from django.utils import timezone
@@ -271,20 +268,18 @@ def _deploycollector(messagebody):
         return
 
     if result['ok']:
-        job_unit.result_json = json.dumps(
-            dict(url=json.loads(job_unit.request_json)['url'],
-                 points=build_points_dicts(
-                     result['scores'],
-                     result['classes'],
-                     org_payload['rowcols'])
-                 )
+        job_unit.result_json = dict(
+            url=job_unit.request_json['url'],
+            points=build_points_dicts(
+                result['scores'],
+                result['classes'],
+                org_payload['rowcols'])
         )
         job_unit.status = ApiJobUnit.SUCCESS
     else:
-        job_unit.result_json = json.dumps(
-            dict(url=json.loads(job_unit.request_json)['url'],
-                 error=result['error']
-                 )
+        job_unit.result_json = dict(
+            url=job_unit.request_json['url'],
+            error=result['error']
         )
         job_unit.status = ApiJobUnit.FAILURE
     job_unit.save()

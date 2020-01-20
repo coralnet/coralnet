@@ -1,5 +1,3 @@
-import json
-
 from lib.tests.utils import ClientTest
 
 from annotations.models import Label
@@ -24,9 +22,8 @@ class TestDeployCollector(ClientTest):
         api_job.save()
         api_job_unit = ApiJobUnit(job=api_job,
                                   type='deploy',
-                                  request_json=json.dumps(
-                                      {'url': 'URL 1',
-                                       'points': 'abc'}))
+                                  request_json={'url': 'URL 1',
+                                                'points': 'abc'})
         api_job_unit.save()
         cls.api_job_unit_pk = api_job_unit.pk
 
@@ -72,10 +69,10 @@ class TestDeployCollector(ClientTest):
         api_job_unit = ApiJobUnit.objects.get(pk=self.api_job_unit_pk)
         self.assertEqual(api_job_unit.status, 'SC')
 
-        results = json.loads(api_job_unit.result_json)
+        results = api_job_unit.result_json
 
         self.assertEqual(results['url'],
-                         json.loads(api_job_unit.request_json)['url'])
+                         api_job_unit.request_json['url'])
         self.assertEqual(len(results['points']), 2)
 
         # First point should be assigned D->A->B
@@ -121,5 +118,5 @@ class TestDeployCollector(ClientTest):
 
         api_job_unit = ApiJobUnit.objects.get(pk=self.api_job_unit_pk)
         self.assertEqual(api_job_unit.status, 'FL')
-        self.assertEqual(json.loads(api_job_unit.result_json)['error'],
+        self.assertEqual(api_job_unit.result_json['error'],
                          'File not found')
