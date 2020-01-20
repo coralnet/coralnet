@@ -4,6 +4,7 @@ from lib.tests.utils import ClientTest
 
 from images.models import Source
 
+
 class MainPageViewPermissions(ClientTest):
     """
     Test the annotation area edit page.

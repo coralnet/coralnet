@@ -1,10 +1,7 @@
 import numpy as np
 
-from django.conf import settings
-
 from lib.tests.utils import ClientTest
-from labels.models import Label
-from images.models import Source, Point
+from images.models import Point
 from vision_backend.models import Score
 
 import vision_backend.task_helpers as th
@@ -34,7 +31,9 @@ class CascadeDeleteTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
     
-        labels = cls.create_labels(cls.user, ['A', 'B', 'C', 'D', 'E', 'F', 'G'], "Group1")
+        labels = cls.create_labels(cls.user,
+                                   ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+                                   "Group1")
 
         cls.create_labelset(cls.user, cls.source, labels.filter(
             name__in=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
@@ -50,7 +49,7 @@ class CascadeDeleteTest(ClientTest):
         label_objs = self.source.labelset.get_globals()
 
         # Check number of points per image
-        nbr_points = Point.objects.filter(image = img).count()
+        nbr_points = Point.objects.filter(image=img).count()
 
         # Fake creation of scores.
         scores = []
@@ -59,11 +58,13 @@ class CascadeDeleteTest(ClientTest):
         th._add_scores(img.pk, scores, label_objs)
 
         expected_nbr_scores = min(5, label_objs.count())
-        self.assertEqual(Score.objects.filter(image = img).count(), nbr_points * expected_nbr_scores)
+        self.assertEqual(Score.objects.filter(image=img).count(),
+                         nbr_points * expected_nbr_scores)
         
         # remove one point
-        points = Point.objects.filter(image = img)
+        points = Point.objects.filter(image=img)
         points[0].delete()
 
         # Now all scores for that point should be gone.
-        self.assertEqual(Score.objects.filter(image = img).count(), (nbr_points - 1) * expected_nbr_scores)
+        self.assertEqual(Score.objects.filter(image=img).count(),
+                         (nbr_points - 1) * expected_nbr_scores)

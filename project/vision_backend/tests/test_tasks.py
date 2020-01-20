@@ -23,12 +23,13 @@ class ResetTaskTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
 
-        labels = cls.create_labels(cls.user, ['A', 'B', 'C', 'D', 'E', 'F', 'G'], "Group1")
+        labels = cls.create_labels(cls.user,
+                                   ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+                                   "Group1")
 
         cls.create_labelset(cls.user, cls.source, labels.filter(
             name__in=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
         )
-
 
     def test_labelset_change_cleanup(self):
         """
@@ -36,10 +37,11 @@ class ResetTaskTest(ClientTest):
         """
 
         # Create some dummy classifiers
-        Classifier(source = self.source).save()
-        Classifier(source = self.source).save()
+        Classifier(source=self.source).save()
+        Classifier(source=self.source).save()
 
-        self.assertEqual(Classifier.objects.filter(source = self.source).count(), 2)
+        self.assertEqual(Classifier.objects.filter(
+            source=self.source).count(), 2)
 
         # Create some dummy scores
         img = self.upload_image(self.user, self.source)
@@ -48,7 +50,7 @@ class ResetTaskTest(ClientTest):
         label_objs = self.source.labelset.get_globals()
 
         # Check number of points per image
-        nbr_points = Point.objects.filter(image = img).count()
+        nbr_points = Point.objects.filter(image=img).count()
 
         # Fake creation of scores.
         scores = []
@@ -57,19 +59,21 @@ class ResetTaskTest(ClientTest):
         th._add_scores(img.pk, scores, label_objs)
 
         expected_nbr_scores = min(5, label_objs.count())
-        self.assertEqual(Score.objects.filter(image = img).count(), nbr_points * expected_nbr_scores)
+        self.assertEqual(Score.objects.filter(image=img).count(),
+                         nbr_points * expected_nbr_scores)
 
         # Fake that the image is classified
         img.features.classified = True
         img.features.save()
-        self.assertTrue(Image.objects.get(id = img.id).features.classified)
+        self.assertTrue(Image.objects.get(id=img.id).features.classified)
 
-        #Now, reset the source.
+        # Now, reset the source.
         reset_after_labelset_change(self.source.id)
 
-        self.assertEqual(Classifier.objects.filter(source = self.source).count(), 0)
-        self.assertEqual(Score.objects.filter(image = img).count(), 0)
-        self.assertFalse(Image.objects.get(id = img.id).features.classified)
+        self.assertEqual(Classifier.objects.filter(
+            source=self.source).count(), 0)
+        self.assertEqual(Score.objects.filter(image=img).count(), 0)
+        self.assertFalse(Image.objects.get(id=img.id).features.classified)
 
     def test_point_change_clenup(self):
         """
@@ -80,19 +84,19 @@ class ResetTaskTest(ClientTest):
         img.features.classified = True
         img.features.save()
 
-        self.assertTrue(Image.objects.get(id = img.id).features.extracted)
-        self.assertTrue(Image.objects.get(id = img.id).features.classified)
+        self.assertTrue(Image.objects.get(id=img.id).features.extracted)
+        self.assertTrue(Image.objects.get(id=img.id).features.classified)
 
         self.client.force_login(self.user)
-        url = reverse('image_detail', kwargs=dict(image_id = img.id))
+        url = reverse('image_detail', kwargs=dict(image_id=img.id))
         data = dict(
             regenerate_point_locations="Any arbitrary string goes here"
         )
         self.client.post(url, data)
 
         # Now features should be reset
-        self.assertFalse(Image.objects.get(id = img.id).features.extracted)
-        self.assertFalse(Image.objects.get(id = img.id).features.classified)
+        self.assertFalse(Image.objects.get(id=img.id).features.extracted)
+        self.assertFalse(Image.objects.get(id=img.id).features.classified)
 
 
 class ClassifyUtilsTest(ClientTest):
