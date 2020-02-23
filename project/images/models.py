@@ -299,6 +299,14 @@ class Source(models.Model):
     def nbr_valid_robots(self):
         return len(self.get_valid_robots())
 
+    @property
+    def best_robot_accuracy(self):
+        robot = self.get_latest_robot()
+        if robot is None:
+            return None
+        else:
+            return robot.accuracy
+
     def image_annotation_area_display(self):
         """
         Display the annotation-area parameters in templates.
@@ -381,7 +389,6 @@ class Source(models.Model):
         wasn't originally.
         """
         images = Image.objects.filter(source=self)
-        nimages = images.count()
         nunique = len(set([i.metadata.name for i in images]))
         return nunique == images.count()
 
@@ -401,9 +408,9 @@ class Source(models.Model):
             {field_name: field_value}
         Both field name and values are strings.
         """
-        field_names = ['name', 'longitude', 'latitude', 'create_date',
+        field_names = ['pk', 'name', 'longitude', 'latitude', 'create_date',
                        'nbr_confirmed_images', 'nbr_images', 'description',
-                       'affiliation', 'nbr_valid_robots']
+                       'affiliation', 'nbr_valid_robots', 'best_robot_accuracy']
 
         return {field: to_ascii_str(getattr(self, field)) for
                 field in field_names}

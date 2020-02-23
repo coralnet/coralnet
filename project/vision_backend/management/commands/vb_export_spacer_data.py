@@ -18,11 +18,23 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
 
-        parser.add_argument('--min_required_imgs', type=int, nargs='?', default=200,
-                            help="Min number of confirmed images required to include a source.")
-        parser.add_argument('--bucket', type=str, default='spacer-trainingdata', help="bucket name to export to")
-        parser.add_argument('--name', type=str, default='debug-export', help="Export name")
-        parser.add_argument('--skip_to', type=int, default=0,
+        parser.add_argument('--min_required_imgs',
+                            type=int,
+                            nargs='?',
+                            default=200,
+                            help="Min number of confirmed images required "
+                                 "to include a source.")
+        parser.add_argument('--bucket',
+                            type=str,
+                            default='spacer-trainingdata',
+                            help="bucket name to export to")
+        parser.add_argument('--name',
+                            type=str,
+                            default='debug-export',
+                            help="Export name")
+        parser.add_argument('--skip_to',
+                            type=int,
+                            default=0,
                             help="Index of source to skip to.")
 
     @property
@@ -43,25 +55,35 @@ class Command(BaseCommand):
         return json.dumps(source.to_dict(), indent=2)
 
     @staticmethod
-    def image_meta_json(metadata):
-        return json.dumps(metadata.to_dict(), indent=2)
+    def image_meta_json(image):
+        # Read out default image metadata.
+        metadata_dict = image.metadata.to_dict()
+        # Add details re. train vs valset.
+        metadata_dict['in_trainset'] = image.trainset
+        metadata_dict['in_valset'] = image.valset
+        return json.dumps(metadata_dict, indent=2)
 
     @staticmethod
     def image_annotations_json(image):
         rowcols = []
-        for ann in Annotation.objects.filter(image=image).\
+        for ann in Annotation.objects.filter(image=image). \
+            order_by('point__id'). \
                 annotate(row=F('point__row'),
                          col=F('point__column'),
                          label_id=F('label__pk')):
-            rowcols.append({'row': ann.row, 'col': ann.col, 'label': ann.label_id})
+            rowcols.append({'row': ann.row,
+                            'col': ann.col,
+                            'label': ann.label_id})
         return json.dumps(rowcols, indent=2)
 
     def handle(self, *args, **options):
 
         # Start by exporting the label-set
-        c = boto.connect_s3(settings.AWS_ACCESS_KEY_ID, settings.AWS_SECRET_ACCESS_KEY)
+        c = boto.connect_s3(settings.AWS_ACCESS_KEY_ID,
+                            settings.AWS_SECRET_ACCESS_KEY)
         bucket = c.get_bucket(options['bucket'])
-        label_set_key = Key(bucket, name=options['name']+'/' + 'label_set.json')
+        label_set_key = Key(bucket,
+                            name=options['name']+'/' + 'label_set.json')
         label_set_key.set_contents_from_string(self.labelset_json)
 
         # Filter sources
@@ -69,17 +91,22 @@ class Command(BaseCommand):
         sources = filter_out_test_sources(sources)
         sources = [s for s in sources if
                    s.nbr_confirmed_images > options['min_required_imgs']]
-        sources = sources[options['skip_to']:]
 
         # Iterate over sources
         for itt, source in enumerate(sources):
-            print("Exporting source id:{}. [{}({})] with {} images...".format(source.pk, itt+1, len(sources),
-                                                                              source.nbr_confirmed_images))
+            print("Exporting {}, id:{}. [{}({})] with {} images...".format(
+                source.name, source.pk, itt, len(sources) - 1,
+                source.nbr_confirmed_images))
+            if itt < options['skip_to']:
+                print("Skipping...")
+                continue
             source_prefix = options['name']+'/'+'s'+str(source.pk)
 
             # Export source meta
-            source_meta_key = Key(bucket, name=source_prefix + '/' + 'meta.json')
-            source_meta_key.set_contents_from_string(self.source_meta_json(source))
+            source_meta_key = Key(bucket,
+                                  name=source_prefix + '/' + 'meta.json')
+            source_meta_key.set_contents_from_string(
+                self.source_meta_json(source))
 
             images_prefix = source_prefix + '/' + 'images'
 
@@ -96,11 +123,13 @@ class Command(BaseCommand):
 
                 # Export image meta
                 source_meta_key = Key(bucket, name=image_prefix + '.meta.json')
-                source_meta_key.set_contents_from_string(self.image_meta_json(image.metadata))
+                source_meta_key.set_contents_from_string(
+                    self.image_meta_json(image))
 
                 # Export image annotations
                 source_meta_key = Key(bucket, name=image_prefix + '.anns.json')
-                source_meta_key.set_contents_from_string(self.image_annotations_json(image))
+                source_meta_key.set_contents_from_string(
+                    self.image_annotations_json(image))
 
                 # Copy image features
                 # Check again since state may have changed
@@ -108,7 +137,8 @@ class Command(BaseCommand):
                 image_path = os.path.join(settings.AWS_LOCATION,
                                           image.original_file.name)
                 if image.features.extracted:
-                    features_path = settings.FEATURE_VECTOR_FILE_PATTERN.format(full_image_path=image_path)
+                    features_path = settings.FEATURE_VECTOR_FILE_PATTERN.\
+                        format(full_image_path=image_path)
                     bucket.copy_key(image_prefix + '.features.json',
                                     settings.AWS_STORAGE_BUCKET_NAME,
                                     features_path)
@@ -117,4 +147,3 @@ class Command(BaseCommand):
                 bucket.copy_key(image_prefix + '.jpg',
                                 settings.AWS_STORAGE_BUCKET_NAME,
                                 image_path)
-
