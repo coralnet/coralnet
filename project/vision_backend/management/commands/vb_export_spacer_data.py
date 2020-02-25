@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
         # Iterate over sources
         for itt, source in enumerate(sources):
-            print("Exporting {}, id:{}. [{}({})] with {} images...".format(
+            print(u"Exporting {}, id:{}. [{}({})] with {} images...".format(
                 source.name, source.pk, itt, len(sources) - 1,
                 source.nbr_confirmed_images))
             if itt < options['skip_to']:
