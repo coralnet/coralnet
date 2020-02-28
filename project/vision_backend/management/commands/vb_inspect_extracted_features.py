@@ -45,6 +45,10 @@ class Command(BaseCommand):
                                                                 len(feats))
                     assert len(feats[0]) == 4096, "Feats dim: ({}) neq 4096".\
                         format(len(feats[0]))
+
+                    # TODO: once we have the new feature structure from
+                    # TODO: spacer, we can assert that the row, col information
+                    # TODO: matches also.
                 except Exception as err:
                     errors[source.id].append((image.id, repr(err)))
                     print("Img: {}, error: {}".format(image.id, repr(err)))
