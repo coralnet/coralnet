@@ -27,7 +27,7 @@ class Command(BaseCommand):
 
         errors = defaultdict(list)
         for source in Source.objects.filter():
-            print('Inspecting source: {}'.format(source.name))
+            print(u"Inspecting source: {}".format(source.name))
 
             for image in Image.objects.filter(source=source):
                 if not image.features.extracted:
