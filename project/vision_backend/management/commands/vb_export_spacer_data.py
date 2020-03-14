@@ -1,16 +1,16 @@
-import boto
 import json
 import os
-from boto.s3.key import Key
+
+import boto
+from django.conf import settings
+from django.core.management.base import BaseCommand
+from django.db.models import F
 from tqdm import tqdm
 
-from django.db.models import F
-from django.core.management.base import BaseCommand
-from django.conf import settings
-
+from annotations.models import Label, Annotation
 from images.models import Source, Image
 from images.utils import filter_out_test_sources
-from annotations.models import Label, Annotation
+from utils import log
 
 
 class Command(BaseCommand):
@@ -36,6 +36,17 @@ class Command(BaseCommand):
                             type=int,
                             default=0,
                             help="Index of source to skip to.")
+        parser.add_argument('--feature_level',
+                            type=int,
+                            default=0,
+                            help="Level of feature export"
+                                 "0 = no export, "
+                                 "1 = export if do not already exist,"
+                                 "2 = export and overwrite.")
+
+    @staticmethod
+    def log(message):
+        log(message, 'export_data.log')
 
     @property
     def labelset_json(self):
@@ -78,12 +89,19 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
 
+        arg_keys = ['min_required_imgs', 'bucket', 'name', 'skip_to',
+                    'feature_level']
+        args_str = ''
+        for key in arg_keys:
+            args_str += '{}: {}, '.format(key, options[key])
+        self.log(u"Starting data export with args: [{}]\n{}".
+                 format(args_str, '-'*70))
+
         # Start by exporting the label-set
         c = boto.connect_s3(settings.AWS_ACCESS_KEY_ID,
                             settings.AWS_SECRET_ACCESS_KEY)
         bucket = c.get_bucket(options['bucket'])
-        label_set_key = Key(bucket,
-                            name=options['name']+'/' + 'label_set.json')
+        label_set_key = bucket.new_key(options['name']+'/' + 'label_set.json')
         label_set_key.set_contents_from_string(self.labelset_json)
 
         # Filter sources
@@ -94,17 +112,22 @@ class Command(BaseCommand):
 
         # Iterate over sources
         for itt, source in enumerate(sources):
-            print(u"Exporting {}, id:{}. [{}({})] with {} images...".format(
+            self.log(u"Exporting {}, id:{}. [{}({})] with {} images...".format(
                 source.name, source.pk, itt, len(sources) - 1,
                 source.nbr_confirmed_images))
+
+            # Establish a new connection for each source.
+            c = boto.connect_s3(settings.AWS_ACCESS_KEY_ID,
+                                settings.AWS_SECRET_ACCESS_KEY)
+            bucket = c.get_bucket(options['bucket'])
+
             if itt < options['skip_to']:
-                print("Skipping...")
+                self.log(u"Skipping...")
                 continue
             source_prefix = options['name']+'/'+'s'+str(source.pk)
 
             # Export source meta
-            source_meta_key = Key(bucket,
-                                  name=source_prefix + '/' + 'meta.json')
+            source_meta_key = bucket.new_key(source_prefix + '/' + 'meta.json')
             source_meta_key.set_contents_from_string(
                 self.source_meta_json(source))
 
@@ -115,35 +138,37 @@ class Command(BaseCommand):
                                                    features__extracted=True)):
 
                 image_prefix = images_prefix + '/i' + str(image.pk)
-                image_key = Key(bucket, name=image_prefix+'.jpg')
-                if image_key.exists():
-                    # Since we write the image file last, if this exists,
-                    # we have already exported this image.
-                    continue
 
                 # Export image meta
-                source_meta_key = Key(bucket, name=image_prefix + '.meta.json')
+                source_meta_key = bucket.new_key(image_prefix + '.meta.json')
                 source_meta_key.set_contents_from_string(
                     self.image_meta_json(image))
 
                 # Export image annotations
-                source_meta_key = Key(bucket, name=image_prefix + '.anns.json')
+                source_meta_key = bucket.new_key(image_prefix + '.anns.json')
                 source_meta_key.set_contents_from_string(
                     self.image_annotations_json(image))
 
-                # Copy image features
-                # Check again since state may have changed
-                # since the filtering was applied
-                image_path = os.path.join(settings.AWS_LOCATION,
-                                          image.original_file.name)
-                if image.features.extracted:
-                    features_path = settings.FEATURE_VECTOR_FILE_PATTERN.\
-                        format(full_image_path=image_path)
-                    bucket.copy_key(image_prefix + '.features.json',
-                                    settings.AWS_STORAGE_BUCKET_NAME,
-                                    features_path)
+                # Set image source and target keys.
+                source_image_key = os.path.join(settings.AWS_LOCATION,
+                                                image.original_file.name)
+                source_feature_key = settings.FEATURE_VECTOR_FILE_PATTERN.\
+                    format(full_image_path=source_image_key)
+                target_image_key = image_prefix + '.jpg'
+                target_feature_key = image_prefix + '.features.json'
+
+                # Copy feature file
+                if options['feature_level'] > 0:
+                    key = bucket.get_key(target_feature_key)
+                    if key is None or options['feature_level'] == 2:
+                        # Nothing exported, or overwrite anyways:
+                        bucket.copy_key(target_feature_key,
+                                        settings.AWS_STORAGE_BUCKET_NAME,
+                                        source_feature_key)
 
                 # Copy image file
-                bucket.copy_key(image_prefix + '.jpg',
-                                settings.AWS_STORAGE_BUCKET_NAME,
-                                image_path)
+                image_key = bucket.get_key(target_image_key)
+                if image_key is None:
+                    bucket.copy_key(target_image_key,
+                                    settings.AWS_STORAGE_BUCKET_NAME,
+                                    source_image_key)
