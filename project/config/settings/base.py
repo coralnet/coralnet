@@ -629,7 +629,8 @@ SELENIUM_TIMEOUTS = {
 }
 
 # We filter on sources that contains these strings for map and some exports.
-LIKELY_TEST_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check']
+LIKELY_TEST_SOURCE_NAMES = ['test', 'sandbox', 'dummy', 'tmp', 'temp', 'check',
+                            'reviewer']
 
 # NewsItem categories used in NewsItem app.
 NEWS_ITEM_CATEGORIES = ['ml', 'source', 'image', 'annotation', 'account']
