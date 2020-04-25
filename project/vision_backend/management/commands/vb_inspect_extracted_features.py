@@ -1,5 +1,5 @@
 import json
-import os
+import posixpath
 from collections import defaultdict
 
 from django.conf import settings
@@ -62,7 +62,7 @@ class Command(BaseCommand):
                 try:
                     feats = direct_s3_read(
                         settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                            full_image_path=os.path.join(
+                            full_image_path=posixpath.join(
                                 settings.AWS_LOCATION,
                                 image.original_file.name)), 'json')
                     n_pts = Point.objects.filter(image=image).count()
