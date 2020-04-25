@@ -1,5 +1,5 @@
 import json
-import os
+import posixpath
 
 import boto
 from django.conf import settings
@@ -150,8 +150,8 @@ class Command(BaseCommand):
                     self.image_annotations_json(image))
 
                 # Set image source and target keys.
-                source_image_key = os.path.join(settings.AWS_LOCATION,
-                                                image.original_file.name)
+                source_image_key = posixpath.join(settings.AWS_LOCATION,
+                                                  image.original_file.name)
                 source_feature_key = settings.FEATURE_VECTOR_FILE_PATTERN.\
                     format(full_image_path=source_image_key)
                 target_image_key = image_prefix + '.jpg'

@@ -1,5 +1,6 @@
 from __future__ import division
 import posixpath
+import six
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -13,7 +14,7 @@ from easy_thumbnails.fields import ThumbnailerImageField
 from guardian.shortcuts import (
     get_objects_for_user, get_users_with_perms, get_perms, assign, remove_perm)
 
-from .model_utils import PointGen, to_ascii_str
+from .model_utils import PointGen
 from accounts.utils import is_robot_user
 from annotations.model_utils import AnnotationAreaUtils
 from labels.models import LabelSet
@@ -443,7 +444,7 @@ class Source(models.Model):
                        'nbr_confirmed_images', 'nbr_images', 'description',
                        'affiliation', 'nbr_valid_robots', 'best_robot_accuracy']
 
-        return {field: to_ascii_str(getattr(self, field)) for
+        return {field: six.text_type(getattr(self, field)) for
                 field in field_names}
 
     def __str__(self):
@@ -549,7 +550,7 @@ class Metadata(models.Model):
             {field_name: field_value}
         Both field name and values are strings.
         """
-        return {field: to_ascii_str(getattr(self, field)) for
+        return {field: six.text_type(getattr(self, field)) for
                 field in self.EDIT_FORM_FIELDS}
 
 
