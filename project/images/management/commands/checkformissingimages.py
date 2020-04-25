@@ -1,4 +1,6 @@
-import csv
+from __future__ import unicode_literals
+from backports import csv
+from io import open
 import os
 import posixpath
 from django.conf import settings
@@ -36,7 +38,7 @@ class Command(BaseCommand):
         csv_filepath = os.path.join(
             settings.SITE_DIR, 'tmp', 'missing_images.csv')
 
-        with open(csv_filepath, 'wb') as f:
+        with open(csv_filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
                 "Source name", "Source id", "Image name",
