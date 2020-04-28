@@ -4,7 +4,7 @@ import boto
 
 import os.path as osp
 
-from io import BytesIO
+from io import StringIO
 
 from django.core import management
 from django.core.files.base import ContentFile
@@ -236,7 +236,7 @@ class VisionBackendRegressionTest(ClientTest):
 
         self.client.force_login(self.user)
 
-        with BytesIO() as stream:
+        with StringIO() as stream:
             writer = csv.writer(stream)
             writer.writerow(['Name', 'Row', 'Column', 'Label'])
             for ann in anns:

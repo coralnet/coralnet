@@ -1,4 +1,4 @@
-import os
+import posixpath
 import logging
 import json
 
@@ -50,7 +50,7 @@ def submit_features(image_id, force=False):
         rowcols.append([point.row, point.column])
     
     # Setup the job payload.
-    full_image_path = os.path.join(settings.AWS_LOCATION, img.original_file.name)
+    full_image_path = posixpath.join(settings.AWS_LOCATION, img.original_file.name)
     payload = {
         'bucketname': settings.AWS_STORAGE_BUCKET_NAME,
         'imkey': full_image_path,
@@ -218,7 +218,7 @@ def classify_image(image_id):
     
     feats = direct_s3_read(
         settings.FEATURE_VECTOR_FILE_PATTERN.format(
-            full_image_path=os.path.join(settings.AWS_LOCATION,
+            full_image_path=posixpath.join(settings.AWS_LOCATION,
                                          img.original_file.name)), 'json')
 
     # Classify.
