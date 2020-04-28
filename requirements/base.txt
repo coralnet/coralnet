@@ -118,7 +118,7 @@ cchardet==2.1.4
 
 # Scientific computing
 # Changelog: https://numpy.org/devdocs/release.html
-numpy==1.11.1
+numpy==1.18.1
 
 # Library for testing; can replace parts of the system under test with
 # mock objects.
