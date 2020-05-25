@@ -1239,22 +1239,26 @@ class UploadAnnotationsContentsTest(UploadAnnotationsBaseTest):
     def test_multiple_points_same_row_column_csv(self):
         """
         More than one point in the same image on the exact same position
-        (same row and same column) should not be allowed.
+        (same row and same column) should be allowed.
         """
-        self.do_error_csv(
+        self.do_success_csv(
             [(150, 90), (20, 20), (150, 90)],
-            "Image 1.png has multiple points on the same position:"
-            " row 90, column 150")
+            {
+                (150, 90, 1, self.img1.pk),
+                (20, 20, 2, self.img1.pk),
+                (150, 90, 3, self.img1.pk),
+            })
 
     def test_multiple_points_same_row_column_cpc(self):
         # These CPC file values for points 1 and 3
         # are different, but they map to the same pixel.
-        self.do_error_cpc(
+        self.do_success_cpc(
             [(150*15-2, 90*15-2), (20*15, 20*15), (150*15+2, 90*15+2)],
-            "From file 1.cpc:"
-            " Points 1 and 3 are on the same"
-            " pixel position:"
-            " row 90, column 150")
+            {
+                (150, 90, 1, self.img1.pk),
+                (20, 20, 2, self.img1.pk),
+                (150, 90, 3, self.img1.pk),
+            })
 
     def test_label_not_in_labelset_csv(self):
         self.do_error_csv(

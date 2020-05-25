@@ -52,7 +52,8 @@ SELENIUM_BROWSERS = [
 #   say using `python -m http.server 8080` (this syntax is Python 3),
 #   and remember to use the collectstatic command
 # - Set a MEDIA_URL which I can serve media files to,
-#   say using `python -m http.server 8070`
+#   say using `python -m http.server 8070` or using this way with CORS:
+#   https://stackoverflow.com/questions/21956683/
 #
 # But I'll leave these all commented out if DEBUG = True, because it's easier
 # to not bother with starting up those extra servers, and ALLOWED_HOSTS gets
@@ -60,7 +61,7 @@ SELENIUM_BROWSERS = [
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
 #DEBUG = False
 #ALLOWED_HOSTS = ['*']
-#MEDIA_URL = 'http://127.0.0.1:8070/'
+#MEDIA_URL = 'http://localhost:8070/'
 #STATIC_URL = 'http://127.0.0.1:8080/'
 
 CAROUSEL_IMAGE_COUNT = 2

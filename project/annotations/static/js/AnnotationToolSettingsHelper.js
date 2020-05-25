@@ -111,7 +111,7 @@ var ATS = {
             // Update the setting
             if ($field.attr('type') === 'checkbox')
                 ATS.settings[fieldName] = $field.prop('checked');
-            else if ($field.hasClass('color'))
+            else if ($field.hasClass('jscolor'))
                 ATS.settings[fieldName] = '#' + $field.val();
             else if ($field.attr('type') === 'number')
                 // Only integer fields right now, no floats

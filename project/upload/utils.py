@@ -280,8 +280,6 @@ def annotations_csv_verify_contents(csv_annotations, source):
             # to upload but are still tracking in their records.
             continue
 
-        row_col_set = set()
-
         for point_number, point_dict in enumerate(annotations_for_image, 1):
 
             # Check that row/column are integers within the image dimensions.
@@ -340,13 +338,6 @@ def annotations_csv_verify_contents(csv_annotations, source):
                         " No label of code {code} found"
                         " in this source's labelset".format(
                             code=label_code))
-
-            if (row, column) in row_col_set:
-                raise FileProcessError(
-                    "Image {name} has multiple points on the same position:"
-                    " row {row}, column {column}".format(
-                        name=image_name, row=row, column=column))
-            row_col_set.add((row, column))
 
         annotations[img.pk] = annotations_for_image
 
@@ -581,7 +572,6 @@ def annotations_cpc_verify_contents(cpc_dicts, source):
             )
         image_names_to_cpc_filenames[image_name] = cpc_filename
 
-        row_col_dict = dict()
         annotations_for_image = []
 
         for point_number, cpc_point_dict in enumerate(cpc_dict['points'], 1):
@@ -652,18 +642,6 @@ def annotations_cpc_verify_contents(cpc_dicts, source):
                         " in this source's labelset".format(
                             code=label_code))
                 point_dict['label'] = label_code
-
-            if (row, column) in row_col_dict:
-                raise FileProcessError(
-                    "From file {cpc_filename}:"
-                    " Points {p1} and {p2} are on the same"
-                    " pixel position:"
-                    " row {row}, column {column}".format(
-                        cpc_filename=cpc_filename,
-                        p1=row_col_dict[(row, column)],
-                        p2=point_number,
-                        row=row, column=column))
-            row_col_dict[(row, column)] = point_number
 
             annotations_for_image.append(point_dict)
 
