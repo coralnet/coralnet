@@ -1,15 +1,20 @@
 from __future__ import division
-from functools import reduce
-from io import BytesIO
+
 import operator
 import re
+from functools import reduce
+from io import BytesIO
 
+import django.db.models.fields as model_fields
+from PIL import Image as PILImage
+from PIL import ImageFile
 from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.db.models import Q
-import django.db.models.fields as model_fields
-from PIL import Image as PILImage
+
 from images.models import Point, Image, Metadata
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 def image_search_kwargs_to_queryset(search_kwargs, source):

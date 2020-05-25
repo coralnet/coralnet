@@ -1,16 +1,18 @@
 from __future__ import unicode_literals
+
+import os
 from io import BytesIO
+
 import mock
 from PIL import Image as PILImage
 from PIL.Image import SAVE as PIL_SAVE
-
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import get_storage_class
-from django.conf import settings
 from django.test import override_settings
 
-from lib.tests.utils import ClientTest
 from images.models import Point
+from lib.tests.utils import ClientTest
 from visualization.utils import generate_patch_if_doesnt_exist, get_patch_path
 
 
@@ -55,6 +57,24 @@ class LabelPatchGenerationTest(ClientTest):
         self.assertEqual(patch.size[0], settings.LABELPATCH_NROWS)
         self.assertEqual(patch.size[1], settings.LABELPATCH_NCOLS)
         self.assertEqual(patch.mode, 'RGB')
+
+    def test_rgb_convert_fix(self):
+
+        # This file caused an issue in production. See
+        # https://github.com/beijbom/coralnet/issues/282 for details
+        filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'fixtures/p82pkvoqn3.JPG')
+        img = PILImage.open(filepath)
+
+        # It was resolved by setting
+        # ImageFile.LOAD_TRUNCATED_IMAGES = True
+        # in ../utils.py
+
+        try:
+            self.assertRaises(IOError, img.convert, 'RGB')
+        except IOError as e:
+            self.fail("img.convert('RGB') raised IOError unexpectedly: {}"
+                      .format(repr(e)))
 
 
 def always_save_png(self, fp, format=None, **params):
