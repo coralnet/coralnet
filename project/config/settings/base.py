@@ -12,6 +12,12 @@ from django.core.exceptions import ImproperlyConfigured
 
 from .vision_backend import *
 
+# Configure Pillow to be tolerant of image files that are truncated (missing
+# data from the last block).
+# https://stackoverflow.com/a/23575424/
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 
 # Directory with settings files.
 # __file__ is a special Python variable containing the current file's path,

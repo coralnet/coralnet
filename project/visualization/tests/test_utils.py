@@ -68,7 +68,7 @@ class LabelPatchGenerationTest(ClientTest):
 
         # It was resolved by setting
         # ImageFile.LOAD_TRUNCATED_IMAGES = True
-        # in ../utils.py
+        # in any loaded module
 
         try:
             img.convert('RGB')
