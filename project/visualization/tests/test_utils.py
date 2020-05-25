@@ -71,7 +71,7 @@ class LabelPatchGenerationTest(ClientTest):
         # in ../utils.py
 
         try:
-            self.assertRaises(IOError, img.convert, 'RGB')
+            img.convert('RGB')
         except IOError as e:
             self.fail("img.convert('RGB') raised IOError unexpectedly: {}"
                       .format(repr(e)))
