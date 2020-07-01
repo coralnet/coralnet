@@ -45,6 +45,8 @@ urlpatterns = [
 
     # API
     url(r'^api/', include('api_core.urls', namespace='api')),
+    url(r'^api_management/',
+        include('api_management.urls', namespace='api_management')),
 
     # "Secret" dev views
     url(r'^nav_test/(?P<source_id>\d+)/$', lib_views.nav_test, name="nav_test"),

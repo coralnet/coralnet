@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}API Jobs | CoralNet{% endblock %}
+
+
+{% block css-code %}
+<style type="text/css">
+tr[data-status="{{ PENDING }}"] {
+  background-color: #bbe;
+}
+tr[data-status="{{ IN_PROGRESS }}"] {
+  background-color: #eeb;
+}
+tr[data-status="{{ DONE }}"] {
+  background-color: #beb;
+}
+td.failure {
+  background-color: #ebb;
+}
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<h1>API Jobs</h1>
+
+<p>{{ in_progress_count }} jobs in progress, {{ pending_count }} pending, {{ done_count }} completed in the last month.</p>
+
+<table class="generic">
+  <thead>
+    <tr>
+      <th title="Database ID">ID</th>
+      <th title="Job request date">Create date</th>
+      <th title="User who requested the job">User</th>
+      <th title="Job type">Type</th>
+      <th title="Progress status">Status</th>
+      <th title="Unfinished units">Unfinished</th>
+      <th title="Units finished with failure">Failed</th>
+      <th title="Units finished with success">Succeeded</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in jobs %}
+      <tr data-status="{{ job.overall_status }}">
+        <td>
+          <a href="{% url 'api_management:job_detail' job.id %}">
+            {{ job.id }}
+          </a>
+        </td>
+        <td>{{ job.create_date }}</td>
+        <td>{{ job.user }}</td>
+        <td>{{ job.type }}</td>
+        <td>{{ job.overall_status }}</td>
+        <td>{{ job.pending_units|add:job.in_progress_units }}</td>
+        <td class="{% if job.failure_units > 0 %} failure {% endif %}">
+          {{ job.failure_units }}
+        </td>
+        <td>{{ job.success_units }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endblock %}

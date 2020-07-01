@@ -156,6 +156,7 @@ INSTALLED_APPS = [
     'accounts',
     'annotations',
     'api_core',
+    'api_management',
     'async_media',
     'blog',
     'bug_reporting',
