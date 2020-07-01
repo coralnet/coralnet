@@ -51,8 +51,14 @@ tr[data-status="{{ FAILURE }}"] {
         <td>{{ unit.id }}</td>
         <td>{{ unit.type }}</td>
         <td>{{ unit.status_display }}</td>
-        <td>{{ unit.request_json_display|linebreaks }}</td>
-        <td>{{ unit.error_display|linebreaks }}</td>
+        <td>
+          <ul class="detail_list">
+            {% for rj_string in unit.request_json_strings %}
+              <li>{{ rj_string }}</li>
+            {% endfor %}
+          </ul>
+        </td>
+        <td>{{ unit.error_display }}</td>
       </tr>
     {% endfor %}
   </tbody>

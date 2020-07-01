@@ -2,9 +2,9 @@ from __future__ import unicode_literals
 from vision_backend.models import Classifier
 
 
-def deploy_request_json_display(job):
+def deploy_request_json_as_strings(job):
     """
-    String display for a deploy job's request JSON.
+    Get a string list representing a deploy job's request JSON.
     """
     request_json = job.request_json
     classifier_id = request_json['classifier_id']
@@ -15,8 +15,8 @@ def deploy_request_json_display(job):
     except Classifier.DoesNotExist:
         classifier_display = "Classifier ID {} (deleted)".format(classifier_id)
 
-    return (
-        classifier_display
-        + "\nURL: {}".format(request_json['url'])
-        + "\nPoint count: {}".format(len(request_json['points']))
-    )
+    return [
+        classifier_display,
+        "URL: {}".format(request_json['url']),
+        "Point count: {}".format(len(request_json['points'])),
+    ]

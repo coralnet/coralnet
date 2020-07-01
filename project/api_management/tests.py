@@ -173,16 +173,16 @@ class JobDetailTest(ClientTest):
         cells_text = [cell.get_text().strip() for cell in cells]
 
         request_json_as_html = (
-            "Classifier ID {} (Source ID {})".format(
+            "<li>Classifier ID {} (Source ID {})</li>".format(
                 self.classifier.pk, self.source.pk)
-            + "<br>URL: my/url"
-            + "<br>Point count: 2")
+            + "<li>URL: my/url</li>"
+            + "<li>Point count: 2</li>")
 
         self.assertEqual(cells_text[0], str(unit.pk))
         self.assertEqual(cells_text[1], 'test_unit_type')
         self.assertEqual(cells_text[2], "Failure")
         self.assertInHTML(
-            request_json_as_html, str(cells[3]))
+            request_json_as_html, str(cells[3].find('ul')))
         self.assertEqual(cells_text[4], "Error goes here")
 
     def test_deleted_classifier(self):
@@ -211,11 +211,11 @@ class JobDetailTest(ClientTest):
         cells = unit_row.find_all('td')
 
         request_json_as_html = (
-            "Classifier ID {} (deleted)".format(classifier_id)
-            + "<br>URL: my/url"
-            + "<br>Point count: 2")
+            "<li>Classifier ID {} (deleted)</li>".format(classifier_id)
+            + "<li>URL: my/url</li>"
+            + "<li>Point count: 2</li>")
         self.assertInHTML(
-            request_json_as_html, str(cells[3]))
+            request_json_as_html, str(cells[3].find('ul')))
 
     def test_no_errors(self):
         job = ApiJob(type='test_job_type', user=self.user)

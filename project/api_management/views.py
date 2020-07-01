@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import permission_required
 from django.shortcuts import get_object_or_404, render
 
 from api_core.models import ApiJob, ApiJobUnit
-from vision_backend_api.utils import deploy_request_json_display
+from vision_backend_api.utils import deploy_request_json_as_strings
 
 
 @permission_required('is_superuser')
@@ -55,7 +55,7 @@ def job_detail(request, job_id):
 
         # Here we assume it's a deploy job. If we expand the API to different
         # job types later, then this code has to become more flexible.
-        request_json_display = deploy_request_json_display(unit_obj)
+        request_json_strings = deploy_request_json_as_strings(unit_obj)
 
         if unit_obj.result_json:
             error_display = unit_obj.result_json.get('error', '')
@@ -67,7 +67,7 @@ def job_detail(request, job_id):
             type=unit_obj.type,
             status=unit_obj.status,
             status_display=unit_obj.get_status_display(),
-            request_json_display=request_json_display,
+            request_json_strings=request_json_strings,
             error_display=error_display,
         ))
 
