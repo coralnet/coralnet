@@ -96,7 +96,9 @@
               {% endwith %}
 
               {% if user.is_superuser %}
-	              <li><a href="{% url 'emailall' %}"><span>Email All</span></a></li>
+	              <li><a href="{% url 'admin_tools' %}">
+                  <span>Admin Tools</span>
+                </a></li>
               {% endif %}
 
               <li><a href="{% url 'profile_detail' user.pk %}"><span>Account ({{ user.username }})</span></a></li>

@@ -36,6 +36,14 @@ def index(request):
     })
 
 
+@permission_required('is_superuser')
+def admin_tools(request):
+    """
+    Admin tools portal page.
+    """
+    return render(request, 'lib/admin_tools.html')
+
+
 def handler500(request, template_name='500.html'):
     try:
         template = loader.get_template(template_name)

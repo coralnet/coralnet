@@ -49,6 +49,7 @@ urlpatterns = [
         include('api_management.urls', namespace='api_management')),
 
     # "Secret" dev views
+    url(r'^admin_tools/$', lib_views.admin_tools, name="admin_tools"),
     url(r'^nav_test/(?P<source_id>\d+)/$', lib_views.nav_test, name="nav_test"),
     url(r'^backend_overview$', backend_views.backend_overview, name="backend_overview"),
     url(r'^cm_test$', backend_views.cm_test, name="cm_test"),

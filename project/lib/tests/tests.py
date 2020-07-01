@@ -44,6 +44,14 @@ class PermissionTest(BasePermissionTest):
 
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
+    def test_admin_tools(self):
+        url = reverse('admin_tools')
+        template = 'lib/admin_tools.html'
+
+        self.assertPermissionLevel(
+            url, self.SUPERUSER, template=template,
+            deny_type=self.REQUIRE_LOGIN)
+
     def test_nav_test(self):
         url = reverse('nav_test', args=[self.source.pk])
         template = 'lib/nav_test.html'
