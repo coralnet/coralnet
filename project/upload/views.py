@@ -163,7 +163,7 @@ def upload_images_ajax(request, source_id):
 
     backend_tasks.submit_features.apply_async(
         args=[img.id],
-        eta=(now() + timedelta(seconds=10)),
+        eta=(now() + timedelta(minutes=1)),
     )
 
     return JsonResponse(dict(
@@ -493,7 +493,7 @@ def upload_annotations_ajax(request, source_id):
         img.confirmed = (len(new_points) == len(new_annotations))
         img.save()
         backend_tasks.reset_features.apply_async(
-            args = [img.id], eta = now() + timedelta(seconds = 10))
+            args=[img.id], eta=now() + timedelta(hours=1))
 
     if cpc_info:
         # We uploaded annotations as CPC. Save some info for future CPC
