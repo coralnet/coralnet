@@ -203,7 +203,10 @@ def source_main(request, source_id):
             })
         robot_stats['backend_plot_data'] = backend_plot_data
         robot_stats['has_robot'] = True
-        robot_stats['create_date'] = source.get_latest_robot().create_date
+        robot_stats['create_date_saved'] = source.get_latest_robot(
+            only_valid=True).create_date
+        robot_stats['create_date_trained'] = source.get_latest_robot(
+            only_valid=False).create_date
     else:
         robot_stats['has_robot'] = False
 
