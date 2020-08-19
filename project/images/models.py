@@ -362,16 +362,23 @@ class Source(models.Model):
         return AnnotationAreaUtils.db_format_to_display(
             self.image_annotation_area)
 
-    def get_latest_robot(self):
+    def get_latest_robot(self, only_valid=True):
         """
         return the latest robot associated with this source.
         if no robots, return None
         """
-        robots = self.get_valid_robots()
-        if robots.count() > 0:
-            return robots[0]
+        if only_valid:
+            robots = self.get_valid_robots()
+            if robots.count() > 0:
+                return robots[0]
+            else:
+                return None
         else:
-            return None
+            robots = Classifier.objects.filter(source=self).order_by('-id')
+            if robots.count() > 0:
+                return robots[0]
+            else:
+                return None
 
     def get_valid_robots(self):
         """
