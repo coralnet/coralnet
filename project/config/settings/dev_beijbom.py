@@ -13,5 +13,5 @@ AWS_SECRET_ACCESS_KEY = get_secret('AWS_SECRET_ACCESS_KEY')
 os.environ['SPACER_AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
 os.environ['SPACER_AWS_SECRET_ACCESS_KEY'] = AWS_SECRET_ACCESS_KEY
 
-from .storage_s3 import *
-# from .storage_local import *
+# from .storage_s3 import *
+from .storage_local import *
