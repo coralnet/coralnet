@@ -110,8 +110,12 @@ class BatchQueue(BaseQueue):
 
     @staticmethod
     def get_job_name(job_msg: JobMsg):
-        return job_msg.task_name + '-' + '_'.join(
-            [t.job_token for t in job_msg.tasks])
+        """ This gives the job a unique name. It can be useful when browsing
+        the AWS Batch console. However, it's only for humans. The actual
+        mapping is encoded in the BatchJobs table."""
+        return settings.SPACER_JOB_HASH + '-' + \
+               job_msg.task_name + '-' + \
+               '_'.join([t.job_token for t in job_msg.tasks])
 
     def submit_job(self, job_msg: JobMsg):
 
