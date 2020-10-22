@@ -48,6 +48,7 @@ class TestJobTokenEncode(BaseTest):
         self.assertEqual(pks_in, pks_out)
 
 
+@override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
 class ResetTaskTest(ClientTest):
 
     @classmethod
@@ -138,6 +139,7 @@ class ResetTaskTest(ClientTest):
         self.assertFalse(Image.objects.get(id=img.id).features.classified)
 
 
+@override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
 class ClassifyUtilsTest(ClientTest):
     """Test helper/utility functions used by the classify-image task."""
 
@@ -267,6 +269,7 @@ class ClassifyUtilsTest(ClientTest):
             self.assertEqual(scores[int(np.argmax(posteriors))].label, ann.label)
 
 
+@override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
 class ExtractFeaturesTest(ClientTest):
 
     @classmethod
@@ -294,6 +297,7 @@ class ExtractFeaturesTest(ClientTest):
         self.assertTrue(img.features.extracted)
 
 
+@override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
 @override_settings(MIN_NBR_ANNOTATED_IMAGES=1)
 class TrainClassifierTest(ClientTest):
 
@@ -351,6 +355,7 @@ class TrainClassifierTest(ClientTest):
                          len(val_data) * val_data.samples_per_image)
 
 
+@override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
 @override_settings(MIN_NBR_ANNOTATED_IMAGES=1)
 class ClassifyImageTest(ClientTest):
 
