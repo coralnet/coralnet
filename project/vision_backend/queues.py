@@ -6,6 +6,7 @@ import time
 from typing import Optional
 
 import boto
+from botocore.exceptions import ClientError
 import boto.sqs
 import boto3
 from django.conf import settings
@@ -107,6 +108,11 @@ class SQSQueue(BaseQueue):
 
 class BatchQueue(BaseQueue):
 
+    @staticmethod
+    def get_job_name(job_msg: JobMsg):
+        return job_msg.task_name + '-' + '_'.join(
+            [t.job_token for t in job_msg.tasks])
+
     def submit_job(self, job_msg: JobMsg):
 
         batch_client = boto3.client(
@@ -118,7 +124,7 @@ class BatchQueue(BaseQueue):
 
         storage = get_storage_class()()
 
-        batch_job = BatchJob(job_token=job_msg.token)
+        batch_job = BatchJob(job_token=self.get_job_name(job_msg))
         batch_job.save()
 
         job_msg_loc = storage.spacer_data_loc(batch_job.job_key)
@@ -157,17 +163,33 @@ class BatchQueue(BaseQueue):
 
         for job in BatchJob.objects.exclude(status='SUCCEEDED').\
                 exclude(status='FAILED'):
+            logger.info('Collecting batch job: {}'.format(str(job)))
             resp = batch_client.describe_jobs(jobs=[job.batch_token])
             job.status = resp['jobs'][0]['status']
             job.save()
             if job.status == 'SUCCEEDED':
                 job_res_loc = storage.spacer_data_loc(job.res_key)
-                return_msg = JobReturnMsg.load(job_res_loc)
-                return return_msg
+                try:
+                    return_msg = JobReturnMsg.load(job_res_loc)
+                    return return_msg
+                except ClientError:
+                    # This should not happen. Any errors inside the
+                    # job should be handled by spacer and it should still
+                    # write a JobReturnMsg to the given location.
+                    logger.error("Error loading {}".format(job_res_loc))
+                    mail_admins("AWS Batch job {} returned with SUCCEEDED but "
+                                "no output found".format(job.batch_token),
+                                str(job))
+                    job.status = 'FAILED'
+                    job.save()
             if job.status == 'FAILED':
                 # This should basically never happen. Let's email the admins.
-                mail_admins("Job {} failed".format(job.batch_token), str(job))
+                logger.error("AWS Batch job {} returned with FAILED".
+                             format(str(job)))
+                mail_admins("AWS Batch job {} returned with FAILED".
+                            format(job.batch_token), str(job))
                 continue
+            logger.info('Done collecting batch job: {}'.format(str(job)))
         return None
 
 

@@ -273,12 +273,10 @@ def _handle_job_result(job_res: JobReturnMsg):
     """Handles the job results found in queue. """
 
     if not job_res.ok:
-        print("Job failed: {}".format(job_res))
+        logger.error("Job failed: {}".format(job_res.error_message))
+        mail_admins("Spacer job failed", repr(job_res))
         if job_res.original_job.task_name == 'classify_image':
             th.deploy_fail(job_res)
-        else:
-            logger.error("Job failed: {}".format(job_res))
-            mail_admins("Spacer job failed", repr(job_res))
         return
 
     task_name = job_res.original_job.task_name

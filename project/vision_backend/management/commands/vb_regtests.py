@@ -10,10 +10,10 @@ from vision_backend.models import Classifier
 from vision_backend.tasks import collect_all_jobs, submit_classifier
 
 reg_test_config = {
-    372: {'small': (20, 5),
+    372: {'small': (25, 5),
           'medium': (250, 30),
           'large': (1400, 50)},
-    504: {'small': (20, 5),
+    504: {'small': (25, 5),
           'medium': (100, 15),
           'large': (100, 15)}
 }
