@@ -49,17 +49,15 @@ class Command(BaseCommand):
         from .storage_s3 import *.
         ```
         ## AWS ECS cluster. 
-        This uses the AWS SQS and ECS to process the jobs. 
-        The jobs are submitted to the spacer_test_queue, 
-        so this is safe to run.
+        This uses the AWS Batch to process the jobs. 
         ```
         CELERY_ALWAYS_EAGER = False
-        SPACER_QUEUE_CHOICE = 'vision_backend.queues.SQSQueue'
+        SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
         from .storage_s3 import *
         ```
         
         Etc. etc. Most combinations work. The only requirement is that if you 
-        use the `SQSQueue` you need to use the `storage_s3` setting. 
+        use the `BatchQueue` you need to use the `storage_s3` setting. 
         
         NOTE1: 
         If you use `.storage_local` you need to add these lines to your 

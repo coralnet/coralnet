@@ -31,12 +31,10 @@ class TestJobTokenEncode(BaseTest):
     def test_encode_one(self):
 
         job_token = th.encode_spacer_job_token([4])
-        self.assertIn(settings.SPACER_JOB_HASH, job_token)
         self.assertIn('4', job_token)
 
     def test_encode_three(self):
         job_token = th.encode_spacer_job_token([4, 5, 6])
-        self.assertIn(settings.SPACER_JOB_HASH, job_token)
         self.assertIn('4', job_token)
         self.assertIn('5', job_token)
         self.assertIn('6', job_token)

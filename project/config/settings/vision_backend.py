@@ -22,7 +22,7 @@ ROBOT_MODEL_VALRESULT_PATTERN = 'classifiers/{pk}.valresult'
 
 # Naming for vision_backend.models.BatchJob
 BATCH_JOB_PATTERN = 'batch_jobs/job{pk}.json'
-BATCH_RESULT_PATTERN = 'batch_jobs/job{pk}.json'
+BATCH_RES_PATTERN = 'batch_jobs/job{pk}.json'
 
 # This indicates the max number of scores we store per point.
 NBR_SCORES_PER_ANNOTATION = 5

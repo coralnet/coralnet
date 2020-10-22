@@ -1,10 +1,10 @@
 from .base_devserver import *
 
-ALLOWED_HOSTS = ['127.0.0.1', 'testserver']
+ALLOWED_HOSTS = ['127.0.0.1', 'testserver', 'localhost']
 
 # SPACER_QUEUE_CHOICE = 'vision_backend.queues.SQSQueue'
 
-SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
+SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
 
 CELERY_ALWAYS_EAGER = True
 

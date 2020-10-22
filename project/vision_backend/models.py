@@ -131,6 +131,10 @@ class BatchJob(models.Model):
         ('FAILED', 'FAILED'),
     ]
 
+    def __str__(self):
+        return "Batch token: {}, job token: {} job id: {}".format(
+            self.batch_token, self.job_token, self.pk)
+
     # The status taxonomy is from AWS Batch.
     status = models.CharField(
         max_length=12, choices=STATUS_CHOICES, default='SUBMITTED')
@@ -139,7 +143,10 @@ class BatchJob(models.Model):
     batch_token = models.CharField(max_length=128, null=True)
 
     # Internal job token that identifies the job.
-    job_token = models.CharField(max_length=128, null=False)
+    job_token = models.CharField(max_length=256, null=False)
+
+    # This can be used to report how long the job unit took.
+    create_date = models.DateTimeField("Date created", auto_now_add=True)
 
     @property
     def job_key(self):

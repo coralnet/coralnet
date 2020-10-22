@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 def get_queue_class():
     """This function is modeled after Django's get_storage_class()."""
 
-    if settings.SPACER_QUEUE_CHOICE == 'vision_backend.queues.SQSQueue':
+    if settings.SPACER_QUEUE_CHOICE in ['vision_backend.queues.SQSQueue',
+                                        'vision_backend.queues.BatchQueue']:
         assert settings.DEFAULT_FILE_STORAGE is not \
             'lib.storage_backends.MediaStorageLocal', \
             'Can not use SQSQueue with local storage. Please use S3 storage.'
@@ -50,11 +51,15 @@ class SQSQueue(BaseQueue):
         """
         Submits message to the SQS spacer_jobs
         """
+        raise RuntimeError('SQSQueue no longer supported. '
+                           'Please use BatchQueue instead')
+
         conn = boto.sqs.connect_to_region(
             "us-west-2",
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
         )
+
         queue = conn.get_queue(settings.SQS_JOBS)
         msg = queue.new_message(body=json.dumps(job.serialize()))
         queue.write(msg)
@@ -72,12 +77,6 @@ class SQSQueue(BaseQueue):
             return None
 
         return_msg = JobReturnMsg.deserialize(json.loads(message.get_body()))
-
-        # Check that the message pertains to this server
-        if settings.SPACER_JOB_HASH not in \
-                return_msg.original_job.tasks[0].job_token:
-            logger.info("Job has doesn't match")
-            return None
 
         # Delete message (at this point, if it is not handled correctly,
         # we still want to delete it from queue.)
@@ -117,9 +116,10 @@ class BatchQueue(BaseQueue):
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
         )
 
-        batch_job = BatchJob(job_token=JobMsg.token)
-
         storage = get_storage_class()()
+
+        batch_job = BatchJob(job_token=job_msg.token)
+        batch_job.save()
 
         job_msg_loc = storage.spacer_data_loc(batch_job.job_key)
         job_msg.store(job_msg_loc)
@@ -128,7 +128,7 @@ class BatchQueue(BaseQueue):
 
         resp = batch_client.submit_job(
             jobQueue=settings.BATCH_QUEUE,
-            jobName=JobMsg.token,
+            jobName=str(batch_job.pk),
             jobDefinition=settings.BATCH_JOB_DEFINITION,
             containerOverrides={
                 'environment': [
@@ -155,23 +155,18 @@ class BatchQueue(BaseQueue):
         )
         storage = get_storage_class()()
 
-        for batch_job in BatchJob.objects.exclude(status='SUCCEEDED').\
+        for job in BatchJob.objects.exclude(status='SUCCEEDED').\
                 exclude(status='FAILED'):
-            resp = batch_client.describe_jobs(jobs=[batch_job.batch_token])
-            assert len(resp['jobs']) == 1
-            batch_job.status = resp['jobs'][0]['status']
-            batch_job.save()
-            if batch_job.status == 'SUCCEEDED':
-                job_res_loc = storage.spacer_data_loc(batch_job.res_key)
+            resp = batch_client.describe_jobs(jobs=[job.batch_token])
+            job.status = resp['jobs'][0]['status']
+            job.save()
+            if job.status == 'SUCCEEDED':
+                job_res_loc = storage.spacer_data_loc(job.res_key)
                 return_msg = JobReturnMsg.load(job_res_loc)
                 return return_msg
-            if batch_job.status == 'FAILED':
+            if job.status == 'FAILED':
                 # This should basically never happen. Let's email the admins.
-                mail_admins("Batch job {} failed".format(batch_job.batch_token),
-                            "Batch token: {}, job token: {},"
-                            " job id: {}".format(batch_job.batch_token,
-                                                 batch_job.job_token,
-                                                 batch_job.pk))
+                mail_admins("Job {} failed".format(job.batch_token), str(job))
                 continue
         return None
 
