@@ -171,14 +171,16 @@ class BatchQueue(BaseQueue):
 
         for job in BatchJob.objects.exclude(status='SUCCEEDED').\
                 exclude(status='FAILED'):
-            logger.info('Checking batch job: {}'.format(str(job)))
             resp = batch_client.describe_jobs(jobs=[job.batch_token])
             job.status = resp['jobs'][0]['status']
             job.save()
             if job.status == 'SUCCEEDED':
+                logger.info('Entering collection of job {}.'.format(str(job)))
                 job_res_loc = storage.spacer_data_loc(job.res_key)
                 try:
                     return_msg = JobReturnMsg.load(job_res_loc)
+                    logger.info('Exiting collection of job {}.'.format(
+                        str(job)))
                     return return_msg
                 except ClientError:
                     # This should not happen. Any errors inside the
@@ -196,8 +198,6 @@ class BatchQueue(BaseQueue):
                              format(str(job)))
                 mail_admins("AWS Batch job {} returned with FAILED".
                             format(job.batch_token), str(job))
-                continue
-            logger.info('Done checking batch job: {}'.format(str(job)))
         return None
 
 
