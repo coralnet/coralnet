@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 def encode_spacer_job_token(pks: List[int]):
     """ Encodes a list of primary keys into a spacer job_token string """
-    return '-'.join([str(pk) for pk in pks])
+    return '_'.join([str(pk) for pk in pks])
 
 
 def decode_spacer_job_token(job_token: str):
     """ Decodes spacer job token """
-    pks = [int(pk) for pk in job_token.split('-')]
+    pks = [int(pk) for pk in job_token.split('_')]
     return pks
 
 

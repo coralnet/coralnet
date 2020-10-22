@@ -114,8 +114,8 @@ class BatchQueue(BaseQueue):
         the AWS Batch console. However, it's only for humans. The actual
         mapping is encoded in the BatchJobs table."""
         return settings.SPACER_JOB_HASH + '-' + \
-               job_msg.task_name + '-' + \
-               '_'.join([t.job_token for t in job_msg.tasks])
+            job_msg.task_name + '-' + \
+            '-'.join([t.job_token for t in job_msg.tasks])
 
     def submit_job(self, job_msg: JobMsg):
 
@@ -167,7 +167,7 @@ class BatchQueue(BaseQueue):
 
         for job in BatchJob.objects.exclude(status='SUCCEEDED').\
                 exclude(status='FAILED'):
-            logger.info('Collecting batch job: {}'.format(str(job)))
+            logger.info('Checking batch job: {}'.format(str(job)))
             resp = batch_client.describe_jobs(jobs=[job.batch_token])
             job.status = resp['jobs'][0]['status']
             job.save()
@@ -193,7 +193,7 @@ class BatchQueue(BaseQueue):
                 mail_admins("AWS Batch job {} returned with FAILED".
                             format(job.batch_token), str(job))
                 continue
-            logger.info('Done collecting batch job: {}'.format(str(job)))
+            logger.info('Done checking batch job: {}'.format(str(job)))
         return None
 
 
