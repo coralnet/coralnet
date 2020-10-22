@@ -1,22 +1,20 @@
 # Base settings for any type of server.
 
 import json
-import os
-import sys
 import logging
-
-from unipath import Path
-
-# Normally you should not import ANYTHING from Django directly
-# into your settings, but ImproperlyConfigured is an exception.
-from django.core.exceptions import ImproperlyConfigured
-
-from .vision_backend import *
+import sys
 
 # Configure Pillow to be tolerant of image files that are truncated (missing
 # data from the last block).
 # https://stackoverflow.com/a/23575424/
 from PIL import ImageFile
+# Normally you should not import ANYTHING from Django directly
+# into your settings, but ImproperlyConfigured is an exception.
+from django.core.exceptions import ImproperlyConfigured
+from unipath import Path
+
+from .vision_backend import *
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
@@ -676,7 +674,6 @@ if has_secrets:
     SPACER_JOB_HASH = get_secret('SPACER_JOB_HASH')
 else:
     SPACER_JOB_HASH = 'dummy_identifier'
-
 
 # For regression tests, spacer expects a local model path.
 os.environ['SPACER_LOCAL_MODEL_PATH'] = LOG_DIR
