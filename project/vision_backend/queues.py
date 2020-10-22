@@ -27,9 +27,13 @@ def get_queue_class():
 
     if settings.SPACER_QUEUE_CHOICE in ['vision_backend.queues.SQSQueue',
                                         'vision_backend.queues.BatchQueue']:
-        assert settings.DEFAULT_FILE_STORAGE is not \
-            'lib.storage_backends.MediaStorageLocal', \
-            'Can not use SQSQueue with local storage. Please use S3 storage.'
+        if settings.DEFAULT_FILE_STORAGE == \
+                'lib.storage_backends.MediaStorageLocal':
+            logger.error("Bad settings combination of queue and storage")
+            raise ValueError('Can not use SQSQueue with local storage. '
+                             'Please use S3 storage.')
+
+
 
     return import_string(settings.SPACER_QUEUE_CHOICE)
 

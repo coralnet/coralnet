@@ -37,5 +37,6 @@ BATCH_JOB_DEFINITION = 'spacer-job'
 # LR for the old extractor for backwards compatibility.
 CLASSIFIER_MAPPINGS = {
     'vgg16_coralnet_ver1': 'LR',
-    'efficientnet_b0_ver1': 'MLP'
+    'efficientnet_b0_ver1': 'MLP',
+    'dummy': 'LR'
 }
