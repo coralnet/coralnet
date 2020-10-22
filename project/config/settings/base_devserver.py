@@ -36,8 +36,9 @@ SECURE_PROXY_SSL_HEADER = None
 SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
 
 # Configure the SQS queue name to use
-SQS_JOBS = 'spacer_test_jobs'
+SQS_JOBS = 'spacer_test_jobs'  # Deprecated.
 SQS_RES = 'spacer_test_results'
+BATCH_QUEUE = 'shakeout'
 
 # [Custom setting]
 # Front page carousel images.

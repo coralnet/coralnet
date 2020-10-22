@@ -109,16 +109,10 @@ def submit_classifier(source_id, nbr_images=1e5, force=False):
 
     # Write train-labels to file storage
     storage = get_storage_class()()
-    traindata = th.make_dataset([image for image in images if image.trainset])
-    traindata_loc = storage.spacer_data_loc(
-        settings.ROBOT_MODEL_TRAINDATA_PATTERN.format(pk=classifier.pk))
-    traindata.store(traindata_loc)
+    train_labels = th.make_dataset([image for image in images if image.trainset])
 
     # Write val-labels to file storage
-    valdata = th.make_dataset([image for image in images if image.valset])
-    valdata_loc = storage.spacer_data_loc(
-        settings.ROBOT_MODEL_VALDATA_PATTERN.format(pk=classifier.pk))
-    valdata.store(valdata_loc)
+    val_labels = th.make_dataset([image for image in images if image.valset])
 
     # This will not include the one we just created, b/c it is not valid.
     prev_classifiers = Classifier.objects.filter(source=source, valid=True)
@@ -131,8 +125,9 @@ def submit_classifier(source_id, nbr_images=1e5, force=False):
         job_token=th.encode_spacer_job_token([classifier.pk] + pc_pks),
         trainer_name='minibatch',
         nbr_epochs=settings.NBR_TRAINING_EPOCHS,
-        traindata_loc=traindata_loc,
-        valdata_loc=valdata_loc,
+        clf_type=settings.CLASSIFIER_MAPPINGS[source.feature_extractor],
+        train_labels=train_labels,
+        val_labels=val_labels,
         features_loc=storage.spacer_data_loc(''),
         previous_model_locs=[storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=pc.pk))

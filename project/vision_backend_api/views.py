@@ -92,7 +92,7 @@ class Deploy(APIView):
                 )
             )
             job_unit.save()
-            deploy.apply_async(args=[job_unit .pk],
+            deploy.apply_async(args=[job_unit.pk],
                                eta=now() + timedelta(seconds=10))
 
         # Respond with the status endpoint's URL.

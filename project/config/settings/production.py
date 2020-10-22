@@ -35,8 +35,9 @@ WSGI_APPLICATION = 'config.wsgi.application'
 SPACER_QUEUE_CHOICE = 'vision_backend.queues.SQSQueue'
 
 # Configure the SQS queue name to use
-SQS_JOBS = 'coralnet_prod_jobs'
+SQS_JOBS = 'coralnet_prod_jobs'  # Deprecated
 SQS_RES = 'coralnet_prod_results'
+BATCH_QUEUE = 'production'
 
 # [Custom setting]
 # Front page carousel images.

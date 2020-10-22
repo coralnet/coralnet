@@ -3,14 +3,20 @@ import json
 import logging
 import posixpath
 import time
+from typing import Optional
 
+import boto
 import boto.sqs
+import boto3
 from django.conf import settings
 from django.core.files.storage import get_storage_class
+from django.core.mail import mail_admins
 from django.utils.module_loading import import_string
 from six import StringIO
 from spacer.messages import JobMsg, JobReturnMsg
 from spacer.tasks import process_job
+
+from vision_backend.models import BatchJob
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,7 @@ class BaseQueue(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def collect_job(self) -> JobReturnMsg:
+    def collect_job(self) -> Optional[JobReturnMsg]:
         pass
 
 
@@ -53,7 +59,7 @@ class SQSQueue(BaseQueue):
         msg = queue.new_message(body=json.dumps(job.serialize()))
         queue.write(msg)
 
-    def collect_job(self):
+    def collect_job(self) -> Optional[JobReturnMsg]:
         """
         If an AWS SQS job result is available, collect it, delete from queue
         if it's a job for this server instance, and return it.
@@ -100,6 +106,76 @@ class SQSQueue(BaseQueue):
             return message
 
 
+class BatchQueue(BaseQueue):
+
+    def submit_job(self, job_msg: JobMsg):
+
+        batch_client = boto3.client(
+            'batch',
+            region_name="us-west-2",
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+        )
+
+        batch_job = BatchJob(job_token=JobMsg.token)
+
+        storage = get_storage_class()()
+
+        job_msg_loc = storage.spacer_data_loc(batch_job.job_key)
+        job_msg.store(job_msg_loc)
+
+        job_res_loc = storage.spacer_data_loc(batch_job.res_key)
+
+        resp = batch_client.submit_job(
+            jobQueue=settings.BATCH_QUEUE,
+            jobName=JobMsg.token,
+            jobDefinition=settings.BATCH_JOB_DEFINITION,
+            containerOverrides={
+                'environment': [
+                    {
+                        'name': 'JOB_MSG_LOC',
+                        'value': json.dumps(job_msg_loc.serialize()),
+                    },
+                    {
+                        'name': 'RES_MSG_LOC',
+                        'value': json.dumps(job_res_loc.serialize()),
+                    },
+                ],
+            }
+        )
+        batch_job.batch_token = resp['jobId']
+        batch_job.save()
+
+    def collect_job(self) -> Optional[JobReturnMsg]:
+        batch_client = boto3.client(
+            'batch',
+            region_name="us-west-2",
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
+        )
+        storage = get_storage_class()()
+
+        for batch_job in BatchJob.objects.exclude(status='SUCCEEDED').\
+                exclude(status='FAILED'):
+            resp = batch_client.describe_jobs(jobs=[batch_job.batch_token])
+            assert len(resp['jobs']) == 1
+            batch_job.status = resp['jobs'][0]['status']
+            batch_job.save()
+            if batch_job.status == 'SUCCEEDED':
+                job_res_loc = storage.spacer_data_loc(batch_job.res_key)
+                return_msg = JobReturnMsg.load(job_res_loc)
+                return return_msg
+            if batch_job.status == 'FAILED':
+                # This should basically never happen. Let's email the admins.
+                mail_admins("Batch job {} failed".format(batch_job.batch_token),
+                            "Batch token: {}, job token: {},"
+                            " job id: {}".format(batch_job.batch_token,
+                                                 batch_job.job_token,
+                                                 batch_job.pk))
+                continue
+        return None
+
+
 class LocalQueue(BaseQueue):
     """
     Used for testing the vision-backend Django tasks.
@@ -117,7 +193,7 @@ class LocalQueue(BaseQueue):
             format(timestamp=time.time())
         storage.save(filepath, StringIO(json.dumps(return_msg.serialize())))
 
-    def collect_job(self):
+    def collect_job(self) -> Optional[JobReturnMsg]:
         """
         Read a job result from file storage, consume (delete) it,
         and return it. If no result is available, return None.
