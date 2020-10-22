@@ -348,9 +348,9 @@ class TrainClassifierTest(ClientTest):
 
         # Check that the point-counts in val_res is equal to val_data.
         val_res = ValResults.load(job_msg.tasks[0].valresult_loc)
-        val_data = ImageLabels.load(job_msg.tasks[0].valdata_loc)
+        val_labels = job_msg.tasks[0].val_labels
         self.assertEqual(len(val_res.gt),
-                         len(val_data) * val_data.samples_per_image)
+                         len(val_labels) * val_labels.samples_per_image)
 
 
 @override_settings(SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
