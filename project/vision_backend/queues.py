@@ -33,8 +33,6 @@ def get_queue_class():
             raise ValueError('Can not use SQSQueue with local storage. '
                              'Please use S3 storage.')
 
-
-
     return import_string(settings.SPACER_QUEUE_CHOICE)
 
 

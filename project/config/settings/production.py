@@ -32,7 +32,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # [Custom setting]
 # Which vision backend to use.
-SPACER_QUEUE_CHOICE = 'vision_backend.queues.SQSQueue'
+SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
 
 # Configure the SQS queue name to use
 BATCH_QUEUE = 'production'
