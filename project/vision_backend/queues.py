@@ -25,13 +25,16 @@ logger = logging.getLogger(__name__)
 def get_queue_class():
     """This function is modeled after Django's get_storage_class()."""
 
-    if settings.SPACER_QUEUE_CHOICE in ['vision_backend.queues.SQSQueue',
-                                        'vision_backend.queues.BatchQueue']:
-        if settings.DEFAULT_FILE_STORAGE == \
-                'lib.storage_backends.MediaStorageLocal':
-            logger.error("Bad settings combination of queue and storage")
-            raise ValueError('Can not use SQSQueue with local storage. '
-                             'Please use S3 storage.')
+    if settings.SPACER_QUEUE_CHOICE == 'vision_backend.queues.SQSQueue':
+        raise ValueError('SQSQueue no longer supported. '
+                         'Please use BatchQueue instead')
+
+    if settings.SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue' and \
+            settings.DEFAULT_FILE_STORAGE == \
+            'lib.storage_backends.MediaStorageLocal':
+        logger.error("Bad settings combination of queue and storage")
+        raise ValueError('Can not use Remote queue with local storage. '
+                         'Please use S3 storage.')
 
     return import_string(settings.SPACER_QUEUE_CHOICE)
 
@@ -54,8 +57,6 @@ class SQSQueue(BaseQueue):
         """
         Submits message to the SQS spacer_jobs
         """
-        raise RuntimeError('SQSQueue no longer supported. '
-                           'Please use BatchQueue instead')
 
         conn = boto.sqs.connect_to_region(
             "us-west-2",
