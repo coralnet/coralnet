@@ -14,7 +14,7 @@ from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
 from vision_backend.models import Classifier
 from vision_backend.tasks import deploy
-from .utils import DeployBaseTest, noop_task
+from .utils import DeployBaseTest, mocked_load_image, noop_task
 
 
 class DeployAccessTest(BaseAPIPermissionTest):
@@ -508,7 +508,7 @@ class SuccessTest(DeployBaseTest):
                 image_order=0),
             "Unit's request_json should be correct")
 
-    @skip("We need to have a mock backend before we can test this.")
+    @patch('spacer.tasks.load_image', mocked_load_image)
     def test_done(self):
         """
         Test state after deploy is done. To do this, just don't replace
@@ -528,7 +528,8 @@ class SuccessTest(DeployBaseTest):
         except ApiJobUnit.DoesNotExist:
             self.fail("Deploy job unit should be created")
 
-        self.assertEqual(deploy_unit.status, ApiJobUnit.SUCCESS,
+        self.assertEqual(
+            ApiJobUnit.SUCCESS, deploy_unit.status,
             "Unit should be done")
 
         classifications = [dict(

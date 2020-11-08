@@ -2,12 +2,23 @@ from __future__ import unicode_literals
 from abc import ABCMeta
 import six
 
+from django.test import override_settings
 from django.urls import reverse
+from spacer.config import MIN_TRAINIMAGES
 
 from api_core.tests.utils import BaseAPITest
+from images.model_utils import PointGen
 from images.models import Source
+from lib.tests.utils import create_sample_image
+from vision_backend.tasks import collect_all_jobs, submit_classifier
+
+# Create and annotate sufficient nbr images.
+# Since 1/8 of images go to val, we need to add a few more to
+# make sure there are enough train images.
+MIN_IMAGES = int(MIN_TRAINIMAGES * (1+1/8) + 1)
 
 
+@override_settings(MIN_NBR_ANNOTATED_IMAGES=1)
 @six.add_metaclass(ABCMeta)
 class DeployBaseTest(BaseAPITest):
 
@@ -18,8 +29,12 @@ class DeployBaseTest(BaseAPITest):
         cls.user = cls.create_user(
             username='testuser', password='SamplePassword')
         cls.source = cls.create_source(
-            cls.user, visibility=Source.VisibilityTypes.PUBLIC)
-        cls.labels = cls.create_labels(cls.user, ['A'], 'GroupA')
+            cls.user,
+            visibility=Source.VisibilityTypes.PUBLIC,
+            point_generation_type=PointGen.Types.SIMPLE,
+            simple_number_of_points=2,
+        )
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         labelset = cls.create_labelset(cls.user, cls.source, cls.labels)
 
         # Set a custom label code, so we can confirm whether responses
@@ -28,7 +43,20 @@ class DeployBaseTest(BaseAPITest):
         local_label.code = 'A_mycode'
         local_label.save()
 
-        cls.classifier = cls.create_robot(cls.source)
+        # Add enough annotated images to train a classifier.
+        for _ in range(MIN_IMAGES):
+            img = cls.upload_image(cls.user, cls.source)
+            # Must have at least 2 unique labels in training data in order to
+            # be accepted by spacer.
+            cls.add_annotations(
+                cls.user, img, {1: 'A_mycode', 2: 'B'})
+        # Extract features.
+        collect_all_jobs()
+        # Train a classifier.
+        submit_classifier(cls.source.id)
+        collect_all_jobs()
+        cls.classifier = cls.source.get_latest_robot()
+
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])
 
         # Get a token
@@ -66,3 +94,11 @@ class DeployBaseTest(BaseAPITest):
 
 def noop_task(*args):
     pass
+
+
+def mocked_load_image(*args):
+    """
+    Return a Pillow image. This can be used to mock spacer.storage.load_image()
+    to bypass image downloading from URL, for example.
+    """
+    return create_sample_image()
