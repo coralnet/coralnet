@@ -13,7 +13,7 @@ from unittest import skip
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
 from vision_backend.models import Classifier
-from vision_backend.tasks import deploy
+from vision_backend.tasks import collect_all_jobs, deploy
 from .utils import DeployBaseTest, mocked_load_image, noop_task
 
 
@@ -518,7 +518,11 @@ class SuccessTest(DeployBaseTest):
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
+
+        # Deploy
         self.client.post(self.deploy_url, data, **self.request_kwargs)
+        # Process result
+        collect_all_jobs()
 
         deploy_job = ApiJob.objects.latest('pk')
 
@@ -532,17 +536,23 @@ class SuccessTest(DeployBaseTest):
             ApiJobUnit.SUCCESS, deploy_unit.status,
             "Unit should be done")
 
-        classifications = [dict(
-            label_id=self.labels[0].pk, label_name='A',
-            label_code='A_mycode', score=1.0)]
+        # Verify result. Not sure if the label order or scores can vary in this
+        # case. If so, modify the assertions accordingly.
+        classifications = [
+            dict(
+                label_id=self.labels_by_name['B'].pk, label_name='B',
+                label_code='B_mycode', score=0.5),
+            dict(
+                label_id=self.labels_by_name['A'].pk, label_name='A',
+                label_code='A_mycode', score=0.5),
+        ]
         self.assertDictEqual(
             deploy_unit.result_json,
             dict(
                 url='URL 1',
                 points=[dict(
                     row=10, column=10, classifications=classifications)]),
-            "Unit's result_json should be as expected"
-            " (labelset with 1 label makes the scores deterministic)")
+            "Unit's result_json should be as expected")
 
 
 class TaskErrorsTest(DeployBaseTest):

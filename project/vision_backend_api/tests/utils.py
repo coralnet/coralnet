@@ -34,14 +34,21 @@ class DeployBaseTest(BaseAPITest):
             point_generation_type=PointGen.Types.SIMPLE,
             simple_number_of_points=2,
         )
-        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
-        labelset = cls.create_labelset(cls.user, cls.source, cls.labels)
 
-        # Set a custom label code, so we can confirm whether responses
-        # contain the source's custom codes or default codes.
-        local_label = labelset.locallabel_set.get(code='A')
-        local_label.code = 'A_mycode'
-        local_label.save()
+        label_names = ['A', 'B']
+        labels = cls.create_labels(cls.user, label_names, 'GroupA')
+        labelset = cls.create_labelset(cls.user, cls.source, labels)
+        cls.labels_by_name = dict(
+            zip(label_names, labelset.get_globals_ordered_by_name()))
+
+        # Set custom label codes, so we can confirm we're returning the
+        # source's custom codes, not the default codes.
+        for label_name in label_names:
+            local_label = labelset.locallabel_set.get(
+                global_label__name=label_name)
+            # A_mycode, B_mycode, etc.
+            local_label.code = label_name + '_mycode'
+            local_label.save()
 
         # Add enough annotated images to train a classifier.
         for _ in range(MIN_IMAGES):
@@ -49,7 +56,7 @@ class DeployBaseTest(BaseAPITest):
             # Must have at least 2 unique labels in training data in order to
             # be accepted by spacer.
             cls.add_annotations(
-                cls.user, img, {1: 'A_mycode', 2: 'B'})
+                cls.user, img, {1: 'A_mycode', 2: 'B_mycode'})
         # Extract features.
         collect_all_jobs()
         # Train a classifier.

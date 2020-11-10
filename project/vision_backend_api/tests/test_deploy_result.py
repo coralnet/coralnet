@@ -208,7 +208,7 @@ class DeployResultEndpointTest(DeployBaseTest):
         self.assertStatusOK(response)
 
         classifications = [dict(
-            label_id=self.labels[0].pk, label_name='A',
+            label_id=self.labels_by_name['A'].pk, label_name='A',
             label_code='A_mycode', score=1.0)]
         points_1 = [
             dict(
@@ -251,7 +251,7 @@ class DeployResultEndpointTest(DeployBaseTest):
 
         unit_1.status = ApiJobUnit.SUCCESS
         classifications = [dict(
-            label_id=self.labels[0].pk, label_name='A',
+            label_id=self.labels_by_name['A'].pk, label_name='A',
             label_code='A_mycode', score=1.0)]
         points_1 = [
             dict(
