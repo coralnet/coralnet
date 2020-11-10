@@ -188,4 +188,4 @@ tqdm==4.43.0
 django-markdownx==2.0.28
 
 # Import spacer which powers the ML stuff.
-pyspacer==0.3.0
+pyspacer==0.3.1
