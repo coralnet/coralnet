@@ -313,7 +313,7 @@ def deploy_fail(job_return_msg: JobReturnMsg):
 
     job_unit.result_json = dict(
         url=job_unit.request_json['url'],
-        error=job_return_msg.error_message
+        errors=[job_return_msg.error_message],
     )
     job_unit.status = ApiJobUnit.FAILURE
     job_unit.save()

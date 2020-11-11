@@ -8,7 +8,6 @@ from django.test.utils import patch_logger
 from django.urls import reverse
 from mock import patch
 from rest_framework import status
-from unittest import skip
 
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
@@ -557,7 +556,7 @@ class SuccessTest(DeployBaseTest):
 
 class TaskErrorsTest(DeployBaseTest):
     """
-    Test error cases of the deploy tasks.
+    Test error cases of the deploy task.
     """
 
     def test_nonexistent_job_unit(self):
@@ -580,16 +579,20 @@ class TaskErrorsTest(DeployBaseTest):
 
             self.assertIn(error_message, log_messages)
 
-    @skip("Skip until we can run backend during tests.")
-    @patch('vision_backend_api.views.deploy.run', noop_task)
     def test_classifier_deleted(self):
+        """
+        Try to run a deploy job when the classifier associated with the job
+        has been deleted.
+        """
         images = [
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
 
-        # Since the task is a no-op, this'll just create the job unit.
-        self.client.post(self.deploy_url, data, **self.request_kwargs)
+        with patch('vision_backend_api.views.deploy.run', noop_task):
+            # Since the task is a no-op, this'll just create the job unit,
+            # without actually deploying yet.
+            self.client.post(self.deploy_url, data, **self.request_kwargs)
 
         job_unit = ApiJobUnit.objects.filter(
             type='deploy').latest('pk')
@@ -599,7 +602,7 @@ class TaskErrorsTest(DeployBaseTest):
         classifier = Classifier.objects.get(pk=classifier_id)
         classifier.delete()
 
-        # Run the task.
+        # Run the task. It should fail since the classifier was deleted.
         deploy.delay(job_unit.pk)
 
         job_unit.refresh_from_db()
@@ -607,8 +610,37 @@ class TaskErrorsTest(DeployBaseTest):
         self.assertEqual(
             job_unit.status, ApiJobUnit.FAILURE,
             "Unit should have failed")
-        message = "Classifier of id {pk} does not exist.".format(
-            pk=classifier_id)
+        message = (
+            "Classifier of id {pk} does not exist. Maybe it was deleted."
+            .format(pk=classifier_id))
         self.assertDictEqual(
             job_unit.result_json,
             dict(url='URL 1', errors=[message]))
+
+    def test_spacer_error(self):
+        """Error from the spacer side."""
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        # Deploy, while mocking the spacer task call. Thus, we don't test
+        # spacer behavior itself. We just test that we appropriately handle any
+        # errors coming from the spacer call.
+        def raise_error(*args):
+            raise ValueError("A spacer error")
+        with patch('spacer.tasks.classify_image', raise_error):
+            self.client.post(self.deploy_url, data, **self.request_kwargs)
+        collect_all_jobs()
+
+        job_unit = ApiJobUnit.objects.filter(
+            type='deploy').latest('pk')
+
+        self.assertEqual(
+            job_unit.status, ApiJobUnit.FAILURE,
+            "Unit should have failed")
+        self.assertEqual('URL 1', job_unit.result_json['url'])
+        error_traceback = job_unit.result_json['errors'][0]
+        error_traceback_last_line = error_traceback.splitlines()[-1]
+        self.assertEqual(
+            "ValueError: A spacer error", error_traceback_last_line)

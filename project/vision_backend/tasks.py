@@ -161,9 +161,21 @@ def deploy(job_unit_id):
     job_unit.status = ApiJobUnit.IN_PROGRESS
     job_unit.save()
 
-    # TODO: catch DoesNotExist here if pk is wrong? Or just let it fail?
-    classifier = Classifier.objects.get(
-        pk=job_unit.request_json['classifier_id'])
+    classifier_id = job_unit.request_json['classifier_id']
+    try:
+        classifier = Classifier.objects.get(pk=classifier_id)
+    except Classifier.DoesNotExist:
+        error_message = (
+            "Classifier of id {} does not exist. Maybe it was deleted."
+            .format(classifier_id))
+        job_unit.result_json = dict(
+            url=job_unit.request_json['url'],
+            errors=[error_message],
+        )
+        job_unit.status = ApiJobUnit.FAILURE
+        job_unit.save()
+        logger.error(error_message)
+        return
 
     storage = get_storage_class()()
 
