@@ -20,7 +20,9 @@ class BackendViewPermissions(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
-    @skip("Skip until we can run backend during tests.")
+    @skip(
+        "Skip as long as backend_overview requires Redis"
+        " (in which case Travis can't pass this test).")
     def test_backend_overview(self):
         # Requires at least 1 image
         self.upload_image(self.user, self.source)
