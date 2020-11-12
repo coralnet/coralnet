@@ -1,7 +1,6 @@
 from __future__ import unicode_literals
 import copy
 import json
-from unittest import skip
 
 from django.conf import settings
 from django.test import override_settings
@@ -11,7 +10,8 @@ from rest_framework import status
 
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
-from .utils import DeployBaseTest, noop_task
+from vision_backend.tasks import collect_all_jobs
+from .utils import DeployBaseTest, mocked_load_image, noop_task
 
 
 class DeployStatusAccessTest(BaseAPIPermissionTest):
@@ -93,6 +93,7 @@ class DeployStatusAccessTest(BaseAPIPermissionTest):
             response, msg="4th request should be denied by throttling")
 
 
+@patch('spacer.tasks.load_image', mocked_load_image)
 class DeployStatusEndpointTest(DeployBaseTest):
     """
     Test the deploy status endpoint.
@@ -268,9 +269,10 @@ class DeployStatusEndpointTest(DeployBaseTest):
                             total=2))]),
             "Response JSON should be as expected")
 
-    @skip("Need to have a mock backend before testing.")
     def test_success(self):
         job = self.deploy()
+        collect_all_jobs()
+
         response = self.get_job_status(job)
 
         self.assertEqual(

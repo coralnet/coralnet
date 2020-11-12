@@ -5,13 +5,13 @@ import json
 from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
-from unittest import skip
 from mock import patch
 from rest_framework import status
 
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
-from .utils import DeployBaseTest, noop_task
+from vision_backend.tasks import collect_all_jobs
+from .utils import DeployBaseTest, mocked_load_image, noop_task
 
 
 class DeployResultAccessTest(BaseAPIPermissionTest):
@@ -93,6 +93,7 @@ class DeployResultAccessTest(BaseAPIPermissionTest):
             response, msg="4th request should be denied by throttling")
 
 
+@patch('spacer.tasks.load_image', mocked_load_image)
 class DeployResultEndpointTest(DeployBaseTest):
     """
     Test the deploy result endpoint.
@@ -200,16 +201,24 @@ class DeployResultEndpointTest(DeployBaseTest):
 
         self.assert_result_response_not_finished(response)
 
-    @skip("Need to have a mock backend before testing.")
     def test_success(self):
         job = self.deploy()
+        collect_all_jobs()
+
         response = self.get_job_result(job)
 
         self.assertStatusOK(response)
 
-        classifications = [dict(
-            label_id=self.labels_by_name['A'].pk, label_name='A',
-            label_code='A_mycode', score=1.0)]
+        # Not sure if the label order or scores can vary in this
+        # case. If so, modify the assertions accordingly.
+        classifications = [
+            dict(
+                label_id=self.labels_by_name['B'].pk, label_name='B',
+                label_code='B_mycode', score=0.5),
+            dict(
+                label_id=self.labels_by_name['A'].pk, label_name='A',
+                label_code='A_mycode', score=0.5),
+        ]
         points_1 = [
             dict(
                 row=10, column=10,

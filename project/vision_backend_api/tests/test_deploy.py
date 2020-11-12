@@ -434,6 +434,7 @@ class DeployImagesParamErrorTest(DeployBaseTest):
                 source=dict(pointer='/data/0/attributes/points/1')))
 
 
+@patch('spacer.tasks.load_image', mocked_load_image)
 class SuccessTest(DeployBaseTest):
     """
     Test the deploy process's success case from start to finish.
@@ -507,7 +508,6 @@ class SuccessTest(DeployBaseTest):
                 image_order=0),
             "Unit's request_json should be correct")
 
-    @patch('spacer.tasks.load_image', mocked_load_image)
     def test_done(self):
         """
         Test state after deploy is done. To do this, just don't replace
