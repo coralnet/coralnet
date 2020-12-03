@@ -151,7 +151,10 @@ class ClassifyImageTest(BaseClassifyTest):
             with mock.patch(
                     'spacer.messages.ClassifyReturnMsg.__init__',
                     mock_classify_msg_2):
-                collect_all_jobs()
+                with patch_logger('vision_backend.tasks', 'info') as tasks_log:
+                    with patch_logger('vision_backend.task_helpers', 'info') as helpers_log:
+                        collect_all_jobs()
+                        self.fail("tasks log: {}, helpers log: {}".format(tasks_log, helpers_log))
 
         clf_2 = self.source.get_latest_robot()
         self.assertNotEqual(
