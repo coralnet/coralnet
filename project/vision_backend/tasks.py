@@ -386,13 +386,12 @@ def reset_features(image_id):
 
 @periodic_task(
     run_every=timedelta(days=1),
-    name="Clean up old Batch jobs",
+    name="Alert if batch jobs did not succeed",
     ignore_result=True,
 )
-def clean_up_old_batch_jobs():
-    thirty_days_ago = timezone.now() - timedelta(days=30)
-    for job in BatchJob.objects.filter(create_date__lt=thirty_days_ago).\
+def alert_batch_jobs_not_succeeded():
+    five_days_ago = timezone.now() - timedelta(days=5)
+    for job in BatchJob.objects.filter(create_date__lt=five_days_ago).\
             exclude(status='SUCCEEDED'):
-        job.delete()
-        mail_admins("Job {} not completed after 30 days.".format(
+        mail_admins("Job {} not completed yet after 5 days.".format(
             job.batch_token), str(job))
