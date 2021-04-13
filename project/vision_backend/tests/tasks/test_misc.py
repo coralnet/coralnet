@@ -11,7 +11,7 @@ from lib.tests.utils import BaseTest, ClientTest
 from vision_backend.models import BatchJob, Score, Classifier
 import vision_backend.task_helpers as th
 from vision_backend.tasks import (
-    clean_up_old_batch_jobs, collect_all_jobs, reset_backend_for_source,
+    alert_batch_jobs_not_succeeded, collect_all_jobs, reset_backend_for_source,
     reset_classifiers_for_source)
 from vision_backend.tests.tasks.utils import BaseTaskTest, MockImage
 
@@ -168,55 +168,3 @@ class ResetTaskTest(BaseTaskTest):
         # Now features should be reset
         self.assertFalse(Image.objects.get(id=img.id).features.extracted)
         self.assertFalse(Image.objects.get(id=img.id).features.classified)
-
-
-class BatchJobCleanupTest(ClientTest):
-    """
-    Test cleanup of old AWS Batch jobs.
-    """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-
-    def test_job_selection(self):
-        """
-        Only jobs eligible for cleanup should be cleaned up.
-        """
-        # More than one job too new to be cleaned up.
-
-        job = BatchJob(job_token='new')
-        job.save()
-
-        job = BatchJob(job_token='29 days ago')
-        job.save()
-        job.create_date = timezone.now() - timedelta(days=29)
-        job.save()
-
-        # More than one job old enough to be cleaned up.
-
-        job = BatchJob(job_token='31 days ago')
-        job.save()
-        job.create_date = timezone.now() - timedelta(days=31)
-        job.save()
-
-        job = BatchJob(job_token='32 days ago')
-        job.save()
-        job.create_date = timezone.now() - timedelta(days=32)
-        job.save()
-
-        clean_up_old_batch_jobs()
-
-        self.assertTrue(
-            BatchJob.objects.filter(job_token='new').exists(),
-            "Shouldn't clean up new job")
-        self.assertTrue(
-            BatchJob.objects.filter(job_token='29 days ago').exists(),
-            "Shouldn't clean up 29 day old job")
-        self.assertFalse(
-            BatchJob.objects.filter(job_token='31 days ago').exists(),
-            "Shouldn't clean up 31 day old job")
-        self.assertFalse(
-            BatchJob.objects.filter(job_token='32 days ago').exists(),
-            "Shouldn't clean up 32 day old job")
