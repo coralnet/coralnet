@@ -391,7 +391,8 @@ def reset_features(image_id):
 )
 def clean_up_old_batch_jobs():
     thirty_days_ago = timezone.now() - timedelta(days=30)
-    for job in BatchJob.objects.filter(create_date__lt=thirty_days_ago):
+    for job in BatchJob.objects.filter(create_date__lt=thirty_days_ago).\
+            exclude(status='SUCCEEDED'):
         job.delete()
         mail_admins("Job {} not completed after 30 days.".format(
             job.batch_token), str(job))
