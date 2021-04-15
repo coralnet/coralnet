@@ -386,7 +386,7 @@ def reset_features(image_id):
 
 @periodic_task(
     run_every=timedelta(days=1),
-    name="Alert if batch jobs did not succeed",
+    name="Purge old batch jobs.",
     ignore_result=True,
 )
 def clean_up_old_batch_jobs():
@@ -397,7 +397,7 @@ def clean_up_old_batch_jobs():
 
 @periodic_task(
     run_every=timedelta(days=1),
-    name="Alert if batch jobs did not succeed",
+    name="Alert if batch jobs did not succeed.",
     ignore_result=True,
 )
 def warn_about_stuck_jobs():
