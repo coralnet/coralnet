@@ -46,7 +46,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'CoralNet'
-copyright = '2011-2020, CoralNet'
+copyright = '2011-2021, CoralNet'
 author = 'CoralNet'
 
 # The version info for the project you're documenting, acts as replacement for

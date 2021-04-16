@@ -12,8 +12,6 @@ django-guardian==1.4.9
 # Python Imaging Library
 # (A currently active, package friendly fork of it; also endorsed by Django)
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-#
-# django-andablog, as of 3.1.0, still needs Pillow 4.x instead of >= 5
 Pillow==4.3.0
 
 # Image EXIF reading/writing
@@ -25,11 +23,6 @@ piexif==1.1.3
 # Markdown support in the blog and other places.
 # Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/change_log/index.md
 Markdown>=3.1.1,<4
-
-# Simple blog.
-# Requires: django, Pillow, and Markdown (for blog Markdown support)
-# Changelog: https://github.com/WimpyAnalytics/django-andablog/blob/master/HISTORY.rst
-django-andablog==3.0.0
 
 # System for generating smaller versions of images.
 # Requires: django, Pillow

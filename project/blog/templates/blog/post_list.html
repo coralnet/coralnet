@@ -1,0 +1,36 @@
+{% extends "blog/base.html" %}
+{% load markdown_to_html %}
+
+{% block content %}
+  <h1>Welcome to the CoralNet blog!</h1>
+
+  {% for post in posts %}
+    <div class="blog-post-row">
+      <h3>
+        <a href="{{ post.get_absolute_url }}">{{ post.title }}</a>
+      </h3>
+
+      <div class="blog-post-meta">
+        {% if post.is_published %}
+          {{ post.published_timestamp|date:"DATE_FORMAT" }}
+        {% else %}
+          (Unpublished draft)
+        {% endif %}
+      </div>
+
+      <div class="blog-post-content-preview">
+        {% if post.preview_content %}
+          {{ post.preview_content|markdown_to_html }}
+        {% else %}
+          {# Truncate derived from: Avg reading speed (3.33 words/s) * Average attention span (8s) #}
+          {{ post.content|truncatewords_html:26 }}
+          <a href="{{ post.get_absolute_url }}">
+            (More...)
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+
+  {% include 'pagination_links.html' with page_results=page_obj %}
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "blog/base.html" %}
+{% load blog_tags %}
+{% load markdown_to_html %}
+
+{% block content %}
+  <h1>
+    {{ post.title }}
+    {% if not post.is_published %}(Draft){% endif %}
+  </h1>
+
+  <div class="blog-post-meta">
+    {{ post.published_timestamp|date:"DATE_FORMAT" }}
+    by {{ post.author }}
+  </div>
+
+  <div class="article-body blog-post-content">
+    {{ post.content|markdown_to_html }}
+  </div>
+
+  {# Navigate between posts #}
+  <div class="blog-post-navigation">
+    {% with newer_post=post.next_newest_post %}
+      {% if newer_post %}
+        <a href="{{ newer_post.get_absolute_url }}"
+           title="{{ newer_post.title }}">
+          &lt; Newer: {{ newer_post.title|truncatechars_html:40 }}
+        </a>
+        |
+      {% endif %}
+    {% endwith %}
+
+    <a href="{% url 'blog:post_list' %}">
+       Blog home</a>
+
+    {% with older_post=post.next_oldest_post %}
+      {% if older_post %}
+        |
+        <a href="{{ older_post.get_absolute_url }}"
+           title="{{ older_post.title }}">
+          Older: {{ older_post.title|truncatechars_html:40 }} &gt;
+        </a>
+      {% endif %}
+    {% endwith %}
+  </div>
+{% endblock %}

@@ -1,7 +1,7 @@
 from django.db import models
 
 
-class EntryManager(models.Manager):
+class BlogPostManager(models.Manager):
 
     def get_visible_to_user(self, user):
         default_queryset = \

@@ -195,13 +195,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     # Sites framework:
     # https://docs.djangoproject.com/en/dev/ref/contrib/sites/
-    # Required by django-andablog. Also "strongly encouraged" to use by the
+    # "Strongly encouraged" to use by the
     # Django docs, even if we only have one site:
     # https://docs.djangoproject.com/en/dev/ref/contrib/sites/#how-django-uses-the-sites-framework
     'django.contrib.sites',
     'django.contrib.staticfiles',
 
-    'andablog',
     'easy_thumbnails',
     'guardian',
     'markdownx',
@@ -211,8 +210,6 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'reversion',
     'storages',
-    # For andablog's entry tags
-    'taggit',
 ]
 
 # The order of middleware classes is important!

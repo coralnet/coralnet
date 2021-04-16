@@ -21,11 +21,13 @@ Updating to the latest repository code
 
 Upgrading Python
 ----------------
-If you are just upgrading the patch version (2.7.15 -> 2.7.16), you should be able to just download and install the new version, allowing it to overwrite your old version. (`Source <https://stackoverflow.com/a/17954487/>`__)
+If you are just upgrading the patch version (3.6.12 -> 3.6.13), you should be able to just download and install the new version, allowing it to overwrite your old version. (`Source <https://stackoverflow.com/a/17954487/>`__)
 
 - If using Windows, you should also create a new virtualenv using the new version, because virtualenv on Windows copies core files/scripts over instead of using symlinks.
 
-If you are upgrading the major version (2 -> 3) or minor version (2.6 -> 2.7), first download and install the new version. It should install in a separate location, such as ``python27`` instead of ``python26``. You'll then want to :ref:`create a new virtualenv <virtualenv>` using the new Python version, and :ref:`reinstall packages <python-packages>` to that new virtualenv.
+If you are upgrading the major version (2 -> 3) or minor version (3.6 -> 3.7), first download and install the new version. It should install in a separate location, such as ``python37`` instead of ``python36``. You'll then want to :ref:`create a new virtualenv <virtualenv>` using the new Python version, and :ref:`reinstall packages <python-packages>` to that new virtualenv.
+
+The Django file-based cache uses a different pickle protocol in Python 2 versus 3, so you'll have to clear the Django cache when switching between Python 2 and 3, otherwise you may see errors on the website.
 
 
 Upgrading PostgreSQL
@@ -55,10 +57,14 @@ Environment setup and services start - Windows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Run this as a ``.bat`` file:
 
-::
+.. code-block:: doscon
 
-  cd D:\<path up to Git repo>\coralnet\project
+  cd <path up to Git repo>\coralnet\project
   set "DJANGO_SETTINGS_MODULE=config.settings.<module name>"
+
+  rem Add ffmpeg DLL to PATH. torchvision 0.5.0 appears to need this.
+  rem https://github.com/pytorch/vision/issues/1877
+  set "PATH=%PATH%;<path up to ffmpeg>\ffmpeg-4.1-win64-shared\bin"
 
   rem Start the PostgreSQL service (this does nothing if it's already started)
   net start postgresql-x64-<version number>
@@ -68,6 +74,9 @@ Run this as a ``.bat`` file:
   rem similarly to & in Linux.
   <path to virtualenv>\Scripts\activate.bat
   start /B celery -A config worker
+
+  rem If this file exists, it could interfere with celerybeat starting up.
+  del <path up to Git repo>\coralnet\project\celerybeat.pid
 
   rem Start celery beat. Could consider commenting this out if you don't
   rem need to submit spacer jobs.
@@ -81,10 +90,7 @@ Run this as a ``.bat`` file:
   rem Run the redis server in this window
   <path to redis>\redis-server.exe
 
-When you're done working:
-
-- Close the command windows
-- If you ran celery beat, delete the ``celerybeat.pid`` file from the ``project`` directory (otherwise, a subsequent start of celerybeat will see that file, assume a celerybeat process is still running, and fail to start)
+When you're done working, close the command windows.
 
 
 Environment setup -- Mac
@@ -123,26 +129,10 @@ Admin-only website functionality
 Writing blog posts
 ^^^^^^^^^^^^^^^^^^
 
-Blog entries (AKA articles, posts) are only writable and editable through the admin section of the site. Head to the admin section (``<site domain>/admin``), then under "Andablog", select "Entries". This should show a list of existing blog entries.
+Blog posts are only writable and editable through the admin section of the site. Head to the admin section (Admin Tools at top bar, then Admin Site), then under "BLOG", select "Blog posts". This should show a list of existing blog posts.
 
-At the Andablog Entries listing, click "Add Entry +" at the top right to start writing a new blog entry:
+At the blog posts listing, click "ADD BLOG POST +" at the top right to start writing a new blog post. The fields should be explained by the help text on the page. In "Content", you can include images using drag and drop.
 
-- Title is the entry's title.
-- Content is the entry's body text.
-- You can select a "Content markup type", but Markdown is recommended to be consistent.
+You need to Save your post in order to preview it. Make sure you leave "Is published" unchecked to save your post as a private draft (only viewable by site admins). Then go to the main site's Blog section, find your draft, and look over it. If you think it's ready to publish, check "Is published" and Save again.
 
-You need to Save your entry in order to preview it. Make sure you leave "Is published" unchecked to save your entry as a private draft (only viewable by site admins). Then go to the main site's Blog section, find your draft, and look over it. If you think it's ready to publish, check "Is published" and Save again.
-
-To add an image to a blog entry, first scroll to the Entry Images section at the bottom, and select an image to upload. Click "Save and continue editing" to save the image (this also saves the blog entry). Once saved, the image's URL will be shown in the Entry Images section. Use this image URL to embed the image in your article - here's a Markdown example: ``![Alt text goes here](/media/andablog/images/my_image.png)``
-
-We'll use Google Groups for blog comments, so we don't have to maintain a separate blog comments system. This also doubles as a simple way to announce blog posts (for those subscribed to the Google Group). After publishing a blog entry, you'll want to create a Google Groups thread for discussion of the new entry, which links to that entry. Then you'll also want to edit the blog entry to link to that Google Groups thread, like: ``Discuss this article here: <link>``. Later, we might come up with a way to automatically create the Google Groups thread (using a CoralNet email address), but for now it has to be done manually.
-
-Optional fields when editing blog entries:
-
-- Tags aren't used yet, but we might use them later when we have more articles and want to make them searchable. It's up to you if you want to add tags for now.
-- Preview Content allows you to customize the text that appears for this article in the Blog section's entry listing. Normally the listing just shows the first X words of the article, but if Preview Content is specified for the article, then Preview Content is used instead. You can further customize the entry-listing preview with Preview Image.
-
-Other notes about the entry-editing interface:
-
-- The Save buttons and the Delete button (when editing an existing entry) at the bottom apply to the whole blog entry, not just the images. Don't be misled by the fact that they're right under the Entry Images section.
-- When editing an existing entry, the "View on Site >" button at the top right doesn't work for now. Perhaps we'll fix it later.
+We'll use Google Groups for blog comments, so we don't have to maintain a separate blog comments system. This also doubles as a simple way to announce blog posts (for those subscribed to the Google Group). After publishing a blog post, you'll want to create a Google Groups thread for discussion of the new post, which links to that post. Then you'll also want to edit the blog post to link to that Google Groups thread, like: ``Discuss this article here: <link>``. Later, we might come up with a way to automatically create the Google Groups thread (using a CoralNet email address), but for now it has to be done manually.

@@ -58,7 +58,7 @@ If you're going to make any contributions:
 
 Python
 ------
-This project uses the latest Python 2.7.x, so download and install that.
+This project uses the latest Python 3.6.x, so download and install that.
 
 Since this project has many third-party dependencies, and may require specific versions of those dependencies, it's highly recommended to use something like virtualenv to keep those dependencies separate from other Python projects.
 
@@ -88,13 +88,11 @@ A few package/OS combinations may need additional steps:
 
 - ``Pillow`` on Linux
 
-  - You'll get errors if you don't have certain packages:
+  - You'll get errors if you don't have development packages for JPEG and PNG support:
 
-    - ``ValueError: jpeg is required unless explicitly disabled using --disable-jpeg, aborting``: You need to install libjpeg (jpeg development support). For supported versions of libjpeg, see the `Pillow docs <https://pillow.readthedocs.io/en/latest/installation.html>`__. For example, to use libjpeg version 8 in Ubuntu, install ``libjpeg8-dev``.
+    - libjpeg. For supported versions of libjpeg, see the `Pillow docs <https://pillow.readthedocs.io/en/latest/installation.html>`__. Check available versions in Ubuntu with ``apt-cache pkgnames | grep libjpeg``. Again, you'll want development libraries; for example, libjpeg version 8 in Ubuntu is ``libjpeg8-dev``.
 
-    - ``fatal error: Python.h: No such file or directory``: You need to install Python compile headers. In Ubuntu, this is ``python-dev``.
-
-    - PNG related errors are also possible. In Ubuntu, this is ``zlib1g-dev``.
+    - zlib (PNG support). In Ubuntu, the dev library should be ``zlib1g-dev``.
 
   - There are also other packages that support optional functionality in Pillow. See the `Pillow docs <https://pillow.readthedocs.io/en/latest/installation.html>`__.
 
@@ -109,6 +107,14 @@ A few package/OS combinations may need additional steps:
   - Installing SciPy with the requirements file will fail for two reasons. First, NumPy needs to be installed as NumPy+MKL, and the binary for that isn't on PyPI. Second, even after getting the NumPy install right, installing SciPy with pip fails for some reason (the first problem is ``libraries openblas not found in [ ... ] NOT AVAILABLE``).
 
   - What to do: First install NumPy+MKL and then SciPy manually using the .whl files here: http://www.lfd.uci.edu/~gohlke/pythonlibs/ Be sure to pick the appropriate .whl depending on whether your Python is 32 or 64 bit. To install a .whl, run ``pip install <path to .whl>``. Then run the requirements file to install the rest of the packages.
+
+- ``torch`` and ``torchvision`` on Windows
+
+  - Confirm your CUDA version if you have a GPU that supports it. For example, NVIDIA Control Panel > Help > System Information > Components tab should have this info.
+
+  - Head to the `PyTorch website <https://pytorch.org/>`__ and find the install or getting started page. There are a few possible ways to try to get the appropriate .whl files depending on your OS, CUDA version, and target torch / torchvision versions. For old versions, either try the "install previous versions" link, or head directly to https://download.pytorch.org/whl/torch_stable.html and find the .whl files that most closely match your environment. Download the .whl files and run ``pip install <path to .whl>`` on each.
+
+  - To import torchvision 0.5.0 without getting a "The program can't start because avcodec-58.dll is missing from your computer." error dialog, download the shared version (not static) of ffmpeg and add its ``bin`` directory to your PATH environment variable. (`Source <https://github.com/pytorch/vision/issues/1877>`__)
 
 If you think you messed up and want to undo a pip installation, use ``pip uninstall <package-name>``.
 
@@ -205,6 +211,8 @@ How to make a Run Configuration that runs ``manage.py runserver`` from PyCharm:
 - Run -> Edit Configurations..., then make a new configuration under "Django server".
 
 - Add an environment variable with Name ``DJANGO_SETTINGS_MODULE`` and Value ``config.settings.<name>``, with <name> being ``local``, ``dev_stephen``, etc. [#pycharmenvvar]_
+
+- If on Windows, set the PATH environment variable in the run configuration, to include shared ffmpeg (to avoid the avcodec-58.dll error). There doesn't seem to be a way to add to the existing PATH, but overriding the old PATH with nothing but ffmpeg seems to be OK.
 
 - Ensure that "Python interpreter" has the Python from your virtualenv.
 

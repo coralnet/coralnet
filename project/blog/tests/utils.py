@@ -1,7 +1,9 @@
+import uuid
+
 from bs4 import BeautifulSoup
 from django.shortcuts import resolve_url
 
-from ..models import Entry
+from ..models import BlogPost
 
 
 class BlogTestMixin(object):
@@ -13,53 +15,52 @@ class BlogTestMixin(object):
     superuser = None
 
     @classmethod
-    def create_entry(cls, **kwargs):
+    def create_post(cls, **kwargs):
         # Defaults
         data = dict(
             title="A title",
+            slug="a-title-" + uuid.uuid4().hex,
+            author="Post Author",
             content="Some content",
-            is_published=True,
-            author=cls.superuser,
-            tags="",
             preview_content="",
-            preview_image=None,
+            is_published=True,
         )
 
         # Override defaults with any kwargs that are present
         data.update(**kwargs)
-        # Save entry
-        entry = Entry(**data)
-        entry.save()
+        # Save post
+        post = BlogPost(**data)
+        post.save()
 
-        return entry
+        return post
 
-    def view_entry_list(self, user=None):
+    def view_post_list(self, user=None):
         if user:
             self.client.force_login(user)
         else:
             self.client.logout()
 
-        url = resolve_url('blog:entry_list')
+        url = resolve_url('blog:post_list')
         response = self.client.get(url)
 
         return response
 
-    def view_entry(self, entry, user=None):
+    def view_post(self, post, user=None):
         if user:
             self.client.force_login(user)
         else:
             self.client.logout()
 
-        url = resolve_url('blog:entry_detail', entry.slug)
+        url = resolve_url('blog:post_detail', post.slug)
         response = self.client.get(url)
 
         return response
 
     @staticmethod
-    def get_entry_content_html(entry_detail_response):
+    def get_post_content_html(post_detail_response):
         response_soup = BeautifulSoup(
-            entry_detail_response.content, 'html.parser')
+            post_detail_response.content, 'html.parser')
         content_div = response_soup.find(
-            'div', class_='blog-entry-content')
+            'div', class_='blog-post-content')
         return ''.join(
             [str(child) for child in content_div.children])

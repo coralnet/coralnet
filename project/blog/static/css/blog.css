@@ -1,24 +1,24 @@
 /*
- * List of blog posts (entry_list)
+ * List of blog posts (post_list)
  */
 
-.blog-entry-row {
+.blog-post-row {
   margin-top: 60px;
   margin-bottom: 60px;
 }
-.blog-entry-content-preview > p {
+.blog-post-content-preview {
   margin-top: 20px;
   margin-bottom: 20px;
 }
 
 /*
- * Blog posts (entry_detail)
+ * Blog posts (post_detail)
  */
 
-.blog-entry-content {
+.blog-post-content {
   margin-top: 60px;
   margin-bottom: 60px;
 }
-.blog-entry-meta {
+.blog-post-meta {
   color: #999;
 }
