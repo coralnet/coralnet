@@ -14,6 +14,12 @@ django-guardian==2.3.0
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
 Pillow==8.2.0
 
+# Image EXIF reading/writing
+# Could be replaced with Pillow once Pillow is 6.0 or higher, since they
+# added EXIF writing support then.
+# Changelog: https://piexif.readthedocs.io/en/latest/changes.html
+piexif==1.1.3
+
 # Web requests.
 # Changelog: https://github.com/psf/requests/blob/master/HISTORY.md
 requests==2.25.1
