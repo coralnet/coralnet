@@ -14,8 +14,7 @@ from lib.decorators import source_visibility_required
 from .confmatrix import ConfMatrix
 from .forms import TreshForm, CmTestForm
 from .models import Classifier
-from .utils import labelset_mapper, map_labels, \
-    get_total_messages_in_jobs_queue, get_alleviate
+from .utils import labelset_mapper, map_labels, get_alleviate
 
 
 @permission_required('is_superuser')
