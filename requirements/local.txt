@@ -16,3 +16,7 @@ Sphinx
 # cchardet is installed. chardet is older; cchardet is much faster.
 # Use chardet here since installing cchardet caused trouble on mac.
 chardet==3.0.4
+
+
+# For development
+pre-commit==2.10.1

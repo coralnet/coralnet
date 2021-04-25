@@ -232,3 +232,8 @@ Sometimes you need to run the server with ``DEBUG = False`` in your settings to 
 - To serve static files, define a ``STATIC_URL`` in your settings; for example, ``http://127.0.0.1:8080/``. Then in a terminal/command window, run: ``python -m http.server 8080``
 
   - Any time static files (CSS, Javascript, etc.) are added or changed, run ``python manage.py collectstatic`` to copy those added/changed static files to STATIC_ROOT. Do ``python manage.py collectstatic --clear`` instead if you think there's some obsolete static files that can be cleaned up.
+
+
+Linting
+-------
+We use pre-commit hooks. Please run `pre-commit install` to activate after installing the packages in `local.txt`.
