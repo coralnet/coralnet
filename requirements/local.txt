@@ -18,5 +18,5 @@ Sphinx
 chardet==3.0.4
 
 
-# For development
+# For development. This allows pre-commit hooks for syntax linting.
 pre-commit==2.10.1
