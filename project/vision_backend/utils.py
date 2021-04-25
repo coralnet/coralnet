@@ -1,4 +1,3 @@
-import boto
 import numpy as np
 from django.conf import settings
 
@@ -134,18 +133,3 @@ def labelset_mapper(labelmode, classids, source):
         raise Exception('labelmode {} not recognized'.format(labelmode))
 
     return classmap, classnames
-
-
-def get_total_messages_in_jobs_queue():
-    """
-    Returns number of jobs in the spacer jobs queue.
-    If there are, for some tests, it means we have to wait.
-    """
-    if not settings.DEFAULT_FILE_STORAGE == \
-            'lib.storage_backends.MediaStorageS3':
-        return 0
-    c = boto.sqs.connect_to_region('us-west-2')
-    queue = c.lookup('spacer_jobs')
-    attr = queue.get_attributes()
-    return int(attr['ApproximateNumberOfMessages']) + \
-        int(attr['ApproximateNumberOfMessagesNotVisible'])

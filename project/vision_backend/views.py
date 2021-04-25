@@ -61,7 +61,6 @@ def backend_overview(request):
     i_act = i.active()
     i_qu = i.reserved()
     q_stats = {
-        'spacer': get_total_messages_in_jobs_queue(),
         'celery_scheduled': first_queue_length(i_sch),
         'celery_active': first_queue_length(i_act),
         'celery_queued': first_queue_length(i_qu),
