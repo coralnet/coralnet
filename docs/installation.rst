@@ -236,4 +236,4 @@ Sometimes you need to run the server with ``DEBUG = False`` in your settings to 
 
 Linting
 -------
-We use pre-commit hooks. Please run `pre-commit install` to activate after installing the packages in `local.txt`.
+We use pre-commit hooks. Please run `pre-commit install` to activate after installing the packages in `local.txt`. Linting will run automatically on `git commit`.
