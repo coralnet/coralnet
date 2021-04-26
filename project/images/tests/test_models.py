@@ -72,8 +72,12 @@ class ImageExifOrientationTest(ClientTest):
         # Upload image
         img = self.upload_image(self.user, self.source, image_file=image_file)
 
-        with PILImage.open(img.original_file) as im:
-            exif_dict = piexif.load(im.info['exif'])
+        im = PILImage.open(img.original_file)
+        exif_dict = piexif.load(im.info['exif'])
+        # We don't use a context manager to close in this case, since that
+        # didn't properly close it on Windows for some reason.
+        im.close()
+
         self.assertEqual(
             exif_dict['0th'][piexif.ImageIFD.Orientation], 8,
             "Image should be saved with EXIF orientation")
