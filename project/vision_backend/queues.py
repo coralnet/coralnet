@@ -106,8 +106,14 @@ class BatchQueue(BaseQueue):
         for job in BatchJob.objects.exclude(status='SUCCEEDED').\
                 exclude(status='FAILED'):
             resp = batch_client.describe_jobs(jobs=[job.batch_token])
-            job.status = resp['jobs'][0]['status']
-            job.save()
+            if len(resp['jobs']) == 0:
+                logger.info(
+                    f'Batch job id: {job.batch_token} not found. Skipping.')
+                job.status = 'FAILED'
+                job.save()
+            else:
+                job.status = resp['jobs'][0]['status']
+                job.save()
             if job.status == 'SUCCEEDED':
                 logger.info('Entering collection of job {}.'.format(str(job)))
                 job_res_loc = storage.spacer_data_loc(job.res_key)
