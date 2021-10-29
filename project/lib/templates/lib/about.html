@@ -11,7 +11,7 @@
 <div class="article-body center">
 <a class="section-anchor section-anchor-top" data-scroll-name="#main"></a>
 <h1>About CoralNet</h1>
-    
+
     <p class="abstract">
         CoralNet is a resource for benthic images analysis.
         The site deploys deep neural networks which allow fully and semi automated annotation of images.
@@ -130,15 +130,16 @@
         This study thus suggests that CoralNet was finally accurate enough to fully address the manual annotation bottleneck!
     </p>
     <p>
-        Following these results a second grant was received from NOAA to develop CoralNet 1.0 (formerly "Beta 2").
+        Following these results a second grant was received from NOAA to develop CoralNet 1.0.
         During this period we achieved two major goals.
         First, we developed an API to allow easy and automated deployment of a trained classifier on new images.
         This also enables the creation of a repository of trained classifiers from which users can choose from.
         Second, we took another look at the core technology behind the computer vision system and managed to push
-        performance even further.
+        performance even further. See <a href="https://openaccess.thecvf.com/content/ICCV2021W/OceanVision/papers/Chen_A_New_Deep_Learning_Engine_for_CoralNet_ICCVW_2021_paper.pdf">our whitepaper</a> for details.
     </p>
     <p>
-      CoralNet is open source. You can visit our <a href="https://github.com/beijbom/coralnet">GitHub repository</a> to see what we're working on, learn how the website works, or even contribute improvements.
+        CoralNet is open source. You can visit our <a href="https://github.com/beijbom/coralnet">GitHub repository</a>
+        to see what we're working on, learn how the website works, or even contribute improvements.
     </p>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
@@ -186,63 +187,81 @@
     </ul>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
-    
+
     <h2 id="acknowledgments">Credits<a class="section-anchor" data-scroll-name="#acknowledgments"></a></h2>
     <p>
         CoralNet has been supported by:
     </p>
     <ul>
-    <li> NSF: <i>Computer Vision Coral Ecology grant #ATM-0941760</i>, 2012 - 2015. </li>
-    <li> NOAA: <i>Grants NA10OAR4320156, NA15OAR4320071 </i> under the  <a href="http://marineresearchpartners.com/nmfs_aiasi/Home.html">  Automated Image Analysis Strategic Initiative</a>, 2014 - 2019.</li>
-
-    <li> NOAA: <i>CoralNet: Tackling Bottlenecks in Coral Reef Image Analysis with
-        Next Gen Deep Networks for Photographs to Large Mosaics, </i> 2019 - 2020.</li>
-    <li> NOAA: <i>Quantifying Coral Reef Net Calcification Capacity and Vulnerability in the Context of Ocean Acidification, </i>2019 - 2021.</li>
-    <li> <a href="https://www.pacificbluefoundation.org/"> Pacific Blue Foundation.</a></li>
+        <li>
+            NSF: <i>Computer Vision Coral Ecology grant #ATM-0941760</i>, 2012 - 2015.
+        </li>
+        <li> NOAA: <i>Grants NA10OAR4320156, NA15OAR4320071 </i> under the  <a href=
+            "http://marineresearchpartners.com/nmfs_aiasi/Home.html">
+            Automated Image Analysis Strategic Initiative</a>, 2014 - 2019.
+        </li>
+        <li>
+            NOAA: <i>CoralNet: Tackling Bottlenecks in Coral Reef Image Analysis with
+            Next Gen Deep Networks for Photographs to Large Mosaics, </i> 2019 - 2020.
+        </li>
+        <li>
+            NOAA: <i>Quantifying Coral Reef Net Calcification Capacity and Vulnerability
+            in the Context of Ocean Acidification, </i>2019 - 2021.
+        </li>
+        <li>
+            <a href="https://www.pacificbluefoundation.org/"> Pacific Blue Foundation.</a>
+        </li>
     </ul>
     <p>
         The following papers are relevant to the development of CoralNet.
         We ask that you cite the appropriate papers if you use CoralNet in your work.
     </p>
     <ul>
-    <li><p>
-        O. Beijbom, P.J. Edmunds, D.I. Kline, G.B. Mitchell, D. Kriegman.
-        <i><a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6247798&tag=1">
-            "Automated Annotation of Coral Reef Survey Images"</a></i>.
-        IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Providence, Rhode Island, June, 2012.</p></li>
-    <li><p>
-        O. Beijbom, P. J. Edmunds, C. Roelfsema, J. Smith, D. I. Kline, B. Neal, M. J. Dunlap,
-        V. Moriarty, T-Y. Fan, C-J. Tan, S. Chan, T. Treibitz, A. Gamst, B. G. Mitchell, D. Kriegman.
-        <i><a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">
-            "Towards automated annotation of benthic survey images: variability of human experts and operational modes of automation"</a></i>.
-        PLOS One, July 2015.
-    </p></li>
-    <li><p>
-        I. D. Williams, C. S. Couch, O. Beijbom, T. A. Oliver, B. Vargas-Angel, B. D. Schumacher, R. E. Brainard.
-        <i><a href="https://www.frontiersin.org/articles/10.3389/fmars.2019.00222/full">
-            "Leveraging Automated Image Analysis Tools to Transform Our Capacity to Assess Status and Trends of Coral Reefs"</a></i>.
-        Frontiers in Marine Science, May 2019.
-    </p></li>
-    <li><p>
-        O. Beijbom,
-        <i><a href="http://roger.ucsd.edu/record=b8984742~S9">
-            "Automated Annotation of Coral Reef Survey Images"</a></i>.
-        PhD Thesis UCSD, June 2015.
-    </p></li>
+        <li><p>
+            Q. Chen, O. Beijbom, S. Chan, J. Bouwmeester, D. Kriegman.
+            <i><a href="https://openaccess.thecvf.com/content/ICCV2021W/OceanVision/papers/Chen_A_New_Deep_Learning_Engine_for_CoralNet_ICCVW_2021_paper.pdf">
+                "A New Deep Learning Engine for CoralNet"</a></i>.
+                International Conference on Computer Vision (ICCV) Workshops, 2021.
+        </p></li>
+        <li><p>
+            I. D. Williams, C. S. Couch, O. Beijbom, T. A. Oliver, B. Vargas-Angel, B. D. Schumacher, R. E. Brainard.
+            <i><a href="https://www.frontiersin.org/articles/10.3389/fmars.2019.00222/full">
+                "Leveraging Automated Image Analysis Tools to Transform Our Capacity to Assess Status and Trends of Coral Reefs"</a></i>.
+            Frontiers in Marine Science, May 2019.
+        </p></li>
+        <li><p>
+            O. Beijbom, P. J. Edmunds, C. Roelfsema, J. Smith, D. I. Kline, B. Neal, M. J. Dunlap,
+            V. Moriarty, T-Y. Fan, C-J. Tan, S. Chan, T. Treibitz, A. Gamst, B. G. Mitchell, D. Kriegman.
+            <i><a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">
+                "Towards automated annotation of benthic survey images: variability of human experts and operational modes of automation"</a></i>.
+            PLOS One, July 2015.
+        </p></li>
+        <li><p>
+            O. Beijbom,
+            <i><a href="http://roger.ucsd.edu/record=b8984742~S9">
+                "Automated Annotation of Coral Reef Survey Images"</a></i>.
+            PhD Thesis UCSD, June 2015.
+            </p></li>
+        <li><p>
+            O. Beijbom, P.J. Edmunds, D.I. Kline, G.B. Mitchell, D. Kriegman.
+            <i><a href="http://ieeexplore.ieee.org/xpls/abs_all.jsp?arnumber=6247798&tag=1">
+                "Automated Annotation of Coral Reef Survey Images"</a></i>.
+            IEEE Conference on Computer Vision and Pattern Recognition (CVPR), Providence, Rhode Island, June, 2012.
+        </p></li>
     </ul>
 
     <p class="uparrow border"><a href="#main">&#9650</a></p>
     <h2 id="people">People<a class="section-anchor" data-scroll-name="#people"></a></h2>
     <h3>Current</h3>
         <ul>
-            <li>Oscar Beijbom - Director [<a href="https://beijbom.github.io/">www</a>]</li>
-            <li>Stephen Chan - Lead Developer </li>
-            <li>David Kriegman - Academic advisor [<a href="http://cseweb.ucsd.edu/~kriegman/">www</a>]</li>
-            <li>Qimin Chen - Vision researcher </li>
-            <li>Jessica Bouwmeester - LabelSet curation [<a href="http://jessbm.weebly.com">www</a>]</li>
+            <li>Oscar Beijbom [<a href="https://beijbom.github.io/">www</a>]</li>
+            <li>Stephen Chan</li>
+            <li>David Kriegman [<a href="http://cseweb.ucsd.edu/~kriegman/">www</a>]</li>
+            <li>Jessica Bouwmeester [<a href="http://jessbm.weebly.com">www</a>]</li>
         </ul>
     <h3>Alumni</h3>
         <ul>
+            <li>Qimin Chen - ML researcher </li>
             <li>Serge Belongie - Academic advisor [<a href="https://vision.cornell.edu/se3/people/serge-belongie/">www</a>]</li>
             <li>David Kline - Academic advisor [<a href="http://scrippsscholars.ucsd.edu/dkline/biocv">www</a>]</li>
             <li>Ben Neal - Academic advisor [<a href="https://www.livingoceansfoundation.org/profile/bneal/">www</a>]</li>
@@ -257,7 +276,8 @@
     <h2 id="press">Press<a class="section-anchor" data-scroll-name="#press"></a></h2>
     <ul >
     <li>January 2017: Our beta launch featured in phys.org
-        [<a href="http://phys.org/news/2017-01-software-coral-reef-images.html">www</a>]. </li>
+        [<a href="http://phys.org/news/2017-01-software-coral-reef-images.html">www</a>].
+    </li>
 
     <li>September 2016: CoralNet featured in the GTC keynote (at 0:0:52)
         [<a href = "https://www.youtube.com/watch?v=npzRyTimcZo">www</a>]. </li>
@@ -274,7 +294,7 @@
 
     <li >May 2014: Destin at SmarterEveryDay follows the data collected by the Catlin Seaview Survey
         all the way to CoralNet [<a href="https://www.youtube.com/watch?v=az1PTIehYKI">www</a>].</li>
-            
+
     <li >September 2013: Greenwire covers CoralNet
         [<a href="http://www.eenews.net/greenwire/stories/1059986651">www</a>]. </li>
     </ul>
@@ -288,9 +308,9 @@
 $("a[href^='#']").click(function(){
     var clicked = $(this).attr("href");
     var link = $('a[data-scroll-name="' + clicked + '"]');
-    
+
     $(".selected").attr("class","");
-    
+
     $('body,html').animate({
         'scrollTop':   $(link).offset().top
     }, 500, function() {
@@ -300,4 +320,3 @@ $("a[href^='#']").click(function(){
 });
 </script>
 {% endblock %}
-
