@@ -108,6 +108,15 @@ djangorestframework==3.14.0
 # https://github.com/plumdog/django_migration_testcase/
 django-migration-testcase==0.0.15
 
+# BeautifulSoup's encoding detection uses chardet if installed.
+# Changelog: https://github.com/chardet/chardet/releases
+#
+# cchardet is a faster version, but no longer maintained:
+# https://github.com/PyYoshi/cChardet/issues/77
+# charset-normalizer is a newer package, but don't know enough to determine
+# its accuracy.
+chardet==5.1.0
+
 # HTML parsing.
 # Changelog: https://bazaar.launchpad.net/~leonardr/beautifulsoup/bs4/view/head:/CHANGELOG
 #
