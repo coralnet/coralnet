@@ -46,6 +46,10 @@ jobs:
       run: |
         mkdir ../log
         mkdir ../tmp
+    - name: Check Django settings
+      run: |
+        python manage.py diffsettings
+      working-directory: ./project
     - name: Run Tests
       run: |
         python manage.py test
