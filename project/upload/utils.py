@@ -22,6 +22,11 @@ from vision_backend.models import Features
 def text_file_to_unicode_stream(text_file):
     # Detect charset and convert to Unicode as needed.
     unicode_text = UnicodeDammit(text_file.read()).unicode_markup
+    print("INPUT:")
+    text_file.seek(0)
+    print(text_file.read())
+    print("OUTPUT:")
+    print(unicode_text)
     # Convert the text into a line-by-line stream.
     return StringIO(unicode_text, newline='')
 
