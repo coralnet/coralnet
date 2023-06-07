@@ -108,14 +108,6 @@ djangorestframework==3.14.0
 # https://github.com/plumdog/django_migration_testcase/
 django-migration-testcase==0.0.15
 
-# Character encoding detection.
-# BeautifulSoup uses this when installed, else it defaults to cchardet.
-# cchardet involves some C++ compilation, which caused trouble on Mac
-# and may complicate installation on Ubuntu. charset-normalizer doesn't have
-# that issue and is more recently maintained (as of 2023), so we use
-# charset-normalizer.
-charset-normalizer==3.1.0
-
 # HTML parsing.
 # Changelog: https://bazaar.launchpad.net/~leonardr/beautifulsoup/bs4/view/head:/CHANGELOG
 #
