@@ -74,7 +74,7 @@ class UploadAnnotationsCpcTestMixin(UploadAnnotationsTestMixin, ABC):
 
         # Headers
         stream.writelines(['""\n']*28)
-
+        print(stream.getvalue())
         f = ContentFile(stream.getvalue(), name=cpc_filename)
         return f
 

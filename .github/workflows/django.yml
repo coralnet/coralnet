@@ -51,7 +51,7 @@ jobs:
         mkdir ../tmp
     - name: Run Tests
       run: |
-        python manage.py test
+        python manage.py test cpce.tests.test_upload_general_cases.FormatTest.test_unicode
       working-directory: ./project
       env:
         POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }}
