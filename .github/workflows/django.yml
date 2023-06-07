@@ -18,6 +18,7 @@ jobs:
       CORALNET_DATABASE_NAME: postgres
       CORALNET_DATABASE_USER: postgres
       CORALNET_DATABASE_PASSWORD: postgres
+      CORALNET_DATABASE_HOST: localhost
       CORALNET_SECRET_KEY: ci-secret-key
 
     services:
