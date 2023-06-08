@@ -4,7 +4,7 @@ import csv
 from io import StringIO
 from typing import Callable, Dict, List, Optional, Tuple
 
-from bs4.dammit import UnicodeDammit
+import charset_normalizer
 from django.urls import reverse
 
 from annotations.models import ImageAnnotationInfo
@@ -21,7 +21,9 @@ from vision_backend.models import Features
 
 def text_file_to_unicode_stream(text_file):
     # Detect charset and convert to Unicode as needed.
-    unicode_text = UnicodeDammit(text_file.read()).unicode_markup
+    content_bytes = text_file.read()
+    unicode_text = content_bytes.decode(
+        charset_normalizer.detect(content_bytes)['encoding'])
     # Convert the text into a line-by-line stream.
     return StringIO(unicode_text, newline='')
 
