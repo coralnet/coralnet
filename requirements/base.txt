@@ -109,8 +109,9 @@ djangorestframework==3.14.0
 django-migration-testcase==0.0.15
 
 # Character encoding detection.
-# This may get more accurate results on our tests than chardet as of 2023.
-charset-normalizer==3.1.0
+# Which is a hard problem, so we ask 2 different libraries for their opinions.
+chardet>=5.1.0,<5.2
+charset-normalizer>=3.1.0,<3.2
 
 # HTML parsing.
 # Changelog: https://bazaar.launchpad.net/~leonardr/beautifulsoup/bs4/view/head:/CHANGELOG

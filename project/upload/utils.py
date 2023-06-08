@@ -4,6 +4,7 @@ import csv
 from io import StringIO
 from typing import Callable, Dict, List, Optional, Tuple
 
+import chardet
 import charset_normalizer
 from django.urls import reverse
 
@@ -20,10 +21,23 @@ from vision_backend.models import Features
 
 
 def text_file_to_unicode_stream(text_file):
-    # Detect charset and convert to Unicode as needed.
-    content_bytes = text_file.read()
-    unicode_text = content_bytes.decode(
-        charset_normalizer.detect(content_bytes)['encoding'])
+    content = text_file.read()
+
+    if isinstance(content, str):
+        unicode_text = content
+    else:
+        # content is in byte form.
+        # Detect charset and convert to Unicode.
+        # See if chardet and charset-normalizer agree; if so, use their guess.
+        # Otherwise, guess utf-8.
+        chardet_opinion = chardet.detect(content)['encoding']
+        normalizer_opinion = charset_normalizer.detect(content)['encoding']
+        if chardet_opinion == normalizer_opinion:
+            encoding_guess = chardet_opinion
+        else:
+            encoding_guess = 'utf-8'
+        unicode_text = content.decode(encoding_guess)
+
     # Convert the text into a line-by-line stream.
     return StringIO(unicode_text, newline='')
 
