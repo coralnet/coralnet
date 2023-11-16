@@ -8,7 +8,7 @@ from django.urls import reverse
 from annotations.utils import cacheable_annotation_count
 from images.models import Image, Source
 from images.utils import get_carousel_images
-from map.utils import get_map_sources
+from map.utils import cacheable_map_sources
 
 
 def index(request):
@@ -18,7 +18,7 @@ def index(request):
     if request.user.is_authenticated:
         return HttpResponseRedirect(reverse('source_list'))
 
-    map_sources = get_map_sources()
+    map_sources = cacheable_map_sources.get()
     carousel_images = get_carousel_images()
 
     # Gather some stats

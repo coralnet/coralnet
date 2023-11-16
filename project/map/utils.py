@@ -4,9 +4,13 @@ from django.urls import reverse
 
 from images.models import Source
 from images.utils import filter_out_test_sources
+from lib.utils import CacheableValue
 
 
-def get_map_sources():
+def compute_map_sources() -> list[dict[str, str|int]]:
+    """
+    As of 2023.11.15, this may take 2-4 seconds to run in production.
+    """
     # Get all sources that have both latitude and longitude specified.
     # (In other words, leave out the sources that have either of them
     # blank, or both exactly 0.)
@@ -48,3 +52,11 @@ def get_map_sources():
         ))
 
     return map_sources
+
+
+cacheable_map_sources = CacheableValue(
+    cache_key='map_sources',
+    cache_update_interval=60*60*6,
+    cache_timeout_interval=60*60*24*1,
+    compute_function=compute_map_sources,
+)
