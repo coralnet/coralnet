@@ -6,10 +6,11 @@ For general instructions on how to update a development environment of CoralNet,
 For info about the semantic versioning used here, see `docs/versions.rst`.
 
 
-## 1.7 (WIP)
+## [1.7](https://github.com/coralnet/coralnet/tree/1.7)
 
 - The new `EXTRACTORS_BUCKET` setting is now required when using a non-dummy feature extractor.
 - The `MIN_NBR_ANNOTATED_IMAGES` setting has been renamed to `TRAINING_MIN_IMAGES`. Also, it's now tied to the corresponding pyspacer setting, which means that lowering this number will speed up unit tests.
+- The `GOOGLE_MAPS_API_KEY` setting is no longer used.
 - Updates to required packages:
   - pyspacer 0.4.1 -> 0.6.1
   - Pillow 9.4.0 -> 10.1.0
