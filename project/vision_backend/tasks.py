@@ -190,7 +190,7 @@ def check_source(source_id):
     # classifier on all points.
     current_classifier = source.get_current_classifier()
     current_classifier_events = ClassifyImageEvent.objects \
-        .filter(classifier_id=current_classifier.pk)
+        .filter(classifier_id=current_classifier.pk, source_id=source_id)
     current_classifier_annotations = source.annotation_set \
         .filter(robot_version=current_classifier)
     current_classifier_used = current_classifier_events.exists() \
@@ -366,7 +366,7 @@ def submit_classifier(source_id, job_id):
 
 @job_starter(job_name='classify_image')
 def deploy(api_job_id, api_unit_order, job_id):
-    """ Submits a deploy job. """
+    """Begin classifying an image submitted through the deploy-API."""
     try:
         api_job_unit = ApiJobUnit.objects.get(
             parent_id=api_job_id, order_in_parent=api_unit_order)
@@ -413,7 +413,7 @@ def deploy(api_job_id, api_unit_order, job_id):
 
 @job_runner(job_name='classify_features')
 def classify_image(image_id):
-    """ Executes a classify_image job. """
+    """Classify a source's image."""
     try:
         img = Image.objects.get(pk=image_id)
     except Image.DoesNotExist:
@@ -444,7 +444,7 @@ def classify_image(image_id):
 
     # Process job right here since it is so fast.
     # In spacer, this task is called classify_features since that
-    # is actually what we are doing (the feature are already extracted).
+    # is actually what we are doing (the features are already extracted).
     res: ClassifyReturnMsg = spacer_classify_features(msg)
 
     # Pre-fetch label objects
@@ -463,6 +463,15 @@ def classify_image(image_id):
 
     # Always add scores
     th.add_scores(image_id, res, label_objs)
+
+    current_classifier_events = ClassifyImageEvent.objects \
+        .filter(classifier_id=classifier.pk, source_id=img.source_id)
+    incomplete_images = img.source.image_set.incomplete()
+    if current_classifier_events.count() >= incomplete_images.count():
+        # Classification for this source may be done.
+        # Confirm whether the source is all caught up. That's useful to know
+        # when looking at job/backend dashboards.
+        queue_source_check(img.source_id)
 
     return f"Used classifier {classifier.pk}"
 
