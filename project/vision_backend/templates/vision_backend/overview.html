@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 
 
+{% block css-code %}
+<style>
+tr.source-row.needs_check {
+  background-color: var(--status-color-pending);
+}
+tr.source-row.caught_up {
+  background-color: var(--status-color-done);
+}
+tr.source-row.needs_processing {
+  background-color: var(--status-color-in-progress);
+}
+</style>
+{% endblock %}
+
+
 {% block content %}
 
 <table class="detail_table" id="image-counts-table">
@@ -44,45 +59,45 @@
   There are {{clf_stats.nclassifiers}} trained classifiers out of which {{clf_stats.nacceptedclassifiers}} are accepted. This means there are on average {{clf_stats.accepted_ratio}} accepted classifiers per each of the {{clf_stats.nsources}} sources.
 </div>
 
-<table class="detail_table_popup" id="sources-table">
+<br><br>
+
+<h2>Sources</h2>
+
+<div class="line">
+  Note: Sources with "Queued ... image classification(s)" which are colored as in-progress may actually be done processing instead.
+</div>
+
+<table class="generic" id="sources-table">
   <thead>
     <tr>
-      <th>id</th>
-      <th>name</th>
-      <th># ver rbts</th>
-      <th># rbts</th>
-      <th>need new</th>
-      <th># imgs</th>
-      <th># ver.</th>
-      <th># in curr.</th>
-      <th># need feats</th>
-      <th># uncl.</th>
+      <th>ID</th>
+      <th>Name</th>
+      <th># Imgs</th>
+      <th># Conf.</th>
+      <th># In clf</th>
+      <th>Last check</th>
     </tr>
   </thead>
   <tbody>
-    {% for source in laundry_list %}
-      <tr
-        {% if source.need_attention %}
-          style="background-color:red;color:#000"
-        {% elif source.has_robot %}
-          style="background-color:green;color:#000"
-        {% else %}
-          style="background-color:gray;color:#000"
-        {% endif %}
-      >
-        <td> <a href="{% url 'source_main' source.id %}">{{source.id}}</a> </td>
-        <td> {{source.name_short}} </td>
-        <td> {{source.nbr_accepted_robots}} </td>
-        <td> {{source.nbr_robots}} </td>
-        <td> {{source.need_robot}} </td>
-        <td> {{source.nbr_total_images}} </td>
-        <td> {{source.nbr_human_annotated_images}} </td>
-        <td> {{source.nbr_in_current_model}} </td>
-        <td> {{source.nbr_images_needs_features}} </td>
-        <td> {{source.nbr_unclassified_images}} </td>
+    {% for source in page_sources %}
+      <tr class="source-row {{ source.status }}">
+        <td>
+          <a href="{% url 'source_main' source.pk %}">{{ source.pk }}</a>
+        </td>
+        <td>
+          <span title="{{ source.name }}">
+            {{ source.name|truncatechars:40 }}
+          </span>
+        </td>
+        <td>{{ source.image_count }}</td>
+        <td>{{ source.confirmed_image_count }}</td>
+        <td>{{ source.classifier_image_count }}</td>
+        <td>{{ source.check_message }}</td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% include 'pagination_links.html' with page_results=page_results %}
 
 {% endblock %}

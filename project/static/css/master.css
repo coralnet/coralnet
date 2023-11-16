@@ -20,6 +20,11 @@ margin: spacing around the outside of an element.
 :root {
   --link-color: hsl(6, 100%, 27%);
   --main-font: 'Droid Sans', helvetica, arial, Geneva, sans-serif;
+
+  --status-color-pending: #bbe;
+  --status-color-in-progress: #eeb;
+  --status-color-done: #beb;
+  --status-color-failure: #ebb;
 }
 
 

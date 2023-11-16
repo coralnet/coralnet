@@ -185,7 +185,8 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
 
     def test(self):
         """
-        This test is somewhat haphazard and doesn't test all cases.
+        This test is somewhat haphazard and definitely doesn't test all
+        cases/values.
         """
         image1a = self.upload_image(self.user, self.source1)
         image1b = self.upload_image(self.user, self.source1)
@@ -222,28 +223,24 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
             'table#sources-table')[0]
         self.assert_table_values(sources_table_soup, [
             {
-                "id": (
+                "ID": (
                     f'<a href="'
                     f'{reverse("source_main", args=[self.source2.pk])}">'
                     f'{self.source2.pk}'
                     f'</a>'
                 ),
-                "# imgs": 3,
-                "# ver.": 1,
-                "# need feats": 3,
-                "# uncl.": 0,
+                "# Imgs": 3,
+                "# Conf.": 1,
             },
             {
-                "id": (
+                "ID": (
                     f'<a href="'
                     f'{reverse("source_main", args=[self.source1.pk])}">'
                     f'{self.source1.pk}'
                     f'</a>'
                 ),
-                "# imgs": 4,
-                "# ver.": 2,
-                "# need feats": 3,
-                "# uncl.": 2,
+                "# Imgs": 4,
+                "# Conf.": 2,
             },
         ])
 
