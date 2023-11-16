@@ -91,7 +91,7 @@ def backend_overview(request):
 
     page_results, _ = paginate(
         results=sorted_sources,
-        items_per_page=500,
+        items_per_page=200,
         request_args=request.GET,
     )
 
