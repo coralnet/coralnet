@@ -55,8 +55,8 @@ class SourcesMap {
         let iconSizes = {
             // Original aspect ratio is (50, 82)
             1: new L.Point(22, 22/aspectRatio),
-            2: new L.Point(26, 26/aspectRatio),
-            3: new L.Point(30, 30/aspectRatio),
+            2: new L.Point(25, 25/aspectRatio),
+            3: new L.Point(28, 28/aspectRatio),
         };
         let iconStyles = {
             public: 'public-source',
@@ -79,7 +79,11 @@ class SourcesMap {
 
         // Place markers.
 
-        let markers = L.markerClusterGroup();
+        let markers = L.markerClusterGroup({
+            // Decreasing will make more, smaller clusters.
+            // Default 80 (pixels).
+            maxClusterRadius: 40,
+        });
         this.popup = L.popup({
             maxWidth: 550,
         });
