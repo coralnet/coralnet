@@ -87,6 +87,9 @@ class SourcesMap {
         for (let source of mapSources) {
             let latitude = Number(source['latitude']);
             let longitude = Number(source['longitude']);
+            if (isNaN(latitude) || isNaN(longitude)) {
+                continue;
+            }
 
             // 'Main' marker.
             let coordinateSets = [[latitude, longitude]];
