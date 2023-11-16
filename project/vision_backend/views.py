@@ -9,8 +9,9 @@ from django.shortcuts import render
 from spacer.data_classes import ValResults
 
 from images.models import Source, Image
-from images.utils import source_robot_status
+from jobs.models import Job
 from lib.decorators import source_visibility_required
+from lib.utils import paginate
 from .confmatrix import ConfMatrix
 from .forms import TreshForm, CmTestForm
 from .models import Classifier
@@ -45,25 +46,77 @@ def backend_overview(request):
             unclassified_without_features, total),
     }
 
+    all_sources = Source.objects.all()
+    all_classifiers = Classifier.objects.all()
+    accepted_classifiers = all_classifiers.filter(status=Classifier.ACCEPTED)
+    accepted_ratio = format(
+        accepted_classifiers.count() / all_sources.count(), '.1f')
     clf_stats = {
-        'nclassifiers': Classifier.objects.filter().count(),
-        'nacceptedclassifiers': Classifier.objects.filter(
-            status=Classifier.ACCEPTED).count(),
-        'nsources': Source.objects.filter().count(),
-        'accepted_ratio': '{:.1f}'.format(
-            Classifier.objects.filter(status=Classifier.ACCEPTED).count()
-            / Source.objects.filter().count())
+        'nclassifiers': all_classifiers.count(),
+        'nacceptedclassifiers': accepted_classifiers.count(),
+        'nsources': all_sources.count(),
+        'accepted_ratio': accepted_ratio,
     }
 
-    laundry_list = []
-    for source in Source.objects.filter().order_by('-id'):
-        laundry_list.append(source_robot_status(source.id))
+    latest_source_check_values = (
+        Job.objects.filter(job_name='check_source', status=Job.Status.SUCCESS)
+        .order_by('source', '-id').distinct('source')
+        .values('source', 'result_message')
+    )
+    latest_check_lookup = {
+        v['source']: v['result_message'] for v in latest_source_check_values
+    }
 
-    laundry_list = sorted(laundry_list,
-                          key=lambda k: (-k['need_attention'], -k['id']))
+    sorted_sources = []
+    for source in all_sources:
+        check_message = latest_check_lookup.get(source.pk)
+        if check_message is None:
+            # No source check has been done recently
+            status = 'needs_check'
+            status_order = 2
+        elif (
+            "all caught up" in check_message
+            or "Not enough annotated" in check_message
+        ):
+            status = 'caught_up'
+            status_order = 3
+        else:
+            status = 'needs_processing'
+            status_order = 1
+        sorted_sources.append(dict(
+            status=status, status_order=status_order,
+            source_id=source.pk, source=source,
+        ))
+    sorted_sources.sort(key=lambda s: (s['status_order'], -s['source_id']))
+
+    page_results, _ = paginate(
+        results=sorted_sources,
+        items_per_page=500,
+        request_args=request.GET,
+    )
+
+    page_sources = []
+    for source_dict in page_results.object_list:
+        source_id = source_dict['source_id']
+        source = source_dict['source']
+        current_classifier = source.get_current_classifier()
+        page_sources.append(dict(
+            pk=source_id,
+            status=source_dict['status'],
+            name=source.name,
+            image_count=source.image_set.count(),
+            confirmed_image_count=source.image_set.confirmed().count(),
+            classifier_image_count=(
+                current_classifier.nbr_train_images
+                if current_classifier
+                else 0
+            ),
+            check_message=latest_check_lookup.get(source_id) or "(None)",
+        ))
 
     return render(request, 'vision_backend/overview.html', {
-        'laundry_list': laundry_list,
+        'page_results': page_results,
+        'page_sources': page_sources,
         'img_stats': img_stats,
         'clf_stats': clf_stats,
     })

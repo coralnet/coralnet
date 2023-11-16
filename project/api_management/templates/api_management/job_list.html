@@ -6,16 +6,16 @@
 {% block css-code %}
 <style>
 tr[data-status="{{ PENDING }}"] {
-  background-color: #bbe;
+  background-color: var(--status-color-pending);
 }
 tr[data-status="{{ IN_PROGRESS }}"] {
-  background-color: #eeb;
+  background-color: var(--status-color-in-progress);
 }
 tr[data-status="{{ DONE }}"] {
-  background-color: #beb;
+  background-color: var(--status-color-done);
 }
 td.failure {
-  background-color: #ebb;
+  background-color: var(--status-color-failure);
 }
 </style>
 {% endblock %}

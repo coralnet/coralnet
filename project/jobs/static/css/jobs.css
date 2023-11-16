@@ -5,20 +5,20 @@
 
 #job-summary td.pending,
 #job-table tr.pending {
-  background-color: #bbe;
+  background-color: var(--status-color-pending);
 }
 #job-summary td.in_progress,
 #job-table tr.in_progress {
-  background-color: #eeb;
+  background-color: var(--status-color-in-progress);
 }
 #job-table tr.success {
-  background-color: #beb;
+  background-color: var(--status-color-done);
 }
 #job-table tr.failure {
-  background-color: #ebb;
+  background-color: var(--status-color-failure);
 }
 #job-summary td.completed {
-  background-color: #beb;
+  background-color: var(--status-color-done);
 }
 
 #job-table td.source,

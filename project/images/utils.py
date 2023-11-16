@@ -373,47 +373,6 @@ def generate_points(img, usesourcemethod=True):
         ).save()
 
 
-def source_robot_status(source_id):
-    """
-    checks source with source_id to determine the status of the vision back-end for this source.
-    takes: 
-    source_id (int)
-
-    gives:
-    several data point regarding the status of the vision backend for this source.
-    """
-    status = dict()
-    source = Source.objects.get(id=source_id)
-    status['name'] = source.name
-    status['name_short'] = source.name[:40]
-    status['id'] = source.id
-    status['has_robot'] = source.has_robot()
-    status['nbr_robots'] = source.classifier_set.count()
-    status['nbr_accepted_robots'] = source.get_accepted_robots().count()
-
-    status['nbr_total_images'] = source.image_set.count()
-    status['nbr_images_needs_features'] = source.image_set.without_features().count()
-    status['nbr_unclassified_images'] = source.image_set.unclassified().count()
-    status['nbr_human_annotated_images'] = source.image_set.confirmed().count()
-
-    status['nbr_in_current_model'] = (
-        source.get_current_classifier().nbr_train_images
-        if status['has_robot'] else 0)
-    if source.has_robot():
-        status['nbr_images_until_next_robot'] = status['nbr_in_current_model'] * settings.NEW_CLASSIFIER_TRAIN_TH - status['nbr_human_annotated_images']
-    else:
-        status['nbr_images_until_next_robot'] = settings.TRAINING_MIN_IMAGES - status['nbr_human_annotated_images']
-    status['nbr_images_until_next_robot'] = int(math.ceil(status['nbr_images_until_next_robot']))
-
-    status['need_robot'], _ = source.need_new_robot()
-    status['need_features'] = status['nbr_images_needs_features'] > 0
-    status['need_classification'] = status['has_robot'] and status['nbr_unclassified_images'] > 0
-
-    status['need_attention'] = source.enable_robot_classifier and (status['need_robot'] or status['need_features'] or status['need_classification'])
-
-    return status
-
-
 def filter_out_test_sources(source_queryset):
     for possible_test_substring in settings.LIKELY_TEST_SOURCE_NAMES:
         source_queryset = source_queryset.exclude(name__icontains=possible_test_substring)
