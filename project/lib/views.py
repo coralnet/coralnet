@@ -5,10 +5,10 @@ from django.shortcuts import render, get_object_or_404
 from django.template import loader, TemplateDoesNotExist
 from django.urls import reverse
 
-from annotations.utils import get_sitewide_annotation_count
+from annotations.utils import cacheable_annotation_count
 from images.models import Image, Source
 from images.utils import get_carousel_images
-from map.utils import get_map_sources
+from map.utils import cacheable_map_sources
 
 
 def index(request):
@@ -18,13 +18,13 @@ def index(request):
     if request.user.is_authenticated:
         return HttpResponseRedirect(reverse('source_list'))
 
-    map_sources = get_map_sources()
+    map_sources = cacheable_map_sources.get()
     carousel_images = get_carousel_images()
 
     # Gather some stats
     total_sources = Source.objects.all().count()
     total_images = Image.objects.all().count()
-    total_annotations = get_sitewide_annotation_count()
+    total_annotations = cacheable_annotation_count.get()
 
     return render(request, 'lib/index.html', {
         'map_sources': map_sources,

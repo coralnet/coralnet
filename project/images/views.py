@@ -19,7 +19,7 @@ from annotations.model_utils import (
 )
 from annotations.models import Annotation
 from annotations.utils import (
-    get_sitewide_annotation_count,
+    cacheable_annotation_count,
     image_annotation_area_is_editable,
     image_has_any_confirmed_annotations,
 )
@@ -32,7 +32,7 @@ from lib.decorators import (
     source_permission_required,
     source_visibility_required,
 )
-from map.utils import get_map_sources
+from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
 from vision_backend.models import Classifier
 from vision_backend.utils import reset_features
@@ -69,11 +69,11 @@ def source_list(request):
     # Gather some stats
     total_sources = Source.objects.all().count()
     total_images = Image.objects.all().count()
-    total_annotations = get_sitewide_annotation_count()
+    total_annotations = cacheable_annotation_count.get()
 
     return render(request, 'images/source_list.html', {
         'your_sources': your_sources_dicts,
-        'map_sources': get_map_sources(),
+        'map_sources': cacheable_map_sources.get(),
         'other_public_sources': other_public_sources,
         'total_sources': total_sources,
         'total_images': total_images,
