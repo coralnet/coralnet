@@ -76,7 +76,7 @@ def backend_overview(request):
             status_order = 2
         elif (
             "all caught up" in check_message
-            or "Not enough annotated" in check_message
+            or "Can't train first classifier" in check_message
         ):
             status = 'caught_up'
             status_order = 3
