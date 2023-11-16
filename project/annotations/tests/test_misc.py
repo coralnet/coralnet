@@ -6,11 +6,10 @@ from django.urls import reverse
 
 from images.model_utils import PointGen
 from jobs.models import Job
-from jobs.utils import queue_job
+from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..model_utils import AnnotationAreaUtils
-from ..tasks import update_sitewide_annotation_count_task
-from ..utils import get_sitewide_annotation_count
+from ..utils import cacheable_annotation_count
 
 
 class PermissionTest(BasePermissionTest):
@@ -49,32 +48,31 @@ class SitewideAnnotationCountTest(ClientTest):
         # Note that this may or may not queue a new job instance; perhaps
         # the periodic job was already queued at the end of the previous
         # job's run.
-        queue_job('update_sitewide_annotation_count')
-        update_sitewide_annotation_count_task()
+        do_job('update_sitewide_annotation_count')
         job = Job.objects.filter(
             job_name='update_sitewide_annotation_count',
             status=Job.Status.SUCCESS).latest('pk')
         return job.result_message
 
     def test_set_on_demand(self):
-        self.assertEqual(get_sitewide_annotation_count(), 3)
+        self.assertEqual(cacheable_annotation_count.get(), 3)
 
     def test_set_in_advance(self):
         self.assertEqual(self.run_and_get_result(), "Updated count to 3")
-        self.assertEqual(get_sitewide_annotation_count(), 3)
+        self.assertEqual(cacheable_annotation_count.get(), 3)
 
     def test_set_then_update(self):
         self.assertEqual(self.run_and_get_result(), "Updated count to 3")
-        self.assertEqual(get_sitewide_annotation_count(), 3)
+        self.assertEqual(cacheable_annotation_count.get(), 3)
         self.add_annotations(self.user, self.img, {4: 'B'})
         self.assertEqual(self.run_and_get_result(), "Updated count to 4")
-        self.assertEqual(get_sitewide_annotation_count(), 4)
+        self.assertEqual(cacheable_annotation_count.get(), 4)
 
     def test_caching(self):
         self.run_and_get_result()
-        self.assertEqual(get_sitewide_annotation_count(), 3)
+        self.assertEqual(cacheable_annotation_count.get(), 3)
         self.add_annotations(self.user, self.img, {4: 'B'})
-        self.assertEqual(get_sitewide_annotation_count(), 3)
+        self.assertEqual(cacheable_annotation_count.get(), 3)
 
 
 class AnnotationAreaEditTest(ClientTest):

@@ -3,9 +3,56 @@
 import datetime
 import random
 import string
+from typing import Any, Callable
 import urllib.parse
 
+from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
+
+
+class CacheableValue:
+    """
+    A value that's managed with the Django cache.
+    Recommended to use this class for values that take a while to compute,
+    especially if they're needed on commonly-visited pages.
+    """
+    def __init__(
+        self,
+        # The value's key to index into the Django cache.
+        cache_key: str,
+        # Interval (in seconds) defining how often the value should be
+        # updated through a periodic job.
+        # This is just a bookkeeping field; this class does not actually
+        # set up the periodic job. That must be done separately in a
+        # tasks.py file (where it can be found by job auto-discovery).
+        cache_update_interval: int,
+        # In case the periodic job is having trouble completing on time,
+        # this interval (in seconds) determines when we'll force an update
+        # of the value on-demand.
+        cache_timeout_interval: int,
+        # Function that recomputes the value.
+        # Should take no args and return the value.
+        compute_function: Callable[[], Any],
+    ):
+        self.cache_key = cache_key
+        self.cache_update_interval = datetime.timedelta(
+            seconds=cache_update_interval)
+        self.cache_timeout_interval = cache_timeout_interval
+        self.compute_function = compute_function
+
+    def update(self):
+        value = self.compute_function()
+        cache.set(
+            key=self.cache_key, value=value,
+            timeout=self.cache_timeout_interval,
+        )
+        return value
+
+    def get(self):
+        value = cache.get(self.cache_key)
+        if value is None:
+            value = self.update()
+        return value
 
 
 def filesize_display(num_bytes):

@@ -19,7 +19,7 @@ from annotations.model_utils import (
 )
 from annotations.models import Annotation
 from annotations.utils import (
-    get_sitewide_annotation_count,
+    cacheable_annotation_count,
     image_annotation_area_is_editable,
     image_has_any_confirmed_annotations,
 )
@@ -69,7 +69,7 @@ def source_list(request):
     # Gather some stats
     total_sources = Source.objects.all().count()
     total_images = Image.objects.all().count()
-    total_annotations = get_sitewide_annotation_count()
+    total_annotations = cacheable_annotation_count.get()
 
     return render(request, 'images/source_list.html', {
         'your_sources': your_sources_dicts,

@@ -2,12 +2,11 @@ import datetime
 import operator
 
 from django.contrib.auth.models import User
-from django.core.cache import cache
 from django.utils import timezone
 from accounts.utils import is_robot_user, get_alleviate_user
-from .models import Annotation
 from images.model_utils import PointGen
-from images.models import Point
+from lib.utils import CacheableValue
+from .models import Annotation
 
 
 def image_has_any_confirmed_annotations(image):
@@ -140,25 +139,17 @@ def apply_alleviate(img, label_scores_all_points):
         img.annoinfo.refresh_from_db()
 
 
-def update_sitewide_annotation_count():
+def compute_sitewide_annotation_count():
     """
-    Cache the count of total annotations on the entire site. As of
+    Count of total annotations on the entire site. As of
     2018.08.15, this may take about 35 seconds to run in production.
-
-    This should be run periodically. If it doesn't get run for some reason,
-    the value will last 30 days before being evicted from the cache, at which
-    point this will be run on-demand.
     """
-    cache_key = 'sitewide_annotation_count'
-    thirty_days = 60*60*24*30
-    count = Annotation.objects.all().count()
-    cache.set(key=cache_key, value=count, timeout=thirty_days)
-    return count
+    return Annotation.objects.all().count()
 
 
-def get_sitewide_annotation_count():
-    cache_key = 'sitewide_annotation_count'
-    count = cache.get(cache_key)
-    if count is None:
-        count = update_sitewide_annotation_count()
-    return count
+cacheable_annotation_count = CacheableValue(
+    cache_key='sitewide_annotation_count',
+    cache_update_interval=60*60*24*1,
+    cache_timeout_interval=60*60*24*30,
+    compute_function=compute_sitewide_annotation_count,
+)
