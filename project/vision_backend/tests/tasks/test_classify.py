@@ -12,7 +12,8 @@ from events.models import ClassifyImageEvent
 from images.models import Point
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import queue_and_run_job, queue_job, JobUtilsMixin
+from jobs.tests.utils import (
+    do_job, JobUtilsMixin, queue_and_run_job, queue_job)
 from ...models import Score
 from ...utils import clear_features
 from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
@@ -66,6 +67,59 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         self.source_check_and_assert_message(
             "Queued 1 image classification(s)",
             assert_msg="Should not re-queue the original 2 classifications",
+        )
+
+    def check_is_pending(self):
+        return Job.objects.filter(
+            job_name='check_source',
+            arg_identifier=self.source.pk,
+            status=Job.Status.PENDING,
+        ).exists()
+
+    def test_queue_check_after_last_classification(self):
+        """
+        After the current classifier seems to have gone over all
+        classifiable images, another source-check should be queued
+        to confirm whether the source is all caught up. That's useful
+        to know when looking at job/backend dashboards.
+        """
+        image_1 = self.upload_image_for_classification()
+        image_2 = self.upload_image_for_classification()
+        self.source_check_and_assert_message(
+            "Queued 2 image classification(s)")
+
+        do_job('classify_features', image_1.pk, source_id=self.source.pk)
+        self.assertFalse(
+            self.check_is_pending(),
+            msg="Should not queue a check after classifying just 1 image",
+        )
+        do_job('classify_features', image_2.pk, source_id=self.source.pk)
+        self.assertTrue(
+            self.check_is_pending(),
+            msg="Should queue a check after classifying both images",
+        )
+
+        # Accept another classifier.
+        with override_settings(
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
+        ):
+            self.upload_data_and_train_classifier(new_train_images_count=0)
+
+        # Ensure there's no pending source check.
+        do_job('check_source', self.source.pk, source_id=self.source.pk)
+
+        do_job('classify_features', image_1.pk, source_id=self.source.pk)
+        self.assertFalse(
+            self.check_is_pending(),
+            msg="Should not queue a check after classifying just 1 image,"
+                " even if the other image was handled by the previous"
+                " classifier",
+        )
+        do_job('classify_features', image_2.pk, source_id=self.source.pk)
+        self.assertTrue(
+            self.check_is_pending(),
+            msg="Should queue a check after classifying both images",
         )
 
     def test_various_image_cases_new_classifier_on_events_and_annotations(self):
