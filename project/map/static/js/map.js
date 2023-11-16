@@ -79,7 +79,11 @@ class SourcesMap {
 
         // Place markers.
 
-        let markers = L.markerClusterGroup();
+        let markers = L.markerClusterGroup({
+            // Decreasing will make more, smaller clusters.
+            // Default 80 (pixels).
+            maxClusterRadius: 40,
+        });
         this.popup = L.popup({
             maxWidth: 550,
         });
