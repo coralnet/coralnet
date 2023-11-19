@@ -6,6 +6,10 @@ For general instructions on how to update a development environment of CoralNet,
 For info about the semantic versioning used here, see `docs/versions.rst`.
 
 
+## 1.7.1 (WIP)
+
+- New migration to run for `jobs`. If `api_core` 0004 runs into issues, try running the new `jobs` 0011 migration first.
+
 ## [1.7](https://github.com/coralnet/coralnet/tree/1.7)
 
 - The new `EXTRACTORS_BUCKET` setting is now required when using a non-dummy feature extractor.
