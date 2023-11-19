@@ -1,5 +1,6 @@
 # Lib tests and non-app-specific tests.
 import datetime
+from email.utils import parseaddr
 from unittest import skip, skipIf
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
@@ -7,6 +8,7 @@ import urllib.request
 
 from django.conf import settings
 from django.core.files.storage import DefaultStorage
+from django.core.mail import mail_admins
 from django import forms
 from django.shortcuts import resolve_url
 from django.urls import reverse
@@ -15,7 +17,12 @@ from django.test.utils import override_settings
 
 from ..forms import get_one_form_error, get_one_formset_error
 from .utils import (
-    BasePermissionTest, BaseTest, ClientTest, sample_image_as_file)
+    BasePermissionTest,
+    BaseTest,
+    ClientTest,
+    EmailAssertionsMixin,
+    sample_image_as_file,
+)
 
 
 class PermissionTest(BasePermissionTest):
@@ -432,3 +439,32 @@ class TestSettingsDecoratorTest(BaseTest):
         # Method decorator should take precedence over class decorator.
         self.assertEqual(
             settings.IMPORTED_USERNAME, 'method_over_class_override')
+
+
+class AdminsSettingTest(BaseTest, EmailAssertionsMixin):
+    """
+    Demonstrate the way settings.py sets the ADMINS setting.
+    """
+    def test(self):
+        admins_setting = \
+            'Alice <alice@example.org>,Jane Doe <jdoe@example.com>'
+        admins = [
+            parseaddr(addr.strip())
+            for addr in admins_setting.split(',')
+        ]
+
+        self.assertListEqual(
+            admins,
+            [
+                ('Alice', 'alice@example.org'),
+                ('Jane Doe', 'jdoe@example.com'),
+            ],
+        )
+
+        with override_settings(ADMINS=admins):
+            mail_admins("Test subject", "Test body")
+        self.assert_latest_email(
+            "Test subject",
+            ["Test body"],
+            to=['alice@example.org', 'jdoe@example.com'],
+        )

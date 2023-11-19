@@ -9,6 +9,7 @@ from spacer.exceptions import SpacerInputError
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import JobUtilsMixin, queue_and_run_job, run_pending_job
+from lib.tests.utils import EmailAssertionsMixin
 from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
 
 
@@ -141,7 +142,9 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
             f" Not enough annotated images for initial training")
 
 
-class AbortCasesTest(BaseTaskTest, ErrorReportTestMixin, JobUtilsMixin):
+class AbortCasesTest(
+    BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin, JobUtilsMixin,
+):
     """
     Test cases where the task or collection would abort before reaching the
     end.
@@ -230,7 +233,7 @@ class AbortCasesTest(BaseTaskTest, ErrorReportTestMixin, JobUtilsMixin):
             "ValueError",
             "A spacer error",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Spacer job failed: extract_features",
             ["ValueError: A spacer error"],
         )

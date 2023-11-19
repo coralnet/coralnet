@@ -12,6 +12,7 @@ from images.model_utils import PointGen
 from jobs.tasks import run_scheduled_jobs_until_empty
 from jobs.tests.utils import (
     JobUtilsMixin, queue_and_run_job, run_pending_job)
+from lib.tests.utils import EmailAssertionsMixin
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
@@ -225,7 +226,9 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         self.assertEqual(latest_classifier.status, Classifier.ACCEPTED)
 
 
-class AbortCasesTest(BaseTaskTest, ErrorReportTestMixin, JobUtilsMixin):
+class AbortCasesTest(
+    BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin, JobUtilsMixin,
+):
     """
     Test cases where the task or collection would abort before reaching the
     end.
@@ -368,7 +371,7 @@ class AbortCasesTest(BaseTaskTest, ErrorReportTestMixin, JobUtilsMixin):
             "ValueError",
             "A spacer error",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Spacer job failed: train_classifier",
             ["ValueError: A spacer error"],
         )

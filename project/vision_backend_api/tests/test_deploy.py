@@ -16,6 +16,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import JobUtilsMixin
 from jobs.utils import queue_job
+from lib.tests.utils import EmailAssertionsMixin
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import queue_and_run_collect_spacer_jobs
 from .utils import DeployBaseTest
@@ -599,7 +600,9 @@ class SuccessTest(DeployBaseTest):
             "Classifications JSON besides scores should be as expected")
 
 
-class TaskErrorsTest(DeployBaseTest, ErrorReportTestMixin, JobUtilsMixin):
+class TaskErrorsTest(
+    DeployBaseTest, EmailAssertionsMixin, ErrorReportTestMixin, JobUtilsMixin,
+):
     """
     Test error cases of the deploy task.
     """
@@ -686,7 +689,7 @@ class TaskErrorsTest(DeployBaseTest, ErrorReportTestMixin, JobUtilsMixin):
             "ValueError",
             "A spacer error",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Spacer job failed: classify_image",
             ["ValueError: A spacer error"],
         )

@@ -26,7 +26,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.conf import settings
 from django.test import (
-    override_settings, skipIfDBFeature, SimpleTestCase, tag, TestCase)
+    override_settings, skipIfDBFeature, tag, TestCase)
 from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.urls import reverse
@@ -1061,6 +1061,69 @@ class HtmlAssertionsMixin:
 
         self._assert_row_values(
             row, expected_values, column_names, row_number)
+
+
+class EmailAssertionsMixin(TestCase):
+
+    def assert_no_email(self):
+        """
+        It's trickier to implement a 'assert no email sent with these details'
+        assertion method.
+        Instead we'll have this less general but simpler one: no email sent
+        at all. This is still useful for many tests.
+        """
+        self.assertEqual(
+            len(mail.outbox), 0, "Should have not sent an email")
+
+    def assert_latest_email(
+        self,
+        subject: str = None,
+        body_contents: list[str] = None,
+        to: list[str] = None,
+        cc: list[str] = None,
+        bcc: list[str] = None,
+    ):
+        """
+        Assert that the latest sent email has the given details. Specify as
+        many or as few of the supported kwargs as you like.
+        """
+        self.assertGreaterEqual(
+            len(mail.outbox), 1, "Should have at least one email")
+
+        # Get the latest email.
+        email = mail.outbox[-1]
+
+        if subject:
+            self.assertEqual(
+                f"[CoralNet] {subject}",
+                email.subject,
+                "Email should have the expected subject")
+
+        body_contents = body_contents or []
+        # Assert that each element of body_contents is present in the body.
+        for body_content in body_contents:
+            self.assertIn(
+                body_content,
+                email.body,
+                "Email body should have the expected content")
+
+        if to is not None:
+            self.assertSetEqual(
+                set(to), set(email.to),
+                "Contents of 'to' field should be as expected",
+            )
+
+        if cc is not None:
+            self.assertSetEqual(
+                set(cc), set(email.cc),
+                "Contents of 'cc' field should be as expected",
+            )
+
+        if bcc is not None:
+            self.assertSetEqual(
+                set(bcc), set(email.bcc),
+                "Contents of 'bcc' field should be as expected",
+            )
 
 
 class ManagementCommandTest(ClientTest):

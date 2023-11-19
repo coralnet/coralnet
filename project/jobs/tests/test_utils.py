@@ -7,7 +7,7 @@ from django.test.testcases import TransactionTestCase
 from django.utils import timezone
 
 from errorlogs.tests.utils import ErrorReportTestMixin
-from lib.tests.utils import BaseTest
+from lib.tests.utils import BaseTest, EmailAssertionsMixin
 from ..exceptions import JobError
 from ..models import Job
 from ..utils import (
@@ -15,7 +15,7 @@ from ..utils import (
     job_starter, queue_job, start_pending_job)
 
 
-class QueueJobTest(BaseTest, ErrorReportTestMixin):
+class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
     def test_queue_job_when_already_pending(self):
         queue_job('name', 'arg')
@@ -117,7 +117,7 @@ class QueueJobTest(BaseTest, ErrorReportTestMixin):
 
         # Queue the same job again
         job = queue_job('name', 'arg')
-        self.assert_error_email(
+        self.assert_latest_email(
             "Job has been failing repeatedly: name / arg, attempt 5",
             ["Error info:\n\nAn error"],
         )
@@ -131,7 +131,7 @@ class QueueJobTest(BaseTest, ErrorReportTestMixin):
         # And again
         finish_job(job, success=False, result_message="An error")
         queue_job('name', 'arg')
-        self.assert_error_email(
+        self.assert_latest_email(
             "Job has been failing repeatedly: name / arg, attempt 6",
             ["Error info:\n\nAn error"],
         )
@@ -146,7 +146,7 @@ class QueueJobTest(BaseTest, ErrorReportTestMixin):
 
         # Queue the same job again
         job = queue_job('name', 'arg', delay=timedelta(days=5))
-        self.assert_error_email(
+        self.assert_latest_email(
             "Job has been failing repeatedly: name / arg, attempt 5",
             ["Error info:\n\nAn error"],
         )
@@ -259,7 +259,7 @@ def job_starter_example(arg1, job_id):
         raise ValueError(f"A ValueError (ID: {job_id})")
 
 
-class JobDecoratorTest(BaseTest, ErrorReportTestMixin):
+class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
 
     def test_full_completion(self):
         full_job_example('some_arg')
@@ -290,7 +290,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin):
             "ValueError",
             "A ValueError",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Error in task: full_job_example",
             ["ValueError: A ValueError"],
         )
@@ -330,7 +330,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin):
             "ValueError",
             "A ValueError",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Error in task: job_runner_example",
             ["ValueError: A ValueError"],
         )
@@ -371,7 +371,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin):
             "ValueError",
             f"A ValueError (ID: {job.pk})",
         )
-        self.assert_error_email(
+        self.assert_latest_email(
             "Error in task: job_starter_example",
             [f"ValueError: A ValueError (ID: {job.pk})"],
         )
