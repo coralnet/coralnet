@@ -16,9 +16,9 @@ Versions take on the form A.B.C, where:
 
   In general, this could be advanced once per pull request which involves such steps for updating, but there may be exceptions. For example, one minor version for back-to-back related PRs, or multiple minor versions for a single PR with a tricky installation (like `PR #387 <https://github.com/coralnet/coralnet/pull/387>`__).
 
-- C is the **patch version**. This indicates any update that doesn't meet the criteria for A or B, but is still worth marking as a version for one reason or another. For example, a security update which should be pushed to production quickly.
+- C is the **patch version**. A new patch version indicates one of two things: 1) any update that doesn't meet the criteria for A or B, but is still worth marking as a version for one reason or another; or 2) a hotfix for a major/minor version that was just released in a broken state.
 
-  Patch versions can be used as often or as scarcely as we see fit; we may frequently have smaller PRs which don't have any version bump at all.
+  Patch versions can be used as often or as scarcely as we see fit; we may frequently have smaller PRs which don't have any version bump at all, particularly if we're not in a rush to get the changes into production.
 
 Note that the versioning system for pluggable apps tends to be different; in particular, the criteria for B are often considered worthy of a major version. But the system above feels better optimized for CoralNet; this is an end-user app, not a pluggable one.
 

@@ -31,7 +31,7 @@ class Job(models.Model):
         max_length=20, choices=Status.choices, default=Status.PENDING)
 
     # Error message or comment about the job's result.
-    result_message = models.CharField(max_length=500, blank=True)
+    result_message = models.CharField(max_length=5000, blank=True)
 
     # If this is a retry of a failed Job, then we set this to be the previous
     # Job's attempt number + 1. This allows better tracking and debugging of
