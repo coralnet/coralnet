@@ -1,5 +1,5 @@
 from collections.abc import MutableMapping
-from email.utils import getaddresses
+from email.utils import parseaddr
 from enum import Enum
 import os
 from pathlib import Path
@@ -165,7 +165,10 @@ USE_I18N = False
 # In the format: Name 1 <email@example.com>,Name 2 <email@example2.com>
 
 if REAL_SERVER:
-    ADMINS = getaddresses(env('ADMINS'))
+    ADMINS = [
+        parseaddr(addr.strip())
+        for addr in env('ADMINS').split(',')
+    ]
 else:
     # Some unit tests need at least one admin specified.
     # The address shouldn't matter since a non-real-server setup shouldn't
