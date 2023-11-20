@@ -30,6 +30,7 @@ from jobs.exceptions import JobError
 from jobs.models import Job
 from jobs.utils import finish_job
 from labels.models import Label, LabelSet
+from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .utils import queue_source_check
 
@@ -74,9 +75,15 @@ def add_annotations(image_id: int,
     for itt, point in enumerate(points):
         if res.valid_rowcol:
             # Retrieve score vector for (row, column) location
-            scores = res[(point.row, point.column)]
+            try:
+                scores = res[(point.row, point.column)]
+            except KeyError:
+                raise RowColumnMismatchError
         else:
-            _, _, scores = res.scores[itt]
+            try:
+                _, _, scores = res.scores[itt]
+            except IndexError:
+                raise RowColumnMismatchError
         label = label_objs[int(np.argmax(scores))]
 
         result = Annotation.objects.update_point_annotation_if_applicable(
@@ -117,13 +124,19 @@ def add_scores(image_id: int,
 
     # Now, go through and create new ones.
     points = Point.objects.filter(image=img).order_by('id')
-    
+
     score_objs = []
     for itt, point in enumerate(points):
         if res.valid_rowcol:
-            scores = res[(point.row, point.column)]
+            try:
+                scores = res[(point.row, point.column)]
+            except KeyError:
+                raise RowColumnMismatchError
         else:
-            _, _, scores = res.scores[itt]
+            try:
+                _, _, scores = res.scores[itt]
+            except IndexError:
+                raise RowColumnMismatchError
         inds = np.argsort(scores)[::-1][:nbr_scores]
         for ind in inds:
             score_objs.append(

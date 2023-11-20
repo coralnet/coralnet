@@ -29,6 +29,7 @@ from jobs.utils import job_runner, job_starter, queue_job
 from labels.models import Label
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
+from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import get_extractor, queue_source_check, reset_features
@@ -454,15 +455,26 @@ def classify_image(image_id):
     if not img.annoinfo.confirmed:
         try:
             th.add_annotations(image_id, res, label_objs, classifier)
-        except IntegrityError:
+        except (IntegrityError, RowColumnMismatchError):
             raise JobError(
-                f"Failed to classify {img} with classifier {classifier.pk}."
-                f" There might have been a race condition when trying"
-                f" to save annotations."
+                f"Failed to save annotations for image {image_id}."
+                f" Maybe there was another change happening at the same time"
+                f" with the image's points/annotations."
             )
 
     # Always add scores
-    th.add_scores(image_id, res, label_objs)
+    try:
+        th.add_scores(image_id, res, label_objs)
+    except (IntegrityError, RowColumnMismatchError):
+        # If we got here, then the annotations saved, so it might seem strange
+        # to finish the job with an error. However, if we got here, then the
+        # points also got regenerated, so the just-saved annotations got
+        # deleted anyway.
+        raise JobError(
+            f"Failed to save scores for image {image_id}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points."
+        )
 
     current_classifier_events = ClassifyImageEvent.objects \
         .filter(classifier_id=classifier.pk, source_id=img.source_id)
