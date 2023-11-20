@@ -22,6 +22,9 @@ from .models import Job
 logger = logging.getLogger(__name__)
 
 
+MANY_FAILURES = 5
+
+
 def queue_job(
         name: str,
         *task_args,
@@ -59,7 +62,10 @@ def queue_job(
     else:
         logger.debug(f"Job [{job}] is already pending or in progress.")
 
-        if job.status == Job.Status.PENDING:
+        if (
+            job.status == Job.Status.PENDING
+            and job.attempt_number <= MANY_FAILURES
+        ):
             # Update the scheduled start date if an earlier date was just
             # requested
             if scheduled_start_date < job.scheduled_start_date:
@@ -81,14 +87,14 @@ def queue_job(
         if last_job.status == Job.Status.FAILURE:
             attempt_number = last_job.attempt_number + 1
 
-            if attempt_number > 5:
+            if attempt_number > MANY_FAILURES:
                 # Notify admins on repeated failure.
                 mail_admins(
                     f"Job has been failing repeatedly: {last_job}",
                     f"Error info:\n\n{last_job.result_message}",
                 )
                 # Make sure it doesn't retry too quickly until the failure
-                # situation's resolved.
+                # situation's manually resolved.
                 three_days_from_now = now + timedelta(days=3)
                 if scheduled_start_date < three_days_from_now:
                     scheduled_start_date = three_days_from_now

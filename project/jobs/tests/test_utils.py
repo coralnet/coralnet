@@ -84,9 +84,9 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             2,
             "Should have queued the second job")
 
-    def test_start_date_update(self):
+    def test_start_date_expedited(self):
         """
-        Test a pending job's scheduled start date getting updated by a
+        Test a pending job's scheduled start date getting expedited by a
         subsequent queue_job() call.
         """
         job = queue_job('name', 'arg', delay=timedelta(hours=1))
@@ -164,7 +164,7 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             finish_job(job, success=False, result_message="An error")
             self.assert_no_email()
 
-        # Queue the same job again
+        # Queue the same job again, with longer delay
         job = queue_job('name', 'arg', delay=timedelta(days=5))
         self.assert_latest_email(
             "Job has been failing repeatedly: name / arg, attempt 5",
@@ -177,6 +177,37 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             msg=(
                 "Latest job should still be 5 days in the future;"
                 " 3 days is just a lower bound"),
+        )
+
+    def test_repeated_failure_no_expediting(self):
+        # 5 fails in a row
+        for _ in range(5):
+            job = queue_job('name', 'arg', delay=timedelta(days=5))
+
+            # Call again with shorter delay
+            queue_job('name', 'arg', delay=timedelta(days=2))
+            job.refresh_from_db()
+            self.assertAlmostEquals(
+                timezone.now() + timedelta(days=2),
+                job.scheduled_start_date,
+                delta=timedelta(minutes=10),
+                msg="Start date should have been expedited",
+            )
+
+            start_pending_job('name', 'arg')
+            finish_job(job, success=False, result_message="An error")
+
+        # Queue the same job again
+        job = queue_job('name', 'arg', delay=timedelta(days=5))
+
+        # Call again with shorter delay
+        queue_job('name', 'arg', delay=timedelta(days=2))
+        job.refresh_from_db()
+        self.assertAlmostEquals(
+            timezone.now() + timedelta(days=5),
+            job.scheduled_start_date,
+            delta=timedelta(minutes=10),
+            msg="Start date shouldn't have been expedited",
         )
 
 
