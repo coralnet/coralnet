@@ -189,12 +189,17 @@ class SpacerResultHandler(ABC):
             # Last line of the traceback should serve as a decent
             # one-line summary. Has the error class and message.
             error_message = error_traceback.splitlines()[-1]
-            # The error message should be like
-            # `somemodule.SomeError: some error info`.
+            # The error message should be either like:
+            # 1) `somemodule.SomeError: some error info`.
             # We extract the error class/info as the part before/after
             # the first colon.
-            error_class, error_info = error_message.split(':', maxsplit=1)
-            error_info = error_info.strip()
+            # 2) `AssertionError`. Just a class, no colon, no detail.
+            if ':' in error_message:
+                error_class, error_info = error_message.split(':', maxsplit=1)
+                error_info = error_info.strip()
+            else:
+                error_class = error_message
+                error_info = ""
 
             if error_class != 'spacer.exceptions.SpacerInputError':
                 # Not a SpacerInputError, so we should treat it like

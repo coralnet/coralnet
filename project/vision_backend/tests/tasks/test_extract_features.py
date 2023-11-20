@@ -238,6 +238,36 @@ class AbortCasesTest(
             ["ValueError: A spacer error"],
         )
 
+    def test_spacer_assertion_error(self):
+        # Upload image.
+        self.upload_image(self.user, self.source)
+        # Check source.
+        run_scheduled_jobs()
+
+        # Submit feature extraction, with a spacer function mocked to
+        # throw an AssertionError with no message. This is a special case
+        # for parsing the error info.
+        def raise_error(*args):
+            assert False
+        with mock.patch('spacer.tasks.extract_features', raise_error):
+            run_scheduled_jobs()
+
+        # Collect feature extraction.
+        queue_and_run_collect_spacer_jobs()
+
+        self.assert_job_result_message(
+            'extract_features',
+            "AssertionError")
+
+        self.assert_error_log_saved(
+            "AssertionError",
+            "",
+        )
+        self.assert_latest_email(
+            "Spacer job failed: extract_features",
+            ["AssertionError"],
+        )
+
     def test_spacer_input_error(self):
         # Upload image.
         self.upload_image(self.user, self.source)
