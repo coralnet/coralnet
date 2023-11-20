@@ -291,7 +291,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             "A ValueError",
         )
         self.assert_latest_email(
-            "Error in task: full_job_example",
+            "Error in job: full_job_example",
             ["ValueError: A ValueError"],
         )
 
@@ -331,7 +331,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             "A ValueError",
         )
         self.assert_latest_email(
-            "Error in task: job_runner_example",
+            "Error in job: job_runner_example",
             ["ValueError: A ValueError"],
         )
 
@@ -372,7 +372,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             f"A ValueError (ID: {job.pk})",
         )
         self.assert_latest_email(
-            "Error in task: job_starter_example",
+            "Error in job: job_starter_example",
             [f"ValueError: A ValueError (ID: {job.pk})"],
         )
 

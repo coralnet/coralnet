@@ -251,15 +251,14 @@ class JobDecorator:
     def run_task_wrapper(self, task_func, task_args):
         raise NotImplementedError
 
-    @staticmethod
-    def report_task_error(task_func):
+    def report_unexpected_error(self):
         # Get the most recent exception's info.
         kind, info, data = sys.exc_info()
 
         # Email admins.
         error_data = '\n'.join(traceback.format_exception(kind, info, data))
         mail_admins(
-            f"Error in task: {task_func.__name__}",
+            f"Error in job: {self.job_name}",
             f"{kind.__name__}: {info}\n\n{error_data}",
         )
 
@@ -269,7 +268,7 @@ class JobDecorator:
         error_log = instantiate_error_log(
             kind=kind.__name__,
             html=error_html,
-            path=f"Task - {task_func.__name__}",
+            path=f"Task - {self.job_name}",
             info=info,
             data=error_data,
         )
@@ -304,9 +303,9 @@ class FullJobDecorator(JobDecorator):
         except JobError as e:
             result_message = str(e)
         except Exception as e:
-            # Non-JobError, likely needs fixing:
-            # report it like a server error.
-            self.report_task_error(task_func)
+            # Non-JobError; a category of error we haven't expected here, and
+            # likely needs fixing. Report it like a server error.
+            self.report_unexpected_error()
             # Include the error class name, since some error types' messages
             # don't have enough context otherwise (e.g. a KeyError's message
             # is just the key that was tried).
@@ -342,7 +341,7 @@ class JobRunnerDecorator(JobDecorator):
         except Exception as e:
             # Non-JobError, likely needs fixing:
             # report it like a server error.
-            self.report_task_error(task_func)
+            self.report_unexpected_error()
             result_message = f'{type(e).__name__}: {e}'
         finally:
             # Regardless of error or not, mark job as done
@@ -374,7 +373,7 @@ class JobStarterDecorator(JobDecorator):
         except Exception as e:
             # Non-JobError, likely needs fixing:
             # job is considered done, and report it like a server error
-            self.report_task_error(task_func)
+            self.report_unexpected_error()
             result_message = f'{type(e).__name__}: {e}'
             finish_job(job, success=False, result_message=result_message)
 
