@@ -2,6 +2,7 @@ import re
 from unittest import mock
 
 from django.core.cache import cache
+from django.db.utils import IntegrityError
 from django.test import override_settings
 import numpy as np
 
@@ -14,6 +15,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import (
     do_job, JobUtilsMixin, queue_and_run_job, queue_job)
+from ...exceptions import RowColumnMismatchError
 from ...models import Score
 from ...utils import clear_features
 from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
@@ -736,10 +738,6 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
             annotation for point 1, then raise an IntegrityError for point 2.
             This should make the view return an appropriate
             error message, and should make point 1 get rolled back.
-
-            And this should only happen ONCE. Due to auto-retries and
-            HUEY['immediate'], if we always raised the error,
-            we'd infinite-loop.
             """
             # This is a simple saving case (for brevity) which works for this
             # particular test.
@@ -757,16 +755,13 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
                     # The point order, which the test depends on, isn't as
                     # expected. Raise a non-IntegrityError to fail the test.
                     raise UnexpectedPointOrderError
-                if not cache.get('raised_integrity_error'):
-                    cache.set('raised_integrity_error', True)
-                    # Save another Annotation for this Point, simulating a
-                    # race condition of some kind.
-                    # Should get an IntegrityError.
-                    new_annotation.pk = None
-                    new_annotation.save()
+                # Save another Annotation for this Point, simulating a
+                # race condition of some kind.
+                # Should get an IntegrityError.
+                new_annotation.pk = None
+                new_annotation.save()
 
         self.upload_data_and_train_classifier()
-        classifier = self.source.get_current_classifier()
 
         img = self.upload_image_and_queue_classification()
 
@@ -776,13 +771,13 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
             '.update_point_annotation_if_applicable',
             mock_update_annotation
         ):
-            run_scheduled_jobs_until_empty()
+            do_job('classify_features', img.pk)
 
         classify_job = Job.objects.get(job_name='classify_features')
         self.assertEqual(
-            f"Failed to classify {img} with classifier {classifier.pk}."
-            f" There might have been a race condition when trying"
-            f" to save annotations.",
+            f"Failed to save annotations for image {img.pk}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points/annotations.",
             classify_job.result_message,
             "Job should have the expected error")
 
@@ -792,3 +787,79 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
             img.annotation_set.count(), 0,
             "Point 1's annotation should have been rolled back"
         )
+
+    def test_row_col_mismatch_when_saving_annotations(self):
+
+        def mock_add_annotations(*args, **kwargs):
+            raise RowColumnMismatchError
+
+        self.upload_data_and_train_classifier()
+
+        img = self.upload_image_and_queue_classification()
+
+        # Try to classify
+        with mock.patch(
+            'vision_backend.task_helpers.add_annotations',
+            mock_add_annotations
+        ):
+            do_job('classify_features', img.pk)
+
+        classify_job = Job.objects.get(job_name='classify_features')
+        self.assertEqual(
+            f"Failed to save annotations for image {img.pk}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points/annotations.",
+            classify_job.result_message,
+            "Job should have the expected error")
+
+    def test_integrity_error_when_saving_scores(self):
+
+        def mock_add_scores(*args, **kwargs):
+            """
+            We're lazier than the save-annotations test here: just directly
+            raise an IntegrityError.
+            """
+            raise IntegrityError
+
+        self.upload_data_and_train_classifier()
+
+        img = self.upload_image_and_queue_classification()
+
+        # Try to classify
+        with mock.patch(
+            'vision_backend.task_helpers.add_scores',
+            mock_add_scores
+        ):
+            do_job('classify_features', img.pk)
+
+        classify_job = Job.objects.get(job_name='classify_features')
+        self.assertEqual(
+            f"Failed to save scores for image {img.pk}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points.",
+            classify_job.result_message,
+            "Job should have the expected error")
+
+    def test_row_col_mismatch_when_saving_scores(self):
+
+        def mock_add_scores(*args, **kwargs):
+            raise RowColumnMismatchError
+
+        self.upload_data_and_train_classifier()
+
+        img = self.upload_image_and_queue_classification()
+
+        # Try to classify
+        with mock.patch(
+            'vision_backend.task_helpers.add_scores',
+            mock_add_scores
+        ):
+            do_job('classify_features', img.pk)
+
+        classify_job = Job.objects.get(job_name='classify_features')
+        self.assertEqual(
+            f"Failed to save scores for image {img.pk}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points.",
+            classify_job.result_message,
+            "Job should have the expected error")

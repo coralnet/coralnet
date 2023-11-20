@@ -55,6 +55,26 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             1,
             "Should not have queued the second job")
 
+    def test_queue_job_when_multiple_pending(self):
+        # queue_job() normally prevents dupes unless there's a race
+        # condition. To keep this test simple, we'll create Jobs with the
+        # ORM instead.
+        job = Job(job_name='name', arg_identifier='arg')
+        job.save()
+        job_2 = Job(job_name='name', arg_identifier='arg')
+        job_2.save()
+
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
+            queue_job('name', 'arg')
+
+        log_message = (
+            "DEBUG:jobs.utils:"
+            "Job [name / arg] is already pending or in progress."
+        )
+        self.assertIn(
+            log_message, cm.output,
+            "Should log the appropriate message (and not crash)")
+
     def test_queue_job_when_previously_done(self):
         queue_job('name', 'arg', initial_status=Job.Status.SUCCESS)
         queue_job('name', 'arg')
@@ -64,9 +84,9 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             2,
             "Should have queued the second job")
 
-    def test_start_date_update(self):
+    def test_start_date_expedited(self):
         """
-        Test a pending job's scheduled start date getting updated by a
+        Test a pending job's scheduled start date getting expedited by a
         subsequent queue_job() call.
         """
         job = queue_job('name', 'arg', delay=timedelta(hours=1))
@@ -144,7 +164,7 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             finish_job(job, success=False, result_message="An error")
             self.assert_no_email()
 
-        # Queue the same job again
+        # Queue the same job again, with longer delay
         job = queue_job('name', 'arg', delay=timedelta(days=5))
         self.assert_latest_email(
             "Job has been failing repeatedly: name / arg, attempt 5",
@@ -157,6 +177,37 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             msg=(
                 "Latest job should still be 5 days in the future;"
                 " 3 days is just a lower bound"),
+        )
+
+    def test_repeated_failure_no_expediting(self):
+        # 5 fails in a row
+        for _ in range(5):
+            job = queue_job('name', 'arg', delay=timedelta(days=5))
+
+            # Call again with shorter delay
+            queue_job('name', 'arg', delay=timedelta(days=2))
+            job.refresh_from_db()
+            self.assertAlmostEquals(
+                timezone.now() + timedelta(days=2),
+                job.scheduled_start_date,
+                delta=timedelta(minutes=10),
+                msg="Start date should have been expedited",
+            )
+
+            start_pending_job('name', 'arg')
+            finish_job(job, success=False, result_message="An error")
+
+        # Queue the same job again
+        job = queue_job('name', 'arg', delay=timedelta(days=5))
+
+        # Call again with shorter delay
+        queue_job('name', 'arg', delay=timedelta(days=2))
+        job.refresh_from_db()
+        self.assertAlmostEquals(
+            timezone.now() + timedelta(days=5),
+            job.scheduled_start_date,
+            delta=timedelta(minutes=10),
+            msg="Start date shouldn't have been expedited",
         )
 
 
@@ -291,7 +342,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             "A ValueError",
         )
         self.assert_latest_email(
-            "Error in task: full_job_example",
+            "Error in job: full_job_example",
             ["ValueError: A ValueError"],
         )
 
@@ -331,7 +382,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             "A ValueError",
         )
         self.assert_latest_email(
-            "Error in task: job_runner_example",
+            "Error in job: job_runner_example",
             ["ValueError: A ValueError"],
         )
 
@@ -372,7 +423,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             f"A ValueError (ID: {job.pk})",
         )
         self.assert_latest_email(
-            "Error in task: job_starter_example",
+            "Error in job: job_starter_example",
             [f"ValueError: A ValueError (ID: {job.pk})"],
         )
 

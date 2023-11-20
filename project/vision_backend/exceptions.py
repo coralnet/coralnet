@@ -1,0 +1,2 @@
+class RowColumnMismatchError(Exception):
+    pass
