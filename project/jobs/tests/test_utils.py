@@ -55,6 +55,26 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             1,
             "Should not have queued the second job")
 
+    def test_queue_job_when_multiple_pending(self):
+        # queue_job() normally prevents dupes unless there's a race
+        # condition. To keep this test simple, we'll create Jobs with the
+        # ORM instead.
+        job = Job(job_name='name', arg_identifier='arg')
+        job.save()
+        job_2 = Job(job_name='name', arg_identifier='arg')
+        job_2.save()
+
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
+            queue_job('name', 'arg')
+
+        log_message = (
+            "DEBUG:jobs.utils:"
+            "Job [name / arg] is already pending or in progress."
+        )
+        self.assertIn(
+            log_message, cm.output,
+            "Should log the appropriate message (and not crash)")
+
     def test_queue_job_when_previously_done(self):
         queue_job('name', 'arg', initial_status=Job.Status.SUCCESS)
         queue_job('name', 'arg')

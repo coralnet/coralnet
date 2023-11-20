@@ -49,7 +49,11 @@ def queue_job(
     # starting a job (as opposed to just queueing it as pending).
     jobs = Job.objects.filter(**job_kwargs)
     try:
-        job = jobs.get(status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS])
+        # There may be multiple such jobs; just get at most one.
+        # We'll leave the task of dupe cleanup to start_pending_job()
+        # (which is more strict on race conditions).
+        job = jobs.filter(status__in=[
+            Job.Status.PENDING, Job.Status.IN_PROGRESS]).earliest('pk')
     except Job.DoesNotExist:
         pass
     else:
@@ -69,7 +73,8 @@ def queue_job(
     # If so, set the attempt count accordingly.
     attempt_number = 1
     try:
-        last_job = jobs.latest('pk')
+        last_job = jobs.filter(
+            status__in=[Job.Status.SUCCESS, Job.Status.FAILURE]).latest('pk')
     except Job.DoesNotExist:
         pass
     else:
