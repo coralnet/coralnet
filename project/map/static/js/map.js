@@ -79,7 +79,25 @@ class SourcesMap {
 
         // Place markers.
 
+        // https://github.com/Leaflet/Leaflet.markercluster#all-options
         let markers = L.markerClusterGroup({
+            // Logic to create a cluster's icon.
+            iconCreateFunction: function (cluster) {
+                let childCount = cluster.getChildCount();
+
+                return new L.DivIcon({
+                    html: `<div><span>${childCount}</span></div>`,
+                    // `medium` here (vs. small or large) determines
+                    // cluster color. We make them all the same color,
+                    // since multiple colors are too distracting alongside
+                    // the green/red markers for sources.
+                    className: 'marker-cluster marker-cluster-medium',
+                    // Customizing the size of 40 gets off-center results.
+                    // Would need to dig deeper if we want to customize this.
+                    iconSize: new L.Point(40, 40),
+                });
+            },
+
             // Decreasing will make more, smaller clusters.
             // Default 80 (pixels).
             maxClusterRadius: 40,
