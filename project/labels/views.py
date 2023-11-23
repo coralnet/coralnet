@@ -426,20 +426,29 @@ def label_example_patches_ajax(request, label_id):
     except ValueError:
         page = 1
 
+    if request.user.is_authenticated:
+        page_size = settings.LABEL_EXAMPLE_PATCHES_PER_PAGE
+    else:
+        page_size = settings.LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST
+
     label_details = cacheable_label_details.get()
 
     if page == 1 and label_details and label_id in label_details:
         # Use the cache
-        patch_annotations = Annotation.objects.filter(
-            pk__in=label_details[label_id]['random_patches_page_1'])
-        is_last_page = \
-            settings.LABEL_EXAMPLE_PATCHES_PER_PAGE >= label.ann_count
+        annotation_ids_full_page = \
+            label_details[label_id]['random_patches_page_1']
+        # The cached annotations fill up a regular sized page,
+        # but if we're requesting as a guest, then we only need
+        # the first few elements of that.
+        annotation_ids = annotation_ids_full_page[:page_size]
+
+        patch_annotations = Annotation.objects.filter(pk__in=annotation_ids)
+        is_last_page = page_size >= label.ann_count
     else:
         all_annotations = Annotation.objects.confirmed() \
             .filter(label=label) \
             .order_by('?')
-        paginator = Paginator(
-            all_annotations, settings.LABEL_EXAMPLE_PATCHES_PER_PAGE)
+        paginator = Paginator(all_annotations, page_size)
 
         try:
             page_annotations = paginator.page(page)

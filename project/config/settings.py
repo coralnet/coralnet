@@ -988,6 +988,7 @@ ALLEVIATE_USERNAME = 'Alleviate'
 
 BROWSE_DEFAULT_THUMBNAILS_PER_PAGE = 20
 LABEL_EXAMPLE_PATCHES_PER_PAGE = 50
+LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST = 5
 
 # Image counts required for sources to: display on the map,
 # display as medium size, and display as large size.

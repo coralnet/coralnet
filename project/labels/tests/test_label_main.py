@@ -68,7 +68,24 @@ class BaseLabelMainTest(ClientTest):
         params = dict()
         if page != 1:
             params['page'] = page
+        self.client.force_login(self.user)
         return self.client.get(url, params).json()
+
+    def get_example_patches_guest(self, page=1):
+        url = reverse(
+            'label_example_patches_ajax',
+            args=[Label.objects.get(name='A').id])
+        params = dict()
+        if page != 1:
+            params['page'] = page
+        self.client.logout()
+        return self.client.get(url, params).json()
+
+    @staticmethod
+    def patch_img_element_count(response):
+        """response should be from label_example_patches_ajax."""
+        patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
+        return len(patches_soup.find_all('img'))
 
 
 class LabelMainTest(BaseLabelMainTest):
@@ -302,7 +319,7 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         response = self.get_example_patches()
 
         # 3 patch images
-        self.assertEqual(response['patchesHtml'].count('<img'), 3)
+        self.assertEqual(self.patch_img_element_count(response), 3)
         # Is the last page of patches
         self.assertEqual(response['isLastPage'], True)
 
@@ -315,12 +332,12 @@ class LabelMainPatchesTest(BaseLabelMainTest):
 
         # Page 1: 5 patch images
         response = self.get_example_patches()
-        self.assertEqual(response['patchesHtml'].count('<img'), 5)
+        self.assertEqual(self.patch_img_element_count(response), 5)
         self.assertEqual(response['isLastPage'], False)
 
         # Page 2: 2 patch images
         response = self.get_example_patches(page=2)
-        self.assertEqual(response['patchesHtml'].count('<img'), 2)
+        self.assertEqual(self.patch_img_element_count(response), 2)
         self.assertEqual(response['isLastPage'], True)
 
     def test_zero_patches(self):
@@ -329,8 +346,25 @@ class LabelMainPatchesTest(BaseLabelMainTest):
 
         response = self.get_example_patches()
 
-        self.assertEqual(response['patchesHtml'].count('<img'), 0)
+        self.assertEqual(self.patch_img_element_count(response), 0)
         self.assertEqual(response['isLastPage'], True)
+
+    @override_settings(
+        LABEL_EXAMPLE_PATCHES_PER_PAGE=5,
+        LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST=3,
+    )
+    def test_guest_page_size(self):
+        annotations = dict(zip(
+            range(1, 10+1),
+            ['A']*10
+        ))
+        self.add_annotations(self.user, self.image, annotations)
+
+        response = self.get_example_patches()
+        self.assertEqual(self.patch_img_element_count(response), 5)
+
+        response = self.get_example_patches_guest()
+        self.assertEqual(self.patch_img_element_count(response), 3)
 
     def test_cache(self):
         """
@@ -364,14 +398,21 @@ class LabelMainPatchesTest(BaseLabelMainTest):
             thumbnail_urls,
             set([img_soup.attrs.get('src') for img_soup in img_soups]))
 
-        # Meanwhile, just do a more basic test on page 2;
-        # no caching expectations, but just want it to still
-        # work when page 1 is cached.
+        # A couple more checks to see that the cache entry's presence
+        # doesn't break other cases.
+
         response = self.get_example_patches(page=2)
-        patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
         self.assertEqual(
-            len(patches_soup.find_all('img')), 5,
+            self.patch_img_element_count(response), 5,
             msg="Page 2 should work")
+
+        with override_settings(
+            LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST=3,
+        ):
+            response = self.get_example_patches_guest()
+            self.assertEqual(
+                self.patch_img_element_count(response), 3,
+                msg="Guest page size should work")
 
     def test_cache_with_deleted_annotations(self):
         annotations = dict(zip(
