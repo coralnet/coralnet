@@ -45,13 +45,7 @@ class SitewideAnnotationCountTest(ClientTest):
 
     @staticmethod
     def run_and_get_result():
-        # Note that this may or may not queue a new job instance; perhaps
-        # the periodic job was already queued at the end of the previous
-        # job's run.
-        do_job('update_sitewide_annotation_count')
-        job = Job.objects.filter(
-            job_name='update_sitewide_annotation_count',
-            status=Job.Status.SUCCESS).latest('pk')
+        job = do_job('update_sitewide_annotation_count')
         return job.result_message
 
     def test_set_on_demand(self):

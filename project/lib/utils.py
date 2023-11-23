@@ -20,6 +20,9 @@ class CacheableValue:
         self,
         # The value's key to index into the Django cache.
         cache_key: str,
+        # Function that recomputes the value.
+        # Should take no args and return the value.
+        compute_function: Callable[[], Any],
         # Interval (in seconds) defining how often the value should be
         # updated through a periodic job.
         # This is just a bookkeeping field; this class does not actually
@@ -30,15 +33,18 @@ class CacheableValue:
         # this interval (in seconds) determines when we'll force an update
         # of the value on-demand.
         cache_timeout_interval: int,
-        # Function that recomputes the value.
-        # Should take no args and return the value.
-        compute_function: Callable[[], Any],
+        # If False, then on a cache miss, get() just returns None instead of
+        # attempting to compute, and it's up to the caller to deal with the
+        # lack of value accordingly. This should be False when on-demand
+        # computing would be unreasonably long for a page that uses the value.
+        on_demand_computation_ok: bool = True,
     ):
         self.cache_key = cache_key
+        self.compute_function = compute_function
         self.cache_update_interval = datetime.timedelta(
             seconds=cache_update_interval)
         self.cache_timeout_interval = cache_timeout_interval
-        self.compute_function = compute_function
+        self.on_demand_computation_ok = on_demand_computation_ok
 
     def update(self):
         value = self.compute_function()
@@ -50,7 +56,7 @@ class CacheableValue:
 
     def get(self):
         value = cache.get(self.cache_key)
-        if value is None:
+        if value is None and self.on_demand_computation_ok:
             value = self.update()
         return value
 

@@ -1,12 +1,8 @@
-from datetime import timedelta
-
 from jobs.utils import job_runner
-from .models import Label
+from .models import cacheable_label_details
 
 
-@job_runner(interval=timedelta(days=7))
-def update_label_popularities():
-    labels = Label.objects.all()
-    for label in labels:
-        label._compute_popularity()
-    return f"Updated popularities for all {labels.count()} label(s)"
+@job_runner(interval=cacheable_label_details.cache_update_interval)
+def update_label_details():
+    label_details = cacheable_label_details.update()
+    return f"Updated details for all {len(label_details)} label(s)"
