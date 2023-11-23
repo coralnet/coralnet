@@ -28,7 +28,7 @@ from .decorators import label_edit_permission_required
 from .forms import (
     LabelForm, LabelSearchForm, LabelSetForm, LocalLabelForm,
     BaseLocalLabelFormSet, labels_csv_process, LabelFormForCurators)
-from .models import Label, LocalLabel, LabelSet
+from .models import cacheable_label_details, Label, LocalLabel, LabelSet
 from .utils import search_labels_by_text, is_label_editable_by_user
 
 
@@ -400,7 +400,6 @@ def label_main(request, label_id):
 
     # Label usage stats
     source_count = all_sources_with_label.count()
-    annotation_count = Annotation.objects.filter(label=label).count()
 
     return render(request, 'labels/label_main.html', {
         'label': label,
@@ -411,7 +410,7 @@ def label_main(request, label_id):
         'other_public_sources': other_public,
         'other_private_sources': other_private,
         'source_count': source_count,
-        'annotation_count': annotation_count,
+        'annotation_count': label.ann_count,
     })
 
 
@@ -422,23 +421,36 @@ def label_example_patches_ajax(request, label_id):
     """
     label = get_object_or_404(Label, id=label_id)
 
-    all_annotations = Annotation.objects.confirmed() \
-        .filter(label=label) \
-        .order_by('?')
-
-    ITEMS_PER_PAGE = 50
     try:
         page = int(request.GET.get('page', '1'))
     except ValueError:
         page = 1
-    paginator = Paginator(all_annotations, ITEMS_PER_PAGE)
-    try:
-        page_annotations = paginator.page(page)
-    except (EmptyPage, InvalidPage):
-        page_annotations = paginator.page(paginator.num_pages)
+
+    label_details = cacheable_label_details.get()
+
+    if page == 1 and label_details and label_id in label_details:
+        # Use the cache
+        patch_annotations = Annotation.objects.filter(
+            pk__in=label_details[label_id]['random_patches_page_1'])
+        is_last_page = \
+            settings.LABEL_EXAMPLE_PATCHES_PER_PAGE >= label.ann_count
+    else:
+        all_annotations = Annotation.objects.confirmed() \
+            .filter(label=label) \
+            .order_by('?')
+        paginator = Paginator(
+            all_annotations, settings.LABEL_EXAMPLE_PATCHES_PER_PAGE)
+
+        try:
+            page_annotations = paginator.page(page)
+        except (EmptyPage, InvalidPage):
+            page_annotations = paginator.page(paginator.num_pages)
+
+        patch_annotations = page_annotations.object_list
+        is_last_page = page >= paginator.num_pages
 
     patches = []
-    for index, annotation in enumerate(page_annotations.object_list):
+    for index, annotation in enumerate(patch_annotations):
         point = annotation.point
         image = point.image
         source = image.source
@@ -460,7 +472,7 @@ def label_example_patches_ajax(request, label_id):
         'patchesHtml': render_to_string('labels/label_example_patches.html', {
             'patches': patches,
         }),
-        'isLastPage': page >= paginator.num_pages,
+        'isLastPage': is_last_page,
     })
 
 

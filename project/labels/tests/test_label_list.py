@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from calcification.tests.utils import create_default_calcify_table
 from images.model_utils import PointGen
+from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import LabelGroup, Label
 
@@ -303,6 +304,7 @@ class LabelSearchOtherFieldsTest(BaseLabelSearchTest):
         img = self.upload_image(self.user, source)
         self.add_annotations(
             self.user, img, {1: 'A', 2: 'A', 3: 'C', 4: 'C'})
+        do_job('update_label_details')
 
         response = self.submit_search()
         self.assertLabels(response, ['A', 'B', 'C', 'D'])
@@ -334,6 +336,7 @@ class LabelSearchOtherFieldsTest(BaseLabelSearchTest):
         img = self.upload_image(self.user, source)
         self.add_annotations(
             self.user, img, {1: 'A', 2: 'A', 3: 'C', 4: 'C'})
+        do_job('update_label_details')
 
         # Only A satisfies all requirements here
         response = self.submit_search(

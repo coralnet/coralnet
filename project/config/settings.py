@@ -827,8 +827,6 @@ CACHES = {
         'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
         'OPTIONS': {
             # This should at least support:
-            # - Label popularities: assume we're always caching 1 entry per
-            #   label, for the label list
             # - Async thumbnail requests: however many might be generated in
             #   the expiration duration
             'MAX_ENTRIES': 10000,
@@ -989,6 +987,7 @@ ROBOT_USERNAME = 'robot'
 ALLEVIATE_USERNAME = 'Alleviate'
 
 BROWSE_DEFAULT_THUMBNAILS_PER_PAGE = 20
+LABEL_EXAMPLE_PATCHES_PER_PAGE = 50
 
 # Image counts required for sources to: display on the map,
 # display as medium size, and display as large size.
