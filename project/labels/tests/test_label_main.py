@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from bs4 import BeautifulSoup
 from django.test import override_settings
 from django.urls import reverse
@@ -9,6 +11,7 @@ from images.models import Source
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, sample_image_as_file)
+from visualization.utils import get_patch_path
 from ..models import LabelGroup, Label
 from ..templatetags.labels import (
     popularity_bar as popularity_bar_tag, status_icon as status_icon_tag)
@@ -369,6 +372,40 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         self.assertEqual(
             len(patches_soup.find_all('img')), 5,
             msg="Page 2 should work")
+
+    def test_cache_with_deleted_annotations(self):
+        annotations = dict(zip(
+            range(1, 5+1),
+            ['A']*5
+        ))
+        self.add_annotations(self.user, self.image, annotations)
+        self.update_cache_and_get_result()
+
+        # Delete 2 of the 5 annotations.
+        self.image.annotation_set \
+            .filter(point__point_number__in=[2, 4]).delete()
+
+        remaining_annotation_point_ids = set(
+            self.image.annotation_set.values_list('point_id', flat=True))
+        expected_thumbnail_filenames = set([
+            Path(get_patch_path(point_id)).name
+            for point_id in remaining_annotation_point_ids])
+
+        response = self.get_example_patches()
+        patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
+        img_soups = patches_soup.find_all('img')
+        actual_thumbnail_filenames = set([
+            Path(img_soup.attrs.get('src')).name
+            for img_soup in img_soups])
+        self.assertEqual(
+            len(actual_thumbnail_filenames), 3,
+            msg="Should show 3 patches")
+        self.assertSetEqual(
+            expected_thumbnail_filenames,
+            actual_thumbnail_filenames,
+            msg="Should show patches for just the annotations"
+                " that still exist",
+        )
 
 
 class LabelMainPatchLinksTest(BaseLabelMainTest):
