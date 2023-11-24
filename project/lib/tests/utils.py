@@ -54,15 +54,10 @@ test_settings = dict()
 test_settings['STATICFILES_STORAGE'] = \
     'django.contrib.staticfiles.storage.StaticFilesStorage'
 
-# Use a local memory cache instead of a filesystem cache, because:
-# - In testing, there's no reason to persist the cache after a particular
-#   test is over. It's also more files we'd have to clean up after testing.
-# - By using the same file-based cache setting as the actual server, we
-#   clutter the actual server's cache folder with test cache files, which
-#   is strange at best (if not actually harmful). Also, there can be file
-#   access annoyances: if production/staging run the server as www-data,
-#   then tests on those instances may also have to run as www-data to
-#   access cache files.
+# For most tests, use a local memory cache instead of a filesystem cache,
+# because there's no reason to persist the cache after a particular test is
+# over. And having to clean up those files after each test is slower +
+# more issue-prone than just using memory.
 #
 # Note that the Django docs have a warning on overriding the CACHES setting.
 # For example, tests that use cached sessions may need some extra care.

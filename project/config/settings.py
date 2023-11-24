@@ -815,22 +815,39 @@ MIDDLEWARE = [
 
 CACHES = {
     'default': {
-        # The default local-memory cache backend is saved per-process, which
-        # doesn't cut it if we have more than one server process, e.g.
+        # File-based cache:
+        # https://grantjenks.com/docs/diskcache/tutorial.html#djangocache
+        #
+        # We don't use Django's stock FileBasedCache because it culls entries
+        # randomly. We want some control over culling priority, like with
+        # expiration dates (see cull_limit comments below).
+        #
+        # We don't use Django's stock local-memory cache because it saves
+        # entries per-process, with no possibility of passing between
         # multiple gunicorn worker processes.
         #
-        # For example, async media loading uses the cache as a kind of
-        # persistent storage between requests. In general, the subsequent
-        # requests may be handled by different worker processes, so per-process
-        # caches won't work; the cache must be shared between processes.
-        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        # Other than that, file-based seems a bit easier to manage/debug than
+        # memory-based, and seems good enough speed-wise for our use case.
+        'BACKEND': 'diskcache.DjangoCache',
         'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
+        # DiskCache: Horizontal partitioning of cache entries. 8 is the
+        # default, but we're setting it explicitly to emphasize that culling
+        # and the cull_limit (see below) only applies within a particular
+        # shard.
+        'SHARDS': 8,
+        # DiskCache: How many seconds to allow to access the DiskCache SQLite
+        # database which lives in LOCATION. Default 0.010.
+        'DATABASE_TIMEOUT': 0.5,
         'OPTIONS': {
-            # This should at least support:
-            # - Async thumbnail requests: however many might be generated in
-            #   the expiration duration
-            'MAX_ENTRIES': 10000,
-        }
+            # DiskCache: Maximum number of expired keys to cull when adding a
+            # new item. 10 is the default, but we're setting it explicitly to
+            # emphasize that this behavior of actively culling expired keys is
+            # important to us.
+            # We'll make one-time-use async media keys expire quickly,
+            # and make performance keys (e.g. label_details) expire
+            # very rarely.
+            'cull_limit': 10,
+        },
     }
 }
 

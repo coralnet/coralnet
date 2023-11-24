@@ -108,6 +108,12 @@ djangorestframework==3.14.0
 # https://github.com/plumdog/django_migration_testcase/
 django-migration-testcase==0.0.15
 
+# We use this as an alternative file-based Django cache backend, to avoid
+# certain issues of the first-party backend (mainly, culling entries
+# randomly).
+# https://github.com/grantjenks/python-diskcache
+diskcache==5.6.3
+
 # Character encoding detection.
 # Which is a hard problem, so we ask 2 different libraries for their opinions.
 # cchardet is a faster version of chardet, but is no longer maintained:
