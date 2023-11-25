@@ -25,27 +25,15 @@ def call_run_scheduled_jobs():
 
 
 @job_runner()
-def test(arg):
+def return_arg_test(arg):
     return str(arg)
-
-
-def test_job_available(job_name):
-    """
-    By patching get_job_run_function() with this, we have a no-op task
-    available called 'test'.
-    """
-    if job_name == 'test':
-        return test
 
 
 class RunScheduledJobsTest(BaseTest):
 
     @staticmethod
     def run_scheduled_jobs_and_get_result():
-        with mock.patch(
-            'jobs.utils.get_job_run_function', test_job_available
-        ):
-            run_scheduled_jobs()
+        run_scheduled_jobs()
 
         job = Job.objects.filter(job_name='run_scheduled_jobs').latest('pk')
         return job.result_message
@@ -55,32 +43,36 @@ class RunScheduledJobsTest(BaseTest):
             self.run_scheduled_jobs_and_get_result(),
             "Ran 0 jobs")
 
-        job_1 = queue_job('test', 1)
-        self.assertEqual(
-            self.run_scheduled_jobs_and_get_result(),
-            f"Ran 1 job(s):\n{job_1.pk}: test / 1")
+        name = 'return_arg_test'
 
-        job_2 = queue_job('test', 2)
-        job_3 = queue_job('test', 3)
-        job_4 = queue_job('test', 4)
+        job_1 = queue_job(name, 1)
         self.assertEqual(
             self.run_scheduled_jobs_and_get_result(),
-            f"Ran 3 job(s):\n{job_2.pk}: test / 2"
-            f"\n{job_3.pk}: test / 3\n{job_4.pk}: test / 4")
+            f"Ran 1 job(s):\n{job_1.pk}: {name} / 1")
 
-        job_5 = queue_job('test', 5)
-        job_6 = queue_job('test', 6)
-        job_7 = queue_job('test', 7)
-        queue_job('test', 8)
+        job_2 = queue_job(name, 2)
+        job_3 = queue_job(name, 3)
+        job_4 = queue_job(name, 4)
         self.assertEqual(
             self.run_scheduled_jobs_and_get_result(),
-            f"Ran 4 jobs, including:\n{job_5.pk}: test / 5"
-            f"\n{job_6.pk}: test / 6\n{job_7.pk}: test / 7")
+            f"Ran 3 job(s):\n{job_2.pk}: {name} / 2"
+            f"\n{job_3.pk}: {name} / 3"
+            f"\n{job_4.pk}: {name} / 4")
+
+        job_5 = queue_job(name, 5)
+        job_6 = queue_job(name, 6)
+        job_7 = queue_job(name, 7)
+        queue_job(name, 8)
+        self.assertEqual(
+            self.run_scheduled_jobs_and_get_result(),
+            f"Ran 4 jobs, including:\n{job_5.pk}: {name} / 5"
+            f"\n{job_6.pk}: {name} / 6"
+            f"\n{job_7.pk}: {name} / 7")
 
     @override_settings(JOB_MAX_MINUTES=-1)
     def test_time_out(self):
         for i in range(12):
-            queue_job('test', i)
+            queue_job('return_arg_test', i)
 
         result_message = self.run_scheduled_jobs_and_get_result()
         self.assertTrue(
@@ -115,6 +107,20 @@ class RunScheduledJobsTest(BaseTest):
         self.assertEqual(
             Job.objects.filter(job_name='run_scheduled_jobs').count(), 1,
             "Should not have accepted the second run")
+
+    def test_unrecognized_job_name(self):
+        job = queue_job('return_arg_test', 1)
+        job_2 = queue_job('test_2', 1)
+
+        result_message = self.run_scheduled_jobs_and_get_result()
+        self.assertRegex(
+            result_message, r"Ran 1 job\(s\):\n\d+: return_arg_test / 1")
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, Job.Status.SUCCESS)
+        job_2.refresh_from_db()
+        self.assertEqual(job_2.status, Job.Status.FAILURE)
+        self.assertEqual(job_2.result_message, "Unrecognized job name")
 
 
 @override_settings(JOB_MAX_DAYS=30)

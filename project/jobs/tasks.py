@@ -6,8 +6,10 @@ from django.core.mail import mail_admins
 from django.utils import timezone
 from huey.contrib.djhuey import HUEY
 
+from .exceptions import UnrecognizedJobNameError
 from .models import Job
 from .utils import (
+    finish_job,
     full_job,
     get_periodic_job_schedules,
     job_runner,
@@ -47,7 +49,12 @@ def run_scheduled_jobs():
     jobs_ran = 0
 
     for job in jobs_to_run:
-        run_job(job)
+        try:
+            run_job(job)
+        except UnrecognizedJobNameError:
+            finish_job(
+                job, success=False, result_message="Unrecognized job name")
+            continue
 
         jobs_ran += 1
         if jobs_ran <= 3:
