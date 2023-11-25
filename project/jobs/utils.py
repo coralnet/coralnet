@@ -16,7 +16,7 @@ from huey import crontab
 from huey.contrib.djhuey import db_periodic_task, db_task
 
 from errorlogs.utils import instantiate_error_log
-from .exceptions import JobError
+from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
 logger = logging.getLogger(__name__)
@@ -172,8 +172,7 @@ def start_pending_job(job_name: str, arg_identifier: str) -> Optional[Job]:
 
 def finish_job(job, success=False, result_message=None):
     """
-    Update Job status from IN_PROGRESS to SUCCESS/FAILURE,
-    and do associated bookkeeping.
+    Update Job status to SUCCESS/FAILURE, and do associated bookkeeping.
     """
     # This field doesn't take None; no message is set as an empty string.
     job.result_message = result_message or ""
@@ -406,6 +405,8 @@ def get_job_run_function(job_name):
         # are not available to the web server threads.
         autodiscover_modules('tasks')
 
+    if job_name not in _job_run_functions:
+        raise UnrecognizedJobNameError
     return _job_run_functions[job_name]
 
 
