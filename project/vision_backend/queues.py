@@ -84,7 +84,8 @@ class BatchQueue(BaseQueue):
             self, job_msg: JobMsg, internal_job_id: int,
             spec_level: SpacerJobSpec):
 
-        batch_job = BatchJob(internal_job_id=internal_job_id)
+        batch_job = BatchJob(
+            internal_job_id=internal_job_id, spec_level=spec_level.value)
         batch_job.save()
 
         job_msg_loc = self.storage.spacer_data_loc(batch_job.job_key)
@@ -157,6 +158,7 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         if job.status != 'SUCCEEDED':
+            # Not done yet, e.g. RUNNING
             return None, job.status
 
         # Else: 'SUCCEEDED'

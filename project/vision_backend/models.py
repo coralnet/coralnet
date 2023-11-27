@@ -4,6 +4,7 @@ from django.db import models
 from spacer.data_classes import ValResults
 from spacer.messages import DataLocation
 
+from config.constants import SpacerJobSpec
 from jobs.models import Job
 from labels.models import Label, LocalLabel
 
@@ -168,6 +169,14 @@ class BatchJob(models.Model):
     # When the Job is cleaned up, this BatchJob also gets cleaned up via
     # cascade-delete.
     internal_job = models.OneToOneField(Job, on_delete=models.CASCADE)
+
+    # Level of resource specs assigned to the job.
+    spec_level = models.CharField(
+        max_length=20,
+        choices=[(s.value, s.name) for s in SpacerJobSpec],
+        # This default accommodates legacy BatchJobs.
+        default='',
+    )
 
     # This can be used to see long the BatchJob is taking.
     create_date = models.DateTimeField("Date created", auto_now_add=True)
