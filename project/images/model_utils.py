@@ -111,4 +111,20 @@ class PointGen():
     def db_to_readable_format(db_format):
         return PointGen.args_to_readable_format(**PointGen.db_to_args_format(db_format))
 
+    @staticmethod
+    def db_to_point_count(db_format):
+        d = PointGen.db_to_args_format(db_format)
 
+        match d['point_generation_type']:
+            case PointGen.Types.SIMPLE:
+                return d['simple_number_of_points']
+            case PointGen.Types.STRATIFIED:
+                return (d['number_of_cell_rows']
+                        * d['number_of_cell_columns']
+                        * d['stratified_points_per_cell'])
+            case PointGen.Types.UNIFORM:
+                return d['number_of_cell_rows'] * d['number_of_cell_columns']
+            case PointGen.Types.IMPORTED:
+                return d['imported_number_of_points']
+            case _:
+                raise ValueError("Point generation type is not a known type.")

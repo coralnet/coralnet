@@ -7,7 +7,7 @@ import random
 from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.db import IntegrityError
-from django.db.models import F
+from django.db.models import Count, F
 from django.utils import timezone
 from spacer.messages import \
     ExtractFeaturesMsg, \
@@ -21,7 +21,9 @@ from spacer.tasks import classify_features as spacer_classify_features
 
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
+from config.constants import SpacerJobSpec
 from events.models import ClassifyImageEvent
+from images.model_utils import PointGen
 from images.models import Source, Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
@@ -256,6 +258,17 @@ def check_source(source_id):
     return f"Source seems to be all caught up. {reason}"
 
 
+def job_spec_for_extract(image) -> SpacerJobSpec:
+    """
+    Specs required for feature extraction. Higher resolution images seem
+    to need more memory.
+    """
+    pixels = image.original_width * image.original_height
+    for job_spec, threshold in settings.FEATURE_EXTRACT_SPEC_PIXELS:
+        if pixels >= threshold:
+            return job_spec
+
+
 @job_starter(job_name='extract_features')
 def submit_features(image_id, job_id):
     """ Submits a feature extraction job. """
@@ -285,7 +298,7 @@ def submit_features(image_id, job_id):
 
     # Submit.
     queue = get_queue_class()()
-    queue.submit_job(msg, job_id)
+    queue.submit_job(msg, job_id, job_spec_for_extract(img))
 
     logger.info(f"Submitted feature extraction for {img}")
     return msg
@@ -355,9 +368,27 @@ def submit_classifier(source_id, job_id):
     # Assemble the message body.
     msg = JobMsg(task_name='train_classifier', tasks=[task])
 
+    # How big of a job is this; how many annotations? That will determine
+    # runtime (and possibly memory) requirements of training.
+    #
+    # Get each unique PointGen value and the value's image count.
+    # https://docs.djangoproject.com/en/4.1/topics/db/aggregation/#interaction-with-order-by
+    point_gen_values_and_counts = images.values_list(
+        'point_generation_method').annotate(Count('id')).order_by()
+    # Then do the math from there.
+    annotation_count = sum([
+        PointGen.db_to_point_count(point_gen_method) * image_count
+        for point_gen_method, image_count in point_gen_values_and_counts
+    ])
+    job_spec = None
+    for spec, threshold in settings.TRAIN_SPEC_ANNOTATIONS:
+        if annotation_count >= threshold:
+            job_spec = spec
+            break
+
     # Submit.
     queue = get_queue_class()()
-    queue.submit_job(msg, job_id)
+    queue.submit_job(msg, job_id, job_spec)
 
     logger.info(
         f"Submitted {classifier} with {classifier.nbr_train_images} images.")
@@ -402,7 +433,9 @@ def deploy(api_job_id, api_unit_order, job_id):
 
     # Submit.
     queue = get_queue_class()()
-    queue.submit_job(msg, job_id)
+    # We have no idea how big the image will be; hopefully medium spec
+    # covers it.
+    queue.submit_job(msg, job_id, SpacerJobSpec.MEDIUM)
 
     logger.info(
         f"Deploy submission made: ApiJobUnit {api_job_unit.pk},"

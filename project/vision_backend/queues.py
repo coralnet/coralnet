@@ -4,7 +4,7 @@ from io import BytesIO
 import json
 import logging
 import sys
-from typing import Optional
+from typing import Optional, Type
 
 import boto3
 from django.conf import settings
@@ -15,13 +15,32 @@ from django.utils.module_loading import import_string
 from spacer.messages import JobMsg, JobReturnMsg
 from spacer.tasks import process_job
 
+from config.constants import SpacerJobSpec
 from jobs.utils import finish_job
 from .models import BatchJob
 
 logger = logging.getLogger(__name__)
 
 
-def get_queue_class():
+class BaseQueue(abc.ABC):
+
+    def __init__(self):
+        self.storage = get_storage_class()()
+
+    @abc.abstractmethod
+    def submit_job(self, job: JobMsg, job_id: int, spec_level: SpacerJobSpec):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get_collectable_jobs(self):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def collect_job(self, job) -> tuple[Optional[JobReturnMsg], str]:
+        raise NotImplementedError
+
+
+def get_queue_class() -> Type[BaseQueue]:
     """This function is modeled after Django's get_storage_class()."""
 
     if (
@@ -44,24 +63,6 @@ def get_queue_class():
     return import_string(settings.SPACER_QUEUE_CHOICE)
 
 
-class BaseQueue(abc.ABC):
-
-    def __init__(self):
-        self.storage = get_storage_class()()
-
-    @abc.abstractmethod
-    def submit_job(self, job: JobMsg, job_id: int):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def get_collectable_jobs(self):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def collect_job(self, job) -> tuple[Optional[JobReturnMsg], str]:
-        raise NotImplementedError
-
-
 def get_batch_client():
     return boto3.client(
         'batch',
@@ -79,7 +80,9 @@ class BatchQueue(BaseQueue):
         super().__init__()
         self.batch_client = get_batch_client()
 
-    def submit_job(self, job_msg: JobMsg, internal_job_id: int):
+    def submit_job(
+            self, job_msg: JobMsg, internal_job_id: int,
+            spec_level: SpacerJobSpec):
 
         batch_job = BatchJob(internal_job_id=internal_job_id)
         batch_job.save()
@@ -90,9 +93,9 @@ class BatchQueue(BaseQueue):
         job_res_loc = self.storage.spacer_data_loc(batch_job.res_key)
 
         resp = self.batch_client.submit_job(
-            jobQueue=settings.BATCH_QUEUE,
+            jobQueue=settings.BATCH_QUEUES[spec_level],
             jobName=batch_job.make_batch_job_name(),
-            jobDefinition=settings.BATCH_JOB_DEFINITION,
+            jobDefinition=settings.BATCH_JOB_DEFINITIONS[spec_level],
             containerOverrides={
                 'environment': [
                     {
@@ -181,7 +184,7 @@ class LocalQueue(BaseQueue):
     Uses a local filesystem queue and calls spacer directly.
     """
 
-    def submit_job(self, job: JobMsg, job_id: int):
+    def submit_job(self, job: JobMsg, job_id: int, spec_level: SpacerJobSpec):
 
         # Process the job right away.
         return_msg = process_job(job)

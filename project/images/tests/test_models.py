@@ -6,8 +6,9 @@ from django.core.files.base import ContentFile
 from django.test import override_settings
 from easy_thumbnails.files import get_thumbnailer
 
-from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import BaseTest, ClientTest
+from ..model_utils import PointGen
+from ..models import Point
 
 
 class SourceExtractorPropertyTest(ClientTest):
@@ -108,6 +109,48 @@ class ImageExifOrientationTest(ClientTest):
                 upper_left_r_greater_than_b,
                 "Red corner should be the same corner as in the original"
                 " image, indicating that the thumbnail content is un-rotated")
+
+
+class PointGenTest(BaseTest):
+
+    def test_point_count_simple_random(self):
+        self.assertEqual(
+            PointGen.db_to_point_count(PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.SIMPLE,
+                simple_number_of_points=15,
+            )),
+            15,
+        )
+
+    def test_point_count_stratified_random(self):
+        self.assertEqual(
+            PointGen.db_to_point_count(PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.STRATIFIED,
+                number_of_cell_rows=3,
+                number_of_cell_columns=5,
+                stratified_points_per_cell=7,
+            )),
+            105,
+        )
+
+    def test_point_count_uniform_grid(self):
+        self.assertEqual(
+            PointGen.db_to_point_count(PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.UNIFORM,
+                number_of_cell_rows=10,
+                number_of_cell_columns=17,
+            )),
+            170,
+        )
+
+    def test_point_count_imported(self):
+        self.assertEqual(
+            PointGen.db_to_point_count(PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.IMPORTED,
+                imported_number_of_points=40,
+            )),
+            40,
+        )
 
 
 class PointValidationTest(ClientTest):

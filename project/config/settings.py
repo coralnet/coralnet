@@ -8,13 +8,17 @@ import sys
 # In many cases it's dangerous to import from Django directly into a settings
 # module, but ImproperlyConfigured is fine.
 from django.core.exceptions import ImproperlyConfigured
-
 import environ
+from PIL import ImageFile
+
+# Careful with imports from the project itself, too. But this is a simple
+# module that doesn't import from any of our other modules.
+from .constants import SpacerJobSpec
+
 
 # Configure Pillow to be tolerant of image files that are truncated (missing
 # data from the last block).
 # https://stackoverflow.com/a/23575424/
-from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
@@ -352,13 +356,38 @@ else:
     SPACER_QUEUE_CHOICE = env(
         'SPACER_QUEUE_CHOICE', default='vision_backend.queues.LocalQueue')
 
-# If AWS Batch is being used, use this job queue and job definition name.
+
+# If AWS Batch is being used, these job queue and job definition names are
+# used depending on the specs of the requested job.
 if SETTINGS_BASE == Bases.PRODUCTION:
-    BATCH_QUEUE = 'production'
-    BATCH_JOB_DEFINITION = 'spacer-job'
+    BATCH_QUEUES = {
+        SpacerJobSpec.MEDIUM: 'production',
+        SpacerJobSpec.HIGH: 'production-highspec',
+    }
+    BATCH_JOB_DEFINITIONS = {
+        SpacerJobSpec.MEDIUM: 'spacer-job',
+        SpacerJobSpec.HIGH: 'spacer-highspec',
+    }
 else:
-    BATCH_QUEUE = 'shakeout'
-    BATCH_JOB_DEFINITION = 'spacer-job-staging'
+    BATCH_QUEUES = {
+        SpacerJobSpec.MEDIUM: 'staging',
+        SpacerJobSpec.HIGH: 'staging-highspec',
+    }
+    BATCH_JOB_DEFINITIONS = {
+        SpacerJobSpec.MEDIUM: 'spacer-job-staging',
+        SpacerJobSpec.HIGH: 'spacer-highspec-staging',
+    }
+
+# How the spec level's decided for individual job types.
+# These thresholds should be specified from high to low.
+FEATURE_EXTRACT_SPEC_PIXELS = [
+    (SpacerJobSpec.HIGH, 6000*6000),
+    (SpacerJobSpec.MEDIUM, 0),
+]
+TRAIN_SPEC_ANNOTATIONS = [
+    (SpacerJobSpec.HIGH, 10000*20),
+    (SpacerJobSpec.MEDIUM, 0),
+]
 
 AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 
