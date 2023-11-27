@@ -7,11 +7,14 @@ from spacer.messages import DataLocation, JobMsg
 from spacer.tasks import process_job
 
 from api_core.models import ApiJob, ApiJobUnit
+from config.constants import SpacerJobSpec
+from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
-from jobs.tests.utils import JobUtilsMixin
+from jobs.tests.utils import do_job, JobUtilsMixin
 from vision_backend_api.tests.utils import DeployBaseTest
 from ..models import BatchJob, Classifier
+from ..queues import get_queue_class
 from .tasks.utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
 
 
@@ -455,3 +458,84 @@ class BatchQueueSpecificsTest(BaseTaskTest, JobUtilsMixin):
         with mock_boto_client('mixed_status'):
             self.extract_and_assert_collect_count(
                 "2 FAILED, 1 RUNNING, 3 SUCCEEDED")
+
+
+@override_settings(
+    FEATURE_EXTRACT_SPEC_PIXELS=[
+        (SpacerJobSpec.HIGH, 100*100),
+        (SpacerJobSpec.MEDIUM, 0),
+    ],
+)
+class JobSpecsTest(BaseTaskTest):
+    """
+    Test the logic for picking job spec levels when submitting
+    spacer jobs.
+    """
+
+    def test_extract_features(self):
+        image_less = self.upload_image(
+            self.user, self.source, image_options=dict(
+                width=90, height=110))
+        image_equal = self.upload_image(
+            self.user, self.source, image_options=dict(
+                width=50, height=200))
+        image_greater = self.upload_image(
+            self.user, self.source, image_options=dict(
+                width=110, height=100))
+
+        with (
+            mock.patch.object(get_queue_class(), 'submit_job')
+            as mock_method
+        ):
+            do_job('extract_features', image_less.pk)
+            do_job('extract_features', image_equal.pk)
+            do_job('extract_features', image_greater.pk)
+
+        self.assertEqual(
+            mock_method.call_args_list[0].args[2], SpacerJobSpec.MEDIUM)
+        self.assertEqual(
+            mock_method.call_args_list[1].args[2], SpacerJobSpec.HIGH)
+        self.assertEqual(
+            mock_method.call_args_list[2].args[2], SpacerJobSpec.HIGH)
+
+    def do_test_train_classifier(
+        self, image_point_counts, threshold, expected_job_spec
+    ):
+        for num, image_point_count in enumerate(image_point_counts, 1):
+            if num == 1:
+                filename = f'val{num}.png'
+            else:
+                filename = f'train{num}.png'
+            image = self.upload_image_with_annotations(filename)
+
+            # The threshold comparison is done by checking each image's
+            # point generation method.
+            image.point_generation_method = PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.IMPORTED,
+                imported_number_of_points=image_point_count)
+            image.save()
+
+            do_job('extract_features', image.pk, source_id=self.source.pk)
+
+        queue_and_run_collect_spacer_jobs()
+
+        with (
+            mock.patch.object(get_queue_class(), 'submit_job')
+            as mock_method,
+            override_settings(TRAIN_SPEC_ANNOTATIONS=[
+                (SpacerJobSpec.HIGH, threshold),
+                (SpacerJobSpec.MEDIUM, 0),
+            ])
+        ):
+            do_job('train_classifier', self.source.pk)
+
+        self.assertEqual(mock_method.call_args[0][2], expected_job_spec)
+
+    def test_train_classifier_less(self):
+        self.do_test_train_classifier([1,5,10], 20, SpacerJobSpec.MEDIUM)
+
+    def test_train_classifier_equal(self):
+        self.do_test_train_classifier([1,5,10], 16, SpacerJobSpec.HIGH)
+
+    def test_train_classifier_greater(self):
+        self.do_test_train_classifier([1,5,10], 10, SpacerJobSpec.HIGH)
