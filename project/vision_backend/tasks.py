@@ -300,8 +300,7 @@ def submit_classifier(source_id, job_id):
     source = Source.objects.get(pk=source_id)
 
     # Create new classifier model
-    IMAGE_LIMIT = 1e5
-    images = source.image_set.confirmed().with_features()[:IMAGE_LIMIT]
+    images = source.image_set.confirmed().with_features()
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
     classifier.save()
