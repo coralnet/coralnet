@@ -689,6 +689,12 @@ class Image(models.Model):
 
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
 
+    # Set this only if a technical issue prevents the image from
+    # being processed in the backend (e.g. feature extraction).
+    # For example, if the image's points were generated while the
+    # point-count-limit checks were buggy/deficient.
+    unprocessable_reason = models.CharField(default="", max_length=200)
+
     @property
     def valset(self):
         """
