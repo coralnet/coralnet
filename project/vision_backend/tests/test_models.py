@@ -179,9 +179,11 @@ class DeletePreMigrationBatchJobsTest(MigrationTest):
 
 class PopulateLoadedRemotelyTest(MigrationTest):
 
-    app_name = 'vision_backend'
-    before = '0015_features_extractor_loaded_remotely'
-    after = '0016_populate_extractor_loaded_remotely'
+    before = [
+        ('vision_backend', '0015_features_extractor_loaded_remotely'),
+        ('images', '0001_squashed_0033_remove_image_annotation_progress'),
+    ]
+    after = [('vision_backend', '0016_populate_extractor_loaded_remotely')]
 
     def test_migration(self):
         User = self.get_model_before('auth.User')
