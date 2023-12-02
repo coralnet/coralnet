@@ -271,7 +271,16 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 # Maximum number of GET/POST parameters that are parsed from a single request.
 # Due to metadata-edit not having an image limit yet, this needs to be quite
 # large (each image would have about 20 fields).
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000000
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2500*20
+
+# Maximum number of files that may be received via POST in a
+# multipart/form-data encoded request before a SuspiciousOperation
+# (TooManyFiles) is raised.
+# Default 100.
+# Main concern for coralnet is CPC upload. Ideally that page would be reworked
+# so that files are uploaded in batches, rather than all in a single request.
+# But until then, we'll have a fairly high limit here.
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000
 
 # [CoralNet settings]
 IMAGE_UPLOAD_MAX_FILE_SIZE = 30*1024*1024  # 30 MB
