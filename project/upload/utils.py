@@ -22,22 +22,43 @@ from vision_backend.models import Features
 
 
 def text_file_to_unicode_stream(text_file):
-    content = text_file.read()
+    content: bytes|str = text_file.read()
 
     if isinstance(content, str):
         unicode_text = content
     else:
         # content is in byte form.
         # Detect charset and convert to Unicode.
-        # See if chardet and charset-normalizer agree; if so, use their guess.
-        # Otherwise, guess utf-8.
+
         chardet_opinion = chardet.detect(content)['encoding']
         normalizer_opinion = charset_normalizer.detect(content)['encoding']
         if chardet_opinion == normalizer_opinion:
-            encoding_guess = chardet_opinion
+            # chardet and charset-normalizer agree; prioritize
+            # their guess, with utf-8 as a fallback.
+            encoding_guesses = [chardet_opinion, 'utf-8']
         else:
-            encoding_guess = 'utf-8'
-        unicode_text = content.decode(encoding_guess)
+            # They disagree; prioritize utf-8, using their guesses as
+            # fallbacks.
+            encoding_guesses = ['utf-8', normalizer_opinion, chardet_opinion]
+
+        # It's possible that either opinion ended up as None.
+        encoding_guesses = [g for g in encoding_guesses if g is not None]
+
+        # Try each guess until one decodes without errors.
+        unicode_text = None
+        for encoding_guess in encoding_guesses:
+            try:
+                unicode_text = content.decode(encoding_guess)
+                # If got here, decoded without errors
+                break
+            except UnicodeDecodeError:
+                pass
+
+        # No known examples thus far result in total failure to decode content.
+        # But if we ever come across one, a reasonable action might be to go
+        # with the first guess and not be strict about errors:
+        # unicode_text = content.decode(encoding_guesses[0], errors='replace')
+        assert unicode_text is not None, "Failed to decode content"
 
     # Convert the text into a line-by-line stream.
     return StringIO(unicode_text, newline='')
