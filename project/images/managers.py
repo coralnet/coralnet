@@ -34,8 +34,8 @@ class ImageQuerySet(models.QuerySet):
         return self.filter(features__extracted=True)
 
     def without_features(self):
-        """Only images without feature vectors available."""
-        return self.filter(features__extracted=False)
+        """Only (processable) images without feature vectors available."""
+        return self.filter(features__extracted=False, unprocessable_reason="")
 
 
 class PointQuerySet(models.QuerySet):

@@ -8,7 +8,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 ## 1.8 (WIP)
 
-- New migration to run for `jobs` and `vision_backend`. If `api_core` 0004 runs into issues, try running the new `jobs` 0011 migration first.
+- New migrations to run for `images`, `jobs`, and `vision_backend`. If `api_core` 0004 runs into issues, try running the new `jobs` 0011 migration first.
 - New package to install: diskcache 5.6.3
 - Clear the current contents of the Django cache folder (`<SITE_DIR>/tmp/django_cache` by default). The format of cache files saved to this directory will be different from before.
 - The `update_label_details` periodic-job should be run at least once to compute labels' annotation counts and popularities.

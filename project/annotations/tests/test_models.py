@@ -207,7 +207,9 @@ class PopulateAnnoInfoStatusTest(MigrationTest):
 
     before = [
         ('accounts', '0001_squashed_0012_field_string_attributes_to_unicode'),
-        ('annotations', '0022_annoinfo_confirmed_to_status')]
+        ('annotations', '0022_annoinfo_confirmed_to_status'),
+        ('images', '0001_squashed_0033_remove_image_annotation_progress'),
+    ]
     after = [
         ('annotations', '0023_populate_annoinfo_status')]
 

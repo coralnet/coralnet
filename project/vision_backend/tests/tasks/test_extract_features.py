@@ -19,6 +19,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         self.upload_image(self.user, self.source)
         self.upload_image(self.user, self.source)
 
+        # Should have queued a source check after uploading
         run_pending_job('check_source', self.source.pk)
         self.assert_job_result_message(
             'check_source',
@@ -55,6 +56,28 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         self.assert_job_result_message(
             'check_source',
             "Queued 2 feature extraction(s)")
+
+    def test_source_check_unprocessable_image(self):
+        image1 = self.upload_image(self.user, self.source)
+        image1.unprocessable_reason = "Exceeds point limit"
+        image1.save()
+
+        run_pending_job('check_source', self.source.pk)
+        self.assert_job_result_message(
+            'check_source',
+            "Can't train first classifier: Not enough annotated images for"
+            " initial training",
+            assert_msg="Shouldn't queue extraction for the"
+                       " unprocessable image",
+        )
+
+        self.upload_image(self.user, self.source)
+        run_pending_job('check_source', self.source.pk)
+        self.assert_job_result_message(
+            'check_source',
+            "Queued 1 feature extraction(s)",
+            assert_msg="Should still queue extraction for other images",
+        )
 
     def test_success(self):
         # After an image upload, features are ready to be submitted.
