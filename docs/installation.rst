@@ -81,27 +81,9 @@ If you're also working on the PySpacer codebase, or otherwise need a PySpacer ve
 
 - Note that any CoralNet pull request you make might not pass in GitHub's CI (GitHub Actions) until PySpacer is updated on PyPI.
 
-A few package/OS combinations may need additional steps:
+If you think something messed up and you want to undo a pip installation, use ``pip uninstall <package-name>``.
 
-- ``Pillow`` on Linux
-
-  - You'll get errors if you don't have development packages for JPEG and PNG support:
-
-    - libjpeg. For supported versions of libjpeg, see the `Pillow docs <https://pillow.readthedocs.io/en/latest/installation.html>`__. Check available versions in Ubuntu with ``apt-cache pkgnames | grep libjpeg``. Again, you'll want development libraries; for example, libjpeg version 8 in Ubuntu is ``libjpeg8-dev``.
-
-    - zlib (PNG support). In Ubuntu, the dev library should be ``zlib1g-dev``.
-
-  - There are also other packages that support optional functionality in Pillow. See the `Pillow docs <https://pillow.readthedocs.io/en/latest/installation.html>`__.
-
-- ``scikit-learn`` on Linux
-
-  - Requires g++: ``sudo apt install g++`` on Ubuntu
-
-  - You may see "ERROR: Failed building wheel for scikit-learn", followed by an attempt to install using ``setup.py install``. If the latter attempt succeeds, then scikit-learn should be good to go.
-
-If you think you messed up and want to undo a pip installation, use ``pip uninstall <package-name>``.
-
-From now on, whenever you need to get your packages up to date, activate your virtual environment and rerun ``pip install -r requirements/<name>.txt``.
+From now on, whenever you need to get your packages up to date, activate your virtual environment and run ``pip install -U -r requirements/<name>.txt``.
 
 
 Settings
