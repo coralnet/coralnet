@@ -151,7 +151,7 @@ def compute_label_details():
     """
     Details (which are worth caching) for all labels, including annotation
     counts and popularities.
-    As of 2023/11, this may take over 20 minutes to run in production.
+    As of 2023/11, this may take 1.5 hours to run in production.
 
     Annotation count can take several seconds to compute for a single
     widely-used label.

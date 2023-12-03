@@ -21,7 +21,7 @@ Production: 2023-11-27
 - New migration to run for `vision_backend`.
 - New package to install: diskcache 5.6.3
 - Clear the current contents of the Django cache folder (`<SITE_DIR>/tmp/django_cache` by default). The format of cache files saved to this directory will be different from before.
-- The `update_label_details` periodic-job should be run at least once to compute labels' annotation counts and popularities.
+- The `update_label_details` periodic-job should be run at least once to compute labels' annotation counts and popularities. This could take 1.5 hours with production amounts of data.
 
 ## [1.7.4](https://github.com/coralnet/coralnet/tree/1.7.4)
 
