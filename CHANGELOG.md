@@ -5,15 +5,47 @@ For general instructions on how to update a development environment of CoralNet,
 
 For info about the semantic versioning used here, see `docs/versions.rst`.
 
+"Production:" dates under each version indicate when the production server was updated to that version.
 
-## 1.8 (WIP)
 
-- New migrations to run for `images`, `jobs`, and `vision_backend`. If `api_core` 0004 runs into issues, try running the new `jobs` 0011 migration first.
+## [1.8.1](https://github.com/coralnet/coralnet/tree/1.8.1)
+
+Production: 2023-12-02
+
+- New migration to run for `images`.
+
+## [1.8](https://github.com/coralnet/coralnet/tree/1.8)
+
+Production: 2023-11-27
+
+- New migration to run for `vision_backend`.
 - New package to install: diskcache 5.6.3
 - Clear the current contents of the Django cache folder (`<SITE_DIR>/tmp/django_cache` by default). The format of cache files saved to this directory will be different from before.
 - The `update_label_details` periodic-job should be run at least once to compute labels' annotation counts and popularities.
 
+## [1.7.4](https://github.com/coralnet/coralnet/tree/1.7.4)
+
+Production: 2023-11-20
+
+## [1.7.3](https://github.com/coralnet/coralnet/tree/1.7.3)
+
+Production: 2023-11-20
+
+- New migration to run for `jobs`.
+
+## [1.7.2](https://github.com/coralnet/coralnet/tree/1.7.2)
+
+Production: 2023-11-19
+
+## [1.7.1](https://github.com/coralnet/coralnet/tree/1.7.1)
+
+Production: 2023/11/18-19
+
+- New migration to run for `jobs`. If `api_core` 0004 runs into issues, try running the new `jobs` 0011 migration first.
+
 ## [1.7](https://github.com/coralnet/coralnet/tree/1.7)
+
+Production: 2023/11/18 (updated from 1.1)
 
 - The new `EXTRACTORS_BUCKET` setting is now required when using a non-dummy feature extractor.
 - The `MIN_NBR_ANNOTATED_IMAGES` setting has been renamed to `TRAINING_MIN_IMAGES`. Also, it's now tied to the corresponding pyspacer setting, which means that lowering this number will speed up unit tests.
