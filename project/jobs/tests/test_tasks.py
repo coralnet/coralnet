@@ -7,7 +7,9 @@ from django.test.utils import override_settings
 from django.utils import timezone
 
 from api_core.models import ApiJob, ApiJobUnit
+from config.constants import SpacerJobSpec
 from lib.tests.utils import BaseTest
+from vision_backend.models import BatchJob
 from ..models import Job
 from ..tasks import (
     clean_up_old_jobs,
@@ -252,12 +254,23 @@ class ReportStuckJobsTest(BaseTest):
         return job.result_message
 
     @staticmethod
-    def create_job(name, arg, modify_date, status=Job.Status.IN_PROGRESS):
+    def create_job(
+        name, arg, modify_date,
+        status=Job.Status.IN_PROGRESS,
+        batch_spec_level=None,
+    ):
         job = Job.objects.create(
             job_name=name, arg_identifier=arg, status=status)
         job.save()
+
         Job.objects.filter(pk=job.pk).update(modify_date=modify_date)
-        return job.pk
+        job.refresh_from_db()
+
+        if batch_spec_level:
+            batch_job = BatchJob(internal_job=job, spec_level=batch_spec_level)
+            batch_job.save()
+
+        return job
 
     def test_zero_jobs_message(self):
         """
@@ -277,11 +290,11 @@ class ReportStuckJobsTest(BaseTest):
             '1', '2d 23h ago',
             timezone.now() - timedelta(days=2, hours=23))
 
-        self.create_job(
+        job_2 = self.create_job(
             '2', '3d 1h ago',
             timezone.now() - timedelta(days=3, hours=1))
 
-        self.create_job(
+        job_3 = self.create_job(
             '3', '3d 23h ago',
             timezone.now() - timedelta(days=3, hours=23))
 
@@ -290,19 +303,63 @@ class ReportStuckJobsTest(BaseTest):
             timezone.now() - timedelta(days=4, hours=1))
 
         self.assertEqual(
-            self.run_and_get_result(), "2 job(s) haven't progressed in 3 days")
+            self.run_and_get_result(), "2 job(s) haven't progressed in a while")
 
         self.assertEqual(len(mail.outbox), 1)
         sent_email = mail.outbox[0]
 
         self.assertEqual(
-            "[CoralNet] 2 job(s) haven't progressed in 3 days",
+            "[CoralNet] 2 job(s) haven't progressed in a while",
             sent_email.subject)
         self.assertEqual(
-            "The following job(s) haven't progressed in 3 days:"
+            "The following job(s) haven't progressed in a while:"
             "\n"
-            f"\n3 / 3d 23h ago"
-            f"\n2 / 3d 1h ago",
+            f"\n3 / 3d 23h ago - since {job_3.modify_date}"
+            f"\n2 / 3d 1h ago - since {job_2.modify_date}",
+            sent_email.body)
+
+    def test_job_selection_by_high_spec(self):
+        """
+        For jobs defined as high-spec for Batch, the range's 8-9 days, not 3-4.
+        """
+        self.create_job(
+            'Non-Batch 1', '7d 23h',
+            timezone.now() - timedelta(days=7, hours=23))
+        self.create_job(
+            'Non-Batch 2', '8d 1h',
+            timezone.now() - timedelta(days=8, hours=1))
+
+        self.create_job(
+            'Batch MEDIUM 1', '7d 23h',
+            timezone.now() - timedelta(days=7, hours=23),
+            batch_spec_level=SpacerJobSpec.MEDIUM)
+        self.create_job(
+            'Batch MEDIUM 2', '8d 1h',
+            timezone.now() - timedelta(days=8, hours=1),
+            batch_spec_level=SpacerJobSpec.MEDIUM)
+
+        self.create_job(
+            'Batch HIGH 1', '7d 23h',
+            timezone.now() - timedelta(days=7, hours=23),
+            batch_spec_level=SpacerJobSpec.HIGH)
+        bh2 = self.create_job(
+            'Batch HIGH 2', '8d 1h',
+            timezone.now() - timedelta(days=8, hours=1),
+            batch_spec_level=SpacerJobSpec.HIGH)
+
+        self.assertEqual(
+            self.run_and_get_result(), "1 job(s) haven't progressed in a while")
+
+        self.assertEqual(len(mail.outbox), 1)
+        sent_email = mail.outbox[0]
+
+        self.assertEqual(
+            "[CoralNet] 1 job(s) haven't progressed in a while",
+            sent_email.subject)
+        self.assertEqual(
+            "The following job(s) haven't progressed in a while:"
+            "\n"
+            f"\nBatch HIGH 2 / 8d 1h - since {bh2.modify_date}",
             sent_email.body)
 
     def test_job_selection_by_status(self):
@@ -313,22 +370,23 @@ class ReportStuckJobsTest(BaseTest):
 
         self.create_job('1', 'PENDING', d3h1, status=Job.Status.PENDING)
         self.create_job('2', 'SUCCESS', d3h1, status=Job.Status.SUCCESS)
-        self.create_job('3', 'IN_PROGRESS', d3h1, status=Job.Status.IN_PROGRESS)
+        job_3 = self.create_job(
+            '3', 'IN_PROGRESS', d3h1, status=Job.Status.IN_PROGRESS)
         self.create_job('4', 'FAILURE', d3h1, status=Job.Status.FAILURE)
 
         self.assertEqual(
-            self.run_and_get_result(), "1 job(s) haven't progressed in 3 days")
+            self.run_and_get_result(), "1 job(s) haven't progressed in a while")
 
         self.assertEqual(len(mail.outbox), 1)
         sent_email = mail.outbox[0]
 
         self.assertEqual(
-            "[CoralNet] 1 job(s) haven't progressed in 3 days",
+            "[CoralNet] 1 job(s) haven't progressed in a while",
             sent_email.subject)
         self.assertEqual(
-            "The following job(s) haven't progressed in 3 days:"
+            "The following job(s) haven't progressed in a while:"
             "\n"
-            f"\n3 / IN_PROGRESS",
+            f"\n3 / IN_PROGRESS - since {job_3.modify_date}",
             sent_email.body)
 
 

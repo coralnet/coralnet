@@ -6,6 +6,7 @@ from django.core.mail import mail_admins
 from django.utils import timezone
 from huey.contrib.djhuey import HUEY
 
+from config.constants import SpacerJobSpec
 from .exceptions import UnrecognizedJobNameError
 from .models import Job
 from .utils import (
@@ -127,40 +128,54 @@ def clean_up_old_jobs():
         return "No old jobs to clean up"
 
 
+# We'll consider most jobs stuck after 3 days of no status progression.
+DEFAULT_STUCK_DAYS = 3
+# Long AWS Batch jobs may run up to 7 days (depending on our AWS Batch config),
+# so consider these jobs stuck after 8.
+HIGH_SPEC_STUCK_DAYS = 8
+
+
 @job_runner(interval=timedelta(days=1))
 def report_stuck_jobs():
     """
     Report in-progress Jobs that haven't progressed since a certain
     number of days.
     """
-    # When an in-progress Job hasn't been modified in this many days,
-    # we'll consider it to be stuck.
-    STUCK = 3
+    stuck_categories = [
+        (Job.objects.exclude(batchjob__spec_level=SpacerJobSpec.HIGH),
+         DEFAULT_STUCK_DAYS),
+        (Job.objects.filter(batchjob__spec_level=SpacerJobSpec.HIGH),
+         HIGH_SPEC_STUCK_DAYS),
+    ]
 
-    # This task runs every day, and we don't issue repeat warnings for
-    # the same jobs on subsequent days. So, only grab jobs whose last
-    # progression was between STUCK days and STUCK+1 days ago.
-    stuck_days_ago = timezone.now() - timedelta(days=STUCK)
-    stuck_plus_one_days_ago = stuck_days_ago - timedelta(days=1)
-    stuck_jobs_to_report = (
-        Job.objects.filter(
-            status=Job.Status.IN_PROGRESS,
-            modify_date__lt=stuck_days_ago,
-            modify_date__gt=stuck_plus_one_days_ago,
+    stuck_jobs_to_report = Job.objects.none()
+
+    for job_queryset, threshold in stuck_categories:
+
+        # This task runs every day, and we don't issue repeat warnings for
+        # the same jobs on subsequent days. So, only grab jobs whose last
+        # progression was between STUCK days and STUCK+1 days ago.
+        stuck_days_ago = timezone.now() - timedelta(days=threshold)
+        stuck_plus_one_days_ago = stuck_days_ago - timedelta(days=1)
+        stuck_jobs_to_report |= (
+            job_queryset.filter(
+                status=Job.Status.IN_PROGRESS,
+                modify_date__lt=stuck_days_ago,
+                modify_date__gt=stuck_plus_one_days_ago,
+            )
+            # Oldest listed first
+            .order_by('modify_date', 'pk')
         )
-        # Oldest listed first
-        .order_by('modify_date', 'pk')
-    )
 
     if not stuck_jobs_to_report.exists():
         return "No stuck jobs detected"
 
     stuck_job_count = stuck_jobs_to_report.count()
-    subject = f"{stuck_job_count} job(s) haven't progressed in {STUCK} days"
+    subject = f"{stuck_job_count} job(s) haven't progressed in a while"
 
-    message = f"The following job(s) haven't progressed in {STUCK} days:\n"
+    message = f"The following job(s) haven't progressed in a while:\n"
     for job in stuck_jobs_to_report:
-        message += f"\n{job}"
+        message += f"\n{job} - since {job.modify_date}"
 
     mail_admins(subject, message)
 
