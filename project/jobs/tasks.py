@@ -130,10 +130,10 @@ def clean_up_old_jobs():
 @job_runner(interval=timedelta(days=1))
 def report_stuck_jobs():
     """
-    Report non-completed Jobs that haven't progressed since a certain
+    Report in-progress Jobs that haven't progressed since a certain
     number of days.
     """
-    # When a non-completed Job hasn't been modified in this many days,
+    # When an in-progress Job hasn't been modified in this many days,
     # we'll consider it to be stuck.
     STUCK = 3
 
@@ -144,10 +144,10 @@ def report_stuck_jobs():
     stuck_plus_one_days_ago = stuck_days_ago - timedelta(days=1)
     stuck_jobs_to_report = (
         Job.objects.filter(
+            status=Job.Status.IN_PROGRESS,
             modify_date__lt=stuck_days_ago,
             modify_date__gt=stuck_plus_one_days_ago,
         )
-        .exclude(status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
         # Oldest listed first
         .order_by('modify_date', 'pk')
     )

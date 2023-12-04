@@ -252,7 +252,7 @@ class ReportStuckJobsTest(BaseTest):
         return job.result_message
 
     @staticmethod
-    def create_job(name, arg, modify_date, status=Job.Status.PENDING):
+    def create_job(name, arg, modify_date, status=Job.Status.IN_PROGRESS):
         job = Job.objects.create(
             job_name=name, arg_identifier=arg, status=status)
         job.save()
@@ -307,7 +307,7 @@ class ReportStuckJobsTest(BaseTest):
 
     def test_job_selection_by_status(self):
         """
-        Only warn about non-completed jobs.
+        Only warn about in-progress jobs.
         """
         d3h1 = timezone.now() - timedelta(days=3, hours=1)
 
@@ -317,18 +317,17 @@ class ReportStuckJobsTest(BaseTest):
         self.create_job('4', 'FAILURE', d3h1, status=Job.Status.FAILURE)
 
         self.assertEqual(
-            self.run_and_get_result(), "2 job(s) haven't progressed in 3 days")
+            self.run_and_get_result(), "1 job(s) haven't progressed in 3 days")
 
         self.assertEqual(len(mail.outbox), 1)
         sent_email = mail.outbox[0]
 
         self.assertEqual(
-            "[CoralNet] 2 job(s) haven't progressed in 3 days",
+            "[CoralNet] 1 job(s) haven't progressed in 3 days",
             sent_email.subject)
         self.assertEqual(
             "The following job(s) haven't progressed in 3 days:"
             "\n"
-            f"\n1 / PENDING"
             f"\n3 / IN_PROGRESS",
             sent_email.body)
 
