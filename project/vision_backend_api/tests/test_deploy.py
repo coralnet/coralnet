@@ -6,8 +6,9 @@ from unittest import mock
 from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
+from PIL import UnidentifiedImageError
 from rest_framework import status
-from spacer.exceptions import SpacerInputError
+from spacer.exceptions import DataLimitError, URLDownloadError
 
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
@@ -655,8 +656,7 @@ class TaskErrorsTest(
             f"Classifier of id {classifier_id} does not exist."
             f" Maybe it was deleted.")
 
-    def test_spacer_error(self):
-        """Error from the spacer side."""
+    def do_test_spacer_error(self, error):
         images = [
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
@@ -669,20 +669,23 @@ class TaskErrorsTest(
         # spacer behavior itself. We just test that we appropriately handle any
         # errors coming from the spacer call.
         def raise_error(*args):
-            raise ValueError("A spacer error")
+            raise error
         with mock.patch('spacer.tasks.classify_image', raise_error):
             run_scheduled_jobs()
         queue_and_run_collect_spacer_jobs()
 
-        job_unit = ApiJobUnit.objects.latest('pk')
+        return ApiJobUnit.objects.latest('pk')
+
+    def test_spacer_priority_error(self):
+        """Spacer error that's not in the non-priority categories."""
+
+        job_unit = self.do_test_spacer_error(ValueError("A spacer error"))
 
         self.assertEqual(
             job_unit.status, Job.Status.FAILURE,
             "Unit should have failed")
-        error_traceback = job_unit.result_message
-        error_traceback_last_line = error_traceback.splitlines()[-1]
         self.assertEqual(
-            "ValueError: A spacer error", error_traceback_last_line,
+            "ValueError: A spacer error", job_unit.result_message,
             "Result JSON should have the error info")
 
         self.assert_error_log_saved(
@@ -694,33 +697,51 @@ class TaskErrorsTest(
             ["ValueError: A spacer error"],
         )
 
-    def test_spacer_input_error(self):
-        """spacer raising a SpacerInputError."""
-        images = [
-            dict(type='image', attributes=dict(
-                url='URL 1', points=[dict(row=10, column=10)]))]
-        data = json.dumps(dict(data=images))
-
-        # Queue deploy
-        self.client.post(self.deploy_url, data, **self.request_kwargs)
-
-        # Deploy, while mocking the spacer task call.
-        def raise_error(*args):
-            raise SpacerInputError("Couldn't access URL")
-        with mock.patch('spacer.tasks.classify_image', raise_error):
-            run_scheduled_jobs()
-        queue_and_run_collect_spacer_jobs()
-
-        job_unit = ApiJobUnit.objects.latest('pk')
+    def test_url_download_error(self):
+        """These errors aren't considered priority."""
+        job_unit = self.do_test_spacer_error(URLDownloadError(
+            "Couldn't access URL", ValueError("Original error")))
 
         self.assertEqual(
             job_unit.status, Job.Status.FAILURE,
             "Unit should have failed")
-        error_traceback = job_unit.result_message
-        error_traceback_last_line = error_traceback.splitlines()[-1]
         self.assertEqual(
-            "spacer.exceptions.SpacerInputError: Couldn't access URL",
-            error_traceback_last_line,
+            "spacer.exceptions.URLDownloadError: Couldn't access URL"
+            " / Details - ValueError: Original error",
+            job_unit.result_message,
+            "Result JSON should have the error info")
+
+        self.assert_no_error_log_saved()
+        self.assert_no_email()
+
+    def test_unidentified_image_error(self):
+        """These errors aren't considered priority."""
+        job_unit = self.do_test_spacer_error(UnidentifiedImageError(
+            "cannot identify image file <image>"))
+
+        self.assertEqual(
+            job_unit.status, Job.Status.FAILURE,
+            "Unit should have failed")
+        self.assertEqual(
+            "PIL.UnidentifiedImageError: cannot identify image file <image>",
+            job_unit.result_message,
+            "Result JSON should have the error info")
+
+        self.assert_no_error_log_saved()
+        self.assert_no_email()
+
+    def test_data_limit_error(self):
+        """These errors aren't considered priority."""
+        job_unit = self.do_test_spacer_error(DataLimitError(
+            "1500 point locations were specified"))
+
+        self.assertEqual(
+            job_unit.status, Job.Status.FAILURE,
+            "Unit should have failed")
+        self.assertEqual(
+            "spacer.exceptions.DataLimitError:"
+            " 1500 point locations were specified",
+            job_unit.result_message,
             "Result JSON should have the error info")
 
         self.assert_no_error_log_saved()

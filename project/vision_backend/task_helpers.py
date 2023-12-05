@@ -181,6 +181,10 @@ class SpacerResultHandler(ABC):
     # spacer JobMsg's task_name (which are assumed to be the same).
     job_name = None
 
+    # Error classes which are considered temporary or end-user errors,
+    # rather than errors demanding attention of coralnet / pyspacer devs.
+    non_priority_error_classes = []
+
     @classmethod
     def handle(cls, job_res: JobReturnMsg):
         if not job_res.ok:
@@ -201,9 +205,8 @@ class SpacerResultHandler(ABC):
                 error_class = error_message
                 error_info = ""
 
-            if error_class != 'spacer.exceptions.SpacerInputError':
-                # Not a SpacerInputError, so we should treat it like
-                # a server error.
+            if error_class not in cls.non_priority_error_classes:
+                # Priority error; treat like an internal server error.
                 mail_admins(
                     f"Spacer job failed: {cls.job_name}",
                     repr(job_res),
@@ -266,6 +269,15 @@ class SpacerResultHandler(ABC):
 
 class SpacerFeatureResultHandler(SpacerResultHandler):
     job_name = 'extract_features'
+
+    non_priority_error_classes = [
+        # When this happens, it's probably a race condition that can be
+        # recovered from in the next attempt.
+        # But if it's not recoverable, then the Job should fail a few times
+        # in a row and then issue a "failing repeatedly" notice to site
+        # admins.
+        'spacer.exceptions.RowColumnMismatchError',
+    ]
 
     @classmethod
     def handle_spacer_task_result(
@@ -408,6 +420,24 @@ class SpacerTrainResultHandler(SpacerResultHandler):
 
 class SpacerClassifyResultHandler(SpacerResultHandler):
     job_name = 'classify_image'
+
+    non_priority_error_classes = [
+        # If the user-specified URL has a non-image, then the Pillow load
+        # step gets:
+        # PIL.UnidentifiedImageError - cannot identify image file <...>
+        'PIL.UnidentifiedImageError',
+        # If the user specifies an image that's too big, then this error
+        # class is raised.
+        # This error class covers the point limit too, but that's already
+        # checked by the deploy view.
+        'spacer.exceptions.DataLimitError',
+        # If there are any issues with downloading from the user-specified
+        # URL, then the download step gets one of a few different
+        # URLDownloadErrors. Now, this scenario could potentially indicate
+        # a coralnet or pyspacer issue, but the common cases are either an
+        # issue with the given URL's site, or just a random network error.
+        'spacer.exceptions.URLDownloadError',
+    ]
 
     @classmethod
     def handle_spacer_task_result(

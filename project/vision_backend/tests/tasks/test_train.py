@@ -5,7 +5,6 @@ from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.test import override_settings
 from spacer.data_classes import ValResults
-from spacer.exceptions import SpacerInputError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from images.model_utils import PointGen
@@ -375,28 +374,6 @@ class AbortCasesTest(
             "Spacer job failed: train_classifier",
             ["ValueError: A spacer error"],
         )
-
-    def test_spacer_input_error(self):
-        # Prepare training images + features.
-        self.upload_images_for_training()
-        run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
-
-        # Train, with a spacer function mocked to
-        # throw a SpacerInputError, which is less critical than other
-        # spacer errors.
-        def raise_error(*args):
-            raise SpacerInputError("A spacer input error")
-        with mock.patch('spacer.tasks.train_classifier', raise_error):
-            run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
-
-        self.assert_job_result_message(
-            'train_classifier',
-            "spacer.exceptions.SpacerInputError: A spacer input error")
-
-        self.assert_no_error_log_saved()
-        self.assert_no_email()
 
     def test_classifier_deleted_before_collection(self):
         """

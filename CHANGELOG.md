@@ -8,6 +8,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.9 (WIP)
+
+- Updates to required packages:
+  - pyspacer 0.6.1 -> 0.7.0
+
 ## [1.8.1](https://github.com/coralnet/coralnet/tree/1.8.1)
 
 Production: 2023-12-02

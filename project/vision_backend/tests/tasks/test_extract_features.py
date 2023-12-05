@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.test import override_settings
 from spacer.data_classes import ImageFeatures
-from spacer.exceptions import SpacerInputError
+from spacer.exceptions import DataLimitError, RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
@@ -232,7 +232,7 @@ class AbortCasesTest(
             'extract_features',
             f"Image {image_id} doesn't exist anymore.")
 
-    def test_spacer_error(self):
+    def do_test_spacer_error(self, raise_error):
         # Upload image.
         self.upload_image(self.user, self.source)
         # Check source.
@@ -240,13 +240,18 @@ class AbortCasesTest(
 
         # Submit feature extraction, with a spacer function mocked to
         # throw an error.
-        def raise_error(*args):
-            raise ValueError("A spacer error")
         with mock.patch('spacer.tasks.extract_features', raise_error):
             run_scheduled_jobs()
 
         # Collect feature extraction.
         queue_and_run_collect_spacer_jobs()
+
+    def test_spacer_priority_error(self):
+        """Spacer error that's not in the non-priority categories."""
+
+        def raise_error(*args):
+            raise ValueError("A spacer error")
+        self.do_test_spacer_error(raise_error)
 
         self.assert_job_result_message(
             'extract_features',
@@ -261,22 +266,14 @@ class AbortCasesTest(
             ["ValueError: A spacer error"],
         )
 
-    def test_spacer_assertion_error(self):
-        # Upload image.
-        self.upload_image(self.user, self.source)
-        # Check source.
-        run_scheduled_jobs()
-
-        # Submit feature extraction, with a spacer function mocked to
-        # throw an AssertionError with no message. This is a special case
-        # for parsing the error info.
+    def test_spacer_assertion_error_no_message(self):
+        """
+        Another priority error type, and a special case for parsing
+        the error info (due to having no message).
+        """
         def raise_error(*args):
             assert False
-        with mock.patch('spacer.tasks.extract_features', raise_error):
-            run_scheduled_jobs()
-
-        # Collect feature extraction.
-        queue_and_run_collect_spacer_jobs()
+        self.do_test_spacer_error(raise_error)
 
         self.assert_job_result_message(
             'extract_features',
@@ -291,24 +288,16 @@ class AbortCasesTest(
             ["AssertionError"],
         )
 
-    def test_spacer_input_error(self):
-        # Upload image.
-        self.upload_image(self.user, self.source)
-        # Check source.
-        run_scheduled_jobs()
-
-        # Extract features, with a spacer function mocked to
-        # throw a SpacerInputError, which is less critical than other
-        # spacer errors.
+    def test_row_column_mismatch_error(self):
+        """These errors aren't considered priority."""
         def raise_error(*args):
-            raise SpacerInputError("A spacer input error")
-        with mock.patch('spacer.tasks.extract_features', raise_error):
-            run_scheduled_jobs()
-        queue_and_run_collect_spacer_jobs()
+            raise RowColumnMismatchError("Row-column positions don't match")
+        self.do_test_spacer_error(raise_error)
 
         self.assert_job_result_message(
             'extract_features',
-            "spacer.exceptions.SpacerInputError: A spacer input error")
+            "spacer.exceptions.RowColumnMismatchError:"
+            " Row-column positions don't match")
 
         self.assert_no_error_log_saved()
         self.assert_no_email()
