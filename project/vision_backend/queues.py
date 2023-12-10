@@ -162,7 +162,6 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         # Else: 'SUCCEEDED'
-        logger.info(f"Entering collection of Batch job [{job}].")
         job_res_loc = self.storage.spacer_data_loc(job.res_key)
 
         try:
@@ -176,7 +175,6 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         # All went well
-        logger.info(f"Exiting collection of Batch job [{job}].")
         return return_msg, job.status
 
 

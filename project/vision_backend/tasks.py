@@ -300,7 +300,6 @@ def submit_features(image_id, job_id):
     queue = get_queue_class()()
     queue.submit_job(msg, job_id, job_spec_for_extract(img))
 
-    logger.info(f"Submitted feature extraction for {img}")
     return msg
 
 
@@ -317,8 +316,6 @@ def submit_classifier(source_id, job_id):
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
     classifier.save()
-
-    logger.info(f"Preparing: {classifier}")
 
     # Create train-labels
     storage = get_storage_class()()
@@ -390,8 +387,6 @@ def submit_classifier(source_id, job_id):
     queue = get_queue_class()()
     queue.submit_job(msg, job_id, job_spec)
 
-    logger.info(
-        f"Submitted {classifier} with {classifier.nbr_train_images} images.")
     return msg
 
 
@@ -436,10 +431,6 @@ def deploy(api_job_id, api_unit_order, job_id):
     # We have no idea how big the image will be; hopefully medium spec
     # covers it.
     queue.submit_job(msg, job_id, SpacerJobSpec.MEDIUM)
-
-    logger.info(
-        f"Deploy submission made: ApiJobUnit {api_job_unit.pk},"
-        f" Image URL [{api_job_unit.request_json['url']}]")
 
     return msg
 

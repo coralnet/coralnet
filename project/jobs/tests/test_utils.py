@@ -214,11 +214,11 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
 class StartPendingJobTest(BaseTest):
 
     def test_job_not_found(self):
-        with self.assertLogs(logger='jobs.utils', level='INFO') as cm:
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
             start_pending_job('name', 'arg')
 
         log_message = (
-            "INFO:jobs.utils:"
+            "DEBUG:jobs.utils:"
             "Job [name / arg] not found."
         )
         self.assertIn(
@@ -228,11 +228,11 @@ class StartPendingJobTest(BaseTest):
     def test_job_already_in_progress(self):
         queue_job('name', 'arg', initial_status=Job.Status.IN_PROGRESS)
 
-        with self.assertLogs(logger='jobs.utils', level='INFO') as cm:
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
             start_pending_job('name', 'arg')
 
             log_message = (
-                "INFO:jobs.utils:"
+                "DEBUG:jobs.utils:"
                 "Job [name / arg] already in progress."
             )
             self.assertIn(
