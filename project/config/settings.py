@@ -958,15 +958,29 @@ LOGGING = {
     'handlers': {
         'coralnet': {
             'level': 'INFO',
-            'class': 'logging.FileHandler',
+            # Filesize-based rotation for info level. When there's
+            # less server activity, having logs of this level from
+            # farther in the past can be nice to have, and has little
+            # impact on disk space.
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOG_DIR / 'coralnet.log',
-            'formatter': 'standard'
+            'formatter': 'standard',
+            # 3 files having 5 MB of logs each
+            'maxBytes': 5000000,
+            'backupCount': 3,
         },
         'coralnet_debug': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
+            # Time-based rotation for debug level. The rate this can
+            # grow is less predictable than info level, and we want
+            # to ensure at least a few days' worth of these logs.
+            'class': 'logging.handlers.TimedRotatingFileHandler',
             'filename': LOG_DIR / 'coralnet_debug.log',
-            'formatter': 'standard'
+            'formatter': 'standard',
+            # 3 files having 3 days of logs each
+            'when': 'D',
+            'interval': 3,
+            'backupCount': 3,
         },
     },
     'loggers': {
