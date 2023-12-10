@@ -747,18 +747,8 @@ JOB_MAX_MINUTES = 10
 # Other Django stuff
 #
 
-# A list of strings designating all applications that are enabled in this
-# Django installation.
-#
-# When several applications provide different versions of the same resource
-# (template, static file, management command, translation), the application
-# listed first in INSTALLED_APPS has precedence.
-# We do have cases where we want to override default templates with our own
-# (e.g. auth and registration pages), so we'll put our apps first.
-#
-# If an app has an application configuration class, specify the dotted path
-# to that class here, rather than just specifying the app package.
-INSTALLED_APPS = [
+# [Helper variable]
+CORALNET_APPS = [
     'accounts',
     'annotations',
     'api_core',
@@ -789,6 +779,21 @@ INSTALLED_APPS = [
     'visualization',
     'vision_backend',
     'vision_backend_api',
+]
+
+# A list of strings designating all applications that are enabled in this
+# Django installation.
+#
+# When several applications provide different versions of the same resource
+# (template, static file, management command, translation), the application
+# listed first in INSTALLED_APPS has precedence.
+# We do have cases where we want to override default templates with our own
+# (e.g. auth and registration pages), so we'll put our apps first.
+#
+# If an app has an application configuration class, specify the dotted path
+# to that class here, rather than just specifying the app package.
+INSTALLED_APPS = [
+    *CORALNET_APPS,
 
     # Admin site (<domain>/admin)
     'django.contrib.admin',
@@ -930,6 +935,12 @@ FORM_RENDERER = 'lib.forms.GridFormRenderer'
 # For the Django sites framework
 SITE_ID = 1
 
+# [Helper variable]
+# CORALNET_APPS elements are either just the app dir's name, or are dotted
+# Python paths to the app's custom AppConfig class.
+# This code grabs just the app dir's name in both cases.
+CORALNET_APP_DIRS = [app_config.split('.')[0] for app_config in CORALNET_APPS]
+
 # https://docs.djangoproject.com/en/dev/topics/logging/#configuring-logging
 LOGGING = {
     'version': 1,
@@ -937,32 +948,33 @@ LOGGING = {
     # so we want to keep it.
     'disable_existing_loggers': False,
     'formatters': {
+        # https://docs.python.org/3/library/logging.html#logrecord-attributes
         'standard': {
-            'format': '[%(name)s.%(funcName)s, %(asctime)s]: %(message)s'
+            'format': (
+                '%(asctime)s - %(levelname)s:%(name)s'
+                ' - p%(process)d/t%(thread)d\n%(message)s')
         },
     },
     'handlers': {
-        'backend': {
+        'coralnet': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': LOG_DIR / 'vision_backend.log',
+            'filename': LOG_DIR / 'coralnet.log',
             'formatter': 'standard'
         },
-        'backend_debug': {
+        'coralnet_debug': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': LOG_DIR / 'vision_backend_debug.log',
+            'filename': LOG_DIR / 'coralnet_debug.log',
             'formatter': 'standard'
         },
     },
     'loggers': {
-        'vision_backend': {
-            'handlers': ['backend', 'backend_debug'],
+        CORALNET_APP_DIR: {
+            'handlers': ['coralnet', 'coralnet_debug'],
             'level': 'DEBUG',
-            # Don't print this info/debug output to console; it clogs output
-            # during unit tests, for example.
-            'propagate': False,
         }
+        for CORALNET_APP_DIR in CORALNET_APP_DIRS + ['spacer']
     },
 }
 # This can help with debugging DB queries.
