@@ -60,7 +60,7 @@ def queue_job(
     except Job.DoesNotExist:
         pass
     else:
-        logger.debug(f"Job [{job}] is already pending or in progress.")
+        # job is already pending or in progress.
 
         if (
             job.status == Job.Status.PENDING
