@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-import logging
+from logging import getLogger
 import math
 import random
 import sys
@@ -19,7 +19,7 @@ from errorlogs.utils import instantiate_error_log
 from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 MANY_FAILURES = 5

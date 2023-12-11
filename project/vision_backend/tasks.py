@@ -1,7 +1,7 @@
 from collections import Counter
 import datetime
 from datetime import timedelta
-import logging
+from logging import getLogger
 import random
 
 from django.conf import settings
@@ -36,7 +36,7 @@ from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import get_extractor, queue_source_check, reset_features
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 # Run daily, and not at prime times of biggest users (e.g. US East, Hawaii,

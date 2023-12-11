@@ -1,5 +1,5 @@
 from datetime import timedelta
-import logging
+from logging import getLogger
 
 from django.conf import settings
 from django.core.mail import mail_admins
@@ -20,7 +20,7 @@ from .utils import (
 )
 
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 def get_scheduled_jobs():

@@ -2,7 +2,7 @@
 This file contains helper functions to vision_backend.tasks.
 """
 from abc import ABC
-import logging
+from logging import getLogger
 import re
 from typing import List, Optional
 
@@ -34,7 +34,7 @@ from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .utils import queue_source_check
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 # This function is generally called outside of Django views, so the

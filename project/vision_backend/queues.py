@@ -2,7 +2,7 @@ import abc
 from datetime import timedelta
 from io import BytesIO
 import json
-import logging
+from logging import getLogger
 import sys
 from typing import Optional, Type
 
@@ -19,7 +19,7 @@ from config.constants import SpacerJobSpec
 from jobs.utils import finish_job
 from .models import BatchJob
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class BaseQueue(abc.ABC):
