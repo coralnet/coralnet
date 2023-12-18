@@ -30,7 +30,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
             cls.user,
             point_generation_type=PointGen.Types.SIMPLE,
             simple_number_of_points=5)
-        cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
+        cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def assertExistsInStorage(self, filepath):
@@ -38,16 +38,26 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         self.assertTrue(storage.exists(filepath))
 
     @classmethod
-    def upload_image_with_annotations(cls, filename):
+    def upload_image_with_annotations(cls, filename, label_choices='cycle'):
         img = cls.upload_image(
             cls.user, cls.source, image_options=dict(filename=filename))
-        cls.add_annotations(
-            cls.user, img, {1: 'A', 2: 'B', 3: 'A', 4: 'A', 5: 'B'})
+        label_codes = ['A', 'B']
+        match label_choices:
+            case 'cycle':
+                # As long as there are at least 2 points per image, this will
+                # ensure the data has at least 2 unique labels.
+                annotations = {
+                    num: label_codes[num % len(label_codes)]
+                    for num in range(1, img.point_set.count()+1)
+                }
+            case _:
+                assert False, "label_choices should be a valid option"
+        cls.add_annotations(cls.user, img, annotations)
         return img
 
     @classmethod
     def upload_images_for_training(
-        cls, train_image_count=None, val_image_count=1,
+        cls, train_image_count=None, val_image_count=1, label_choices='cycle',
     ):
         if not train_image_count:
             # Provide enough data for initial training
@@ -59,11 +69,13 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         for _ in range(train_image_count):
             train_images.append(
                 cls.upload_image_with_annotations(
-                    'train{}.png'.format(cls.image_count)))
+                    'train{}.png'.format(cls.image_count),
+                    label_choices=label_choices))
         for _ in range(val_image_count):
             val_images.append(
                 cls.upload_image_with_annotations(
-                    'val{}.png'.format(cls.image_count)))
+                    'val{}.png'.format(cls.image_count),
+                    label_choices=label_choices))
 
         return train_images, val_images
 

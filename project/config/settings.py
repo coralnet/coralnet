@@ -308,6 +308,8 @@ NEW_CLASSIFIER_TRAIN_TH = 1.1
 NEW_CLASSIFIER_IMPROVEMENT_TH = 1.01
 
 # This many images must be annotated before a first classifier is trained.
+# Can't set this lower than 3, since at least 1 train, 1 ref, and 1 val image
+# are needed for training.
 TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
 
 # Naming schemes
@@ -332,6 +334,9 @@ NBR_SCORES_PER_ANNOTATION = 5
 # This is the number of epochs we request the SGD solver to take over the data.
 NBR_TRAINING_EPOCHS = 10
 
+# Batch size for pyspacer's batching of training-annotations.
+TRAINING_BATCH_LABEL_COUNT = 5000
+
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.
 SPACER_JOB_HASH = env('SPACER_JOB_HASH', default='default_hash')
@@ -346,7 +351,7 @@ SPACER = {
         IMAGE_UPLOAD_MAX_DIMENSIONS[0] * IMAGE_UPLOAD_MAX_DIMENSIONS[1]),
     'MAX_POINTS_PER_IMAGE': MAX_POINTS_PER_IMAGE,
 
-    'MIN_TRAINIMAGES': TRAINING_MIN_IMAGES,
+    'TRAINING_BATCH_LABEL_COUNT': TRAINING_BATCH_LABEL_COUNT,
 }
 
 # If True, feature extraction just returns dummy results to speed up testing.

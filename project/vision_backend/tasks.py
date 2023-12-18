@@ -7,23 +7,26 @@ import random
 from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.db import IntegrityError
-from django.db.models import Count, F
+from django.db.models import F
 from django.utils import timezone
-from spacer.messages import \
-    ExtractFeaturesMsg, \
-    TrainClassifierMsg, \
-    ClassifyFeaturesMsg, \
-    ClassifyImageMsg, \
-    ClassifyReturnMsg, \
-    JobMsg, \
-    DataLocation
+from spacer.exceptions import TrainingLabelsError
+from spacer.messages import (
+    ClassifyFeaturesMsg,
+    ClassifyImageMsg,
+    ClassifyReturnMsg,
+    DataLocation,
+    ExtractFeaturesMsg,
+    JobMsg,
+    TrainClassifierMsg,
+    TrainingTaskLabels,
+)
 from spacer.tasks import classify_features as spacer_classify_features
+from spacer.task_utils import preprocess_labels
 
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from config.constants import SpacerJobSpec
 from events.models import ClassifyImageEvent
-from images.model_utils import PointGen
 from images.models import Source, Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
@@ -312,46 +315,66 @@ def submit_classifier(source_id, job_id):
     source = Source.objects.get(pk=source_id)
 
     # Create new classifier model
-    images = source.image_set.confirmed().with_features()
+    images = source.image_set.confirmed().with_features().order_by('pk')
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
     classifier.save()
 
-    # Create train-labels
-    storage = get_storage_class()()
-    train_labels = th.make_dataset(
-        [image for image in images if image.trainset])
+    # Create training datasets.
+    # The train+ref vs. val split is defined in advance, while the
+    # train vs. ref split is determined here with mod-10. This matches
+    # how it's worked since coralnet 1.0.
+    train_and_ref_images = [image for image in images if image.trainset]
+    train_images = []
+    ref_images = []
+    ref_annotation_count = 0
+    ref_done = False
+    for image_index, image in enumerate(train_and_ref_images):
+        if not ref_done and image_index % 10 == 0:
+            image_annotation_count = image.annotation_set.count()
+            if (ref_annotation_count + image_annotation_count
+                    <= settings.TRAINING_BATCH_LABEL_COUNT):
+                ref_images.append(image)
+                ref_annotation_count += image_annotation_count
+            else:
+                train_images.append(image)
+                ref_done = True
+        else:
+            train_images.append(image)
 
-    # Create val-labels
-    val_labels = th.make_dataset([image for image in images if image.valset])
-
-    # Identify classes common to both train and val. This will be our labelset
-    # for the training.
-    # Here we check that there are at least 2 unique labels for training. If
-    # not, we can get stuck in an error loop if we proceed to submit training
-    # (see issue #412), so we don't submit training.
-    train_data_classes = train_labels.unique_classes(train_labels.image_keys)
-    val_data_classes = val_labels.unique_classes(val_labels.image_keys)
-    training_classes = train_data_classes.intersection(val_data_classes)
-    if len(training_classes) <= 1:
+    labels = TrainingTaskLabels(
+        train=th.make_dataset(train_images),
+        ref=th.make_dataset(ref_images),
+        val=th.make_dataset([image for image in images if image.valset]),
+    )
+    try:
+        labels = preprocess_labels(labels)
+    except TrainingLabelsError:
+        # After preprocessing, we either ended up with only 0 or 1 unique
+        # label(s), or train/ref/val set ended up empty.
+        # There's a bit of "luck" involved with what ends up in train/ref/val,
+        # but generally this means that there weren't enough annotations of
+        # at least 2 different labels.
+        #
+        # We can get stuck in an error loop if we proceed to submit training
+        # (see issue #412), so we don't submit training.
         classifier.status = Classifier.LACKING_UNIQUE_LABELS
         classifier.save()
         raise JobError(
-            f"{classifier} was declined training, because the training"
-            f" labelset ended up only having one unique label. Training"
-            f" requires at least 2 unique labels.")
+            f"{classifier} was declined training, because there weren't enough"
+            f" annotations of at least 2 different labels.")
 
     # This will not include the one we just created, b/c status isn't accepted.
     prev_classifiers = source.get_accepted_robots()
 
     # Create TrainClassifierMsg
+    storage = get_storage_class()()
     task = TrainClassifierMsg(
         job_token=str(job_id),
         trainer_name='minibatch',
         nbr_epochs=settings.NBR_TRAINING_EPOCHS,
         clf_type=CLASSIFIER_MAPPINGS[source.feature_extractor],
-        train_labels=train_labels,
-        val_labels=val_labels,
+        labels=labels,
         features_loc=storage.spacer_data_loc(''),
         previous_model_locs=[storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=pc.pk))
@@ -367,16 +390,11 @@ def submit_classifier(source_id, job_id):
 
     # How big of a job is this; how many annotations? That will determine
     # runtime (and possibly memory) requirements of training.
-    #
-    # Get each unique PointGen value and the value's image count.
-    # https://docs.djangoproject.com/en/4.1/topics/db/aggregation/#interaction-with-order-by
-    point_gen_values_and_counts = images.values_list(
-        'point_generation_method').annotate(Count('id')).order_by()
-    # Then do the math from there.
-    annotation_count = sum([
-        PointGen.db_to_point_count(point_gen_method) * image_count
-        for point_gen_method, image_count in point_gen_values_and_counts
-    ])
+    annotation_count = (
+        labels.train.label_count
+        + labels.ref.label_count
+        + labels.val.label_count
+    )
     job_spec = None
     for spec, threshold in settings.TRAIN_SPEC_ANNOTATIONS:
         if annotation_count >= threshold:

@@ -158,7 +158,7 @@ def make_dataset(images: List[Image]) -> ImageLabels:
     for training and evaluation of the robot classifier.
     """
     storage = get_storage_class()()
-    labels = ImageLabels(data={})
+    data = dict()
     for img in images:
         data_loc = storage.spacer_data_loc(img.original_file.name)
         feature_key = settings.FEATURE_VECTOR_FILE_PATTERN.format(
@@ -167,9 +167,9 @@ def make_dataset(images: List[Image]) -> ImageLabels:
             annotate(gt_label=F('label__id')).\
             annotate(row=F('point__row')). \
             annotate(col=F('point__column'))
-        labels.data[feature_key] = [(ann.row, ann.col, ann.gt_label)
-                                    for ann in anns]
-    return labels
+        data[feature_key] = [
+            (ann.row, ann.col, ann.gt_label) for ann in anns]
+    return ImageLabels(data)
 
 
 class SpacerResultHandler(ABC):
