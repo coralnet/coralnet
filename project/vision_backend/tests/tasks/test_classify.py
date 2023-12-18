@@ -336,54 +336,58 @@ class ClassifyImageTest(
             ]
         )
 
-    def test_more_than_5_labels(self):
+    def test_score_count_cap(self):
         """
-        When there are more than 5 labels, score count should be capped to 5.
-
-        TODO:
-         1) Due to the randomness of the training 'reference set', there's
-         no guarantee of what labels would be included without the
-         score-count cap. Once PySpacer is updated to allow specifying a
-         non-random reference set, use that option here.
-         2) This test would be more robust if it tested the same
-         annotation-specifying logic with 2 different score-count caps
-         (e.g. 3 and 5).
+        Score count should be capped by the number of labels or the
+        setting for number of scores, whichever is lower.
         """
-        # Increase label count from 2 to 8.
+        # Increase label count from 2 to 5.
         labels = self.create_labels(
-            self.user, ['C', 'D', 'E', 'F', 'G', 'H'], "Group2")
+            self.user, ['C', 'D', 'E'], "Group2")
         self.create_labelset(self.user, self.source, labels | self.labels)
 
-        # Use each label, so that they all have enough training
-        # data to be considered during classification.
-        img = self.upload_image(self.user, self.source)
-        self.add_annotations(
-            self.user, img, {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E'})
-        img = self.upload_image(self.user, self.source)
-        self.add_annotations(
-            self.user, img, {1: 'F', 2: 'G', 3: 'H', 4: 'B', 5: 'C'})
-        img = self.upload_image(self.user, self.source)
-        self.add_annotations(
-            self.user, img, {1: 'D', 2: 'E', 3: 'F', 4: 'G', 5: 'H'})
+        def mock_classify_return_msg(
+                self_, runtime, scores, classes, valid_rowcol):
+            self_.runtime = runtime
+            self_.classes = [
+                (labels | self.labels).get(name=name).pk
+                for name in ['A', 'B', 'C', 'D', 'E']
+            ]
+            self_.valid_rowcol = valid_rowcol
 
-        # This uploads a bunch of images using nothing but A/B, then runs
-        # tasks needed to train a classifier.
+            # 1 list per point; 1 float score per label per point.
+            scores_simple = [
+                [0.5, 0.2, 0.15, 0.1, 0.05],
+                [0.5, 0.2, 0.15, 0.1, 0.05],
+                [0.5, 0.2, 0.15, 0.1, 0.05],
+                [0.5, 0.2, 0.15, 0.1, 0.05],
+                [0.5, 0.2, 0.15, 0.1, 0.05],
+            ]
+            self_.scores = []
+            for i, (row, column, _) in enumerate(scores):
+                self_.scores.append((row, column, scores_simple[i]))
+
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_machine_classify()
+        with mock.patch(
+            'spacer.messages.ClassifyReturnMsg.__init__', mock_classify_return_msg
+        ):
 
-        for point in Point.objects.filter(image__id=img.id):
-            # Score count per point should be label count or 5,
-            # whichever is less. (In this case 5)
-            # Or apparently in rare cases there may be less than 5, possibly
-            # since the scores are integers?
-            # But the point is that there shouldn't be 8 scores.
-            self.assertTrue(
-                point.score_set.exists(),
-                "Each point should have scores")
-            self.assertLessEqual(
-                point.score_set.count(), 5,
-                "Each point should have <= 5 scores")
+            with override_settings(NBR_SCORES_PER_ANNOTATION=4):
+                img = self.upload_image_and_machine_classify()
+            for point in Point.objects.filter(image__id=img.id):
+                self.assertEqual(
+                    point.score_set.count(), 4,
+                    "Each point should have 4 scores"
+                    " (limited by setting)")
+
+            with override_settings(NBR_SCORES_PER_ANNOTATION=6):
+                img = self.upload_image_and_machine_classify()
+            for point in Point.objects.filter(image__id=img.id):
+                self.assertEqual(
+                    point.score_set.count(), 5,
+                    "Each point should have 5 scores"
+                    " (limited by label count)")
 
     def test_classify_unconfirmed_image(self):
         """
