@@ -308,6 +308,8 @@ NEW_CLASSIFIER_TRAIN_TH = 1.1
 NEW_CLASSIFIER_IMPROVEMENT_TH = 1.01
 
 # This many images must be annotated before a first classifier is trained.
+# Can't set this lower than 3, since at least 1 train, 1 ref, and 1 val image
+# are needed for training.
 TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
 
 # Naming schemes
@@ -332,6 +334,9 @@ NBR_SCORES_PER_ANNOTATION = 5
 # This is the number of epochs we request the SGD solver to take over the data.
 NBR_TRAINING_EPOCHS = 10
 
+# Batch size for pyspacer's batching of training-annotations.
+TRAINING_BATCH_LABEL_COUNT = 5000
+
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.
 SPACER_JOB_HASH = env('SPACER_JOB_HASH', default='default_hash')
@@ -346,7 +351,7 @@ SPACER = {
         IMAGE_UPLOAD_MAX_DIMENSIONS[0] * IMAGE_UPLOAD_MAX_DIMENSIONS[1]),
     'MAX_POINTS_PER_IMAGE': MAX_POINTS_PER_IMAGE,
 
-    'MIN_TRAINIMAGES': TRAINING_MIN_IMAGES,
+    'TRAINING_BATCH_LABEL_COUNT': TRAINING_BATCH_LABEL_COUNT,
 }
 
 # If True, feature extraction just returns dummy results to speed up testing.
@@ -747,18 +752,8 @@ JOB_MAX_MINUTES = 10
 # Other Django stuff
 #
 
-# A list of strings designating all applications that are enabled in this
-# Django installation.
-#
-# When several applications provide different versions of the same resource
-# (template, static file, management command, translation), the application
-# listed first in INSTALLED_APPS has precedence.
-# We do have cases where we want to override default templates with our own
-# (e.g. auth and registration pages), so we'll put our apps first.
-#
-# If an app has an application configuration class, specify the dotted path
-# to that class here, rather than just specifying the app package.
-INSTALLED_APPS = [
+# [Helper variable]
+CORALNET_APPS = [
     'accounts',
     'annotations',
     'api_core',
@@ -789,6 +784,21 @@ INSTALLED_APPS = [
     'visualization',
     'vision_backend',
     'vision_backend_api',
+]
+
+# A list of strings designating all applications that are enabled in this
+# Django installation.
+#
+# When several applications provide different versions of the same resource
+# (template, static file, management command, translation), the application
+# listed first in INSTALLED_APPS has precedence.
+# We do have cases where we want to override default templates with our own
+# (e.g. auth and registration pages), so we'll put our apps first.
+#
+# If an app has an application configuration class, specify the dotted path
+# to that class here, rather than just specifying the app package.
+INSTALLED_APPS = [
+    *CORALNET_APPS,
 
     # Admin site (<domain>/admin)
     'django.contrib.admin',
@@ -930,6 +940,12 @@ FORM_RENDERER = 'lib.forms.GridFormRenderer'
 # For the Django sites framework
 SITE_ID = 1
 
+# [Helper variable]
+# CORALNET_APPS elements are either just the app dir's name, or are dotted
+# Python paths to the app's custom AppConfig class.
+# This code grabs just the app dir's name in both cases.
+CORALNET_APP_DIRS = [app_config.split('.')[0] for app_config in CORALNET_APPS]
+
 # https://docs.djangoproject.com/en/dev/topics/logging/#configuring-logging
 LOGGING = {
     'version': 1,
@@ -937,32 +953,47 @@ LOGGING = {
     # so we want to keep it.
     'disable_existing_loggers': False,
     'formatters': {
+        # https://docs.python.org/3/library/logging.html#logrecord-attributes
         'standard': {
-            'format': '[%(name)s.%(funcName)s, %(asctime)s]: %(message)s'
+            'format': (
+                '%(asctime)s - %(levelname)s:%(name)s'
+                ' - p%(process)d/t%(thread)d\n%(message)s')
         },
     },
     'handlers': {
-        'backend': {
+        'coralnet': {
             'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': LOG_DIR / 'vision_backend.log',
-            'formatter': 'standard'
+            # Filesize-based rotation for info level. When there's
+            # less server activity, having logs of this level from
+            # farther in the past can be nice to have, and has little
+            # impact on disk space.
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOG_DIR / 'coralnet.log',
+            'formatter': 'standard',
+            # 3 files having 5 MB of logs each
+            'maxBytes': 5000000,
+            'backupCount': 3,
         },
-        'backend_debug': {
+        'coralnet_debug': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': LOG_DIR / 'vision_backend_debug.log',
-            'formatter': 'standard'
+            # Time-based rotation for debug level. The rate this can
+            # grow is less predictable than info level, and we want
+            # to ensure at least a few days' worth of these logs.
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': LOG_DIR / 'coralnet_debug.log',
+            'formatter': 'standard',
+            # 3 files having 3 days of logs each
+            'when': 'D',
+            'interval': 3,
+            'backupCount': 3,
         },
     },
     'loggers': {
-        'vision_backend': {
-            'handlers': ['backend', 'backend_debug'],
+        CORALNET_APP_DIR: {
+            'handlers': ['coralnet', 'coralnet_debug'],
             'level': 'DEBUG',
-            # Don't print this info/debug output to console; it clogs output
-            # during unit tests, for example.
-            'propagate': False,
         }
+        for CORALNET_APP_DIR in CORALNET_APP_DIRS + ['spacer']
     },
 }
 # This can help with debugging DB queries.

@@ -2,7 +2,7 @@
 This file contains helper functions to vision_backend.tasks.
 """
 from abc import ABC
-import logging
+from logging import getLogger
 import re
 from typing import List, Optional
 
@@ -34,7 +34,7 @@ from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .utils import queue_source_check
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 # This function is generally called outside of Django views, so the
@@ -158,7 +158,7 @@ def make_dataset(images: List[Image]) -> ImageLabels:
     for training and evaluation of the robot classifier.
     """
     storage = get_storage_class()()
-    labels = ImageLabels(data={})
+    data = dict()
     for img in images:
         data_loc = storage.spacer_data_loc(img.original_file.name)
         feature_key = settings.FEATURE_VECTOR_FILE_PATTERN.format(
@@ -167,9 +167,9 @@ def make_dataset(images: List[Image]) -> ImageLabels:
             annotate(gt_label=F('label__id')).\
             annotate(row=F('point__row')). \
             annotate(col=F('point__column'))
-        labels.data[feature_key] = [(ann.row, ann.col, ann.gt_label)
-                                    for ann in anns]
-    return labels
+        data[feature_key] = [
+            (ann.row, ann.col, ann.gt_label) for ann in anns]
+    return ImageLabels(data)
 
 
 class SpacerResultHandler(ABC):
@@ -180,6 +180,10 @@ class SpacerResultHandler(ABC):
     # This must match the corresponding Job's job_name AND the
     # spacer JobMsg's task_name (which are assumed to be the same).
     job_name = None
+
+    # Error classes which are considered temporary or end-user errors,
+    # rather than errors demanding attention of coralnet / pyspacer devs.
+    non_priority_error_classes = []
 
     @classmethod
     def handle(cls, job_res: JobReturnMsg):
@@ -201,9 +205,8 @@ class SpacerResultHandler(ABC):
                 error_class = error_message
                 error_info = ""
 
-            if error_class != 'spacer.exceptions.SpacerInputError':
-                # Not a SpacerInputError, so we should treat it like
-                # a server error.
+            if error_class not in cls.non_priority_error_classes:
+                # Priority error; treat like an internal server error.
                 mail_admins(
                     f"Spacer job failed: {cls.job_name}",
                     repr(job_res),
@@ -266,6 +269,15 @@ class SpacerResultHandler(ABC):
 
 class SpacerFeatureResultHandler(SpacerResultHandler):
     job_name = 'extract_features'
+
+    non_priority_error_classes = [
+        # When this happens, it's probably a race condition that can be
+        # recovered from in the next attempt.
+        # But if it's not recoverable, then the Job should fail a few times
+        # in a row and then issue a "failing repeatedly" notice to site
+        # admins.
+        'spacer.exceptions.RowColumnMismatchError',
+    ]
 
     @classmethod
     def handle_spacer_task_result(
@@ -408,6 +420,24 @@ class SpacerTrainResultHandler(SpacerResultHandler):
 
 class SpacerClassifyResultHandler(SpacerResultHandler):
     job_name = 'classify_image'
+
+    non_priority_error_classes = [
+        # If the user-specified URL has a non-image, then the Pillow load
+        # step gets:
+        # PIL.UnidentifiedImageError - cannot identify image file <...>
+        'PIL.UnidentifiedImageError',
+        # If the user specifies an image that's too big, then this error
+        # class is raised.
+        # This error class covers the point limit too, but that's already
+        # checked by the deploy view.
+        'spacer.exceptions.DataLimitError',
+        # If there are any issues with downloading from the user-specified
+        # URL, then the download step gets one of a few different
+        # URLDownloadErrors. Now, this scenario could potentially indicate
+        # a coralnet or pyspacer issue, but the common cases are either an
+        # issue with the given URL's site, or just a random network error.
+        'spacer.exceptions.URLDownloadError',
+    ]
 
     @classmethod
     def handle_spacer_task_result(

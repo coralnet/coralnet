@@ -2,7 +2,7 @@ import abc
 from datetime import timedelta
 from io import BytesIO
 import json
-import logging
+from logging import getLogger
 import sys
 from typing import Optional, Type
 
@@ -19,7 +19,7 @@ from config.constants import SpacerJobSpec
 from jobs.utils import finish_job
 from .models import BatchJob
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 class BaseQueue(abc.ABC):
@@ -162,7 +162,6 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         # Else: 'SUCCEEDED'
-        logger.info(f"Entering collection of Batch job [{job}].")
         job_res_loc = self.storage.spacer_data_loc(job.res_key)
 
         try:
@@ -176,7 +175,6 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         # All went well
-        logger.info(f"Exiting collection of Batch job [{job}].")
         return return_msg, job.status
 
 

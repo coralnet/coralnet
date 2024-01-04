@@ -8,6 +8,15 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.9 (WIP)
+
+- Updates to required packages:
+  - pyspacer 0.6.1 -> 0.7.0
+
+### Notes
+
+1.5's logging regression has been fixed. Unit-test console output is now clean, and logging statements from all project apps and pyspacer are now logged to `coralnet.log` and `coralnet_debug.log`.
+
 ## [1.8.1](https://github.com/coralnet/coralnet/tree/1.8.1)
 
 Production: 2023-12-02

@@ -72,6 +72,8 @@ test_settings['CACHES'] = {
 # Force spacer jobs to use the dummy extractor.
 # Otherwise tests will run slow.
 test_settings['FORCE_DUMMY_EXTRACTOR'] = True
+# Speed up training setup by requiring as few images as possible.
+test_settings['TRAINING_MIN_IMAGES'] = 3
 # Validation sets vs. training sets should be completely predictable in
 # unit tests.
 test_settings['VALSET_SELECTION_METHOD'] = 'name'

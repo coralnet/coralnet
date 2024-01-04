@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-import logging
+from logging import getLogger
 import math
 import random
 import sys
@@ -19,7 +19,7 @@ from errorlogs.utils import instantiate_error_log
 from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 MANY_FAILURES = 5
@@ -60,7 +60,7 @@ def queue_job(
     except Job.DoesNotExist:
         pass
     else:
-        logger.debug(f"Job [{job}] is already pending or in progress.")
+        # job is already pending or in progress.
 
         if (
             job.status == Job.Status.PENDING
@@ -71,7 +71,7 @@ def queue_job(
             if scheduled_start_date < job.scheduled_start_date:
                 job.scheduled_start_date = scheduled_start_date
                 job.save()
-                logger.debug(f"Updated the job's scheduled start date.")
+                logger.debug(f"Job [{job}]: updated scheduled start date.")
 
         return None
 
@@ -152,11 +152,11 @@ def start_pending_job(job_name: str, arg_identifier: str) -> Optional[Job]:
             return None
 
         if len(jobs) == 0:
-            logger.info(f"Job [{job_name} / {arg_identifier}] not found.")
+            logger.debug(f"Job [{job_name} / {arg_identifier}] not found.")
             return None
 
         if Job.Status.IN_PROGRESS in [job.status for job in jobs]:
-            logger.info(f"Job [{jobs[0]}] already in progress.")
+            logger.debug(f"Job [{jobs[0]}] already in progress.")
             return None
 
         job = jobs[0]
@@ -188,9 +188,6 @@ def finish_job(job, success=False, result_message=None):
         job.persist = True
 
     job.save()
-
-    if job.result_message:
-        logger.info(f"Job [{job}]: {job.result_message}")
 
     if settings.ENABLE_PERIODIC_JOBS:
         # If it's a periodic job, schedule another run of it

@@ -19,18 +19,9 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
     def test_queue_job_when_already_pending(self):
         queue_job('name', 'arg')
+        return_val = queue_job('name', 'arg')
 
-        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
-            queue_job('name', 'arg')
-
-        log_message = (
-            "DEBUG:jobs.utils:"
-            "Job [name / arg] is already pending or in progress."
-        )
-        self.assertIn(
-            log_message, cm.output,
-            "Should log the appropriate message")
-
+        self.assertIsNone(return_val, "Should return None")
         self.assertEqual(
             Job.objects.all().count(),
             1,
@@ -38,18 +29,9 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
     def test_queue_job_when_already_in_progress(self):
         queue_job('name', 'arg', initial_status=Job.Status.IN_PROGRESS)
+        return_val = queue_job('name', 'arg')
 
-        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
-            queue_job('name', 'arg')
-
-        log_message = (
-            "DEBUG:jobs.utils:"
-            "Job [name / arg] is already pending or in progress."
-        )
-        self.assertIn(
-            log_message, cm.output,
-            "Should log the appropriate message")
-
+        self.assertIsNone(return_val, "Should return None")
         self.assertEqual(
             Job.objects.all().count(),
             1,
@@ -64,16 +46,8 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
         job_2 = Job(job_name='name', arg_identifier='arg')
         job_2.save()
 
-        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
-            queue_job('name', 'arg')
-
-        log_message = (
-            "DEBUG:jobs.utils:"
-            "Job [name / arg] is already pending or in progress."
-        )
-        self.assertIn(
-            log_message, cm.output,
-            "Should log the appropriate message (and not crash)")
+        return_val = queue_job('name', 'arg')
+        self.assertIsNone(return_val, "Should return None (and not crash)")
 
     def test_queue_job_when_previously_done(self):
         queue_job('name', 'arg', initial_status=Job.Status.SUCCESS)
@@ -214,11 +188,11 @@ class QueueJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
 class StartPendingJobTest(BaseTest):
 
     def test_job_not_found(self):
-        with self.assertLogs(logger='jobs.utils', level='INFO') as cm:
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
             start_pending_job('name', 'arg')
 
         log_message = (
-            "INFO:jobs.utils:"
+            "DEBUG:jobs.utils:"
             "Job [name / arg] not found."
         )
         self.assertIn(
@@ -228,11 +202,11 @@ class StartPendingJobTest(BaseTest):
     def test_job_already_in_progress(self):
         queue_job('name', 'arg', initial_status=Job.Status.IN_PROGRESS)
 
-        with self.assertLogs(logger='jobs.utils', level='INFO') as cm:
+        with self.assertLogs(logger='jobs.utils', level='DEBUG') as cm:
             start_pending_job('name', 'arg')
 
             log_message = (
-                "INFO:jobs.utils:"
+                "DEBUG:jobs.utils:"
                 "Job [name / arg] already in progress."
             )
             self.assertIn(

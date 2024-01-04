@@ -506,14 +506,13 @@ class JobSpecsTest(BaseTaskTest):
                 filename = f'val{num}.png'
             else:
                 filename = f'train{num}.png'
-            image = self.upload_image_with_annotations(filename)
 
-            # The threshold comparison is done by checking each image's
-            # point generation method.
-            image.point_generation_method = PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.IMPORTED,
-                imported_number_of_points=image_point_count)
-            image.save()
+            self.source.default_point_generation_method = \
+                PointGen.args_to_db_format(
+                    point_generation_type=PointGen.Types.SIMPLE,
+                    simple_number_of_points=image_point_count)
+            self.source.save()
+            image = self.upload_image_with_annotations(filename)
 
             do_job('extract_features', image.pk, source_id=self.source.pk)
 
@@ -529,13 +528,20 @@ class JobSpecsTest(BaseTaskTest):
         ):
             do_job('train_classifier', self.source.pk)
 
-        self.assertEqual(mock_method.call_args[0][2], expected_job_spec)
+        self.assertIsNotNone(
+            mock_method.call_args[0],
+            "Should have called submit_job() (sanity check)")
+        self.assertEqual(
+            mock_method.call_args[0][2], expected_job_spec,
+            "Should have called submit_job() with the expected job spec")
 
     def test_train_classifier_less(self):
-        self.do_test_train_classifier([1,5,10], 20, SpacerJobSpec.MEDIUM)
+        # Need at least 2 points in each of the 3 images so that it's
+        # possible to have 2 different labels in each of train, ref, val.
+        self.do_test_train_classifier([2,4,10], 20, SpacerJobSpec.MEDIUM)
 
     def test_train_classifier_equal(self):
-        self.do_test_train_classifier([1,5,10], 16, SpacerJobSpec.HIGH)
+        self.do_test_train_classifier([2,4,10], 16, SpacerJobSpec.HIGH)
 
     def test_train_classifier_greater(self):
-        self.do_test_train_classifier([1,5,10], 10, SpacerJobSpec.HIGH)
+        self.do_test_train_classifier([2,4,10], 10, SpacerJobSpec.HIGH)
