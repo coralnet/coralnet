@@ -855,6 +855,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Associates users with requests across sessions; required for auth
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Log when each view starts and ends.
+    # Should be after AuthenticationMiddleware so we can log the user ID of
+    # each request to understand usage patterns. (ID, not username, to keep
+    # things relatively anonymous)
+    'lib.middleware.ViewLoggingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 
     # django-reversion
@@ -959,6 +964,19 @@ LOGGING = {
                 '%(asctime)s - %(levelname)s:%(name)s'
                 ' - p%(process)d/t%(thread)d\n%(message)s')
         },
+        'views': {
+            # This is meant to be converted to a SSV easily. `message` has
+            # multiple semicolon-separated values within it as well.
+            # We go for semicolons instead of commas because it's a bit of a
+            # hassle to make asctime use something besides a comma before
+            # the milliseconds.
+            'format': ';'.join([
+                '%(asctime)s',
+                'p%(process)d',
+                't%(thread)d',
+                '%(message)s',
+            ]),
+        },
     },
     'handlers': {
         'coralnet': {
@@ -987,13 +1005,39 @@ LOGGING = {
             'interval': 3,
             'backupCount': 3,
         },
+        'coralnet_views': {
+            'level': 'INFO',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': LOG_DIR / 'coralnet_views.log',
+            'formatter': 'views',
+            # 3 files having 3 days of logs each
+            'when': 'D',
+            'interval': 3,
+            'backupCount': 3,
+        },
+        'coralnet_views_debug': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': LOG_DIR / 'coralnet_views_debug.log',
+            'formatter': 'views',
+            # 3 files having 1 day of logs each
+            'when': 'D',
+            'interval': 1,
+            'backupCount': 3,
+        },
     },
     'loggers': {
-        CORALNET_APP_DIR: {
-            'handlers': ['coralnet', 'coralnet_debug'],
+        'coralnet_views': {
+            'handlers': ['coralnet_views', 'coralnet_views_debug'],
             'level': 'DEBUG',
+        },
+        **{
+            CORALNET_APP_DIR: {
+                'handlers': ['coralnet', 'coralnet_debug'],
+                'level': 'DEBUG',
+            }
+            for CORALNET_APP_DIR in CORALNET_APP_DIRS + ['spacer']
         }
-        for CORALNET_APP_DIR in CORALNET_APP_DIRS + ['spacer']
     },
 }
 # This can help with debugging DB queries.
