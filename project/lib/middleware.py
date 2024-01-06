@@ -18,12 +18,10 @@ class ViewLoggingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-        # One-time configuration and initialization.
+        # One-time configuration and initialization goes here.
+        #
+        # This tracks the views that are active in the current process.
         self.active_views = set()
-
-    @classmethod
-    def get_next_view_id(cls):
-        return str(uuid.uuid4())
 
     @staticmethod
     def log_info(tokens):
@@ -36,27 +34,31 @@ class ViewLoggingMiddleware:
         view_logger.debug(message)
 
     def __call__(self, request: HttpRequest):
-        # Before-view code.
-        view_id = self.get_next_view_id()
+        # Log a message before view entry.
+        view_id = str(uuid.uuid4())
         self.active_views.add(view_id)
         view_path = request.path
         view_name = resolve(view_path).view_name
+        view_user = request.user.pk or "Guest"
         self.log_debug([
             view_id,
+            # view or task.
+            'view',
+            # start or end.
             'start',
             len(self.active_views),
             '',
-            '',
+            view_name,
             '',
             request.method,
-            request.user.pk,
+            view_user,
             view_path,
         ])
         start_time = datetime.datetime.now()
 
         response: HttpResponse = self.get_response(request)
 
-        # After-view code.
+        # Log a message after view exit.
         elapsed_seconds = (datetime.datetime.now() - start_time).total_seconds()
         if elapsed_seconds > 0.5:
             log = self.log_info
@@ -65,13 +67,14 @@ class ViewLoggingMiddleware:
         self.active_views.remove(view_id)
         log([
             view_id,
+            'view',
             'end',
             len(self.active_views),
             elapsed_seconds,
             view_name,
             response.status_code,
             request.method,
-            request.user.pk,
+            view_user,
             view_path,
         ])
 

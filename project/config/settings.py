@@ -1005,20 +1005,20 @@ LOGGING = {
             'interval': 3,
             'backupCount': 3,
         },
-        'coralnet_views': {
+        'coralnet_views_tasks': {
             'level': 'INFO',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': LOG_DIR / 'coralnet_views.log',
+            'filename': LOG_DIR / 'coralnet_views_tasks.ssv',
             'formatter': 'views',
             # 3 files having 3 days of logs each
             'when': 'D',
             'interval': 3,
             'backupCount': 3,
         },
-        'coralnet_views_debug': {
+        'coralnet_views_tasks_debug': {
             'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': LOG_DIR / 'coralnet_views_debug.log',
+            'filename': LOG_DIR / 'coralnet_views_tasks_debug.ssv',
             'formatter': 'views',
             # 3 files having 1 day of logs each
             'when': 'D',
@@ -1028,7 +1028,11 @@ LOGGING = {
     },
     'loggers': {
         'coralnet_views': {
-            'handlers': ['coralnet_views', 'coralnet_views_debug'],
+            'handlers': ['coralnet_views_tasks', 'coralnet_views_tasks_debug'],
+            'level': 'DEBUG',
+        },
+        'coralnet_tasks': {
+            'handlers': ['coralnet_views_tasks', 'coralnet_views_tasks_debug'],
             'level': 'DEBUG',
         },
         **{

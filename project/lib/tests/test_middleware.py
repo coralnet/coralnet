@@ -26,12 +26,16 @@ class ViewLoggingMiddlewareTest(ClientTest):
             r"DEBUG:coralnet_views:"
             # UUID for this view instance
             r"[a-f\d\-]+;"
+            # view or task
+            r"view;"
             # start or end of view processing
             r"start;"
             # Number of concurrent views after adding this one
             r"1;"
             r";"
-            r";;GET;None;/"
+            # View name
+            r"index;"
+            r";GET;Guest;/"
         )
         self.assertRegexpMatches(
             cm.output[0],
@@ -41,13 +45,15 @@ class ViewLoggingMiddlewareTest(ClientTest):
         expected_end_message_regex = re.compile(
             r"DEBUG:coralnet_views:"
             r"[a-f\d\-]+;"
+            r"view;"
             r"end;"
             # Number of concurrent views after removing this one
             r"0;"
             # Seconds elapsed
             r"[\d.]+;"
-            # View name; status code; method; user ID; request path
-            r"index;200;GET;None;/"
+            r"index;"
+            # Status code; method; user ID or 'Guest'; request path
+            r"200;GET;Guest;/"
         )
         self.assertRegexpMatches(
             cm.output[1],
@@ -80,5 +86,5 @@ class ViewLoggingMiddlewareTest(ClientTest):
         self.assertEqual(
             len(cm.output), 2, "Should still log start and end messages")
         self.assertTrue(
-            cm.output[1].endswith(f";500;GET;None;/"),
+            cm.output[1].endswith(f";500;GET;Guest;/"),
             f"End message should have status code. Message: {cm.output[1]}")

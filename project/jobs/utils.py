@@ -5,6 +5,7 @@ import random
 import sys
 import traceback
 from typing import Optional
+import uuid
 
 from django.conf import settings
 from django.core.mail import mail_admins
@@ -20,6 +21,7 @@ from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
 logger = getLogger(__name__)
+task_logger = getLogger('coralnet_tasks')
 
 
 MANY_FAILURES = 5
@@ -227,6 +229,11 @@ class JobDecorator:
         # Only minute-intervals are supported for simplicity.
         self.huey_interval_minutes = huey_interval_minutes
 
+    @staticmethod
+    def log_debug(tokens):
+        message = ';'.join(str(token) for token in tokens)
+        task_logger.debug(message)
+
     def __call__(self, task_func):
         if not self.job_name:
             self.job_name = task_func.__name__
@@ -249,7 +256,43 @@ class JobDecorator:
 
         @huey_decorator
         def task_wrapper(*task_args):
+            # Log a message before task entry.
+            # Columns are supposed to correspond to the ones in
+            # lib.middleware.ViewLoggingMiddleware.
+            task_id = str(uuid.uuid4())
+            self.log_debug([
+                task_id,
+                'task',
+                'start',
+                # Tasks active in the current process. Presumably it's
+                # at most 1.
+                1,
+                '',
+                task_func.__name__,
+                '',
+                '',
+                '',
+                task_args,
+            ])
+            start_time = datetime.now()
+
             self.run_task_wrapper(task_func, task_args)
+
+            # Log a message after task exit.
+            elapsed_seconds = (
+                datetime.now() - start_time).total_seconds()
+            self.log_debug([
+                task_id,
+                'task',
+                'end',
+                0,
+                elapsed_seconds,
+                task_func.__name__,
+                '',
+                '',
+                '',
+                task_args,
+            ])
 
         set_job_run_function(self.job_name, task_wrapper)
 
