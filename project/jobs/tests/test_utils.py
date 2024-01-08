@@ -1,4 +1,5 @@
 from datetime import timedelta
+import re
 from unittest import mock
 
 from django.db import connections, transaction
@@ -400,6 +401,46 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             "Error in job: job_starter_example",
             [f"ValueError: A ValueError (ID: {job.pk})"],
         )
+
+    def test_logging(self):
+        with self.assertLogs(logger='coralnet_tasks', level='DEBUG') as cm:
+            full_job_example('some_arg')
+
+        expected_start_message_regex = re.compile(
+            # Message prefix applied by assertLogs() (the logging handler
+            # format defined in settings is not used here)
+            r"DEBUG:coralnet_tasks:"
+            # UUID for this task instance
+            r"[a-f\d\-]+;"
+            # view or task
+            r"task;"
+            # start or end of task
+            r"start;"
+            r";"
+            # Task name
+            r"full_job_example;"
+            # Task args
+            r";;;\('some_arg',\)"
+        )
+        self.assertRegexpMatches(
+            cm.output[0],
+            expected_start_message_regex,
+            f"Should log the expected start message")
+
+        expected_end_message_regex = re.compile(
+            r"DEBUG:coralnet_tasks:"
+            r"[a-f\d\-]+;"
+            r"task;"
+            r"end;"
+            # Seconds elapsed
+            r"[\d.]+;"
+            r"full_job_example;"
+            r";;;\('some_arg',\)"
+        )
+        self.assertRegexpMatches(
+            cm.output[1],
+            expected_end_message_regex,
+            f"Should log the expected end message")
 
 
 def save_two_copies(self, *args, **kwargs):
