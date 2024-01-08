@@ -18,11 +18,6 @@ class ViewLoggingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-        # One-time configuration and initialization goes here.
-        #
-        # This tracks the views that are active in the current process.
-        self.active_views = set()
-
     @staticmethod
     def log_info(tokens):
         message = ';'.join(str(token) for token in tokens)
@@ -36,7 +31,6 @@ class ViewLoggingMiddleware:
     def __call__(self, request: HttpRequest):
         # Log a message before view entry.
         view_id = str(uuid.uuid4())
-        self.active_views.add(view_id)
         view_path = request.path
         view_name = resolve(view_path).view_name
         view_user = request.user.pk or "Guest"
@@ -46,7 +40,6 @@ class ViewLoggingMiddleware:
             'view',
             # start or end.
             'start',
-            len(self.active_views),
             '',
             view_name,
             '',
@@ -64,12 +57,10 @@ class ViewLoggingMiddleware:
             log = self.log_info
         else:
             log = self.log_debug
-        self.active_views.remove(view_id)
         log([
             view_id,
             'view',
             'end',
-            len(self.active_views),
             elapsed_seconds,
             view_name,
             response.status_code,

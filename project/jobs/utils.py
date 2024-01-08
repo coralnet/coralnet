@@ -264,9 +264,6 @@ class JobDecorator:
                 task_id,
                 'task',
                 'start',
-                # Tasks active in the current process. Presumably it's
-                # at most 1.
-                1,
                 '',
                 task_func.__name__,
                 '',
@@ -285,7 +282,6 @@ class JobDecorator:
                 task_id,
                 'task',
                 'end',
-                0,
                 elapsed_seconds,
                 task_func.__name__,
                 '',

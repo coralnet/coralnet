@@ -30,8 +30,6 @@ class ViewLoggingMiddlewareTest(ClientTest):
             r"view;"
             # start or end of view processing
             r"start;"
-            # Number of concurrent views after adding this one
-            r"1;"
             r";"
             # View name
             r"index;"
@@ -47,8 +45,6 @@ class ViewLoggingMiddlewareTest(ClientTest):
             r"[a-f\d\-]+;"
             r"view;"
             r"end;"
-            # Number of concurrent views after removing this one
-            r"0;"
             # Seconds elapsed
             r"[\d.]+;"
             r"index;"

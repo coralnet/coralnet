@@ -416,8 +416,6 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             r"task;"
             # start or end of task
             r"start;"
-            # Number of concurrent tasks in the process after adding this one
-            r"1;"
             r";"
             # Task name
             r"full_job_example;"
@@ -434,8 +432,6 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             r"[a-f\d\-]+;"
             r"task;"
             r"end;"
-            # Number of concurrent tasks in the process after removing this one
-            r"0;"
             # Seconds elapsed
             r"[\d.]+;"
             r"full_job_example;"
