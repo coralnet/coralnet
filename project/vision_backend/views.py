@@ -22,12 +22,16 @@ from .utils import labelset_mapper, map_labels, get_alleviate
 def backend_overview(request):
     total = Image.objects.filter().count()
 
-    confirmed = Image.objects.confirmed().count()
-    unconfirmed = Image.objects.unconfirmed().count()
+    images_backend_enabled = \
+        Image.objects.filter(source__enable_robot_classifier=True)
+    confirmed = images_backend_enabled.confirmed().count()
+    unconfirmed = images_backend_enabled.unconfirmed().count()
     unclassified_with_features = \
-        Image.objects.unclassified().with_features().count()
+        images_backend_enabled.unclassified().with_features().count()
     unclassified_without_features = \
-        Image.objects.unclassified().without_features().count()
+        images_backend_enabled.unclassified().without_features().count()
+    backend_disabled = \
+        Image.objects.filter(source__enable_robot_classifier=False).count()
 
     def percent_display(numerator, denominator):
         return format(100*numerator / denominator, '.1f') + "%"
@@ -38,12 +42,14 @@ def backend_overview(request):
         'unconfirmed': unconfirmed,
         'unclassified_with_features': unclassified_with_features,
         'unclassified_without_features': unclassified_without_features,
+        'backend_disabled': backend_disabled,
         'pct_confirmed': percent_display(confirmed, total),
         'pct_unconfirmed': percent_display(unconfirmed, total),
         'pct_unclassified_with_features': percent_display(
             unclassified_with_features, total),
         'pct_unclassified_without_features': percent_display(
             unclassified_without_features, total),
+        'pct_backend_disabled': percent_display(backend_disabled, total),
     }
 
     all_sources = Source.objects.all()

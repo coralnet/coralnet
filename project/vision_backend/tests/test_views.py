@@ -216,6 +216,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
             ["Unconfirmed", "2", "28.6%"],
             ["Unclassified, with features", "1", "14.3%"],
             ["Unclassified, without features", "1", "14.3%"],
+            ["Source has backend disabled", "0", "0.0%"],
             ["All", "7", "100.0%"],
         ])
 
