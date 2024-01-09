@@ -282,6 +282,13 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 2500*20
 # But until then, we'll have a fairly high limit here.
 DATA_UPLOAD_MAX_NUMBER_FILES = 1000
 
+# Although the name of this setting implies it's just for file uploads, it also
+# applies to the collectstatic command, which is our primary use case.
+# We prefer collectstatic to create group-writable files, so that multiple
+# users in the www-data group can update the same files.
+# This setting doesn't seem to apply to diskcache's Django cache files though.
+FILE_UPLOAD_PERMISSIONS = 0o664
+
 # [CoralNet settings]
 IMAGE_UPLOAD_MAX_FILE_SIZE = 30*1024*1024  # 30 MB
 IMAGE_UPLOAD_MAX_DIMENSIONS = (8000, 8000)
