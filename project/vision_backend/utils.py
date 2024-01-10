@@ -1,5 +1,6 @@
 from django.conf import settings
 import numpy as np
+from spacer.data_classes import ValResults
 from spacer.extract_features import (
     DummyExtractor,
     EfficientNetExtractor,
@@ -8,10 +9,10 @@ from spacer.extract_features import (
 )
 from spacer.messages import DataLocation
 
-from images.models import Point
+from images.models import Point, Source
 from jobs.utils import queue_job
-from labels.models import Label, LocalLabel
 from .common import Extractors
+from .confmatrix import ConfMatrix
 from .models import Score
 
 
@@ -58,9 +59,18 @@ def get_label_scores_for_image(image_id):
     return lpdict
 
 
+MAX_PLOT_POINTS = 250
+
+
 def get_alleviate(estlabels, gtlabels, scores):
     """
-    calculates accuracy for (up to) 250 different score thresholds.
+    Calculate alleviation line-plot data based on the given
+    classifier evaluation results.
+    For various confidence thresholds x (up to MAX_PLOT_POINTS values)
+    representative of `scores`, calculates:
+    1. The classifier's accuracy among its predictions scored as
+       x% or higher
+    2. The ratio of predictions (over total predictions) scored as x% of higher
     """
     if not len(estlabels) == len(gtlabels) or \
             not len(estlabels) == len(scores):
@@ -74,18 +84,22 @@ def get_alleviate(estlabels, gtlabels, scores):
     gtlabels = np.asarray(gtlabels, dtype=int)
     estlabels = np.asarray(estlabels, dtype=int)
     
-    # Figure out teh appropriate thresholds to use
+    # Figure out what confidence thresholds to add plot points for.
+
     ths = sorted(scores)
 
-    # Append something slightly lower and higher to ensure we
-    # include ratio = 0 and 100%
+    # Include confidence thresholds slightly lower than the minimum
+    # (a data point with 100% ratio of predictions) and slightly higher
+    # than the maximum (a data point with 0% ratio of predictions).
     ths.insert(0, max(min(ths) - 0.01, 0))
     ths.append(min(max(ths) + 0.01, 1.00))
-    
-    ths = np.asarray(ths)  # Convert back to numpy.
-    # cap at 250
-    if len(ths) > 250:
-        ths = ths[np.linspace(0, len(ths) - 1, 250, dtype=int)]  # max 250!
+
+    # Convert back to numpy.
+    ths = np.asarray(ths)
+    # Cap at MAX_PLOT_POINTS, taking evenly-distributed points if there are
+    # more than that.
+    if len(ths) > MAX_PLOT_POINTS:
+        ths = ths[np.linspace(0, len(ths) - 1, MAX_PLOT_POINTS, dtype=int)]
     
     # do the actual sweep.
     accs, ratios = [], []
@@ -99,49 +113,130 @@ def get_alleviate(estlabels, gtlabels, scores):
     return accs, ratios, ths
 
 
-def map_labels(labellist, classmap):
+def list_no_dupes_preserving_order(iterable):
+    seen = set()
+    lst = []
+    for element in iterable:
+        if element in seen:
+            continue
+        lst.append(element)
+        seen.add(element)
+    return lst
+
+
+def map_labels(labellist, label_mapping):
     """
     Helper function to map integer labels to new labels.
     """
+    old_labelset = list(label_mapping.keys())
+    new_labelset = list_no_dupes_preserving_order(label_mapping.values())
+    labelset_index_mapping = {
+        old_labelset.index(old_label): new_labelset.index(new_label)
+        for old_label, new_label in label_mapping.items()
+    }
+
     labellist = np.asarray(labellist, dtype=int)
     newlist = -1 * np.ones(len(labellist), dtype=int)
-    for key in classmap.keys():
-        newlist[labellist == key] = classmap[key]
+    for key in labelset_index_mapping.keys():
+        newlist[labellist == key] = labelset_index_mapping[key]
     return list(newlist)
 
 
-def labelset_mapper(labelmode, classids, source):
+def labelset_mapper(
+        labelmode: str, label_ids: list[int], source: Source) -> dict[int, str]:
     """
     Prepares mapping function and labelset names to inject in confusion matrix.
     """
+    label_mapping = dict()
+
     if labelmode == 'full':
-        
-        # Label names are the abbreviated full names with code in parethesis.
-        classnames = [Label.objects.get(id=classid).name
-                      for classid in classids]
-        codes = [LocalLabel.objects.get(global_label__id=class_id,
-                                        labelset=source.labelset).code
-                 for class_id in classids]
-        classmap = dict()
-        for i in range(len(classnames)):
-            if len(classnames[i]) > 30:
-                classnames[i] = classnames[i][:27] + '...'
-            classnames[i] = classnames[i] + ' (' + codes[i] + ')'
-            classmap[i] = i
+        # Use the label's full name (length-limited) with code in parentheses.
+
+        labelset_values = source.labelset.locallabel_set.values(
+            'global_label__id', 'global_label__name', 'code')
+
+        for label_values in labelset_values:
+            label_id = label_values['global_label__id']
+            if label_id not in label_ids:
+                continue
+
+            full_name = label_values['global_label__name']
+            if len(full_name) > 30:
+                display_name = full_name[:27] + '...'
+            else:
+                display_name = full_name
+            short_code = label_values['code']
+            label_mapping[label_id] = f"{display_name} ({short_code})"
 
     elif labelmode == 'func':
-        classmap = dict()
-        classnames = []
-        for classid in classids:
-            fcnname = Label.objects.get(pk=classid).group.name
-            if fcnname not in classnames:
-                classnames.append(fcnname)
-            classmap[classids.index(classid)] = classnames.index(fcnname)
+        # Use functional groups.
+
+        labelset_values = source.labelset.locallabel_set.values(
+            'global_label__id', 'global_label__group__name')
+
+        for label_values in labelset_values:
+            label_id = label_values['global_label__id']
+            if label_id not in label_ids:
+                continue
+
+            label_mapping[label_id] = label_values['global_label__group__name']
     
     else:
-        raise Exception('labelmode {} not recognized'.format(labelmode))
+        raise ValueError(f"labelmode {labelmode} not recognized")
 
-    return classmap, classnames
+    return label_mapping
+
+
+def confmatrix_from_valresults(
+        valres: ValResults,
+        # Mapping from integer-represented labels in valresults to
+        # displayed labels on the confusion matrix.
+        # This serves two purposes: human readability, and the option to
+        # group multiple labels into a single confusion-matrix label.
+        label_mapping: dict[int, str] = None,
+        # Only include points where the prediction's confidence level
+        # (0-100) is higher than this.
+        confidence_threshold: int = 0,
+        # Dimension size cap for the matrix.
+        # If there are more confusion matrix labels than this, the remaining
+        # ones are aggregated into an 'Other' label.
+        max_display_labels: int = 50):
+
+    if label_mapping:
+        labelset = list_no_dupes_preserving_order(label_mapping.values())
+        gt = map_labels(valres.gt, label_mapping)
+        est = map_labels(valres.est, label_mapping)
+    else:
+        labelset = valres.classes
+        gt = valres.gt
+        est = valres.est
+
+    # Initialize confusion matrix.
+    cm = ConfMatrix(len(labelset), labelset=labelset)
+
+    # Add data-points above the threshold.
+    cm.add_select(gt, est, valres.scores, confidence_threshold / 100)
+
+    # Sort by label frequency, highest first.
+    cm.sort()
+
+    if cm.nclasses > max_display_labels:
+        cm.cut(max_display_labels)
+
+    return cm
+
+
+def myfmt(r):
+    """Helper function to format numpy outputs"""
+    return "%.0f" % (r,)
+
+
+def confmatrix_to_csv(cm, csv_writer):
+    vecfmt = np.vectorize(myfmt)
+    for enu, classname in enumerate(cm.labelset):
+        row = [classname]
+        row.extend(vecfmt(cm.cm[enu, :]))
+        csv_writer.writerow(row)
 
 
 def clear_features(image):

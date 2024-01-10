@@ -177,7 +177,7 @@ class TestLabelSetMapper(ClientTest):
         pklist = [Label.objects.get(name='A').pk]
 
         with self.assertRaisesMessage(
-                Exception, "labelmode mystery_labelmode not recognized"):
+                ValueError, "labelmode mystery_labelmode not recognized"):
             utils.labelset_mapper('mystery_labelmode', pklist, self.source)
 
 

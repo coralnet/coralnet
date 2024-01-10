@@ -15,7 +15,13 @@ from lib.utils import paginate
 from .confmatrix import ConfMatrix
 from .forms import TreshForm, CmTestForm
 from .models import Classifier
-from .utils import labelset_mapper, map_labels, get_alleviate
+from .utils import (
+    confmatrix_from_valresults,
+    confmatrix_to_csv,
+    get_alleviate,
+    labelset_mapper,
+    map_labels,
+)
 
 
 @permission_required('is_superuser')
@@ -164,30 +170,23 @@ def backend_main(request, source_id):
         pass
     else:
         valres: ValResults = cc.valres
+        # Since valresults may be slow to load, cache it to the session
+        # and use that on subsequent page loads as long as the classifier ID
+        # remains the same.
         request.session['valres'] = valres.serialize()
         request.session['ccpk'] = cc.pk
-    
-    # Load stored variables to local namespace
+
     valres: ValResults = ValResults.deserialize(request.session['valres'])
-    
-    # find classmap and class names for selected label-mode
-    classmap, classnames = labelset_mapper(labelmode, valres.classes, source)
 
-    # Initialize confusion matrix
-    cm = ConfMatrix(len(classnames), labelset=classnames)
+    # Determine the mapping of label IDs to displayed labels on the confusion
+    # matrix.
+    label_mapping = labelset_mapper(labelmode, valres.classes, source)
 
-    # Add data-points above the threshold.
-    cm.add_select(map_labels(valres.gt, classmap),
-                  map_labels(valres.est, classmap), valres.scores,
-                  confidence_threshold / 100)
-
-    # Sort by descending order.
-    cm.sort()
-
-    max_display_labels = 50
-    
-    if cm.nclasses > max_display_labels:
-        cm.cut(max_display_labels)
+    cm = confmatrix_from_valresults(
+        valres,
+        label_mapping=label_mapping,
+        confidence_threshold=confidence_threshold,
+    )
 
     # Export for heat-map
     cm_render = dict()
@@ -200,14 +199,15 @@ def backend_main(request, source_id):
     cm_render['css_height'] = max(500, cm.nclasses * 22 + 320)
     cm_render['css_width'] = max(600, cm.nclasses * 22 + 360)
 
-    # Prepare the alleviate plot if not allready in session
+    # Prepare the alleviate plot if not already in session
     if 'alleviate_data' not in request.session.keys():
-        acc_full, ratios, confs = get_alleviate(valres.gt, valres.est,
-                                                valres.scores)
-        classmap, _ = labelset_mapper('func', valres.classes, source)
-        acc_func, _, _ = get_alleviate(map_labels(valres.gt, classmap),
-                                       map_labels(valres.est, classmap),
-                                       valres.scores)
+        acc_full, ratios, confs = get_alleviate(
+            valres.gt, valres.est, valres.scores)
+        label_mapping = labelset_mapper('func', valres.classes, source)
+        acc_func, _, _ = get_alleviate(
+            map_labels(valres.gt, label_mapping),
+            map_labels(valres.est, label_mapping),
+            valres.scores)
         request.session['alleviate'] = dict()
         for member in ['acc_full', 'acc_func', 'ratios']:
             request.session['alleviate'][member] = [[conf, val] for val, conf
@@ -216,7 +216,6 @@ def backend_main(request, source_id):
 
     # Handle the case where we are exporting the confusion matrix.
     if request.method == 'POST' and request.POST.get('export_cm', None):
-        vecfmt = np.vectorize(myfmt)
 
         # create CSV file
         response = HttpResponse()
@@ -226,10 +225,7 @@ def backend_main(request, source_id):
                 labelmode, confidence_threshold)
         writer = csv.writer(response)
 
-        for enu, classname in enumerate(cm.labelset):
-            row = [classname]
-            row.extend(vecfmt(cm.cm[enu, :]))
-            writer.writerow(row)
+        confmatrix_to_csv(cm, writer)
 
         return response
 
@@ -240,11 +236,6 @@ def backend_main(request, source_id):
         'cm': cm_render,
         'alleviate': request.session['alleviate'],
     })
-
-
-def myfmt(r):
-    """Helper function to format numpy outputs"""
-    return "%.0f" % (r,)
 
 
 @permission_required('is_superuser')
