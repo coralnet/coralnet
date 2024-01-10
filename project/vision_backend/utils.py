@@ -143,11 +143,12 @@ def map_labels(labellist, label_mapping):
 
 
 def labelset_mapper(
-        labelmode: str, label_ids: list[int], source: Source) -> dict[int, str]:
+        labelmode: str, labelset: list[int], source: Source) -> dict[int, str]:
     """
     Prepares mapping function and labelset names to inject in confusion matrix.
+    labelset ordering is preserved in the returned mapping's ordering.
     """
-    label_mapping = dict()
+    unordered_label_mapping = dict()
 
     if labelmode == 'full':
         # Use the label's full name (length-limited) with code in parentheses.
@@ -157,7 +158,7 @@ def labelset_mapper(
 
         for label_values in labelset_values:
             label_id = label_values['global_label__id']
-            if label_id not in label_ids:
+            if label_id not in labelset:
                 continue
 
             full_name = label_values['global_label__name']
@@ -166,7 +167,8 @@ def labelset_mapper(
             else:
                 display_name = full_name
             short_code = label_values['code']
-            label_mapping[label_id] = f"{display_name} ({short_code})"
+            unordered_label_mapping[label_id] = \
+                f"{display_name} ({short_code})"
 
     elif labelmode == 'func':
         # Use functional groups.
@@ -176,13 +178,20 @@ def labelset_mapper(
 
         for label_values in labelset_values:
             label_id = label_values['global_label__id']
-            if label_id not in label_ids:
+            if label_id not in labelset:
                 continue
 
-            label_mapping[label_id] = label_values['global_label__group__name']
+            unordered_label_mapping[label_id] = \
+                label_values['global_label__group__name']
     
     else:
         raise ValueError(f"labelmode {labelmode} not recognized")
+
+    # Restore the original ordering (dict ordering is defined by insertion
+    # order).
+    label_mapping = dict()
+    for label_id in labelset:
+        label_mapping[label_id] = unordered_label_mapping[label_id]
 
     return label_mapping
 
