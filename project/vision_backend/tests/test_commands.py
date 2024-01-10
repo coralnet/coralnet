@@ -364,6 +364,64 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
             stdout_text
         )
 
+    def test_legacy_ok(self):
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+
+        # Change features to the legacy format.
+        storage = get_storage_class()()
+        feature_loc = storage.spacer_data_loc(
+            settings.FEATURE_VECTOR_FILE_PATTERN.format(
+                full_image_path=self.image_1a.original_file.name))
+        features = ImageFeatures.load(feature_loc)
+        features_legacy = ImageFeatures.deserialize(
+            [pf.data for pf in features.point_features]
+        )
+        features_legacy.store(feature_loc)
+
+        stdout_text, features_log_content, errors_json = self.call_command(
+            'image_ids', '--ids', self.image_1a.pk,
+        )
+
+        self.assertIsNone(errors_json)
+        self.assertIn("No errors found", stdout_text)
+
+    def test_legacy_count_mismatch(self):
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+
+        # Change features to the legacy format and change the length.
+        storage = get_storage_class()()
+        feature_loc = storage.spacer_data_loc(
+            settings.FEATURE_VECTOR_FILE_PATTERN.format(
+                full_image_path=self.image_1a.original_file.name))
+        features = ImageFeatures.load(feature_loc)
+        data = [pf.data for pf in features.point_features]
+        # Append a duplicate of the first point feature.
+        data.append(data[0])
+        features_legacy = ImageFeatures.deserialize(data)
+        features_legacy.store(feature_loc)
+
+        stdout_text, features_log_content, errors_json = self.call_command(
+            'image_ids', '--ids', self.image_1a.pk,
+        )
+
+        errors = dict(errors_json[str(self.source_1.pk)])
+        self.assertEqual(
+            errors[self.image_1a.pk],
+            "ValueError(\"Legacy feature rowcols don't match the number of DB"
+            " rowcols.\")",
+        )
+
+        self.assertIn(
+            f"Errors per source:"
+            f"\n{self.source_1.pk}: 1"
+            f"\nErrors written to feature_errors.json.",
+            stdout_text
+        )
+
     def test_image_ids(self):
         stdout_text, features_log_content, errors_json = self.call_command(
             'image_ids', '--ids', self.image_1a.pk, self.image_2b.pk,
