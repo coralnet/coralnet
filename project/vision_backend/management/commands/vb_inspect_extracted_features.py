@@ -59,13 +59,20 @@ class Command(BaseCommand):
             # or FileNotFoundError.
             features = ImageFeatures.load(feature_loc)
 
-            rowcols_from_features = [
-                (pf.row, pf.col)
-                for pf in features.point_features
-            ]
+            if features.valid_rowcol:
+                rowcols_from_features = [
+                    (pf.row, pf.col)
+                    for pf in features.point_features
+                ]
 
-            if not set(rowcols_from_db) == set(rowcols_from_features):
-                raise ValueError("Feature rowcols don't match the DB rowcols.")
+                if not set(rowcols_from_db) == set(rowcols_from_features):
+                    raise ValueError(
+                        "Feature rowcols don't match the DB rowcols.")
+            else:
+                if not len(rowcols_from_db) == len(features.point_features):
+                    raise ValueError(
+                        "Legacy feature rowcols don't match the number of DB"
+                        " rowcols.")
 
         except (AssertionError, ValueError, FileNotFoundError) as err:
             self.errors[image.source.id].append((image.id, repr(err)))
