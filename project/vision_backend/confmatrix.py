@@ -24,7 +24,7 @@ class ConfMatrix:
         """
 
         if not len(gtlabels) == len(estlabels):
-            raise Exception(
+            raise ValueError(
                 'input gtlabels and estlabels must have the same length')
         for (gtl, estl) in zip(gtlabels, estlabels):
             assert gtl > -1 and estl > -1, 'label index must be positive'

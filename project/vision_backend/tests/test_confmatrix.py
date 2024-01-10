@@ -19,11 +19,15 @@ class ConfMatrixBasics(BaseTest):
         """Example: if k = 5, this returns ['a', 'b', 'c', 'd', 'e']"""
         return list(string.ascii_lowercase)[:k]
 
-    def test_simple_add(self):
-
+    def test_add(self):
         cm = ConfMatrix(2)
         cm.add([0, 1], [1, 0])
         self.assertEqual(cm.cm[0, 0], 0)
+
+    def test_add_bad_input(self):
+        cm = ConfMatrix(2)
+        with self.assertRaises(ValueError):
+            cm.add([0, 1], [1, 0, 1])
 
     def test_simple(self):
         k = 50
