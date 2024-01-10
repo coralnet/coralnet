@@ -20,12 +20,12 @@ class ConfMatrix:
 
         Takes
         gtlabels: array of ground truth labels
-        estlabels: array of estiamated labels of SAME SIZE as gtlabels
+        estlabels: array of estimated labels of SAME SIZE as gtlabels
         """
 
         if not len(gtlabels) == len(estlabels):
             raise Exception(
-                'intput gtlabels and estlabels must have the same length')
+                'input gtlabels and estlabels must have the same length')
         for (gtl, estl) in zip(gtlabels, estlabels):
             assert gtl > -1 and estl > -1, 'label index must be positive'
             self.cm[gtl, estl] += 1
@@ -73,7 +73,7 @@ class ConfMatrix:
 
     def collapse(self, collapsemap, new_labelset):
         """
-        This nifty method allow the confution matrix to be collapsed so that
+        This nifty method allows the confusion matrix to be collapsed so that
         class i is assigned to new class collapsemap[i]. Since this changes
         the confmatrix, a new labelset must also be provided.
         """
@@ -95,7 +95,7 @@ class ConfMatrix:
 
     def render_for_heatmap(self):
         """
-        Perpares confmatrix to be rendered by the highcharts.heatmap class.
+        Prepares confmatrix to be rendered by the highcharts.heatmap class.
         """
 
         cm = self.cm
@@ -116,7 +116,7 @@ class ConfMatrix:
                     [col, row, int(round(cm[cm.shape[0]-1-row, col]*100))])
 
         # This is a hack which enables us to show the class totals in the row
-        # titles. (there is no support for this in highchars.heatmap)
+        # titles. (there is no support for this in highcharts.heatmap)
         classes_with_rowsums = [
             '{} [n:{}]'.format(classname, int(rowsum))
             for rowsum, classname in zip(rowsums, self.labelset)
@@ -141,7 +141,7 @@ class ConfMatrix:
         pgt = cm.sum(axis=1) / np.sum(cm)
         # probability of the estimates to predict each class
         pest = cm.sum(axis=0) / np.sum(cm)
-        # probaility of randomly guessing the same thing!
+        # probability of randomly guessing the same thing!
         pe = np.sum(pgt * pest)
 
         if pe == 1:
@@ -153,7 +153,7 @@ class ConfMatrix:
 
     def get_class_accuracy(self, cm=None):
         """
-        Returns accurcy per class.
+        Returns accuracy per class.
         """
 
         if cm is None:
