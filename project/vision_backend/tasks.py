@@ -314,8 +314,19 @@ def submit_classifier(source_id, job_id):
     # and deleting the Source would've cascade-deleted the Job.
     source = Source.objects.get(pk=source_id)
 
-    # Create new classifier model
     images = source.image_set.confirmed().with_features().order_by('pk')
+
+    without_feature_rowcols = images.filter(features__has_rowcols=False)
+    if without_feature_rowcols.exists():
+        count = without_feature_rowcols.count()
+        for image in without_feature_rowcols:
+            reset_features(image)
+        raise JobError(
+            f"This source has {count} feature vector(s) without"
+            f" rows/columns, and this is no longer accepted for training."
+            f" Feature extractions will be redone to fix this.")
+
+    # Create new classifier
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
     classifier.save()

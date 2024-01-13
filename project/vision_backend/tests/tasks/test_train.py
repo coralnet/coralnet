@@ -10,7 +10,7 @@ from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import (
-    JobUtilsMixin, queue_and_run_job, run_pending_job)
+    do_job, JobUtilsMixin, queue_and_run_job, run_pending_job)
 from lib.tests.utils import EmailAssertionsMixin
 from ...models import Classifier
 from ...queues import get_queue_class
@@ -582,7 +582,7 @@ class AbortCasesTest(
         self.assert_job_persist_value('train_classifier', True)
 
 
-class TrainRefValSets(BaseTaskTest):
+class TrainRefValSetsTest(BaseTaskTest):
 
     def prep_images(
         self, train_image_count=0, val_image_count=0, points_per_image=2,
@@ -597,7 +597,7 @@ class TrainRefValSets(BaseTaskTest):
             val_image_count=val_image_count,
             # As long as there are at least 2 points per image, this will
             # ensure each image has at least 2 unique labels.
-            label_choices='cycle',
+            annotation_scheme='cycle',
         )
 
     def do_test(self, expected_set_sizes):
@@ -652,3 +652,135 @@ class TrainRefValSets(BaseTaskTest):
             val_image_count=1,
         )
         self.do_test(dict(train=10, ref=1, val=1))
+
+
+class LabelFilteringTest(BaseTaskTest):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        cls.source.default_point_generation_method = \
+            PointGen.args_to_db_format(
+                point_generation_type=PointGen.Types.SIMPLE,
+                simple_number_of_points=3)
+        cls.source.save()
+
+    def test_annotations_not_in_training_labelset(self):
+        # This image will go into ref, and will get annotated with A and B.
+        self.upload_images_for_training(
+            train_image_count=1,
+            val_image_count=0,
+            annotation_scheme='cycle',
+            label_codes=['A', 'B'],
+        )
+        # This image will go into train, and will get annotated with A, B, C
+        # (1 each).
+        # Since ref doesn't have C, the C will be left out of training.
+        self.upload_images_for_training(
+            train_image_count=1,
+            val_image_count=0,
+            annotation_scheme='cycle',
+            label_codes=['A', 'B', 'C'],
+        )
+        # Val image doesn't matter for this test.
+        self.upload_images_for_training(
+            train_image_count=0,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+
+        # Try to train.
+        job = do_job(
+            'train_classifier', self.source.pk, source_id=self.source.pk)
+
+        # Call internal job-collection methods to
+        # get access to the job return msg.
+        queue = get_queue_class()()
+        job_return_msg = queue.collect_job(queue.get_collectable_jobs()[0])[0]
+        training_task_labels = job_return_msg.original_job.tasks[0].labels
+        self.assertEqual(len(training_task_labels.ref), 1)
+        self.assertEqual(
+            training_task_labels.ref.label_count, 3,
+            msg="Ref should have all of its annotations"
+        )
+        self.assertEqual(len(training_task_labels.train), 1)
+        self.assertEqual(
+            training_task_labels.train.label_count, 2,
+            msg="Train should have one annotation filtered out"
+        )
+        handle_spacer_result(job_return_msg)
+
+        job.refresh_from_db()
+        self.assertEqual(
+            job.status, Job.Status.SUCCESS,
+            "Training should have succeeded, indicating no issues"
+            " loading features for the training, despite the"
+            " filtered-out annotation")
+
+
+class InvalidRowcolFeaturesTest(BaseTaskTest):
+
+    def test_train_invalid_rowcol(self):
+
+        train_images, _ = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+
+        # Say one training image's features are legacy format.
+        train_image = train_images[0]
+        train_image.features.has_rowcols = False
+        train_image.features.save()
+
+        # Try to train.
+        job = do_job(
+            'train_classifier', self.source.pk, source_id=self.source.pk)
+        job.refresh_from_db()
+        self.assertEqual(job.status, Job.Status.FAILURE)
+        self.assertEqual(
+            job.result_message,
+            "This source has 1 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        train_image.features.refresh_from_db()
+        self.assertFalse(
+            train_image.features.extracted, "Features should be reset")
+
+    def test_val_invalid_rowcol(self):
+
+        _, val_images = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=3,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+
+        # Say at least one validation image's features are legacy format.
+        for image in [val_images[0], val_images[1]]:
+            image.features.has_rowcols = False
+            image.features.save()
+
+        # Try to train.
+        job = do_job(
+            'train_classifier', self.source.pk, source_id=self.source.pk)
+        job.refresh_from_db()
+        self.assertEqual(job.status, Job.Status.FAILURE)
+        self.assertEqual(
+            job.result_message,
+            "This source has 2 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        for image in [val_images[0], val_images[1]]:
+            image.features.refresh_from_db()
+            self.assertFalse(
+                image.features.extracted, "Features should be reset")

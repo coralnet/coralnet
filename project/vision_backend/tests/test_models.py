@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from django_migration_testcase import MigrationTest
 import numpy as np
 from spacer.messages import ClassifyReturnMsg
@@ -225,3 +227,65 @@ class PopulateLoadedRemotelyTest(MigrationTest):
         self.assertFalse(images[0].features.extractor_loaded_remotely)
         self.assertTrue(images[1].features.extractor_loaded_remotely)
         self.assertIsNone(images[2].features.extractor_loaded_remotely)
+
+
+class PopulateHasRowcolsTest(MigrationTest):
+
+    before = [
+        # Start before the has_rowcols field was even added.
+        # Then we'll extract features, then run migration 0020 to add the
+        # field with nulls, then run migration 0021 to replace those nulls.
+        ('vision_backend', '0019_batchjob_spec_level'),
+        ('images', '0034_image_unprocessable_reason'),
+    ]
+    after = [('vision_backend', '0021_features_populate_has_rowcols')]
+
+    def test_migration(self):
+        User = self.get_model_before('auth.User')
+        Source = self.get_model_before('images.Source')
+        Metadata = self.get_model_before('images.Metadata')
+        Image = self.get_model_before('images.Image')
+        Features = self.get_model_before('vision_backend.Features')
+
+        user = User(username='testuser')
+        user.save()
+        source = Source(name="Test source")
+        source.save()
+        images = []
+        for extracted, extracted_dt_args in [
+            # Should say no rowcols
+            (True, (2020, 12, 30, 23, 0)),
+            # Should say has rowcols
+            (True, (2020, 12, 31, 1, 0)),
+            # No features
+            (False, (2020, 12, 31, 1, 0)),
+        ]:
+            metadata = Metadata()
+            metadata.save()
+            image = Image(
+                original_file=sample_image_as_file('a.png'),
+                uploaded_by=user,
+                point_generation_method=source.default_point_generation_method,
+                metadata=metadata,
+                source=source,
+            )
+            image.save()
+            images.append(image)
+
+            features = Features(
+                image=image, extracted=extracted,
+                extracted_date=datetime(
+                    *extracted_dt_args, tzinfo=timezone.utc))
+            features.save()
+
+        self.run_migration()
+
+        Features = self.get_model_after('vision_backend.Features')
+
+        has_rowcols_values = [
+            Features.objects.get(pk=image.features.pk).has_rowcols
+            for image in images
+        ]
+        self.assertFalse(has_rowcols_values[0])
+        self.assertTrue(has_rowcols_values[1])
+        self.assertIsNone(has_rowcols_values[2])

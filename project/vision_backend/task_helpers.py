@@ -314,6 +314,7 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
         img.features.extractor_loaded_remotely = \
             task_res.extractor_loaded_remotely
         img.features.extracted_date = now()
+        img.features.has_rowcols = True
         img.features.save()
 
 

@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.10 (WIP)
+
+- New migrations to run for `vision_backend`. Runtime should be less than 5 minutes in production. As noted in migration 0021's comments, non-production environments may want to take manual migration steps if their situations differ from production.
+
 ## [1.9.1](https://github.com/coralnet/coralnet/tree/1.9.1)
 
 Production: 2024-01-09

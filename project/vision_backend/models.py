@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.db import models
-from spacer.data_classes import ValResults
+from spacer.data_classes import ImageFeatures, ValResults
 from spacer.messages import DataLocation
 
 from config.constants import SpacerJobSpec
@@ -94,6 +94,8 @@ class Classifier(models.Model):
 class Features(models.Model):
     """
     This class manages the bookkeeping of features for each image.
+
+    Most fields are nullable for the case where `extracted` is False.
     """
     image = models.OneToOneField('images.Image', on_delete=models.CASCADE)
 
@@ -103,11 +105,26 @@ class Features(models.Model):
     # Total runtime for job
     runtime_total = models.IntegerField(null=True)
 
+    # Whether the stored ImageFeatures structure has row/column information
+    # (added around pyspacer PR #5).
+    # Loading this info from S3 is slow, so this field is for quicker access.
+    has_rowcols = models.BooleanField(null=True)
+
     # Whether the extractor needed to be downloaded from S3
     extractor_loaded_remotely = models.BooleanField(null=True)
 
     # When were the features extracted
     extracted_date = models.DateTimeField(null=True)
+
+    @property
+    def data_loc(self):
+        storage = get_storage_class()()
+        return storage.spacer_data_loc(
+            settings.FEATURE_VECTOR_FILE_PATTERN.format(
+                full_image_path=self.image.original_file.name)),
+
+    def load(self) -> ImageFeatures:
+        return ImageFeatures.load(self.data_loc)
 
 
 class Score(models.Model):
