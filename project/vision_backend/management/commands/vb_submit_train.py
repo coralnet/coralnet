@@ -14,5 +14,9 @@ class Command(BaseCommand):
         parser.add_argument('source_id', type=int, help="Source id to process")
 
     def handle(self, *args, **options):
-        queue_job('train_classifier', options['source_id'])
+        queue_job(
+            'train_classifier',
+            options['source_id'],
+            source_id=options['source_id'],
+        )
         self.stdout.write("Training has been queued for this source.")

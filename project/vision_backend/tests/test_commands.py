@@ -584,13 +584,16 @@ class SubmitTrainTest(ManagementCommandTest):
             stdout_text)
 
         job_details = {
-            (job.job_name, job.arg_identifier, job.status)
+            (job.job_name, job.arg_identifier, job.source_id, job.status)
             for job in Job.objects.all()
         }
         self.assertSetEqual(
             job_details,
             {
-                ('train_classifier', str(self.source_1.pk), Job.Status.PENDING),
+                ('train_classifier',
+                 str(self.source_1.pk),
+                 self.source_1.pk,
+                 Job.Status.PENDING),
             },
             "Should queue the appropriate job",
         )
