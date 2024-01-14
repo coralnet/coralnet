@@ -292,9 +292,7 @@ def submit_features(image_id, job_id):
         extractor=get_extractor(img.source.feature_extractor),
         rowcols=rowcols,
         image_loc=storage.spacer_data_loc(img.original_file.name),
-        feature_loc=storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=img.original_file.name))
+        feature_loc=img.features.data_loc,
     )
 
     msg = JobMsg(task_name='extract_features', tasks=[task])
@@ -314,8 +312,19 @@ def submit_classifier(source_id, job_id):
     # and deleting the Source would've cascade-deleted the Job.
     source = Source.objects.get(pk=source_id)
 
-    # Create new classifier model
     images = source.image_set.confirmed().with_features().order_by('pk')
+
+    without_feature_rowcols = images.filter(features__has_rowcols=False)
+    if without_feature_rowcols.exists():
+        count = without_feature_rowcols.count()
+        for image in without_feature_rowcols:
+            reset_features(image)
+        raise JobError(
+            f"This source has {count} feature vector(s) without"
+            f" rows/columns, and this is no longer accepted for training."
+            f" Feature extractions will be redone to fix this.")
+
+    # Create new classifier
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
     classifier.save()
@@ -476,9 +485,7 @@ def classify_image(image_id):
     storage = get_storage_class()()
     msg = ClassifyFeaturesMsg(
         job_token=str(image_id),
-        feature_loc=storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=img.original_file.name)),
+        feature_loc=img.features.data_loc,
         classifier_loc=storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)
         )

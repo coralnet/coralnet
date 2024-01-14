@@ -1,10 +1,8 @@
 from unittest import mock
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
 from django.test import override_settings
-from spacer.data_classes import ImageFeatures
-from spacer.exceptions import DataLimitError, RowColumnMismatchError
+from spacer.exceptions import RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
@@ -94,8 +92,10 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         # available for collection immediately.
         queue_and_run_collect_spacer_jobs()
 
-        # Features should be successfully extracted.
-        self.assertTrue(img.features.extracted)
+        self.assertTrue(
+            img.features.extracted, msg="Extracted boolean should be set")
+        self.assertTrue(
+            img.features.has_rowcols, msg="has_rowcols should be True")
 
     def test_multiple(self):
         img1 = self.upload_image(self.user, self.source)
@@ -125,11 +125,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         self.assertTrue(img.features.extracted, "Features should be extracted")
 
         # Ensure the features are of the uploaded points, without dupes.
-        storage = get_storage_class()()
-        feature_loc = storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=img.original_file.name))
-        features = ImageFeatures.load(feature_loc)
+        features = img.features.load()
         rowcols = [(f.row, f.col) for f in features.point_features]
         self.assertListEqual(
             self.rowcols_with_dupes_included, sorted(rowcols),
