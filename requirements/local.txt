@@ -1,4 +1,5 @@
--r base.txt # includes the base.txt requirements file
+# Include the base.txt requirements file
+-r base.txt
 
 
 # Output info on test coverage - how much of the Python codebase is covered

@@ -1,6 +1,8 @@
--r base.txt # includes the base.txt requirements file
+# Include the base.txt requirements file
+-r base.txt
+
 
 # WSGI HTTP server - The layer above Django, and below the overall web
 # server (e.g. nginx)
 # Changelog: http://docs.gunicorn.org/en/stable/news.html
-gunicorn>=20.1.0,<20.2
+gunicorn[gthread]>=20.1.0,<20.2
