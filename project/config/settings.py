@@ -425,6 +425,14 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+# Added in 1.13; disables using threads for S3 requests, preventing errors
+# such as
+# `RuntimeError: cannot schedule new futures after interpreter shutdown`
+# At time of writing, not in django-storages docs, but was implemented in:
+# https://github.com/jschneier/django-storages/pull/1112
+# This very similar PR in django-s3-storage has more info:
+# https://github.com/etianen/django-s3-storage/pull/136
+AWS_S3_USE_THREADS = False
 
 # [PySpacer settings]
 SPACER['AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
