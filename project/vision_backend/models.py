@@ -121,7 +121,7 @@ class Features(models.Model):
         storage = get_storage_class()()
         return storage.spacer_data_loc(
             settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=self.image.original_file.name)),
+                full_image_path=self.image.original_file.name))
 
     def load(self) -> ImageFeatures:
         return ImageFeatures.load(self.data_loc)
