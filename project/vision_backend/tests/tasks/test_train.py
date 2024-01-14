@@ -200,12 +200,9 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         for set_name in ['train', 'ref', 'val']:
 
-            storage = get_storage_class()()
             labels_data = spacer_task.labels[set_name]
-            image_path = images_with_dupe_point[set_name].original_file.name
-            feature_filepath = settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=image_path)
-            feature_location = storage.spacer_data_loc(feature_filepath)
+            feature_location = \
+                images_with_dupe_point[set_name].features.data_loc
             image_labels_data = labels_data[feature_location.key]
             self.assertEqual(
                 len(self.rowcols_with_dupes_included), len(image_labels_data),

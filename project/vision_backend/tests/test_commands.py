@@ -2,8 +2,6 @@ import json
 from pathlib import Path
 from unittest import mock
 
-from django.conf import settings
-from django.core.files.storage import get_storage_class
 from django.core.management.base import CommandError
 from django.test.utils import override_settings
 from spacer.data_classes import ImageFeatures
@@ -309,10 +307,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
         queue_and_run_collect_spacer_jobs()
 
         # Modify features to have a mismatching feature_dim attribute.
-        storage = get_storage_class()()
-        feature_loc = storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=self.image_1a.original_file.name))
+        feature_loc = self.image_1a.features.data_loc
         features = ImageFeatures.load(feature_loc)
         features.feature_dim += 1
         features.store(feature_loc)
@@ -370,10 +365,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
         queue_and_run_collect_spacer_jobs()
 
         # Change features to the legacy format.
-        storage = get_storage_class()()
-        feature_loc = storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=self.image_1a.original_file.name))
+        feature_loc = self.image_1a.features.data_loc
         features = ImageFeatures.load(feature_loc)
         features_legacy = ImageFeatures.deserialize(
             [pf.data for pf in features.point_features]
@@ -393,10 +385,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
         queue_and_run_collect_spacer_jobs()
 
         # Change features to the legacy format and change the length.
-        storage = get_storage_class()()
-        feature_loc = storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=self.image_1a.original_file.name))
+        feature_loc = self.image_1a.features.data_loc
         features = ImageFeatures.load(feature_loc)
         data = [pf.data for pf in features.point_features]
         # Append a duplicate of the first point feature.
@@ -529,10 +518,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
 
         # Induce mismatching feature_dim attributes on 2 images.
         for image in [self.image_1a, self.image_2b]:
-            storage = get_storage_class()()
-            feature_loc = storage.spacer_data_loc(
-                settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                    full_image_path=image.original_file.name))
+            feature_loc = image.features.data_loc
             features = ImageFeatures.load(feature_loc)
             features.feature_dim += 1
             features.store(feature_loc)

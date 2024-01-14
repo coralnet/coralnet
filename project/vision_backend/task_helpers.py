@@ -8,7 +8,6 @@ from typing import List, Optional
 
 import numpy as np
 from django.conf import settings
-from django.core.files.storage import get_storage_class
 from django.core.mail import mail_admins
 from django.db.models import F
 from django.utils.timezone import now
@@ -157,12 +156,9 @@ def make_dataset(images: List[Image]) -> ImageLabels:
     Assembles all features and ground truth annotations
     for training and evaluation of the robot classifier.
     """
-    storage = get_storage_class()()
     data = dict()
     for img in images:
-        data_loc = storage.spacer_data_loc(img.original_file.name)
-        feature_key = settings.FEATURE_VECTOR_FILE_PATTERN.format(
-            full_image_path=data_loc.key)
+        feature_key = img.features.data_loc.key
         anns = Annotation.objects.filter(image=img).\
             annotate(gt_label=F('label__id')).\
             annotate(row=F('point__row')). \

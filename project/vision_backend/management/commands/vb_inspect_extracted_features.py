@@ -1,10 +1,8 @@
 from collections import defaultdict
 import json
 
-from django.conf import settings
 from django.core.files.storage import get_storage_class
 from django.core.management.base import BaseCommand
-from spacer.data_classes import ImageFeatures
 
 from images.models import Image, Source
 from ...utils import reset_features
@@ -50,14 +48,11 @@ class Command(BaseCommand):
             (p['row'], p['column'])
             for p in image.point_set.values('row', 'column')
         ]
-        feature_loc = self.storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=image.original_file.name))
 
         try:
             # This may raise an AssertionError, ValueError,
             # or FileNotFoundError.
-            features = ImageFeatures.load(feature_loc)
+            features = image.features.load()
 
             if features.valid_rowcol:
                 rowcols_from_features = [

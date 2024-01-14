@@ -292,9 +292,7 @@ def submit_features(image_id, job_id):
         extractor=get_extractor(img.source.feature_extractor),
         rowcols=rowcols,
         image_loc=storage.spacer_data_loc(img.original_file.name),
-        feature_loc=storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=img.original_file.name))
+        feature_loc=img.features.data_loc,
     )
 
     msg = JobMsg(task_name='extract_features', tasks=[task])
@@ -487,9 +485,7 @@ def classify_image(image_id):
     storage = get_storage_class()()
     msg = ClassifyFeaturesMsg(
         job_token=str(image_id),
-        feature_loc=storage.spacer_data_loc(
-            settings.FEATURE_VECTOR_FILE_PATTERN.format(
-                full_image_path=img.original_file.name)),
+        feature_loc=img.features.data_loc,
         classifier_loc=storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)
         )
