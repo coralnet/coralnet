@@ -166,6 +166,49 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             clf_2.status, Classifier.ACCEPTED, "Should be accepted")
         self.assertEqual(clf_2.nbr_train_images, clf_1.nbr_train_images + 2)
 
+    def test_train_on_confirmed_only(self):
+        def upload_image_without_annotations(filename):
+            return self.upload_image(
+                self.user, self.source, image_options=dict(filename=filename))
+
+        def upload_image_with_machine_annotations(filename):
+            image = upload_image_without_annotations(filename)
+            classifier = Classifier(
+                source=self.source,
+                nbr_train_images=1,
+                status=Classifier.ACCEPTED,
+            )
+            classifier.save()
+            self.add_robot_annotations(classifier, image)
+            return image
+
+        self.upload_image_with_annotations('train1.png')
+        self.upload_image_with_annotations('train2.png')
+        upload_image_without_annotations('train3.png')
+        upload_image_with_machine_annotations('train4.png')
+        upload_image_with_machine_annotations('train5.png')
+
+        upload_image_with_machine_annotations('val1.png')
+        upload_image_with_machine_annotations('val2.png')
+        upload_image_without_annotations('val3.png')
+        self.upload_image_with_annotations('val4.png')
+
+        # Sanity check
+        self.assertEqual(self.source.image_set.confirmed().count(), 3)
+        self.assertEqual(self.source.image_set.unconfirmed().count(), 4)
+        self.assertEqual(self.source.image_set.unclassified().count(), 2)
+
+        # Extract features.
+        run_scheduled_jobs_until_empty()
+        queue_and_run_collect_spacer_jobs()
+        # Submit classifier.
+        run_scheduled_jobs_until_empty()
+
+        pending_classifier = self.source.classifier_set.latest('pk')
+        self.assertEqual(
+            pending_classifier.nbr_train_images, 3,
+            msg="Classification should be submitted with only 3 images")
+
     def test_with_dupe_points(self):
         """
         Training data has two points with the same row/column.
