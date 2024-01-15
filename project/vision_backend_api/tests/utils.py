@@ -6,6 +6,7 @@ from unittest import mock
 from django.conf import settings
 from django.test import override_settings
 from django.urls import reverse
+from rest_framework import status
 
 from api_core.tests.utils import BaseAPITest
 from images.model_utils import PointGen
@@ -62,6 +63,15 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
             # but doesn't hurt for other requests either.
             content_type='application/vnd.api+json',
         )
+
+    def assert_expected_400_error(self, response, error_dict):
+        self.assertEqual(
+            response.status_code, status.HTTP_400_BAD_REQUEST,
+            "Should get 400")
+        self.assertDictEqual(
+            response.json(),
+            dict(errors=[error_dict]),
+            "Response JSON should be as expected")
 
     @classmethod
     def train_classifier(cls):
