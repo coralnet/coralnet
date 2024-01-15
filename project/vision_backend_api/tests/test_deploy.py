@@ -4,10 +4,13 @@ import operator
 from unittest import mock
 
 from django.conf import settings
+from django.http import UnreadablePostError
 from django.test import override_settings
 from django.urls import reverse
 from PIL import UnidentifiedImageError
 from rest_framework import status
+from rest_framework.exceptions import ParseError
+from rest_framework.request import Request
 from spacer.exceptions import DataLimitError, URLDownloadError
 
 from api_core.models import ApiJob, ApiJobUnit
@@ -165,15 +168,6 @@ class DeployImagesParamErrorTest(DeployBaseTest):
     def setUpTestData(cls):
         super().setUpTestData()
         cls.train_classifier()
-
-    def assert_expected_400_error(self, response, error_dict):
-        self.assertEqual(
-            response.status_code, status.HTTP_400_BAD_REQUEST,
-            "Should get 400")
-        self.assertDictEqual(
-            response.json(),
-            dict(errors=[error_dict]),
-            "Response JSON should be as expected")
 
     def test_not_valid_json(self):
         data = '[abc'
@@ -444,6 +438,53 @@ class DeployImagesParamErrorTest(DeployBaseTest):
             response, dict(
                 detail="Ensure this hash has a 'column' key.",
                 source=dict(pointer='/data/0/attributes/points/1')))
+
+
+class RequestDataErrorTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.train_classifier()
+
+    def test_parse_error(self):
+        def raise_parse_error(self, *args, **kwargs):
+            raise ParseError("Some ParseError")
+
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        # Make the `data` property of the request raise an error.
+        # Not sure how to mock a property though, so let's mock
+        # something that the property calls, instead.
+        with mock.patch.object(
+            Request, '_load_data_and_files', raise_parse_error
+        ):
+            response = self.client.post(
+                self.deploy_url, data, **self.request_kwargs)
+
+        self.assert_expected_400_error(
+            response, dict(detail="Some ParseError"))
+
+    def test_unreadable_post_error(self):
+        def raise_unreadable_post_error(self, *args, **kwargs):
+            raise UnreadablePostError("Some UnreadablePostError")
+
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        with mock.patch.object(
+            Request, '_load_data_and_files', raise_unreadable_post_error
+        ):
+            response = self.client.post(
+                self.deploy_url, data, **self.request_kwargs)
+
+        self.assert_expected_400_error(
+            response, dict(detail="Some UnreadablePostError"))
 
 
 class SuccessTest(DeployBaseTest):

@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, UnreadablePostError
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from rest_framework.exceptions import ParseError
@@ -42,7 +42,7 @@ class Deploy(APIView):
         # Check for invalid JSON.
         try:
             request.data
-        except ParseError as e:
+        except (ParseError, UnreadablePostError) as e:
             return Response(
                 dict(errors=[dict(detail=str(e))]),
                 status=status.HTTP_400_BAD_REQUEST)
