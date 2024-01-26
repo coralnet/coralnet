@@ -8,6 +8,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.11 (WIP)
+
+- Updates to required packages:
+  - Pillow 10.1.0 -> 10.2.0
+
 ## [1.10](https://github.com/coralnet/coralnet/tree/1.10)
 
 Production: 2024-01-14
