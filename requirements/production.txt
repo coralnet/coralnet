@@ -5,4 +5,4 @@
 # WSGI HTTP server - The layer above Django, and below the overall web
 # server (e.g. nginx)
 # Changelog: http://docs.gunicorn.org/en/stable/news.html
-gunicorn[gthread]>=20.1.0,<20.2
+gunicorn>=20.1.0,<20.2
