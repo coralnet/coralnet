@@ -4,7 +4,7 @@ from logging import getLogger
 from django.conf import settings
 from django.core.mail import mail_admins
 from django.utils import timezone
-from huey.contrib.djhuey import HUEY
+import django_huey
 
 from config.constants import SpacerJobSpec
 from .exceptions import UnrecognizedJobNameError
@@ -25,9 +25,9 @@ logger = getLogger(__name__)
 
 def get_scheduled_jobs():
     jobs = Job.objects.filter(status=Job.Status.PENDING).order_by('pk')
-    # We'll run any pending jobs immediately if huey is configured to act
-    # similarly.
-    if not HUEY.immediate:
+    # We'll run any pending jobs immediately if django-huey's default queue
+    # is configured to act similarly.
+    if not django_huey.get_queue(settings.DJANGO_HUEY['default']).immediate:
         jobs = jobs.filter(scheduled_start_date__lt=timezone.now())
     return jobs
 

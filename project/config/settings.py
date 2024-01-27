@@ -731,16 +731,41 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api_core.exceptions.exception_handler',
 }
 
-# [huey setting]
-# https://huey.readthedocs.io/en/latest/django.html#setting-things-up
-HUEY = {
-    # Don't store return values of tasks.
-    'results': False,
-    # Whether to run tasks immediately or to schedule them as normal.
-    'immediate': env.bool('HUEY_IMMEDIATE', default=DEBUG),
-    # Whether to run huey-registered periodic tasks or not.
-    'consumer': {
-        'periodic': env.bool('HUEY_CONSUMER_PERIODIC', default=True),
+# [django-huey setting]
+# https://github.com/gaiacoop/django-huey#configuration
+DJANGO_HUEY = {
+    # Dict key of default queue. We make background the default since we expect
+    # most task definitions to use that queue.
+    'default': 'background',
+    'queues': {
+        # The following dicts are each what the HUEY setting would accept if
+        # using huey standalone.
+        # https://huey.readthedocs.io/en/latest/django.html#setting-things-up
+        #
+        # The request/response cycle is top priority for low latency.
+        # The 'realtime' task queue is second priority.
+        # The 'background' task queue is third priority.
+        'realtime': {
+            'name': 'realtime_tasks',
+            # Don't store return values of tasks.
+            'results': False,
+            # Whether to run tasks immediately in the webserver's thread,
+            # or to schedule them to be run by a worker as normal.
+            'immediate': env.bool('HUEY_IMMEDIATE', default=DEBUG),
+            'consumer': {
+                # No periodic tasks in this queue.
+                'periodic': False,
+            }
+        },
+        'background': {
+            'name': 'background_tasks',
+            'results': False,
+            'immediate': env.bool('HUEY_IMMEDIATE', default=DEBUG),
+            'consumer': {
+                # Whether to run huey-registered periodic tasks or not.
+                'periodic': env.bool('HUEY_CONSUMER_PERIODIC', default=True),
+            }
+        }
     }
 }
 
@@ -843,9 +868,10 @@ INSTALLED_APPS = [
     # https://docs.djangoproject.com/en/dev/ref/forms/renderers/#templatessetting
     'django.forms',
 
+    # Extension of huey's contrib.djhuey package; for async tasks
+    'django_huey',
     'easy_thumbnails',
     'guardian',
-    'huey.contrib.djhuey',
     'markdownx',
     # REST API
     'rest_framework',

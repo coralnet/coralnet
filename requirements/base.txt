@@ -146,6 +146,12 @@ redis>=4.5.4,<4.6
 # Requires: redis
 huey>=2.4.5,<2.5
 
+# Extension of huey's contrib.djhuey package that allows tasks to be
+# allocated to multiple queues.
+# Changelog: https://github.com/gaiacoop/django-huey/blob/main/CHANGELOG.md
+# Requires: django, huey
+django-huey>=1.1.2,<1.2
+
 # Process management. Doesn't run on Windows (but it can still be installed).
 # Changelog: https://github.com/Supervisor/supervisor/blob/master/CHANGES.rst
 supervisor>=4.2.5,<4.3

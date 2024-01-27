@@ -13,8 +13,8 @@ from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 from django.utils.module_loading import autodiscover_modules
 from django.views.debug import ExceptionReporter
+from django_huey import db_periodic_task, db_task
 from huey import crontab
-from huey.contrib.djhuey import db_periodic_task, db_task
 
 from errorlogs.utils import instantiate_error_log
 from .exceptions import JobError, UnrecognizedJobNameError
@@ -204,10 +204,15 @@ class JobDecorator:
         self, job_name: str = None,
         interval: timedelta = None, offset: datetime = None,
         huey_interval_minutes: int = None,
+        task_queue_name: str = None,
     ):
         # This can be left unspecified if the task name works as the
         # job name.
         self.job_name = job_name
+
+        # This can be left unspecified if the default django-huey queue
+        # works for this job.
+        self.task_queue_name = task_queue_name
 
         # This should be present if the job is to be run periodically
         # through run_scheduled_jobs().
@@ -247,12 +252,16 @@ class JobDecorator:
                 # to run the same every-3-minutes task 10 times as makeup.
                 expires=timedelta(minutes=self.huey_interval_minutes*2),
                 name=self.job_name,
+                queue=self.task_queue_name,
             )
         else:
             if self.interval:
                 set_periodic_job_schedule(
                     self.job_name, self.interval, self.offset)
-            huey_decorator = db_task(name=self.job_name)
+            huey_decorator = db_task(
+                name=self.job_name,
+                queue=self.task_queue_name,
+            )
 
         @huey_decorator
         def task_wrapper(*task_args):

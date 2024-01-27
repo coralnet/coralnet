@@ -31,7 +31,7 @@ from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.urls import reverse
 from django.utils.html import escape as html_escape
-from huey.contrib.djhuey import HUEY
+import django_huey
 from spacer.messages import ClassifyReturnMsg
 
 from images.model_utils import PointGen
@@ -395,9 +395,11 @@ class CustomTestRunner(DiscoverRunner):
         # huey consumer would run in a separate process, meaning it
         # wouldn't see the state of the current test's open DB-transaction.
         #
-        # We specify this behavior here because override_settings doesn't seem
-        # to work on huey. Modifying this HUEY singleton does work.
-        HUEY.immediate = True
+        # We specify this behavior here, because there doesn't seem to be a way
+        # to use override_settings with django-huey (it doesn't work with huey
+        # standalone either).
+        django_huey.get_queue('realtime').immediate = True
+        django_huey.get_queue('background').immediate = True
 
         storage_manager = get_storage_manager()
 
