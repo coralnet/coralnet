@@ -12,6 +12,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 - Updates to required packages:
   - Pillow 10.1.0 -> 10.2.0
+  - pyspacer 0.7.0 -> 0.8.0
 
 ## [1.10](https://github.com/coralnet/coralnet/tree/1.10)
 
