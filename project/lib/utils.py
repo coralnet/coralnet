@@ -10,7 +10,7 @@ import urllib.parse
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
 
-view_scoped_cache = ContextVar('view_scoped_cache')
+view_scoped_cache = ContextVar('view_scoped_cache', default=None)
 
 
 class CacheableValue:
@@ -59,6 +59,9 @@ class CacheableValue:
             return
 
         view_scoped_cache_dict = view_scoped_cache.get()
+        if view_scoped_cache_dict is None:
+            return
+
         view_scoped_cache_dict[self.cache_key] = value
         view_scoped_cache.set(view_scoped_cache_dict)
 
@@ -76,8 +79,9 @@ class CacheableValue:
         value = None
         if self.use_view_scoped_cache:
             view_scoped_cache_dict = view_scoped_cache.get()
-            # Try the view scoped cache
-            value = view_scoped_cache_dict.get(self.cache_key)
+            if view_scoped_cache_dict is not None:
+                # Try the view scoped cache
+                value = view_scoped_cache_dict.get(self.cache_key)
 
         if value is None:
             # Try the Django cache
