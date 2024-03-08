@@ -5,7 +5,24 @@ import uuid
 from django.http import HttpRequest, HttpResponse
 from django.urls import resolve
 
+from .utils import view_scoped_cache
+
 view_logger = getLogger('coralnet_views')
+
+
+class ViewScopedCacheMiddleware:
+    """
+    Provide a cache (key-value store) which persists until the
+    end of the view.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        token = view_scoped_cache.set(dict())
+        response = self.get_response(request)
+        view_scoped_cache.reset(token)
+        return response
 
 
 class ViewLoggingMiddleware:

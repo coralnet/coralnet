@@ -875,6 +875,8 @@ MIDDLEWARE = [
     # each request to understand usage patterns. (ID, not username, to keep
     # things relatively anonymous)
     'lib.middleware.ViewLoggingMiddleware',
+    # Provide a cache which persists for the duration of the view.
+    'lib.middleware.ViewScopedCacheMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
 
     # django-reversion

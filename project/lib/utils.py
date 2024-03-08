@@ -1,5 +1,6 @@
 # General utility functions and classes can go here.
 
+from contextvars import ContextVar
 import datetime
 import random
 import string
@@ -8,6 +9,8 @@ import urllib.parse
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
+
+view_scoped_cache = ContextVar('view_scoped_cache')
 
 
 class CacheableValue:
@@ -38,6 +41,10 @@ class CacheableValue:
         # lack of value accordingly. This should be False when on-demand
         # computing would be unreasonably long for a page that uses the value.
         on_demand_computation_ok: bool = True,
+        # In addition to caching in the Django cache to reduce re-computations,
+        # also cache in memory (with a ContextVar) for the duration of the view
+        # to reduce repeat fetches from the Django cache.
+        use_view_scoped_cache: bool = False,
     ):
         self.cache_key = cache_key
         self.compute_function = compute_function
@@ -45,6 +52,15 @@ class CacheableValue:
             seconds=cache_update_interval)
         self.cache_timeout_interval = cache_timeout_interval
         self.on_demand_computation_ok = on_demand_computation_ok
+        self.use_view_scoped_cache = use_view_scoped_cache
+
+    def _update_view_scoped_cache(self, value):
+        if not self.use_view_scoped_cache:
+            return
+
+        view_scoped_cache_dict = view_scoped_cache.get()
+        view_scoped_cache_dict[self.cache_key] = value
+        view_scoped_cache.set(view_scoped_cache_dict)
 
     def update(self):
         value = self.compute_function()
@@ -52,12 +68,26 @@ class CacheableValue:
             key=self.cache_key, value=value,
             timeout=self.cache_timeout_interval,
         )
+        self._update_view_scoped_cache(value)
+
         return value
 
     def get(self):
-        value = cache.get(self.cache_key)
+        value = None
+        if self.use_view_scoped_cache:
+            view_scoped_cache_dict = view_scoped_cache.get()
+            # Try the view scoped cache
+            value = view_scoped_cache_dict.get(self.cache_key)
+
+        if value is None:
+            # Try the Django cache
+            value = cache.get(self.cache_key)
+            self._update_view_scoped_cache(value)
+
         if value is None and self.on_demand_computation_ok:
+            # Compute value
             value = self.update()
+
         return value
 
 
