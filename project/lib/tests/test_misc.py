@@ -3,6 +3,7 @@ from email.utils import parseaddr
 from unittest import skip, skipIf
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.storage import DefaultStorage
 from django.core.mail import mail_admins
 from django import forms
@@ -12,6 +13,8 @@ from django.test.client import Client
 from django.test.utils import override_settings
 
 from ..forms import get_one_form_error, get_one_formset_error
+from ..middleware import ViewScopedCacheMiddleware
+from ..utils import CacheableValue, view_scoped_cache
 from .utils import (
     BasePermissionTest,
     BaseTest,
@@ -365,3 +368,98 @@ class AdminsSettingTest(BaseTest, EmailAssertionsMixin):
             ["Test body"],
             to=['alice@example.org', 'jdoe@example.com'],
         )
+
+
+class ViewScopedCacheTest(ClientTest):
+
+    def test_middleware_not_active(self):
+        self.assertIsNone(
+            view_scoped_cache.get(),
+            msg="Cache is not initialized when the middleware's not active,"
+                " but access should return None instead of crashing")
+
+    def test_middleware_active(self):
+        def view(_request):
+            self.assertDictEqual(
+                view_scoped_cache.get(), dict(),
+                msg="Cache should be initialized")
+            return 'response'
+        ViewScopedCacheMiddleware(view)('request')
+
+    def test_cache_usage(self):
+        computed_value = 1
+
+        def compute():
+            return computed_value
+
+        cacheable_value = CacheableValue(
+            cache_key='key',
+            compute_function=compute,
+            cache_update_interval=60*60,
+            cache_timeout_interval=60*60,
+            use_view_scoped_cache=True,
+        )
+
+        def view(_request):
+            self.assertEqual(cacheable_value.get(), 1)
+            return 'response'
+        ViewScopedCacheMiddleware(view)('request')
+
+        computed_value = 2
+        self.assertEqual(compute(), 2, "This var scoping should work")
+
+        def view(_request):
+            # Django cache and view-scoped cache still have the old value
+            self.assertEqual(cache.get(cacheable_value.cache_key), 1)
+            self.assertEqual(cacheable_value.get(), 1)
+
+            # Django cache is updated; view-scoped cache still has old value
+            cache.set(cacheable_value.cache_key, compute())
+            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
+            self.assertEqual(cacheable_value.get(), 1)
+
+            # Both caches are updated
+            cacheable_value.update()
+            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
+            self.assertEqual(cacheable_value.get(), 2)
+
+            return 'response'
+        ViewScopedCacheMiddleware(view)('request')
+
+    def test_value_not_cached_in_next_view(self):
+        computed_value = 1
+
+        def compute():
+            return computed_value
+
+        cacheable_value = CacheableValue(
+            cache_key='key',
+            compute_function=compute,
+            cache_update_interval=60*60,
+            cache_timeout_interval=60*60,
+            use_view_scoped_cache=True,
+        )
+        cacheable_value.update()
+
+        computed_value = 2
+
+        def view(_request):
+            # Django cache and view-scoped cache still have the old value
+            self.assertEqual(cache.get(cacheable_value.cache_key), 1)
+            self.assertEqual(cacheable_value.get(), 1)
+
+            # Django cache is updated; view-scoped cache still has old value
+            cache.set(cacheable_value.cache_key, compute())
+            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
+            self.assertEqual(cacheable_value.get(), 1)
+
+            return 'response'
+        ViewScopedCacheMiddleware(view)('request')
+
+        def view(_request):
+            # View-scoped cache is updated because a new view has started
+            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
+            self.assertEqual(cacheable_value.get(), 2)
+
+            return 'response'
+        ViewScopedCacheMiddleware(view)('request')

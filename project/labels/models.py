@@ -215,6 +215,7 @@ cacheable_label_details = CacheableValue(
     cache_update_interval=60*60*24*7,
     cache_timeout_interval=60*60*24*30,
     on_demand_computation_ok=False,
+    use_view_scoped_cache=True,
 )
 
 
