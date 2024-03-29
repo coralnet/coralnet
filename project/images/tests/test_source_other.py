@@ -14,8 +14,8 @@ from lib.tests.utils import BasePermissionTest, ClientTest
 from newsfeed.models import NewsItem
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import (
-    BaseTaskTest, queue_and_run_collect_spacer_jobs)
-from vision_backend.utils import queue_source_check
+    BaseTaskTest, do_collect_spacer_jobs)
+from vision_backend.utils import schedule_source_check
 from ..model_utils import PointGen
 from ..models import Source
 
@@ -418,17 +418,21 @@ class SourceMainTest(ClientTest):
             browse_url = html.unescape(browse_url)
 
             response = self.client.get(browse_url)
-            self.assertContains(
-                response, 'img class="thumb', count=count,
-                msg_prefix=(
+            response_soup = BeautifulSoup(response.content, 'html.parser')
+
+            thumbnails = response_soup.find_all('img', class_='thumb')
+            self.assertEqual(
+                len(thumbnails), count,
+                msg=(
                     "Following the browse link should show the correct"
                     " number of results"))
 
             if status_browse_thumb:
-                self.assertContains(
-                    response, 'img class="thumb {}'.format(status_browse_thumb),
-                    count=count,
-                    msg_prefix=(
+                thumbnails = response_soup.find_all(
+                    'img', class_=status_browse_thumb)
+                self.assertEqual(
+                    len(thumbnails), count,
+                    msg=(
                         "Following the browse link should show only image"
                         " results of the specified status"))
 
@@ -509,12 +513,12 @@ class SourceMainRobotTest(BaseTaskTest):
         with override_settings(
                 NEW_CLASSIFIER_TRAIN_TH=0.0001,
                 NEW_CLASSIFIER_IMPROVEMENT_TH=math.inf):
-            # Source was considered all caught up earlier, so need to queue
+            # Source was considered all caught up earlier, so need to schedule
             # another check.
-            queue_source_check(self.source.pk)
+            schedule_source_check(self.source.pk)
             # Train
             run_scheduled_jobs_until_empty()
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         classifier_2 = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)

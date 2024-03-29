@@ -30,14 +30,14 @@ from events.models import ClassifyImageEvent
 from images.models import Source, Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
-from jobs.utils import job_runner, job_starter, queue_job
+from jobs.utils import job_runner, job_starter, schedule_job
 from labels.models import Label
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
-from .utils import get_extractor, queue_source_check, reset_features
+from .utils import get_extractor, reset_features, schedule_source_check
 
 logger = getLogger(__name__)
 
@@ -52,15 +52,15 @@ logger = getLogger(__name__)
     ),
 )
 def check_all_sources():
-    queued = 0
+    scheduled = 0
     for source in Source.objects.all():
-        # Queue a check of this source at a random time in the next 4 hours.
+        # Schedule a check of this source at a random time in the next 4 hours.
         delay_in_seconds = random.randrange(1, 60*60*4)
-        job = queue_source_check(
+        job, created = schedule_source_check(
             source.pk, delay=timedelta(seconds=delay_in_seconds))
-        if job:
-            queued += 1
-    return f"Queued checks for {queued} source(s)"
+        if created:
+            scheduled += 1
+    return f"Scheduled checks for {scheduled} source(s)"
 
 
 @job_runner()
@@ -90,10 +90,9 @@ def check_source(source_id):
     to_extract = not_extracted.difference(cant_extract)
 
     if to_extract.exists():
-        active_training_jobs = Job.objects.filter(
+        active_training_jobs = Job.objects.incomplete().filter(
             job_name='train_classifier',
             source_id=source_id,
-            status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS]
         )
         if active_training_jobs.exists():
             # If we submit, rowcols that were submitted to training may get
@@ -113,34 +112,32 @@ def check_source(source_id):
                 f"Feature extraction(s) ready, but not"
                 f" submitted due to training in progress")
 
-        active_extraction_jobs = Job.objects.filter(
+        active_extraction_jobs = Job.objects.incomplete().filter(
             job_name='extract_features',
             source_id=source_id,
-            status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS]
         )
         active_extraction_image_ids = set([
             int(str_id) for str_id in
             active_extraction_jobs.values_list('arg_identifier', flat=True)
         ])
 
-        # Try to queue extractions (will not be queued if an extraction for
-        # the same image is already active)
-        num_queued_extractions = 0
+        # Try to schedule extractions (will not be scheduled if an extraction
+        # for the same image is already active)
+        num_scheduled_extractions = 0
         for image in to_extract:
             if image.pk in active_extraction_image_ids:
                 # Very quick short-circuit without additional DB check.
                 continue
 
-            # This hits the DB to check for a race condition (identical
-            # active job), then to create a job as appropriate.
-            job = queue_job('extract_features', image.pk, source_id=source_id)
-            if not job:
+            job, created = schedule_job(
+                'extract_features', image.pk, source_id=source_id)
+            if not created:
                 continue
 
-            num_queued_extractions += 1
+            num_scheduled_extractions += 1
 
             if (
-                num_queued_extractions % 10 == 0
+                num_scheduled_extractions % 10 == 0
                 and timezone.now() > wrap_up_time
             ):
                 timed_out = True
@@ -149,9 +146,9 @@ def check_source(source_id):
         # If there are extractions to be done, then having that overlap with
         # training can lead to desynced rowcols, so we return and worry about
         # training later.
-        if num_queued_extractions > 0:
+        if num_scheduled_extractions > 0:
             result_str = (
-                f"Queued {num_queued_extractions} feature extraction(s)")
+                f"Scheduled {num_scheduled_extractions} feature extraction(s)")
             if timed_out:
                 result_str += " (timed out)"
             return result_str
@@ -167,12 +164,13 @@ def check_source(source_id):
 
     need_new_robot, reason = source.need_new_robot()
     if need_new_robot:
-        # Try to queue training
-        job = queue_job('train_classifier', source_id, source_id=source_id)
+        # Try to schedule training
+        job, created = schedule_job(
+            'train_classifier', source_id, source_id=source_id)
         # We return and don't worry about classification until the classifier
         # is up to date.
-        if job:
-            return "Queued training"
+        if created:
+            return "Scheduled training"
         else:
             return "Waiting for training to finish"
 
@@ -212,39 +210,40 @@ def check_source(source_id):
 
     if images_to_classify.exists():
 
-        active_classify_jobs = Job.objects.filter(
+        active_classify_jobs = Job.objects.incomplete().filter(
             job_name='classify_features',
             source_id=source_id,
-            status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS]
         )
         active_classify_image_ids = set([
             int(str_id) for str_id in
             active_classify_jobs.values_list('arg_identifier', flat=True)
         ])
 
-        # Try to queue classifications
-        num_queued_classifications = 0
+        # Try to schedule classifications
+        num_scheduled_classifications = 0
         for image in images_to_classify:
             if image.pk in active_classify_image_ids:
                 # Very quick short-circuit without additional DB check.
                 continue
 
-            job = queue_job('classify_features', image.pk, source_id=source_id)
-            if not job:
+            job, created = schedule_job(
+                'classify_features', image.pk, source_id=source_id)
+            if not created:
                 continue
 
-            num_queued_classifications += 1
+            num_scheduled_classifications += 1
 
             if (
-                num_queued_classifications % 10 == 0
+                num_scheduled_classifications % 10 == 0
                 and timezone.now() > wrap_up_time
             ):
                 timed_out = True
                 break
 
-        if num_queued_classifications > 0:
+        if num_scheduled_classifications > 0:
             result_str = (
-                f"Queued {num_queued_classifications} image classification(s)")
+                f"Scheduled {num_scheduled_classifications}"
+                f" image classification(s)")
             if timed_out:
                 result_str += " (timed out)"
             return result_str
@@ -252,7 +251,7 @@ def check_source(source_id):
             return "Waiting for image classification(s) to finish"
 
     # If we got here, then the source should be all caught up, and there's
-    # no need to queue another check for now. However, there may be a caveat
+    # no need to schedule another check for now. However, there may be a caveat
     # to the 'caught up' status.
     if done_caveat:
         return (
@@ -531,7 +530,7 @@ def classify_image(image_id):
         # Classification for this source may be done.
         # Confirm whether the source is all caught up. That's useful to know
         # when looking at job/backend dashboards.
-        queue_source_check(img.source_id)
+        schedule_source_check(img.source_id)
 
     return f"Used classifier {classifier.pk}"
 
@@ -584,7 +583,7 @@ def reset_backend_for_source(source_id):
     Removes all traces of the backend for this source, including
     classifiers and features.
     """
-    queue_job(
+    schedule_job(
         'reset_classifiers_for_source', source_id,
         source_id=source_id)
 
@@ -602,4 +601,4 @@ def reset_classifiers_for_source(source_id):
     Annotation.objects.filter(source_id=source_id).unconfirmed().delete()
 
     # Can probably train a new classifier.
-    queue_source_check(source_id)
+    schedule_source_check(source_id)

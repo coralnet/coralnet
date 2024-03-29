@@ -19,7 +19,7 @@ from lib.decorators import source_permission_required, source_labelset_required
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from lib.utils import filesize_display
-from vision_backend.utils import queue_source_check, reset_features
+from vision_backend.utils import reset_features, schedule_source_check_on_commit
 from visualization.forms import ImageSpecifyByIdForm
 from .forms import (
     CSVImportForm, ImageUploadForm, ImageUploadFrontendForm)
@@ -162,7 +162,7 @@ def upload_images_ajax(request, source_id):
     )
 
     # The uploaded images should be ready for feature extraction.
-    queue_source_check(source_id)
+    schedule_source_check_on_commit(source_id)
 
     return JsonResponse(dict(
         success=True,

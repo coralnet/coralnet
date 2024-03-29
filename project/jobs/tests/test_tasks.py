@@ -13,12 +13,12 @@ from vision_backend.models import BatchJob
 from ..models import Job
 from ..tasks import (
     clean_up_old_jobs,
-    queue_periodic_jobs,
+    schedule_periodic_jobs,
     report_stuck_jobs,
     run_scheduled_jobs,
 )
-from ..utils import job_runner, queue_job
-from .utils import queue_job_with_modify_date
+from ..utils import job_runner
+from .utils import fabricate_job
 
 
 def call_run_scheduled_jobs():
@@ -47,24 +47,24 @@ class RunScheduledJobsTest(BaseTest):
 
         name = 'return_arg_test'
 
-        job_1 = queue_job(name, 1)
+        job_1 = fabricate_job(name, 1)
         self.assertEqual(
             self.run_scheduled_jobs_and_get_result(),
             f"Ran 1 job(s):\n{job_1.pk}: {name} / 1")
 
-        job_2 = queue_job(name, 2)
-        job_3 = queue_job(name, 3)
-        job_4 = queue_job(name, 4)
+        job_2 = fabricate_job(name, 2)
+        job_3 = fabricate_job(name, 3)
+        job_4 = fabricate_job(name, 4)
         self.assertEqual(
             self.run_scheduled_jobs_and_get_result(),
             f"Ran 3 job(s):\n{job_2.pk}: {name} / 2"
             f"\n{job_3.pk}: {name} / 3"
             f"\n{job_4.pk}: {name} / 4")
 
-        job_5 = queue_job(name, 5)
-        job_6 = queue_job(name, 6)
-        job_7 = queue_job(name, 7)
-        queue_job(name, 8)
+        job_5 = fabricate_job(name, 5)
+        job_6 = fabricate_job(name, 6)
+        job_7 = fabricate_job(name, 7)
+        fabricate_job(name, 8)
         self.assertEqual(
             self.run_scheduled_jobs_and_get_result(),
             f"Ran 4 jobs, including:\n{job_5.pk}: {name} / 5"
@@ -74,7 +74,7 @@ class RunScheduledJobsTest(BaseTest):
     @override_settings(JOB_MAX_MINUTES=-1)
     def test_time_out(self):
         for i in range(12):
-            queue_job('return_arg_test', i)
+            fabricate_job('return_arg_test', i)
 
         result_message = self.run_scheduled_jobs_and_get_result()
         self.assertTrue(
@@ -101,8 +101,8 @@ class RunScheduledJobsTest(BaseTest):
             "Should not have accepted the second run")
 
     def test_unrecognized_job_name(self):
-        job = queue_job('return_arg_test', 1)
-        job_2 = queue_job('test_2', 1)
+        job = fabricate_job('return_arg_test', 1)
+        job_2 = fabricate_job('test_2', 1)
 
         result_message = self.run_scheduled_jobs_and_get_result()
         self.assertRegex(
@@ -120,7 +120,7 @@ class CleanupTaskTest(BaseTest):
 
     @staticmethod
     def run_and_get_result():
-        job = queue_job('clean_up_old_jobs')
+        job = fabricate_job('clean_up_old_jobs')
         clean_up_old_jobs()
         job.refresh_from_db()
         return job.result_message
@@ -130,7 +130,7 @@ class CleanupTaskTest(BaseTest):
         Check the result message when there are no jobs to clean up.
         """
         # Too new to be cleaned up.
-        queue_job('new')
+        fabricate_job('new')
 
         self.assertEqual(
             self.run_and_get_result(), "No old jobs to clean up")
@@ -140,16 +140,16 @@ class CleanupTaskTest(BaseTest):
         Jobs should be selected for cleanup based on date.
         """
         # More than one job too new to be cleaned up.
-        queue_job('new')
-        queue_job_with_modify_date(
+        fabricate_job('new')
+        fabricate_job(
             '29 days ago',
             modify_date=timezone.now() - timedelta(days=29))
 
         # More than one job old enough to be cleaned up.
-        queue_job_with_modify_date(
+        fabricate_job(
             '31 days ago',
             modify_date=timezone.now() - timedelta(days=31))
-        queue_job_with_modify_date(
+        fabricate_job(
             '32 days ago',
             modify_date=timezone.now() - timedelta(days=32))
 
@@ -173,14 +173,16 @@ class CleanupTaskTest(BaseTest):
         """
         Jobs with the persist flag set should not be cleaned up.
         """
-        job = queue_job('Persist True')
-        Job.objects.filter(pk=job.pk).update(
+        fabricate_job(
+            'Persist True',
             persist=True,
-            modify_date=timezone.now() - timedelta(days=31))
-        job = queue_job('Persist False')
-        Job.objects.filter(pk=job.pk).update(
+            modify_date=timezone.now() - timedelta(days=31),
+        )
+        fabricate_job(
+            'Persist False',
             persist=False,
-            modify_date=timezone.now() - timedelta(days=31))
+            modify_date=timezone.now() - timedelta(days=31),
+        )
 
         self.assertEqual(
             self.run_and_get_result(), "Cleaned up 1 old job(s)")
@@ -202,14 +204,14 @@ class CleanupTaskTest(BaseTest):
         api_job = ApiJob(type='', user=user)
         api_job.save()
 
-        job = queue_job('unit 1')
+        job = fabricate_job('unit 1')
         ApiJobUnit(
             parent=api_job, internal_job=job,
             order_in_parent=1, request_json=[]).save()
 
-        queue_job('no unit')
+        fabricate_job('no unit')
 
-        job = queue_job('unit 2')
+        job = fabricate_job('unit 2')
         ApiJobUnit(
             parent=api_job, internal_job=job,
             order_in_parent=2, request_json=[]).save()
@@ -238,7 +240,7 @@ class ReportStuckJobsTest(BaseTest):
     """
     @staticmethod
     def run_and_get_result():
-        job = queue_job('report_stuck_jobs')
+        job = fabricate_job('report_stuck_jobs')
         report_stuck_jobs()
         job.refresh_from_db()
         return job.result_message
@@ -249,12 +251,7 @@ class ReportStuckJobsTest(BaseTest):
         status=Job.Status.IN_PROGRESS,
         batch_spec_level=None,
     ):
-        job = Job.objects.create(
-            job_name=name, arg_identifier=arg, status=status)
-        job.save()
-
-        Job.objects.filter(pk=job.pk).update(modify_date=modify_date)
-        job.refresh_from_db()
+        job = fabricate_job(name, arg, modify_date=modify_date, status=status)
 
         if batch_spec_level:
             batch_job = BatchJob(internal_job=job, spec_level=batch_spec_level)
@@ -267,7 +264,7 @@ class ReportStuckJobsTest(BaseTest):
         Check the result message when there are no stuck jobs to report.
         """
         # Too new to be cleaned up.
-        queue_job('new')
+        fabricate_job('new')
 
         self.assertEqual(
             self.run_and_get_result(), "No stuck jobs detected")
@@ -380,33 +377,34 @@ class ReportStuckJobsTest(BaseTest):
             sent_email.body)
 
 
-class QueuePeriodicJobsTest(BaseTest):
+class SchedulePeriodicJobsTest(BaseTest):
     """
-    Test the queue_periodic_jobs task.
+    Test the schedule_periodic_jobs task.
     """
     @staticmethod
     def run_and_get_result():
-        queue_periodic_jobs()
+        schedule_periodic_jobs()
         job = Job.objects.filter(
-            job_name='queue_periodic_jobs').latest('pk')
+            job_name='schedule_periodic_jobs').latest('pk')
         return job.result_message
 
     def test_zero_jobs_message(self):
         """
-        Check the result message when there are no periodic jobs to queue.
+        Check the result message when there are no periodic jobs to schedule.
         """
-        # Queue everything first
-        queue_periodic_jobs()
-        # Then queueing again should do nothing
+        # Schedule everything first
+        schedule_periodic_jobs()
+        # Then scheduling again should do nothing
         self.assertEqual(
-            self.run_and_get_result(), "All periodic jobs are already queued")
+            self.run_and_get_result(),
+            "All periodic jobs are already scheduled")
 
-    def test_queue_all_periodic_jobs(self):
+    def test_schedule_all_periodic_jobs(self):
 
         def test_periodics():
             """
             By patching get_periodic_job_schedules() with this, we have these
-            names available as periodic jobs to queue.
+            names available as periodic jobs to schedule.
             """
             return dict(
                 periodic1=(5*60, 0),
@@ -418,10 +416,10 @@ class QueuePeriodicJobsTest(BaseTest):
             'jobs.tasks.get_periodic_job_schedules', test_periodics
         ):
             self.assertEqual(
-                self.run_and_get_result(), "Queued 3 periodic job(s)")
+                self.run_and_get_result(), "Scheduled 3 periodic job(s)")
 
         # If these lines don't get errors, then the expected
-        # queued jobs exist
+        # scheduled jobs exist
         Job.objects.get(job_name='periodic1', status=Job.Status.PENDING)
         Job.objects.get(job_name='periodic2', status=Job.Status.PENDING)
         Job.objects.get(job_name='periodic3', status=Job.Status.PENDING)

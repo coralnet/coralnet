@@ -18,7 +18,7 @@
 <div class="line" id="source-check-status">
   {% if latest_check %}
     {% if check_in_progress %}
-      This source is currently being checked for jobs to queue.
+      This source is currently being checked for jobs to schedule.
     {% else %}
       <strong>Latest source check result:</strong>
       {{ latest_check.result_message }}

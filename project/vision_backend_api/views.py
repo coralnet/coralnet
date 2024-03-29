@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from api_core.exceptions import ApiRequestDataError
 from api_core.models import ApiJob, ApiJobUnit
 from jobs.models import Job
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from vision_backend.models import Classifier
 from .forms import validate_deploy
 
@@ -76,7 +76,7 @@ class Deploy(APIView):
         # operations (one per image).
         for image_number, image_json in enumerate(images_data, 1):
 
-            internal_job = queue_job(
+            internal_job, _ = schedule_job(
                 'classify_image', deploy_job.pk, image_number)
             job_unit = ApiJobUnit(
                 parent=deploy_job,

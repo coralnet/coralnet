@@ -4,7 +4,7 @@ from django.urls import reverse
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.tests.tasks.utils import (
-    BaseTaskTest, queue_and_run_collect_spacer_jobs)
+    BaseTaskTest, do_collect_spacer_jobs)
 
 
 class PermissionTest(BasePermissionTest):
@@ -229,7 +229,7 @@ class ClassifyAfterDeleteTest(BaseTaskTest):
             image_options=dict(filename='unconfirmed.png'))
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -239,10 +239,11 @@ class ClassifyAfterDeleteTest(BaseTaskTest):
             f"Image {unconfirmed_image.metadata.name} should have"
             f" unconfirmed annotations")
 
-        # Delete annotations
+        # Delete annotations, ensuring the on-commit callback runs
         self.client.force_login(self.user)
         url = reverse('batch_delete_annotations_ajax', args=[self.source.pk])
-        response = self.client.post(url, default_search_params)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(url, default_search_params)
         self.assertDictEqual(response.json(), dict(success=True))
 
         self.source.refresh_from_db()

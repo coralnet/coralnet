@@ -15,8 +15,8 @@ from .utils import (
     get_periodic_job_schedules,
     job_runner,
     next_run_delay,
-    queue_job,
-    run_job,
+    schedule_job,
+    start_job,
 )
 
 
@@ -51,7 +51,7 @@ def run_scheduled_jobs():
 
     for job in jobs_to_run:
         try:
-            run_job(job)
+            start_job(job)
         except UnrecognizedJobNameError:
             finish_job(
                 job, success=False, result_message="Unrecognized job name")
@@ -183,36 +183,26 @@ def report_stuck_jobs():
 
 
 @full_job(huey_interval_minutes=5)
-def queue_periodic_jobs():
+def schedule_periodic_jobs():
     """
-    Queue periodic jobs as needed. This ensures that every defined periodic job
-    has 1 pending or in-progress run.
+    Schedule periodic jobs as needed. This ensures that every defined periodic
+    job has 1 pending or in-progress run.
 
-    When a periodic job finishes, it should queue up another run of that same
+    When a periodic job finishes, it should schedule another run of that same
     job. So this task is mainly for initialization and then acts as a fallback,
     e.g. if a periodic job crashes.
-
-    We don't use huey's periodic-task construct for most kinds of tasks/jobs
-    because:
-    - It doesn't let us easily report when the next run of a particular job is.
-    - The logic isn't great for infrequent jobs on an unstable server: if we
-      have a daily job, and huey's cron doesn't get to run on the particular
-      minute that the job's scheduled for, then the job has to wait another day
-      before trying again.
-
-    However, we do depend on huey to begin the process of queueing and running
-    jobs in the first place.
     """
     periodic_job_schedules = get_periodic_job_schedules()
-    queued = 0
+    scheduled = 0
 
     for name, schedule in periodic_job_schedules.items():
         interval, offset = schedule
-        job = queue_job(name, delay=next_run_delay(interval, offset))
-        if job:
-            queued += 1
+        job, created = schedule_job(
+            name, delay=next_run_delay(interval, offset))
+        if created:
+            scheduled += 1
 
-    if queued > 0:
-        return f"Queued {queued} periodic job(s)"
+    if scheduled > 0:
+        return f"Scheduled {scheduled} periodic job(s)"
     else:
-        return "All periodic jobs are already queued"
+        return "All periodic jobs are already scheduled"

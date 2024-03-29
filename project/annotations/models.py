@@ -5,7 +5,7 @@ from django.db import models
 from images.models import Image, Point, Source
 from labels.models import Label, LocalLabel
 from vision_backend.models import Classifier
-from vision_backend.utils import queue_source_check
+from vision_backend.utils import schedule_source_check_on_commit
 from .managers import AnnotationManager, AnnotationQuerySet
 from .model_utils import ImageAnnoStatuses, image_annotation_status
 
@@ -98,13 +98,13 @@ class ImageAnnotationInfo(models.Model):
 
             # With a new image confirmed, let's see if a new robot can be
             # trained.
-            queue_source_check(self.image.source.pk)
+            schedule_source_check_on_commit(self.image.source.pk)
 
         elif last_annotation is None:
 
             # Image has no annotations now. Let's see if machine annotations
             # can be added.
-            queue_source_check(self.image.source.pk)
+            schedule_source_check_on_commit(self.image.source.pk)
 
     @property
     def confirmed(self):

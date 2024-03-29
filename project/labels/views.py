@@ -16,7 +16,7 @@ from annotations.utils import label_ids_with_confirmed_annotations_in_source
 from calcification.utils import get_default_calcify_tables
 from images.models import Source
 from images.utils import filter_out_test_sources
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from lib.decorators import (
     login_required_ajax, source_permission_required,
     source_visibility_required, source_labelset_required)
@@ -157,7 +157,7 @@ def labelset_add(request, source_id):
                 messages.success(request, "Labelset successfully changed.")
 
                 # Reset classifiers.
-                queue_job(
+                schedule_job(
                     'reset_classifiers_for_source', source_id,
                     source_id=source_id)
 

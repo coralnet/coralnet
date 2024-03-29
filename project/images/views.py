@@ -23,7 +23,7 @@ from annotations.utils import (
     image_annotation_area_is_editable,
     image_has_any_confirmed_annotations,
 )
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from labels.models import LabelGroup
 from lib.decorators import (
     image_annotation_area_must_be_editable,
@@ -275,7 +275,7 @@ def source_edit(request, source_id):
                 # Feature extractor setting changed. Wipe this source's
                 # features and classifiers.
                 editedSource.save()
-                queue_job(
+                schedule_job(
                     'reset_backend_for_source', source_id,
                     source_id=source_id)
                 messages.success(

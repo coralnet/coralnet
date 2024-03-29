@@ -15,7 +15,7 @@ from jobs.tests.utils import do_job, JobUtilsMixin
 from vision_backend_api.tests.utils import DeployBaseTest
 from ..models import BatchJob, Classifier
 from ..queues import get_queue_class
-from .tasks.utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
+from .tasks.utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 def local_queue_decorator(func):
@@ -122,7 +122,7 @@ class QueueBasicTest(BaseTaskTest, JobUtilsMixin):
     to 'parameterize' these tests.
     """
     def do_test_no_jobs(self):
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 0")
 
@@ -131,7 +131,7 @@ class QueueBasicTest(BaseTaskTest, JobUtilsMixin):
         # Submit feature extraction
         run_scheduled_jobs_until_empty()
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 1 SUCCEEDED")
         # Check for successful result handling
@@ -141,11 +141,11 @@ class QueueBasicTest(BaseTaskTest, JobUtilsMixin):
         self.upload_images_for_training()
         # Feature extraction
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Submit training
         run_scheduled_jobs_until_empty()
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 1 SUCCEEDED")
         # Check for successful result handling
@@ -161,11 +161,11 @@ class QueueBasicTest(BaseTaskTest, JobUtilsMixin):
         # Submit feature extraction
         run_scheduled_jobs_until_empty()
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 1 SUCCEEDED")
         # Collect again; job should already be consumed
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 0")
 
@@ -213,7 +213,7 @@ class BatchQueueBasicTest(QueueBasicTest):
             # Submit feature extraction
             run_scheduled_jobs_until_empty()
             # Collect
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
             self.assert_job_result_message(
                 'collect_spacer_jobs', "Jobs checked/collected: 1 FAILED")
 
@@ -228,13 +228,13 @@ class BatchQueueBasicTest(QueueBasicTest):
         with mock_boto_client():
             # Feature extraction
             run_scheduled_jobs_until_empty()
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         with mock_boto_client('failed'):
             # Submit training
             run_scheduled_jobs_until_empty()
             # Collect
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
             self.assert_job_result_message(
                 'collect_spacer_jobs', "Jobs checked/collected: 1 FAILED")
 
@@ -247,7 +247,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
 
     def do_test_collect_classification(self):
         self.train_classifier()
-        # Queue classification
+        # Schedule classification
         images = [
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
@@ -256,7 +256,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         # Submit classification
         self.run_scheduled_jobs_including_deploy()
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 1 SUCCEEDED")
         # Check for successful result handling
@@ -266,7 +266,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
 
     def do_test_collect_multiple_classification(self):
         self.train_classifier()
-        # Queue classifications
+        # Schedule classifications
         images = [
             dict(
                 type='image',
@@ -279,7 +279,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         ]
         data = json.dumps(dict(data=images))
         self.client.post(self.deploy_url, data, **self.request_kwargs)
-        # Queue more classifications (separate ApiJob)
+        # Schedule more classifications (separate ApiJob)
         images = [
             dict(
                 type='image',
@@ -297,7 +297,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         self.run_scheduled_jobs_including_deploy()
 
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 8 SUCCEEDED")
 
@@ -333,7 +333,7 @@ class BatchQueueClassificationTest(QueueClassificationTest):
         with mock_boto_client():
             self.train_classifier()
 
-        # Queue classification
+        # Schedule classification
         images = [
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
@@ -344,7 +344,7 @@ class BatchQueueClassificationTest(QueueClassificationTest):
             # Submit classification
             self.run_scheduled_jobs_including_deploy()
             # Collect
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
             self.assert_job_result_message(
                 'collect_spacer_jobs', "Jobs checked/collected: 1 FAILED")
 
@@ -360,7 +360,7 @@ class BatchQueueSpecificsTest(BaseTaskTest, JobUtilsMixin):
         # Submit feature extraction
         run_scheduled_jobs_until_empty()
         # Collect
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs',
             f"Jobs checked/collected: {expected_counts_str}")
@@ -393,7 +393,7 @@ class BatchQueueSpecificsTest(BaseTaskTest, JobUtilsMixin):
             run_scheduled_jobs_until_empty()
 
             # Try to collect
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
             self.assert_job_result_message(
                 'collect_spacer_jobs',
                 "Jobs checked/collected: 1 NOT SUBMITTED")
@@ -406,7 +406,7 @@ class BatchQueueSpecificsTest(BaseTaskTest, JobUtilsMixin):
             batch_job.save()
 
             # Then try to collect again.
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
             self.assert_job_result_message(
                 'collect_spacer_jobs',
                 "Jobs checked/collected: 1 DROPPED")
@@ -516,7 +516,7 @@ class JobSpecsTest(BaseTaskTest):
 
             do_job('extract_features', image.pk, source_id=self.source.pk)
 
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         with (
             mock.patch.object(get_queue_class(), 'submit_job')

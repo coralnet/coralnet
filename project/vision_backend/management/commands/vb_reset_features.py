@@ -42,4 +42,4 @@ class Command(BaseCommand):
 
         self.stdout.write(
             "Done. Keep an eye out for the feature extraction jobs which"
-            " should get queued and run.")
+            " should get scheduled and run.")

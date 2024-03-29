@@ -62,7 +62,8 @@ class JobListView(View, ABC):
             'pk', 'job_name', 'arg_identifier',
             'apijobunit', 'apijobunit__parent',
             'status', 'result_message',
-            'persist', 'modify_date', 'scheduled_start_date',
+            'persist', 'create_date', 'modify_date',
+            'scheduled_start_date', 'start_date',
         ]
         if self.has_source_column:
             fields += ['source', 'source__name']
@@ -76,8 +77,10 @@ class JobListView(View, ABC):
                 status_display=status_choices_labels[values['status']],
                 result_message=values['result_message'],
                 persist=values['persist'],
+                create_date=values['create_date'],
                 modify_date=values['modify_date'],
                 scheduled_start_date=values['scheduled_start_date'],
+                start_date=values['start_date'],
             )
 
             if self.has_source_column:

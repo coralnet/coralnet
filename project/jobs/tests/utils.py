@@ -1,60 +1,87 @@
+from datetime import datetime, timedelta, timezone
 import re
 from typing import Union
 from unittest.case import TestCase
 
+from django.contrib.auth.models import User
+
 from ..models import Job
-from ..utils import queue_job, run_job
+from ..utils import get_or_create_job, start_job
 
 
-def queue_job_with_modify_date(*args, modify_date=None, **kwargs):
-    job = queue_job(*args, **kwargs)
-
-    # Use QuerySet.update() instead of Model.save() so that the modify
-    # date doesn't get auto-updated to the current date.
-    Job.objects.filter(pk=job.pk).update(modify_date=modify_date)
-
-    return job
-
-
-def queue_and_run_job(*args, **kwargs):
-    job = queue_job(*args, **kwargs)
-    run_job(job)
-
-    job.refresh_from_db()
-    return job
-
-
-def run_pending_job(job_name, arg_identifier):
+def fabricate_job(
+    name: str,
+    *task_args,
+    delay: timedelta = None,
+    start_date: datetime = None,
+    create_date: datetime = None,
+    modify_date: datetime = None,
+    status: str = Job.Status.PENDING,
+    **kwargs
+) -> Job:
     """
-    Sometimes we want to run only a specific job without touching others
-    that are pending.
-
-    This is much less rigorous against race conditions etc. than
-    start_pending_job(), and should only be used for testing.
+    Similar to the job-creation case of get_or_create_job(), except this allows
+    specifying a modify date and initial status.
     """
-    job = Job.objects.get(
-        job_name=job_name,
-        arg_identifier=arg_identifier,
-        status=Job.Status.PENDING,
+
+    job_kwargs = {
+        key: value for key, value in kwargs.items()
+        if key in [
+            'source', 'source_id', 'user', 'attempt_number', 'persist',
+        ]
+    }
+    job = Job(
+        job_name=name,
+        arg_identifier=Job.args_to_identifier(task_args),
+        status=status,
+        scheduled_start_date=(
+            datetime.now(timezone.utc) + delay if delay else None),
+        start_date=start_date,
+        **job_kwargs
     )
-    run_job(job)
+    job.save()
+
+    if create_date:
+        # Must set create date after creation in order to save a custom value.
+        job.create_date = create_date
+        job.save()
+    if modify_date:
+        # Use QuerySet.update() instead of Model.save() so that the modify
+        # date doesn't get auto-updated to the current date.
+        Job.objects.filter(pk=job.pk).update(modify_date=modify_date)
 
     job.refresh_from_db()
     return job
 
 
-def do_job(name, *task_args, **kwargs):
+def do_job(
+    name: str,
+    *task_args,
+    source_id: int = None,
+    user: User = None,
+) -> Job:
     """
-    Sometimes we don't care if a job was already queued or not. Just run it
-    if it exists, and if not, queue it then run it.
-    This does assume that said job is not already running (must either be
-    pending or not exist yet).
+    Here we just want to run a particular job and don't really care about
+    how we get there (creating or starting).
     """
-    job = queue_job(name, *task_args, **kwargs)
-    if job:
-        run_job(job)
+
+    job, created = get_or_create_job(
+        name, *task_args, source_id=source_id, user=user)
+
+    now = datetime.now(timezone.utc)
+
+    if created:
+        start_job(job)
     else:
-        job = run_pending_job(name, Job.args_to_identifier(task_args))
+        if job.status == Job.Status.PENDING:
+            if job.scheduled_start_date < now:
+                # This Job was previously considered scheduled for later, but
+                # now it's just being run outright. Null out the scheduled date
+                # since it can be misleading.
+                job.scheduled_start_date = None
+                job.save()
+            start_job(job)
+        # Else, the same job was already existing and running.
 
     job.refresh_from_db()
     return job

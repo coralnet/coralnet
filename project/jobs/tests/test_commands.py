@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from lib.tests.utils import ManagementCommandTest
 from ..models import Job
-from ..utils import queue_job
+from .utils import fabricate_job
 
 
 class AbortJobTest(ManagementCommandTest):
@@ -39,13 +39,13 @@ class AbortJobTest(ManagementCommandTest):
 class ExpediteJobTest(ManagementCommandTest):
 
     def test_expedite(self):
-        # Queue 3 jobs days into the future. 2 pending, 1 in progress.
-        job_1 = queue_job(
+        # Schedule 3 jobs days into the future. 2 pending, 1 in progress.
+        job_1 = fabricate_job(
             name='1', delay=timedelta(days=3))
-        job_2 = queue_job(
+        job_2 = fabricate_job(
             name='2', delay=timedelta(days=3),
-            initial_status=Job.Status.IN_PROGRESS)
-        job_3 = queue_job(
+            status=Job.Status.IN_PROGRESS)
+        job_3 = fabricate_job(
             name='3', delay=timedelta(days=3))
         original_start_dates = [
             job_1.scheduled_start_date,

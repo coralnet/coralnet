@@ -10,10 +10,9 @@ from django_migration_testcase import MigrationTest
 from rest_framework import status
 
 from jobs.models import Job
-from jobs.utils import queue_job
+from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
 from ..models import ApiJob, ApiJobUnit
-from ..tasks import clean_up_old_api_jobs
 from .utils import BaseAPITest
 
 
@@ -295,7 +294,8 @@ class JobCleanupTest(ClientTest):
 
     @staticmethod
     def create_unit(api_job, order):
-        internal_job = Job(job_name='')
+        internal_job = Job(
+            job_name='test', arg_identifier=f'{api_job.pk}_{order}')
         internal_job.save()
         unit = ApiJobUnit(
             parent=api_job, internal_job=internal_job,
@@ -306,11 +306,7 @@ class JobCleanupTest(ClientTest):
 
     @staticmethod
     def run_and_get_result():
-        # Note that this may or may not queue a new job instance; perhaps
-        # the periodic job was already queued at the end of the previous
-        # job's run.
-        queue_job('clean_up_old_api_jobs')
-        clean_up_old_api_jobs()
+        do_job('clean_up_old_api_jobs')
         job = Job.objects.filter(
             job_name='clean_up_old_api_jobs',
             status=Job.Status.SUCCESS).latest('pk')

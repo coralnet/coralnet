@@ -1,15 +1,13 @@
-from lib.tests.utils import ClientTest
-
-from annotations.models import Label
-
-from api_core.models import ApiJob, ApiJobUnit
-from jobs.models import Job
-from jobs.utils import queue_job
-from ..task_helpers import SpacerClassifyResultHandler
-from ..utils import get_extractor
-
 from spacer.messages import ClassifyImageMsg, JobMsg, JobReturnMsg, \
     ClassifyReturnMsg, DataLocation
+
+from annotations.models import Label
+from api_core.models import ApiJob, ApiJobUnit
+from jobs.models import Job
+from jobs.tests.utils import fabricate_job
+from lib.tests.utils import ClientTest
+from ..task_helpers import SpacerClassifyResultHandler
+from ..utils import get_extractor
 
 
 class TestDeployCollector(ClientTest):
@@ -39,10 +37,10 @@ class TestDeployCollector(ClientTest):
         api_job = ApiJob(type='deploy', user=cls.user)
         api_job.save()
 
-        internal_job = queue_job(
+        internal_job = fabricate_job(
             'classify_image',
             api_job.pk, 1,
-            initial_status=Job.Status.IN_PROGRESS,
+            status=Job.Status.IN_PROGRESS,
         )
         api_job_unit = ApiJobUnit(
             parent=api_job, order_in_parent=1,

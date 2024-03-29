@@ -1,8 +1,19 @@
 from typing import Iterable
 
+from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Q
-from django.utils import timezone
+
+
+class JobQuerySet(models.QuerySet):
+
+    def incomplete(self):
+        return self.filter(
+            status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS])
+
+    def completed(self):
+        return self.filter(
+            status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
 
 
 class Job(models.Model):
@@ -11,6 +22,8 @@ class Job(models.Model):
     Don't have to track every single job/task like this; just ones we want to
     keep a closer eye on.
     """
+    objects = JobQuerySet.as_manager()
+
     job_name = models.CharField(max_length=100)
 
     # Secondary identifier for this Job based on the arguments it was
@@ -21,6 +34,9 @@ class Job(models.Model):
     # Source this Job applies to, if applicable.
     source = models.ForeignKey(
         'images.Source', null=True, on_delete=models.CASCADE)
+
+    # User who initiated this Job, if applicable.
+    user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
 
     class Status(models.TextChoices):
         PENDING = 'pending', "Pending"
@@ -42,12 +58,16 @@ class Job(models.Model):
     # when it gets old enough.
     persist = models.BooleanField(default=False)
 
-    # Date/time the Job was queued (pending).
+    # Date/time the Job was scheduled (pending).
     create_date = models.DateTimeField("Date created", auto_now_add=True)
     # Date/time the Job is scheduled to start, assuming server resources are
     # available then.
+    # May be null if the Job is meant to be started by a specific function
+    # instead of on a schedule.
     scheduled_start_date = models.DateTimeField(
-        "Scheduled start date", default=timezone.now)
+        "Scheduled start date", null=True)
+    # Date/time the Job actually started (status changed to in-progress).
+    start_date = models.DateTimeField("Start date", null=True)
     # Date/time the Job was modified. If the Job is done, this should tell us
     # how long the Job took. This is useful info for tuning
     # task delays / periodic runs.
@@ -56,11 +76,11 @@ class Job(models.Model):
     class Meta:
         constraints = [
             # There cannot be two identical Jobs among the
-            # in-progress Jobs.
+            # incomplete Jobs.
             models.UniqueConstraint(
                 fields=['job_name', 'arg_identifier'],
-                condition=Q(status='in_progress'),
-                name='unique_running_jobs',
+                condition=Q(status__in=['pending', 'in_progress']),
+                name='unique_incomplete_jobs',
             ),
         ]
 

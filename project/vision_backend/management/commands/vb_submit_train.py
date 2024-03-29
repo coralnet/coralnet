@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 
 
 class Command(BaseCommand):
@@ -14,9 +14,9 @@ class Command(BaseCommand):
         parser.add_argument('source_id', type=int, help="Source id to process")
 
     def handle(self, *args, **options):
-        queue_job(
+        schedule_job(
             'train_classifier',
             options['source_id'],
             source_id=options['source_id'],
         )
-        self.stdout.write("Training has been queued for this source.")
+        self.stdout.write("Training has been scheduled for this source.")

@@ -32,7 +32,7 @@
         <th title="Progress status">Status</th>
         <th title="Notes about the result, or error message if the job failed">Detail</th>
         <th title="Time the job's status was last updated; * means the record will stay after {{ job_max_days }} days">Last updated</th>
-        <th title="Time since in-progress job was queued, time taken for job to complete, or time until job is scheduled to start. Hover over the text to see the job's scheduled date">Duration</th>
+        <th title="Info on the job's duration or start time">Time</th>
       </tr>
     </thead>
     <tbody>
@@ -67,16 +67,36 @@
             {% if job_entry.persist %} * {% endif %}
           </td>
           <td>
-            <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
-              {% if job_entry.status == 'pending' %}
-                {{ job_entry.scheduled_start_date|timeuntil }} until scheduled start
-              {% elif job_entry.status == 'in_progress' %}
-                {{ job_entry.scheduled_start_date|timesince }}
+            {% if job_entry.status == 'pending' %}
+
+              {% if job_entry.scheduled_start_date %}
+
+                <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
+                  {{ job_entry.scheduled_start_date|timeuntil }} until scheduled start
+                </span>
+
               {% else %}
-                {# completed #}
-                {{ job_entry.scheduled_start_date|timesince:job_entry.modify_date }}
+
+                <span title="Created: {{ job_entry.create_date }}">
+                  Created {{ job_entry.create_date|timesince }} ago
+                </span>
+
               {% endif %}
-            </span>
+
+            {% elif job_entry.status == 'in_progress' %}
+
+              <span title="Started: {{ job_entry.start_date }}">
+                Started {{ job_entry.start_date|timesince }} ago
+              </span>
+
+            {% else %}
+
+              {# 'completed' #}
+              <span title="Started: {{ job_entry.start_date }}">
+                Completed in {{ job_entry.start_date|timesince:job_entry.modify_date }}
+              </span>
+
+            {% endif %}
           </td>
         </tr>
       {% endfor %}

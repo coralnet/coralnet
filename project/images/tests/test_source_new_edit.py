@@ -674,7 +674,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         self.assertTrue(
             Job.objects.filter(
                 job_name='reset_backend_for_source').exists(),
-            msg="Reset job should be queued")
+            msg="Reset job should be scheduled")
 
         self.assertContains(
             response,
@@ -691,7 +691,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         self.assertFalse(
             Job.objects.filter(
                 job_name='reset_backend_for_source').exists(),
-            msg="Reset job should not be queued")
+            msg="Reset job should not be scheduled")
 
         self.assertContains(
             response, "Source successfully edited.",

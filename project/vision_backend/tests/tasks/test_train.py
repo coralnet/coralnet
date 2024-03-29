@@ -9,13 +9,13 @@ from errorlogs.tests.utils import ErrorReportTestMixin
 from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import (
-    do_job, JobUtilsMixin, queue_and_run_job, run_pending_job)
+from jobs.tests.utils import do_job, JobUtilsMixin
+from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
-from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
+from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 def mock_training_results(
@@ -37,14 +37,16 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
-        run_pending_job('check_source', self.source.pk)
+        job, created = get_or_create_job('check_source', self.source.pk)
+        self.assertFalse(created, "Should have scheduled a source check")
+        start_job(job)
         self.assert_job_result_message(
             'check_source',
-            "Queued training")
+            "Scheduled training")
 
-        queue_and_run_job(
+        do_job(
             'check_source', self.source.pk,
             source_id=self.source.pk)
         self.assert_job_result_message(
@@ -57,7 +59,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         self.upload_images_for_training(
             train_image_count=3, val_image_count=val_image_count)
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Train a classifier
         run_scheduled_jobs_until_empty()
@@ -76,7 +78,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             ],
             runtime_custom=90,
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         # Now we should have a trained classifier whose accuracy is the best so
         # far (due to having no previous classifiers), and thus it should have
@@ -133,12 +135,12 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
         # Collect classifier.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         clf_1 = self.source.get_current_classifier()
 
@@ -147,7 +149,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             train_image_count=2, val_image_count=0)
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
@@ -157,7 +159,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             acc_custom=0.57,
             pc_accs_custom=[0.5],
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         clf_2 = self.source.get_current_classifier()
 
@@ -200,7 +202,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
@@ -230,7 +232,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train classifier; call internal job-collection methods to
         # get access to the job return msg.
         run_scheduled_jobs_until_empty()
@@ -286,9 +288,9 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         # accepted during this class's tests.
         cls.upload_images_for_training(train_image_count=2, val_image_count=1)
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         first_classifier = cls.source.get_current_classifier()
         assert first_classifier.status == Classifier.ACCEPTED
 
@@ -296,13 +298,13 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         # different 'previous classifier status' cases.
         cls.upload_images_for_training(train_image_count=1, val_image_count=0)
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         with mock_training_results(
             acc_custom=0.57,
             pc_accs_custom=[0.5],
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         cls.previous_classifier = cls.source.get_current_classifier()
         assert cls.previous_classifier.status == Classifier.ACCEPTED
@@ -324,7 +326,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Check source.
         run_scheduled_jobs()
         # Submit classifier.
@@ -353,7 +355,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
     def test_previous_accepted_and_above_threshold(self):
         self.do_test_retrain_logic(
             Classifier.ACCEPTED, True, True,
-            "Queued training",
+            "Scheduled training",
         )
 
     def test_previous_rejected_and_below_threshold(self):
@@ -366,7 +368,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
     def test_previous_rejected_and_above_threshold(self):
         self.do_test_retrain_logic(
             Classifier.REJECTED_ACCURACY, True, True,
-            "Queued training",
+            "Scheduled training",
         )
 
     def test_previous_lacking_unique_and_below_threshold(self):
@@ -379,19 +381,19 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
     def test_previous_lacking_unique_and_above_threshold(self):
         self.do_test_retrain_logic(
             Classifier.LACKING_UNIQUE_LABELS, True, True,
-            "Queued training",
+            "Scheduled training",
         )
 
     def test_previous_pending_and_below_threshold(self):
         """
-        In practice, this case should indeed say "Queued training" but should
+        In practice, this case should indeed say "Scheduled training" but should
         in fact defer to the training that's already in progress for this
         source, since creating another training would be creating a duplicate
         active job (which isn't allowed).
         """
         self.do_test_retrain_logic(
             Classifier.TRAIN_PENDING, False, True,
-            "Queued training",
+            "Scheduled training",
         )
 
     def test_previous_errored_and_below_threshold(self):
@@ -401,7 +403,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         """
         self.do_test_retrain_logic(
             Classifier.TRAIN_ERROR, False, True,
-            "Queued training",
+            "Scheduled training",
         )
 
 
@@ -418,7 +420,7 @@ class AbortCasesTest(
         self.upload_images_for_training()
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Disable classification.
         self.source.enable_robot_classifier = False
@@ -441,7 +443,7 @@ class AbortCasesTest(
         # Prepare some training images + features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # But set CoralNet's requirement 1 higher than that image count.
         min_images = self.source.image_set.count() + 1
@@ -464,7 +466,7 @@ class AbortCasesTest(
                 self.user, img, annotations)
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Try to train classifier.
         run_scheduled_jobs_until_empty()
@@ -520,7 +522,7 @@ class AbortCasesTest(
         # Prepare training images + features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Submit training, with a spacer function mocked to
         # throw an error.
@@ -530,7 +532,7 @@ class AbortCasesTest(
             run_scheduled_jobs_until_empty()
 
         # Collect training.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'train_classifier',
@@ -555,7 +557,7 @@ class AbortCasesTest(
         self.upload_images_for_training()
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train classifier.
         run_scheduled_jobs_until_empty()
 
@@ -565,7 +567,7 @@ class AbortCasesTest(
         classifier.delete()
 
         # Collect training.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'train_classifier',
@@ -585,19 +587,19 @@ class AbortCasesTest(
         # Train one classifier.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         with mock_training_results(
             acc_custom=0.5,
             pc_accs_custom=[],
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         # Upload enough additional images for the next training to happen.
         self.upload_images_for_training(
             train_image_count=2, val_image_count=0)
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
 
         # Collect classifier. Use mock to ensure a low enough accuracy
@@ -606,7 +608,7 @@ class AbortCasesTest(
             acc_custom=0.74,
             pc_accs_custom=[0.5],
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         classifier = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier.status, Classifier.REJECTED_ACCURACY)
@@ -643,7 +645,7 @@ class TrainRefValSetsTest(BaseTaskTest):
     def do_test(self, expected_set_sizes):
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Train classifier.
         with mock.patch(
@@ -731,7 +733,7 @@ class LabelFilteringTest(BaseTaskTest):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Try to train.
         job = do_job(
@@ -773,7 +775,7 @@ class InvalidRowcolFeaturesTest(BaseTaskTest):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Say one training image's features are legacy format.
         train_image = train_images[0]
@@ -803,7 +805,7 @@ class InvalidRowcolFeaturesTest(BaseTaskTest):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Say at least one validation image's features are legacy format.
         for image in [val_images[0], val_images[1]]:

@@ -82,7 +82,8 @@ class BaseJobForm(forms.Form):
                     When(status=Job.Status.IN_PROGRESS, then=Value(1)),
                     When(status=Job.Status.PENDING, due=True, then=Value(2)),
                     When(status=Job.Status.PENDING, due=False, then=Value(3)),
-                    default=Value(4),
+                    When(status=Job.Status.PENDING, due=None, then=Value(4)),
+                    default=Value(5),
                     output_field=models.fields.IntegerField(),
                 )
             )
