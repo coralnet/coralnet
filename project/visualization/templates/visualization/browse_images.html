@@ -1,5 +1,5 @@
 {% extends "images/base_source.html" %}
-{% load thumbnail_async from async_media_tags %}
+{% load async_media_batch_key thumbnail_async from async_media_tags %}
 {% load jsonify from common_tags %}
 
 {% block title %}{{ source.name }} - Browse Images | CoralNet{% endblock %}
@@ -31,16 +31,22 @@
     {{ empty_message }}
   {% else %}
 
+    {% async_media_batch_key request as media_batch_key %}
+
     {# Grid of images #}
     {% for image in page_results.object_list %}
-      {% thumbnail_async image.original_file '150x150' request as thumb_dict %}
+      {% thumbnail_async image.original_file '150x150' media_batch_key request as thumb_dict %}
 
       <span class="thumb_wrapper">
         <a href="{% url 'image_detail' image.pk %}">
-          <img class="thumb {{ image.annoinfo.status }} media-async"
+          <img
+            class="thumb {{ image.annoinfo.status }} media-async"
             src="{{ thumb_dict.src }}"
-            data-async-request-hash="{{ thumb_dict.async_request_hash }}"
-            title="{{ image.get_image_element_title }} - {{ image.annoinfo.status_display }}"/>
+            data-media-batch-key="{{ media_batch_key }}"
+            data-media-key="{{ thumb_dict.media_key }}"
+            title="{{ image.get_image_element_title }} - {{ image.annoinfo.status_display }}"
+            alt="{{ image.get_image_element_title }}"
+          />
         </a>
       </span>
     {% endfor %}

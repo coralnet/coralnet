@@ -118,12 +118,17 @@ to any value (except the empty string) to not include it.
     {% include "static-local-include.html" with type="js" path="js/util.js" %}
 {% endif %}
 
-{# On-load events required for supporting asynchronous generation of media. #}
+{# Supporting asynchronous generation of media. #}
 {# Must be included after: util.js #}
-{% if not no_async_media_load_events %}
+{% if not no_async_media %}
+    {# This is needed for the included script's ajax calls. #}
+    {% csrf_token %}
+    {# And same with these. #}
     <script>
-    window.generateMediaURL = "{% url 'async_media:media_ajax' %}";
+    window.startMediaGenerationURL = "{% url 'async_media:start_media_generation_ajax' %}";
     window.pollForMediaURL = "{% url 'async_media:media_poll_ajax' %}";
     </script>
-    {% include "static-local-include.html" with type="js" path="async_media/load-events.js" %}
+
+    {% include "static-local-include.html" with type="js" path="js/Poller.js" %}
+    {% include "static-local-include.html" with type="js" path="js/AsyncMedia.js" %}
 {% endif %}
