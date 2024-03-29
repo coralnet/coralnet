@@ -731,6 +731,8 @@ REST_FRAMEWORK = {
     'EXCEPTION_HANDLER': 'api_core.exceptions.exception_handler',
 }
 
+HUEY_IMMEDIATE = env.bool('HUEY_IMMEDIATE', default=DEBUG)
+
 # [django-huey setting]
 # https://github.com/gaiacoop/django-huey#configuration
 DJANGO_HUEY = {
@@ -751,7 +753,7 @@ DJANGO_HUEY = {
             'results': False,
             # Whether to run tasks immediately in the webserver's thread,
             # or to schedule them to be run by a worker as normal.
-            'immediate': env.bool('HUEY_IMMEDIATE', default=DEBUG),
+            'immediate': HUEY_IMMEDIATE,
             'consumer': {
                 # No periodic tasks in this queue.
                 'periodic': False,
@@ -760,7 +762,7 @@ DJANGO_HUEY = {
         'background': {
             'name': 'background_tasks',
             'results': False,
-            'immediate': env.bool('HUEY_IMMEDIATE', default=DEBUG),
+            'immediate': HUEY_IMMEDIATE,
             'consumer': {
                 # Whether to run huey-registered periodic tasks or not.
                 'periodic': env.bool('HUEY_CONSUMER_PERIODIC', default=True),
@@ -1100,6 +1102,16 @@ if env.bool('LOG_DATABASE_QUERIES', default=False):
         'level': 'DEBUG',
         'propagate': True,
     }
+
+if os.name == 'nt' and not HUEY_IMMEDIATE:
+    # If Windows + multiple processes, change all rotating loggers to regular
+    # file loggers, because the file-renaming step of the rotation would crash.
+    # https://bugs.python.org/issue25121
+    for handler in LOGGING['handlers'].values():
+        handler['class'] = 'logging.FileHandler'
+        for kwarg in ['maxBytes', 'backupCount', 'when', 'interval']:
+            if kwarg in handler:
+                handler.pop(kwarg)
 
 # The name of the class to use for starting the test suite.
 TEST_RUNNER = 'lib.tests.utils.CustomTestRunner'
