@@ -1,4 +1,6 @@
-/* Dependencies: util */
+import Poller from '/static/js/Poller.js';
+/* Non-imported dependencies: util */
+
 
 class AsyncMedia {
 
@@ -6,7 +8,7 @@ class AsyncMedia {
 
     /* Generate any page media that weren't available before the page was
        requested. */
-    startGeneratingAsyncMedia() {
+    async startGeneratingAsyncMedia() {
         this.mediaBatches = {};
         this.mediaCount = 0;
         this.loadedMedia = 0;
@@ -34,7 +36,7 @@ class AsyncMedia {
 
         let csrfToken =
             document.querySelector('[name=csrfmiddlewaretoken]').value;
-        let numGenerationRequests = 0;
+        let startGenerationPromises = [];
         this.poller = new Poller(
             this.pollForMedia.bind(this), this.INITIAL_POLL_INTERVAL);
 
@@ -42,32 +44,33 @@ class AsyncMedia {
             let formData = new FormData();
             formData.append('media_batch_key', mediaBatchKey);
 
-            util.fetch(
-                window.startMediaGenerationURL,
+            let promise = util.fetch(
+                globalThis.startMediaGenerationURL,
                 {
                     method: 'POST',
                     body: formData,
                     headers: {'X-CSRFToken': csrfToken},
                     // Do not send CSRF token to another domain.
                     mode: 'same-origin',
-                },
-                (response) => {
-                    if (response.hasOwnProperty('error')) {
-                        console.log(
-                            `Problem generating images: ${response['error']}`);
-                        return;
-                    }
-
-                    numGenerationRequests++;
-
-                    if (numGenerationRequests === mediaBatchKeys.length) {
-                        // Start periodically polling the server for generated
-                        // media.
-                        this.poller.startPolling();
-                    }
                 }
-            );
+            )
+                .then((response) => {
+                    if (response.hasOwnProperty('error')) {
+                        throw new Error(
+                            `Problem generating images: ${response['error']}`);
+                    }
+                    return response;
+                });
+            startGenerationPromises.push(promise);
         }
+
+        return Promise.all(startGenerationPromises)
+            .then(() => {
+                // Requested generation for each batch.
+                // Start periodically polling the server for generated
+                // media.
+                this.poller.startPolling();
+            });
     }
 
     pollForMedia() {
@@ -78,13 +81,13 @@ class AsyncMedia {
         });
 
         return util.fetch(
-            window.pollForMediaURL + '?' + searchParams.toString(),
+            globalThis.pollForMediaURL + '?' + searchParams.toString(),
             {method: 'GET'},
-            (response) => {
+        )
+            .then((response) => {
                 if (response.hasOwnProperty('error')) {
-                    console.log(
+                    throw new Error(
                         `Problem loading images: ${response['error']}`);
-                    return null;
                 }
 
                 this.handleMediaResults(
@@ -92,8 +95,7 @@ class AsyncMedia {
 
                 // Return progress out of 1.0.
                 return this.loadedMedia / this.mediaCount;
-            }
-        );
+            });
     }
 
     handleMediaResults(mediaBatchKey, mediaResults) {
@@ -120,14 +122,4 @@ class AsyncMedia {
     }
 }
 
-let asyncMedia = new AsyncMedia();
-window.addEventListener(
-    'load', asyncMedia.startGeneratingAsyncMedia.bind(asyncMedia));
-
-// TODO: Relevant JS tests would include:
-// - All/some/none async media already generated
-// - Single poll gets all URLs
-// - Multiple polls required to get all URLs
-// - Multiple batches of async media
-// - Problem generating images
-// - Problem loading images
+export default AsyncMedia;

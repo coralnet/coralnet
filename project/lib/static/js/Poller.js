@@ -25,6 +25,26 @@ class Poller {
         this.giveUpInterval = giveUpInterval;
 
         this.previousPolls = [];
+
+        // withResolvers was introduced in most browsers around March 2024.
+        // We use it to help with certain QUnit tests.
+        // If it's not detected in the browser, we make sure the non-test
+        // functionality still works.
+        if (Promise.withResolvers) {
+            let {promise, resolve, reject} = Promise.withResolvers();
+            // This promise can be awaited to indicate when the polling is
+            // finished.
+            this.finishPromise = promise;
+            this.resolveFinishPromise = resolve;
+            this.rejectFinishPromise = reject;
+        }
+        else {
+            // Here we do the bare minimum to not affect non-test
+            // functionality. The QUnit tests will break.
+            this.finishPromise = null;
+            this.resolveFinishPromise = () => {};
+            this.rejectFinishPromise = () => {};
+        }
     }
 
     getNextInterval(progress) {
@@ -69,38 +89,37 @@ class Poller {
     }
 
     async poll() {
-        let progress = await this.func();
-        if (progress === null || progress === undefined) {
-            // There was a problem (null = caught on server side,
-            // undefined = uncaught)
-            return;
-        }
-        if (progress >= 1.0) {
-            // Done
-            return;
-        }
+        this.func()
+            .then((progress) => {
+                if (progress >= 1.0) {
+                    this.resolveFinishPromise("Success");
+                    return;
+                }
 
-        let nextInterval = this.getNextInterval(progress);
-        if (nextInterval === null) {
-            // Giving up
-            return;
-        }
+                let nextInterval = this.getNextInterval(progress);
+                if (nextInterval === null) {
+                    this.rejectFinishPromise("Gave up due to lack of progress");
+                    return;
+                }
 
-        this.previousPolls.push([nextInterval, progress]);
-        window.setTimeout(this.poll.bind(this), nextInterval);
+                this.previousPolls.push([nextInterval, progress]);
+                globalThis.setTimeout(this.poll.bind(this), nextInterval);
+            })
+            .catch((error) => {
+                this.rejectFinishPromise(error.message);
+            });
     }
 
     startPolling() {
         let interval = this.initialInterval;
         this.previousPolls.push([interval, 0.0]);
-        window.setTimeout(this.poll.bind(this), interval);
+        globalThis.setTimeout(this.poll.bind(this), interval);
     }
 }
 
+export default Poller;
+
 // TODO: Relevant JS tests would include:
-// - Complete after 1 poll
-// - Complete after multiple polls
 // - Backoff
 // - Max interval not exceeded
 // - Giving up
-// - progress null or undefined

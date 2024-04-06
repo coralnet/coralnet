@@ -121,14 +121,21 @@ to any value (except the empty string) to not include it.
 {# Supporting asynchronous generation of media. #}
 {# Must be included after: util.js #}
 {% if not no_async_media %}
-    {# This is needed for the included script's ajax calls. #}
+    {# Needed for AsyncMedia's ajax calls. #}
     {% csrf_token %}
-    {# And same with these. #}
-    <script>
-    window.startMediaGenerationURL = "{% url 'async_media:start_media_generation_ajax' %}";
-    window.pollForMediaURL = "{% url 'async_media:media_poll_ajax' %}";
-    </script>
 
-    {% include "static-local-include.html" with type="js" path="js/Poller.js" %}
-    {% include "static-local-include.html" with type="js" path="js/AsyncMedia.js" %}
+    <script type="module">
+    import AsyncMedia from "{% static 'js/AsyncMedia.js' %}";
+
+    {# Needed for AsyncMedia's ajax calls. #}
+    globalThis.startMediaGenerationURL = "{% url 'async_media:start_media_generation_ajax' %}";
+    globalThis.pollForMediaURL = "{% url 'async_media:media_poll_ajax' %}";
+
+    globalThis.asyncMedia = new AsyncMedia();
+    globalThis.addEventListener(
+        'load',
+        globalThis.asyncMedia.startGeneratingAsyncMedia.bind(
+            globalThis.asyncMedia),
+    );
+    </script>
 {% endif %}

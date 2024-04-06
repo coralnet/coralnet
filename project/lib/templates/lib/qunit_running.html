@@ -10,10 +10,8 @@
 
   {% include "static-local-include.html" with type="css" path="css/qunit.css" %}
 
-  {# Needs to include with type="module" in order for its import statements to work. #}
-  <script src="{% static 'js/fetch-mock.js' %}" type="module"></script>
-
   {% for javascript_path in javascript_functionality_modules %}
+    {# Later, might have to use type=module for some JS files and not others. But at this time of writing, no type=module should work for all cases. #}
     {% include "static-local-include.html" with type="js" path=javascript_path %}
   {% endfor %}
 </head>

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block js-includes %}
+  {# Don't load AsyncMedia through javascript-includes, because that has a load event that we don't want in this case. AsyncMedia.js will be loaded with a Javascript import statement instead. #}
+  {% include "javascript-includes.html" with no_async_media="yes" %}
+
+  {# Needed for AsyncMedia's ajax calls. #}
+  <script>
+    globalThis.startMediaGenerationURL = "{% url 'async_media:start_media_generation_ajax' %}";
+    globalThis.pollForMediaURL = "{% url 'async_media:media_poll_ajax' %}";
+  </script>
+{% endblock %}
+
+{% block content %}
+  {# Needed for AsyncMedia's ajax calls. #}
+  {% csrf_token %}
+
+  {# 1 batch, 2 media. If there is later a need for testing other cases, such as multiple batches, we could modify this to dynamically build these elements based on template parameters. #}
+  <img
+    class="media-async"
+    data-media-batch-key="batch1"
+    data-media-key="media1"
+    src=""
+    alt="media1"
+  />
+  <img
+    class="media-async"
+    data-media-batch-key="batch1"
+    data-media-key="media2"
+    src=""
+    alt="media2"
+  />
+{% endblock %}

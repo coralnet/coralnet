@@ -5,6 +5,7 @@ from django.urls import include, path
 from django.views.generic import TemplateView
 
 import lib.views as lib_views
+import lib.tests.js.views as lib_js_test_views
 
 
 SOURCE_ID = 'source/<int:source_id>/'
@@ -43,6 +44,9 @@ urlpatterns = [
          name='release'),
     path('admin_tools/', lib_views.admin_tools, name='admin_tools'),
     path('error_500_test/', lib_views.error_500_test, name='error_500_test'),
+    path('js_test_util/',
+         lib_js_test_views.UtilQUnitView.as_view(),
+         name='js_test_util'),
     path(SOURCE_ID + 'nav_test/', lib_views.nav_test, name='nav_test'),
 
     # Django's built-in admin

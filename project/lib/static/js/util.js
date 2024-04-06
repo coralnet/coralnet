@@ -28,12 +28,18 @@ var util = {
     /*
     Wrapper around the standard fetch() which does error handling.
     @param resource - url or other resource to fetch (see standard fetch())
-    @param init - options (see standard fetch())
-    @param callback - function to call when the response status is OK
-    @return - the Promise that fetch() returns.
+    @param options - see standard fetch()
+    @param callback - function to call when the response is OK and converted
+      to JSON. Optional; a no-op if not specified.
+    @return - the Promise that fetch() returns. One possible use is to
+      `await` this Promise and then run some code, instead of using the
+      callback param.
     */
-    fetch: function(resource, init, callback) {
-        return fetch(resource, init)
+    fetch: function(resource, options, callback) {
+        // Default callback is a no-op
+        callback = callback || ((responseJson) => {return responseJson});
+
+        return fetch(resource, options)
             .then(response => {
                 if (!response.ok) {
                     // This can be "Internal server error" for example.
@@ -48,6 +54,7 @@ var util = {
                     `\n${error}` +
                     "\nIf the problem persists, please notify us on the forum."
                 );
+                throw error;
             });
     },
 

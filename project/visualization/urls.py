@@ -5,7 +5,7 @@ from .tests.js import views as js_test_views
 
 general_urlpatterns = [
     path('js_test_browse_images_actions/',
-         js_test_views.browse_images_actions,
+         js_test_views.BrowseImagesActionsQUnitView.as_view(),
          name="js_test_browse_images_actions"),
 ]
 

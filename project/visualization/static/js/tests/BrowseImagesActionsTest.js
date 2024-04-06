@@ -1,19 +1,11 @@
-import fetchMock from '/static/js/fetch-mock.js';
 const { test } = QUnit;
+import fetchMock from '/static/js/fetch-mock.js';
+
+import { useFixture } from '/static/js/test-utils.js';
+
 let browseActionHelper = null;
 let originalWindowAlert = window.alert;
 let originalWindowPrompt = window.prompt;
-
-
-function useFixture(fixtureName) {
-    // This assumes the #qunit-fixture element currently contains all the
-    // fixtures we've defined. We'll remove all except the desired fixture.
-    document.querySelectorAll('.fixture-option').forEach((fixtureElement) => {
-        if (fixtureElement.dataset.fixtureName !== fixtureName) {
-            fixtureElement.remove();
-        }
-    });
-}
 
 
 class Form {
@@ -582,7 +574,7 @@ QUnit.module("Form submission", (hooks) => {
                 ['delete_annotations', 'all', 'with_search_filters'],
                 ['delete_annotations', 'selected', 'with_search_filters'],
             ],
-            (assert, [actionValue, imageSelectType, fixtureName]) => {
+            async(assert, [actionValue, imageSelectType, fixtureName]) => {
 
         useFixture(fixtureName);
         browseActionHelper = new BrowseActionHelper([1, 2, 3]);
@@ -611,22 +603,23 @@ QUnit.module("Form submission", (hooks) => {
         secondForm.mockSynchronousFormSubmit();
 
         // Submit.
-        let promise = browseActionHelper.actionSubmit(new Event('dummyevent'));
+        let errorMessage;
+        await browseActionHelper.actionSubmit(new Event('dummyevent'))
+            .catch((error) => {
+                errorMessage = error.message;
+            });
 
-        // Wait for the response.
-        const done = assert.async();
-        promise.then((response) => {
-            secondForm.assertNotSubmitted(assert);
+        secondForm.assertNotSubmitted(assert);
 
-            assert.equal(
-                alertMessage,
-                "There was an error:" +
-                "\nError: Internal Server Error" +
-                "\nIf the problem persists, please notify us on the forum.",
-                "Alert message should be as expected");
-
-            // Tell QUnit that the test can finish.
-            done();
-        });
+        assert.equal(
+            alertMessage,
+            "There was an error:" +
+            "\nError: Internal Server Error" +
+            "\nIf the problem persists, please notify us on the forum.",
+            "Alert message should be as expected");
+        assert.equal(
+            errorMessage,
+            "Internal Server Error",
+            "Should throw the expected error");
     });
 });
