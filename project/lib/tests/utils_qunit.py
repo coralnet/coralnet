@@ -15,13 +15,19 @@ from lib.decorators import debug_required
 class QUnitView(View, ABC):
 
     template_name = 'lib/qunit_running.html'
-    test_template_name: str
+
+    # Subclasses can override this if they need a specific template's
+    # content for the test runs.
+    test_template_name = 'base.html'
+
+    # Subclasses must specify these.
     javascript_functionality_modules: list[str]
     javascript_test_modules: list[str]
 
     @property
     def default_test_template_context(self):
-        raise NotImplementedError
+        """Subclasses can override this as needed."""
+        return {}
 
     def create_test_template_context(self, **kwargs):
         """
@@ -34,7 +40,10 @@ class QUnitView(View, ABC):
 
     @property
     def test_template_contexts(self):
-        raise NotImplementedError
+        """Subclasses can override this as needed."""
+        return {
+            'main': {},
+        }
 
     def get(self, request):
         fixtures = dict()

@@ -7,13 +7,3 @@ class AsyncMediaQUnitView(QUnitView):
     # base.html should already include jQuery, util, and AsyncMedia.
     javascript_functionality_modules = []
     javascript_test_modules = ['js/tests/AsyncMediaQUnit.js']
-
-    @property
-    def default_test_template_context(self):
-        return {}
-
-    @property
-    def test_template_contexts(self):
-        return {
-            'main': {},
-        }

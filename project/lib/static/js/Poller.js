@@ -6,15 +6,17 @@ class Poller {
         func,
         // Initial interval to wait between polls.
         initialInterval,
-        // If after this many polls, the progress ratio has advanced less than
-        // this much, back off by increasing the interval by this factor.
-        backoffPolls = 2,
-        backoffProgress = 0.01,
-        backoffIntervalFactor = 2.0,
-        // Max polling interval.
-        maxInterval = 60*1000,
-        // After polling for this long with 0 progress, give up completely.
-        giveUpInterval = 5*60*1000,
+        {
+            // If after this many polls, the progress ratio has advanced less than
+            // this much, back off by increasing the interval by this factor.
+            backoffPolls = 2,
+            backoffProgress = 0.01,
+            backoffIntervalFactor = 2.0,
+            // Max polling interval.
+            maxInterval = 60 * 1000,
+            // After polling for this long with 0 progress, give up completely.
+            giveUpInterval = 5 * 60 * 1000,
+        } = {},
     ) {
         this.func = func;
         this.initialInterval = initialInterval;
@@ -118,8 +120,3 @@ class Poller {
 }
 
 export default Poller;
-
-// TODO: Relevant JS tests would include:
-// - Backoff
-// - Max interval not exceeded
-// - Giving up
