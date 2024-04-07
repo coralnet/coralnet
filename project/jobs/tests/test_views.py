@@ -661,6 +661,11 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 modified_time_ago=timedelta(minutes=10),
                 start_date=now-timedelta(days=2, hours=18, minutes=20),
             ),
+            self.job(
+                Job.Status.FAILURE,
+                modified_time_ago=timedelta(minutes=10),
+                create_date=now-timedelta(days=2, hours=18, minutes=20),
+            ),
         ]
 
         response = self.get_response(data=dict(sort='recently_created'))
@@ -679,6 +684,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             ["Completed in " + str(num) + "\xa0minutes"
              for num in [8, 9, 10, 11, 12]],
             ["Completed in 2\xa0days, 18\xa0hours"],
+            ["Completed 2\xa0days, 18\xa0hours after creation"],
         ]
 
         titles_for_each_job = [
@@ -688,6 +694,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             f"Started: {date_display(jobs[3].start_date)}",
             f"Started: {date_display(jobs[4].start_date)}",
             f"Started: {date_display(jobs[5].start_date)}",
+            f"Created: {date_display(jobs[6].create_date)}",
         ]
 
         for row_number, job, acceptable_cells, title in zip(

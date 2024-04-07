@@ -92,9 +92,21 @@
             {% else %}
 
               {# 'completed' #}
-              <span title="Started: {{ job_entry.start_date }}">
-                Completed in {{ job_entry.start_date|timesince:job_entry.modify_date }}
-              </span>
+
+              {% if job_entry.start_date %}
+
+                <span title="Started: {{ job_entry.start_date }}">
+                  Completed in {{ job_entry.start_date|timesince:job_entry.modify_date }}
+                </span>
+
+              {% else %}
+
+                {# This case is for jobs that went from pending to aborted. #}
+                <span title="Created: {{ job_entry.create_date }}">
+                  Completed {{ job_entry.create_date|timesince:job_entry.modify_date }} after creation
+                </span>
+
+              {% endif %}
 
             {% endif %}
           </td>
