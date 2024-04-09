@@ -2,13 +2,13 @@ import abc
 import uuid
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.files.storage import get_storage_class
 from django.templatetags.static import static as to_static_path
 from easy_thumbnails.files import get_thumbnailer
 
 from jobs.models import Job
 from jobs.utils import get_or_create_job, start_job
+from lib.utils import scoped_cache_context_var
 from visualization.utils import get_patch_path, get_patch_url
 from .exceptions import MediaRequestDenied
 
@@ -161,7 +161,9 @@ class AsyncMediaBatch:
     #   async media.
     # - Be at least reasonably short so that there's still room for other types
     #   of cache entries.
-    CACHE_EXPIRATION_SECONDS = 10*60
+    # - Possibly be long enough to accommodate some re-request cases such as
+    #   the Back button.
+    CACHE_EXPIRATION_SECONDS = 30*60
 
     def __init__(self, key):
         """
@@ -176,37 +178,48 @@ class AsyncMediaBatch:
 
     @property
     def cache_entry(self):
-        entry = cache.get(self.cache_key)
+        context_scoped_cache = scoped_cache_context_var.get()
+        entry = context_scoped_cache.get(self.cache_key)
         if entry is None:
             # Expired, or a randomly guessed key
             raise MediaRequestDenied("Couldn't get cache entry.")
         return entry
 
-    @property
-    def media(self):
-        """
-        This is a dict from media keys to Job IDs (or None if no Job yet).
-        """
-        return self.cache_entry['media']
-
     def update_cache_entry(self, updated_entry):
-        cache.set(
+        context_scoped_cache = scoped_cache_context_var.get()
+        context_scoped_cache.set(
             self.cache_key,
             updated_entry,
             self.CACHE_EXPIRATION_SECONDS,
         )
+        scoped_cache_context_var.set(context_scoped_cache)
 
-    def update_media(self, updated_media):
-        self.update_cache_entry(
-            self.cache_entry | dict(media=updated_media))
+    @property
+    def media(self) -> dict[str, dict]:
+        """
+        This is a dict of dicts, indexed by media key.
+        """
+        return self.cache_entry['media']
 
-    def add_media(self, media_item):
-        self.update_media(self.media | {media_item.media_key: None})
+    def update_media_entry(self, media_key, **entry_kwargs):
+        media = self.media
+        media[media_key] |= entry_kwargs
+        self.update_cache_entry(self.cache_entry | dict(media=media))
+
+    def add_media_item(self, media_item):
+        media = self.media
+        media[media_item.media_key] = dict(status='pending')
+        self.update_cache_entry(self.cache_entry | dict(media=media))
+
+    @property
+    def has_started_media_generation(self):
+        return any([
+            item['status'] != 'pending'
+            for item in self.media.values()
+        ])
 
     def start_media_generation(self, user):
-        updated_media = dict()
-
-        for media_key in self.media.keys():
+        for media_key in self.media:
             media_item = async_media_factory(media_key)
 
             job, created = get_or_create_job(
@@ -219,12 +232,16 @@ class AsyncMediaBatch:
             # Else, someone else happened to just request the same media.
             # So we'll just keep tabs on that existing job.
 
-            updated_media[media_key] = job.pk
-
-        self.update_media(updated_media)
+            self.update_media_entry(
+                media_key, status='in_progress', job_id=job.pk)
 
     def check_media_jobs(self):
-        job_ids = list(self.media.values())
+        in_progress_media = {
+            media_key: media_info['job_id']
+            for media_key, media_info in self.media.items()
+            if media_info['status'] == 'in_progress'
+        }
+        job_ids = list(in_progress_media.values())
         jobs = (
             Job.objects
             .filter(
@@ -236,9 +253,9 @@ class AsyncMediaBatch:
         )
         jobs_by_id = {job['pk']: job for job in jobs}
 
-        results = dict()
+        new_completions = dict()
 
-        for media_key, job_id in self.media.items():
+        for media_key, job_id in in_progress_media.items():
 
             media_item = async_media_factory(media_key)
 
@@ -248,24 +265,30 @@ class AsyncMediaBatch:
                 f'{media_item.width}x{media_item.height}.png')
 
             if job_id not in jobs_by_id:
-                results[media_key] = not_found_result
+                new_completions[media_key] = not_found_result
                 continue
 
             job = jobs_by_id[job_id]
 
             if job['status'] == Job.Status.FAILURE:
-                results[media_key] = not_found_result
+                new_completions[media_key] = not_found_result
             elif job['status'] == Job.Status.SUCCESS:
                 # result_message is the URL of the generated media.
-                results[media_key] = job['result_message']
-            # Else, not finished yet, so don't add to results.
+                new_completions[media_key] = job['result_message']
+            # Else, not finished yet, so don't add to new_completions.
 
-        # Remove finished media from the media dict.
-        self.update_media({
-            k: v for k, v in self.media.items() if k not in results
-        })
+        # Update the cache entry.
+        for media_key, url in new_completions.items():
+            self.update_media_entry(media_key, status='completed', url=url)
 
-        return results
+        return new_completions
+
+    def get_previous_media_results(self):
+        return {
+            media_key: media_info['url']
+            for media_key, media_info in self.media.items()
+            if media_info['status'] == 'completed'
+        }
 
     @classmethod
     def create(cls, request):

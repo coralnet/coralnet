@@ -1,5 +1,6 @@
 # General utility functions and classes can go here.
 
+from contextlib import ContextDecorator
 from contextvars import ContextVar
 import datetime
 import random
@@ -10,7 +11,48 @@ import urllib.parse
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
 
-view_scoped_cache = ContextVar('view_scoped_cache', default=None)
+scoped_cache_context_var = ContextVar('scoped_cache', default=None)
+
+
+class ContextScopedCache:
+    """
+    In-memory cache (key-value store) intended to last for the duration of a
+    view, a task, or potentially some other context.
+    Serves as an intermediary between application code and the disk-based
+    Django cache, to reduce disk accesses.
+    """
+    def __init__(self):
+        self._dict = dict()
+        self._written_keys = dict()
+
+    def get(self, key):
+        if key not in self._dict:
+            # Get value from the Django cache
+            self._dict[key] = cache.get(key)
+        return self._dict[key]
+
+    def set(self, key, value, timeout):
+        self._dict[key] = value
+        # Should be written out to the Django cache at the end of the view
+        self._written_keys[key] = timeout
+
+    def write_to_django_cache(self):
+        for key, timeout in self._written_keys.items():
+            cache.set(key, self._dict[key], timeout=timeout)
+
+
+class context_scoped_cache(ContextDecorator):
+    def __enter__(self):
+        # Initialize the cache
+        self.token = scoped_cache_context_var.set(ContextScopedCache())
+
+    def __exit__(self, *exc):
+        # Write any updates from context scoped cache to Django cache
+        scoped_cache = scoped_cache_context_var.get()
+        scoped_cache.write_to_django_cache()
+
+        # Revert to pre-token state
+        scoped_cache_context_var.reset(self.token)
 
 
 class CacheableValue:
@@ -41,10 +83,9 @@ class CacheableValue:
         # lack of value accordingly. This should be False when on-demand
         # computing would be unreasonably long for a page that uses the value.
         on_demand_computation_ok: bool = True,
-        # In addition to caching in the Django cache to reduce re-computations,
-        # also cache in memory (with a ContextVar) for the duration of the view
-        # to reduce repeat fetches from the Django cache.
-        use_view_scoped_cache: bool = False,
+        # Cache in memory (with a ContextVar) for the duration of the
+        # view or task to reduce repeat fetches from the Django cache.
+        use_context_scoped_cache: bool = False,
     ):
         self.cache_key = cache_key
         self.compute_function = compute_function
@@ -52,41 +93,34 @@ class CacheableValue:
             seconds=cache_update_interval)
         self.cache_timeout_interval = cache_timeout_interval
         self.on_demand_computation_ok = on_demand_computation_ok
-        self.use_view_scoped_cache = use_view_scoped_cache
-
-    def _update_view_scoped_cache(self, value):
-        if not self.use_view_scoped_cache:
-            return
-
-        view_scoped_cache_dict = view_scoped_cache.get()
-        if view_scoped_cache_dict is None:
-            return
-
-        view_scoped_cache_dict[self.cache_key] = value
-        view_scoped_cache.set(view_scoped_cache_dict)
+        self.use_context_scoped_cache = use_context_scoped_cache
 
     def update(self):
         value = self.compute_function()
-        cache.set(
-            key=self.cache_key, value=value,
-            timeout=self.cache_timeout_interval,
-        )
-        self._update_view_scoped_cache(value)
+        if self.use_context_scoped_cache:
+            scoped_cache = scoped_cache_context_var.get()
+            scoped_cache.set(
+                self.cache_key, value, self.cache_timeout_interval)
+            scoped_cache_context_var.set(scoped_cache)
+        else:
+            # Use Django cache directly
+            cache.set(
+                key=self.cache_key, value=value,
+                timeout=self.cache_timeout_interval,
+            )
 
         return value
 
     def get(self):
-        value = None
-        if self.use_view_scoped_cache:
-            view_scoped_cache_dict = view_scoped_cache.get()
-            if view_scoped_cache_dict is not None:
-                # Try the view scoped cache
-                value = view_scoped_cache_dict.get(self.cache_key)
-
-        if value is None:
-            # Try the Django cache
+        if self.use_context_scoped_cache:
+            # We assume the context-scoped cache is active. There is
+            # no silent non-cache fallback, because not using the
+            # cache could have serious implications for performance.
+            scoped_cache = scoped_cache_context_var.get()
+            value = scoped_cache.get(self.cache_key)
+        else:
+            # Use Django cache directly
             value = cache.get(self.cache_key)
-            self._update_view_scoped_cache(value)
 
         if value is None and self.on_demand_computation_ok:
             # Compute value

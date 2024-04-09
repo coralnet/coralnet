@@ -17,6 +17,7 @@ from django_huey import db_periodic_task, db_task
 from huey import crontab
 
 from errorlogs.utils import instantiate_error_log
+from lib.utils import context_scoped_cache
 from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
@@ -281,7 +282,8 @@ class JobDecorator:
             ])
             start_time = datetime.now()
 
-            self.run_task_wrapper(task_func, task_args)
+            with context_scoped_cache():
+                self.run_task_wrapper(task_func, task_args)
 
             # Log a message after task exit.
             elapsed_seconds = (

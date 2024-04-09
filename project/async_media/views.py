@@ -4,6 +4,7 @@ from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
+from lib.utils import context_scoped_cache
 from .exceptions import MediaRequestDenied
 from .utils import AsyncMediaBatch
 
@@ -30,14 +31,23 @@ def start_media_generation_ajax(request):
     except MediaRequestDenied as e:
         return JsonResponse(dict(error=f"Media request denied: {e}"))
 
+    if batch.has_started_media_generation:
+        # Already started generation. Using the browser's Back button
+        # could lead to this case. Whatever the cause, we don't need to
+        # generate again. Return the media that have been generated thus far.
+        return JsonResponse(dict(
+            code='already_started_generating',
+            mediaResults=batch.get_previous_media_results()))
+
     # Anything related to creating and starting Jobs should be done outside of
     # the view's transaction.
     # (non_atomic_requests() would've been simpler than on_commit(), but for
     # some reason the former wasn't working on this view.)
     transaction.on_commit(
-        functools.partial(batch.start_media_generation, request.user))
+        context_scoped_cache()(
+            functools.partial(batch.start_media_generation, request.user)))
 
-    return JsonResponse(dict(success=True))
+    return JsonResponse(dict(code='success'))
 
 
 @require_GET

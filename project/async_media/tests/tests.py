@@ -55,7 +55,7 @@ class AsyncMediaTest(ClientTest):
             response = self.client.post(
                 reverse('async_media:start_media_generation_ajax'), data=data)
 
-        self.assertDictEqual(response.json(), dict(success=True))
+        self.assertDictEqual(response.json(), dict(code='success'))
 
         return response
 
@@ -208,6 +208,54 @@ class ThumbnailsTest(AsyncMediaTest):
         self.assert_poll_results(
             batch_key,
             zip(media_keys, [img2]),
+        )
+
+    def test_already_started_generating(self):
+        img = self.upload_image(self.user, self.source)
+
+        self.client.force_login(self.user_2)
+        batch_key, media_keys = self.load_browse_and_get_media_keys()[0]
+
+        # Start generation
+        self.start_generation(batch_key)
+        thumbnail = (
+            get_thumbnailer(img.original_file)
+            .get_thumbnail(dict(size=(150, 150)), generate=False)
+        )
+
+        # Try to start again
+        data = dict(media_batch_key=batch_key)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('async_media:start_media_generation_ajax'), data=data)
+        self.assertDictEqual(
+            response.json(),
+            dict(
+                code='already_started_generating',
+                mediaResults={},
+            ),
+            msg="Shouldn't return any results since they weren't collected by"
+                " a poll yet",
+        )
+
+        # Poll
+        self.assert_poll_results(
+            batch_key,
+            zip(media_keys, [img]),
+        )
+
+        # Try to start again
+        data = dict(media_batch_key=batch_key)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse('async_media:start_media_generation_ajax'), data=data)
+        self.assertDictEqual(
+            response.json(),
+            dict(
+                code='already_started_generating',
+                mediaResults={media_keys[0]: thumbnail.url},
+            ),
+            msg="Should have results after the poll",
         )
 
     def test_logged_in_user_ok(self):

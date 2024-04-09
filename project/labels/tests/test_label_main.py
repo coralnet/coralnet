@@ -11,6 +11,7 @@ from images.models import Source
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, sample_image_as_file)
+from lib.utils import context_scoped_cache
 from visualization.utils import get_patch_path
 from ..models import LabelGroup, Label
 from ..templatetags.labels import (
@@ -227,8 +228,9 @@ class LabelMainTest(BaseLabelMainTest):
             response.content.decode())
 
         # Popularity.
-        popularity_str = str(int(label_a.popularity)) + '%'
-        popularity_bar_html = popularity_bar_tag(label_a)
+        with context_scoped_cache():
+            popularity_str = str(int(label_a.popularity)) + '%'
+            popularity_bar_html = popularity_bar_tag(label_a)
         self.assertInHTML(
             'Popularity: {} {}'.format(
                 popularity_str, popularity_bar_html),
@@ -540,9 +542,10 @@ class PopularityTest(ClientTest):
             self.user, self.source, self.labels.filter(name='B'))
         do_job('update_label_details')
 
-        self.assertEqual(
-            self.label_a.popularity, 0,
-            msg="0 sources should mean 0 popularity")
+        with context_scoped_cache():
+            self.assertEqual(
+                self.label_a.popularity, 0,
+                msg="0 sources should mean 0 popularity")
 
     def test_zero_annotations(self):
         # A is in a labelset
@@ -551,9 +554,10 @@ class PopularityTest(ClientTest):
         self.add_annotations(self.user, self.img, {1: 'B'})
         do_job('update_label_details')
 
-        self.assertEqual(
-            self.label_a.popularity, 0,
-            msg="1 source and 0 annotations still should mean 0 popularity")
+        with context_scoped_cache():
+            self.assertEqual(
+                self.label_a.popularity, 0,
+                msg="1 source and 0 annotations still should mean 0 popularity")
 
     def test_nonzero_annotations(self):
         # A is in a labelset
@@ -563,9 +567,10 @@ class PopularityTest(ClientTest):
         self.add_annotations(self.user, self.img, {1: 'A', 2: 'A'})
         do_job('update_label_details')
 
-        self.assertGreater(
-            self.label_a.popularity, 0,
-            msg="Non-0 annotations should mean non-0 popularity")
+        with context_scoped_cache():
+            self.assertGreater(
+                self.label_a.popularity, 0,
+                msg="Non-0 annotations should mean non-0 popularity")
 
 
 class CalcificationRatesTest(BaseLabelMainTest):

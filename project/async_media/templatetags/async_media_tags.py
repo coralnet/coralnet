@@ -36,7 +36,7 @@ def media_async(media_item, media_batch_key, request):
 
     # The media doesn't exist. Prepare to generate it asynchronously.
     batch = AsyncMediaBatch.get_existing(media_batch_key, request)
-    batch.add_media(media_item)
+    batch.add_media_item(media_item)
 
     # Display a 'loading' image to begin with.
     src = to_static_path(

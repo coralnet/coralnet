@@ -22,7 +22,7 @@ QUnit.module("Main", (hooks) => {
             globalThis.startMediaGenerationURL,
             // Response config as JSON
             // https://github.com/wheresrhys/fetch-mock/blob/main/docs/cheatsheet.md#response-configuration
-            {success: true},
+            {code: 'success'},
         );
         // Mock the poll request to avoid hitting the Django server and
         // guarantee a particular response.
@@ -41,7 +41,11 @@ QUnit.module("Main", (hooks) => {
         );
 
         let asyncMedia = new AsyncMedia();
-        await asyncMedia.startGeneratingAsyncMedia();
+        let status = await asyncMedia.startGeneratingAsyncMedia();
+        assert.equal(
+            status, 'now_polling',
+            "startGeneratingAsyncMedia status should be as expected");
+
         let finishMessage = await asyncMedia.poller.finishPromise;
 
         assert.equal(
@@ -67,7 +71,7 @@ QUnit.module("Main", (hooks) => {
 
         fetchMock.post(
             globalThis.startMediaGenerationURL,
-            {success: true},
+            {code: 'success'},
         );
 
         fetchMock.get(
@@ -121,7 +125,7 @@ QUnit.module("Main", (hooks) => {
 
         fetchMock.post(
             globalThis.startMediaGenerationURL,
-            {success: true},
+            {code: 'success'},
         );
         fetchMock.get(
             {
@@ -186,11 +190,31 @@ QUnit.module("Main", (hooks) => {
             "Should have thrown the expected error");
     });
 
+    test("already started generating", async function(assert) {
+
+        fetchMock.post(
+            globalThis.startMediaGenerationURL,
+            {
+                code: 'already_started_generating',
+                mediaResults: {
+                    'media1': '/media/images/media1.png',
+                    'media2': '/media/images/media2.png',
+                },
+            },
+        );
+
+        let asyncMedia = new AsyncMedia();
+        let status = await asyncMedia.startGeneratingAsyncMedia();
+        assert.equal(
+            status, 'already_started_generating',
+            "startGeneratingAsyncMedia status should be as expected");
+    });
+
     test("problem loading", async function(assert) {
 
         fetchMock.post(
             globalThis.startMediaGenerationURL,
-            {success: true},
+            {code: 'success'},
         );
         fetchMock.get(
             {

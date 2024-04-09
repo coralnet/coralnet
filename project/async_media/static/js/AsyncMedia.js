@@ -59,6 +59,14 @@ class AsyncMedia {
                         throw new Error(
                             `Problem generating images: ${response['error']}`);
                     }
+                    if (response.code === 'already_started_generating') {
+                        // Handle the results that have been generated already
+                        // (this could happen when using the Back button).
+                        this.handleMediaResults(
+                            mediaBatchKey, response.mediaResults);
+                        // Don't request generation again for this batch.
+                        delete this.mediaBatches[mediaBatchKey];
+                    }
                     return response;
                 });
             startGenerationPromises.push(promise);
@@ -66,10 +74,16 @@ class AsyncMedia {
 
         return Promise.all(startGenerationPromises)
             .then(() => {
+                if (Object.keys(this.mediaBatches).length === 0) {
+                    // All batches started generation previously.
+                    return 'already_started_generating';
+                }
+
                 // Requested generation for each batch.
                 // Start periodically polling the server for generated
                 // media.
                 this.poller.startPolling();
+                return 'now_polling';
             });
     }
 
