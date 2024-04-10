@@ -31,7 +31,7 @@ from jobs.utils import finish_job
 from labels.models import Label, LabelSet
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
-from .utils import queue_source_check
+from .utils import schedule_source_check
 
 logger = getLogger(__name__)
 
@@ -244,7 +244,7 @@ class SpacerResultHandler(ABC):
             if job.source:
                 # If this is a source's job, chances are there might
                 # be another job to do for the source.
-                queue_source_check(job.source_id)
+                schedule_source_check(job.source_id)
 
     @classmethod
     def get_internal_job(cls, task):

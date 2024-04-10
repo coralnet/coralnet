@@ -1,96 +1,75 @@
-from django.core.cache import cache
+import functools
+
+from django.db import transaction
 from django.http import JsonResponse
-from django.templatetags.static import static as to_static_path
-import easy_thumbnails.exceptions as easy_thumbnails_exceptions
-from easy_thumbnails.files import get_thumbnailer
+from django.views.decorators.http import require_GET, require_POST
 
-from visualization.utils import generate_patch_if_doesnt_exist, get_patch_url
-from .utils import (
-    delete_media_request_status,
-    get_media_request_status, get_media_url,
-    set_media_request_status, set_media_url)
+from lib.utils import context_scoped_cache
+from .exceptions import MediaRequestDenied
+from .utils import AsyncMediaBatch
 
 
-def media_ajax(request):
-    hashes = request.POST.getlist('hashes[]')
-    if not hashes:
-        return JsonResponse(dict(error="No request hashes provided."))
+@require_POST
+def start_media_generation_ajax(request):
+    """
+    Request generating a batch of thumbnails/patches.
 
-    first_hash = hashes[0]
-    status = dict(count=len(hashes), index=0)
-    set_media_request_status(first_hash, status)
+    A key should have been provided by a previous view to identify this
+    batch of media to be generated. Checking the key prevents us from
+    getting DOSed by arbitrary generation requests.
 
-    error = None
+    That previous view could have been a GET, and generating media should be
+    done in a POST, which is why this separate view is responsible for
+    kicking off media generation.
+    """
+    media_batch_key = request.POST.get('media_batch_key')
+    if not media_batch_key:
+        return JsonResponse(dict(error="No media batch key provided."))
 
-    for index, media_hash in enumerate(hashes):
-        cache_key = 'media_async_request_{hash}'.format(
-            hash=media_hash)
-        details = cache.get(cache_key)
-        cache.delete(cache_key)
+    try:
+        batch = AsyncMediaBatch.get_existing(media_batch_key, request)
+    except MediaRequestDenied as e:
+        return JsonResponse(dict(error=f"Media request denied: {e}"))
 
-        size = details['size'] if details else (150, 150)
-        not_found_image = to_static_path(
-            'img/placeholders/'
-            'media-image-not-found__{w}x{h}.png'.format(
-                w=size[0], h=size[1]))
-
-        if not details:
-            # Seems the hash is invalid.
-            url = not_found_image
-            error = "Invalid hash: " + media_hash
-        elif details['user_id'] and request.user.pk != details['user_id']:
-            # Security check.
-            url = not_found_image
-            error = "The user didn't match the original media requester."
-        elif details['media_type'] == 'thumbnail':
-            try:
-                # Generate the media.
-                thumbnail = get_thumbnailer(details['name']).get_thumbnail(
-                    dict(size=size), generate=True)
-                url = thumbnail.url
-            except easy_thumbnails_exceptions.InvalidImageFormatError:
-                # We might get here if the original image file is not found.
-                url = not_found_image
-        elif details['media_type'] == 'patch':
-            # Generate the media.
-            generate_patch_if_doesnt_exist(details['point_id'])
-            url = get_patch_url(details['point_id'])
-        else:
-            url = not_found_image
-            error = "Unknown media type."
-
-        set_media_url(first_hash, index, url)
-
-    # If there was an error, report at least one of them.
-    # Otherwise, no actual data to return. The client should be getting the
-    # media from the polling responses.
-    return JsonResponse(dict(error=error))
-
-
-def media_poll_ajax(request):
-    first_hash = request.POST.get('first_hash')
-    status = get_media_request_status(first_hash)
-
-    if not status:
-        # Perhaps the initial Ajax didn't complete yet. Try again later.
+    if batch.has_started_media_generation:
+        # Already started generation. Using the browser's Back button
+        # could lead to this case. Whatever the cause, we don't need to
+        # generate again. Return the media that have been generated thus far.
         return JsonResponse(dict(
-            media=[], mediaRemaining=True))
+            code='already_started_generating',
+            mediaResults=batch.get_previous_media_results()))
 
-    media = []
+    # Anything related to creating and starting Jobs should be done outside of
+    # the view's transaction.
+    # (non_atomic_requests() would've been simpler than on_commit(), but for
+    # some reason the former wasn't working on this view.)
+    transaction.on_commit(
+        context_scoped_cache()(
+            functools.partial(batch.start_media_generation, request.user)))
 
-    for index in range(status['index'], status['count']):
-        url = get_media_url(first_hash, index)
-        if not url:
-            # The next media file isn't available yet. Return the ones we have
-            # so far.
-            status['index'] = index
-            set_media_request_status(first_hash, status)
-            return JsonResponse(dict(
-                media=media, mediaRemaining=True))
+    return JsonResponse(dict(code='success'))
 
-        media.append(dict(index=index, url=url))
 
-    # That's the last of the media.
-    delete_media_request_status(first_hash)
-    return JsonResponse(dict(
-        media=media, mediaRemaining=False))
+@require_GET
+def media_poll_ajax(request):
+    """
+    A key should have been provided by a previous view to identify this
+    batch of media to be generated. Checking the key ensures that people
+    can't craft requests to get other people's private images.
+    """
+    media_batch_key = request.GET.get('media_batch_key')
+    if not media_batch_key:
+        return JsonResponse(dict(error="No media batch key provided."))
+
+    try:
+        batch = AsyncMediaBatch.get_existing(media_batch_key, request)
+    except MediaRequestDenied as e:
+        return JsonResponse(dict(error=f"Media request denied: {e}"))
+
+    if len(batch.media) == 0:
+        return JsonResponse(dict(
+            error=f"Media request has already been collected"))
+
+    results = batch.check_media_jobs()
+
+    return JsonResponse(dict(mediaResults=results))

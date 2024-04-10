@@ -4,14 +4,13 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 from annotations.models import Annotation
-from images.models import Image
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from lib.tests.utils import ClientTest
 from ...models import Score, Classifier
 from ...tasks import check_all_sources
-from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
+from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 class ResetTaskTest(BaseTaskTest):
@@ -37,7 +36,7 @@ class ResetTaskTest(BaseTaskTest):
             "img should have annotations")
 
         # Reset classifiers
-        job = queue_job(
+        job, _ = schedule_job(
             'reset_classifiers_for_source', self.source.pk,
             source_id=self.source.pk)
         run_scheduled_jobs_until_empty()
@@ -68,7 +67,7 @@ class ResetTaskTest(BaseTaskTest):
 
         # Train
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -111,7 +110,7 @@ class ResetTaskTest(BaseTaskTest):
             "img should have annotations")
 
         # Reset backend
-        job = queue_job(
+        job, _ = schedule_job(
             'reset_backend_for_source', self.source.pk,
             source_id=self.source.pk)
         run_scheduled_jobs_until_empty()
@@ -142,10 +141,10 @@ class ResetTaskTest(BaseTaskTest):
 
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -194,8 +193,8 @@ class ResetTaskTest(BaseTaskTest):
         self.assertFalse(image.annoinfo.classified, "Should not be classified")
 
 
-def call_collect_spacer_jobs():
-    queue_job('collect_spacer_jobs')
+def schedule_collect_spacer_jobs():
+    schedule_job('collect_spacer_jobs')
 
     class Queue:
         status_counts = dict()
@@ -209,10 +208,10 @@ class CollectSpacerJobsTest(BaseTaskTest):
 
     @staticmethod
     def run_and_get_result():
-        # Note that this may or may not queue a new job instance; perhaps
-        # the periodic job was already queued at the end of the previous
+        # Note that this may or may not schedule a new job instance; perhaps
+        # the periodic job was already scheduled at the end of the previous
         # job's run.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         job = Job.objects.filter(
             job_name='collect_spacer_jobs',
             status=Job.Status.SUCCESS).latest('pk')
@@ -267,9 +266,9 @@ class CollectSpacerJobsTest(BaseTaskTest):
         # Mock a function called by the task, and make that function
         # attempt to run the task recursively.
         with mock.patch(
-            'vision_backend.tasks.get_queue_class', call_collect_spacer_jobs
+            'vision_backend.tasks.get_queue_class', schedule_collect_spacer_jobs
         ):
-            queue_and_run_collect_spacer_jobs()
+            do_collect_spacer_jobs()
 
         self.assertEqual(
             Job.objects.filter(job_name='collect_spacer_jobs').count(), 1,
@@ -287,10 +286,10 @@ class CheckAllSourcesTest(ClientTest):
 
     @staticmethod
     def run_and_get_result():
-        # Note that this may or may not queue a new job instance; perhaps
-        # the periodic job was already queued at the end of the previous
+        # Note that this may or may not schedule a new job instance; perhaps
+        # the periodic job was already scheduled at the end of the previous
         # job's run.
-        queue_job('check_all_sources')
+        schedule_job('check_all_sources')
         check_all_sources()
         job = Job.objects.filter(
             job_name='check_all_sources',
@@ -300,10 +299,10 @@ class CheckAllSourcesTest(ClientTest):
     def test(self):
         self.assertEqual(
             self.run_and_get_result(),
-            "Queued checks for 2 source(s)")
+            "Scheduled checks for 2 source(s)")
 
         # If these lines don't get errors, then the expected
-        # queued jobs exist
+        # scheduled jobs exist
         Job.objects.get(
             job_name='check_source', arg_identifier=self.source.pk,
             status=Job.Status.PENDING)

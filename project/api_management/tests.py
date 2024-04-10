@@ -97,7 +97,7 @@ class JobListTest(ClientTest):
 
         in_progress_job = ApiJob(type='test', user=self.user)
         in_progress_job.save()
-        internal_job = Job(job_name='test', status=Job.Status.IN_PROGRESS)
+        internal_job = Job(job_name='test2', status=Job.Status.IN_PROGRESS)
         internal_job.save()
         unit = ApiJobUnit(
             parent=in_progress_job, order_in_parent=1,
@@ -107,13 +107,13 @@ class JobListTest(ClientTest):
 
         done_with_fails_job = ApiJob(type='test', user=self.user)
         done_with_fails_job.save()
-        internal_job = Job(job_name='test', status=Job.Status.SUCCESS)
+        internal_job = Job(job_name='test3', status=Job.Status.SUCCESS)
         internal_job.save()
         unit = ApiJobUnit(
             parent=done_with_fails_job, order_in_parent=1,
             internal_job=internal_job, request_json={})
         unit.save()
-        internal_job = Job(job_name='test', status=Job.Status.FAILURE)
+        internal_job = Job(job_name='test4', status=Job.Status.FAILURE)
         internal_job.save()
         unit = ApiJobUnit(
             parent=done_with_fails_job, order_in_parent=2,
@@ -123,7 +123,7 @@ class JobListTest(ClientTest):
 
         done_success_job = ApiJob(type='test', user=self.user)
         done_success_job.save()
-        internal_job = Job(job_name='test', status=Job.Status.SUCCESS)
+        internal_job = Job(job_name='test5', status=Job.Status.SUCCESS)
         internal_job.save()
         unit = ApiJobUnit(
             parent=done_success_job, order_in_parent=1,
@@ -305,7 +305,8 @@ class JobDetailTest(ClientTest):
             Job.Status.PENDING, Job.Status.IN_PROGRESS,
             Job.Status.FAILURE, Job.Status.SUCCESS]
         for order, status in enumerate(unit_statuses, 1):
-            internal_job = Job(job_name='', status=status)
+            internal_job = Job(
+                job_name='test', arg_identifier=order, status=status)
             internal_job.save()
             unit = ApiJobUnit(
                 parent=job, order_in_parent=order,

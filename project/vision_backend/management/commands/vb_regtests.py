@@ -1,12 +1,11 @@
 from argparse import RawTextHelpFormatter
-from datetime import timedelta
 import time
 
 from django.core.management.base import BaseCommand
 
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
-from jobs.utils import queue_job
+from jobs.tests.utils import do_job
 from lib.regtest_utils import VisionBackendRegressionTest
 from ...models import Classifier
 
@@ -120,7 +119,7 @@ class Command(BaseCommand):
         while not all_have_features:
             time.sleep(5)
             run_scheduled_jobs()
-            queue_job('collect_spacer_jobs', delay=timedelta(seconds=0))
+            do_job('collect_spacer_jobs')
             n_with_feats = s.source.image_set.with_features().count()
             print(f"-> {n_with_feats} out of {n_imgs} images have features.")
             all_have_features = n_with_feats == n_imgs
@@ -133,7 +132,7 @@ class Command(BaseCommand):
         while not has_classifier:
             time.sleep(5)
             run_scheduled_jobs()
-            queue_job('collect_spacer_jobs', delay=timedelta(seconds=0))
+            do_job('collect_spacer_jobs')
             print("-> No classifier trained yet.")
             has_classifier = Classifier.objects.filter(
                 source=s.source, status=Classifier.ACCEPTED).count() > 0

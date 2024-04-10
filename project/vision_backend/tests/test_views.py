@@ -5,7 +5,7 @@ from export.tests.utils import BaseExportTest
 from jobs.tests.utils import do_job
 from labels.models import Label
 from lib.tests.utils import BasePermissionTest, ClientTest, HtmlAssertionsMixin
-from .tasks.utils import queue_and_run_collect_spacer_jobs
+from .tasks.utils import do_collect_spacer_jobs
 
 
 class BackendViewPermissions(BasePermissionTest):
@@ -195,7 +195,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         self.add_annotations(self.user, image1a)
         self.add_annotations(self.user, image1b)
         do_job('extract_features', image1c.pk, source_id=self.source1.pk)
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         classifier2 = self.create_robot(self.source2)
         image2a = self.upload_image(self.user, self.source2)

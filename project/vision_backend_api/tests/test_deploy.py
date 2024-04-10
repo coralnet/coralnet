@@ -19,10 +19,10 @@ from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import JobUtilsMixin
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from lib.tests.utils import EmailAssertionsMixin
 from vision_backend.models import Classifier
-from vision_backend.tests.tasks.utils import queue_and_run_collect_spacer_jobs
+from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
 
 
@@ -528,7 +528,7 @@ class SuccessTest(DeployBaseTest):
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
-        # This should queue a deploy job without running it yet.
+        # This should schedule a deploy job without running it yet.
         self.client.post(self.deploy_url, data, **self.request_kwargs)
 
         try:
@@ -573,11 +573,11 @@ class SuccessTest(DeployBaseTest):
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
 
-        # Queue deploy
+        # Schedule deploy
         self.client.post(self.deploy_url, data, **self.request_kwargs)
         # Deploy
         self.run_scheduled_jobs_including_deploy()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         deploy_job = ApiJob.objects.latest('pk')
 
@@ -657,7 +657,7 @@ class TaskErrorsTest(
         # Create a job but don't create the unit.
         job = ApiJob(type='', user=self.user)
         job.save()
-        queue_job('classify_image', job.pk, 1)
+        schedule_job('classify_image', job.pk, 1)
 
         run_scheduled_jobs()
         self.assert_job_result_message(
@@ -674,7 +674,7 @@ class TaskErrorsTest(
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
 
-        # Queue deploy job
+        # Schedule deploy job
         self.client.post(self.deploy_url, data, **self.request_kwargs)
 
         job_unit = ApiJobUnit.objects.latest('pk')
@@ -703,7 +703,7 @@ class TaskErrorsTest(
                 url='URL 1', points=[dict(row=10, column=10)]))]
         data = json.dumps(dict(data=images))
 
-        # Queue deploy
+        # Schedule deploy
         self.client.post(self.deploy_url, data, **self.request_kwargs)
 
         # Deploy, while mocking the spacer task call. Thus, we don't test
@@ -713,7 +713,7 @@ class TaskErrorsTest(
             raise error
         with mock.patch('spacer.tasks.classify_image', raise_error):
             run_scheduled_jobs()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         return ApiJobUnit.objects.latest('pk')
 

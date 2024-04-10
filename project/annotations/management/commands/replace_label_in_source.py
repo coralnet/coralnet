@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from annotations.models import Annotation
 from images.models import Source
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from labels.models import Label
 
 User = get_user_model()
@@ -94,6 +94,6 @@ class Command(BaseCommand):
         source.labelset.locallabel_set.get(global_label=old_label).delete()
 
         # Reset the classifiers for this source.
-        queue_job(
+        schedule_job(
             'reset_classifiers_for_source', source.pk,
             source_id=source.pk)

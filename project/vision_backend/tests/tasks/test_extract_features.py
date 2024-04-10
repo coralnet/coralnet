@@ -6,9 +6,10 @@ from spacer.exceptions import RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import JobUtilsMixin, queue_and_run_job, run_pending_job
+from jobs.tests.utils import do_job, JobUtilsMixin
+from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
-from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
+from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
@@ -17,21 +18,26 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         self.upload_image(self.user, self.source)
         self.upload_image(self.user, self.source)
 
-        # Should have queued a source check after uploading
-        run_pending_job('check_source', self.source.pk)
+        job, created = get_or_create_job('check_source', self.source.pk)
+        self.assertFalse(
+            created, "Should have scheduled a source check after uploading")
+        start_job(job)
         self.assert_job_result_message(
             'check_source',
-            "Queued 2 feature extraction(s)")
+            "Scheduled 2 feature extraction(s)")
 
         self.upload_image(self.user, self.source)
 
-        run_pending_job('check_source', self.source.pk)
-        # Should not re-queue the other extractions
+        job, created = get_or_create_job('check_source', self.source.pk)
+        self.assertFalse(
+            created, "Should have scheduled a source check after uploading")
+        start_job(job)
         self.assert_job_result_message(
             'check_source',
-            "Queued 1 feature extraction(s)")
+            "Scheduled 1 feature extraction(s)",
+            assert_msg="Should not redo the other extractions")
 
-        queue_and_run_job(
+        do_job(
             'check_source', self.source.pk,
             source_id=self.source.pk)
         self.assert_job_result_message(
@@ -43,38 +49,38 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         for _ in range(12):
             self.upload_image(self.user, self.source)
 
-        run_pending_job('check_source', self.source.pk)
+        do_job('check_source', self.source.pk)
         self.assert_job_result_message(
             'check_source',
-            "Queued 10 feature extraction(s) (timed out)")
+            "Scheduled 10 feature extraction(s) (timed out)")
 
-        queue_and_run_job(
+        do_job(
             'check_source', self.source.pk,
             source_id=self.source.pk)
         self.assert_job_result_message(
             'check_source',
-            "Queued 2 feature extraction(s)")
+            "Scheduled 2 feature extraction(s)")
 
     def test_source_check_unprocessable_image(self):
         image1 = self.upload_image(self.user, self.source)
         image1.unprocessable_reason = "Exceeds point limit"
         image1.save()
 
-        run_pending_job('check_source', self.source.pk)
+        do_job('check_source', self.source.pk)
         self.assert_job_result_message(
             'check_source',
             "Can't train first classifier: Not enough annotated images for"
             " initial training",
-            assert_msg="Shouldn't queue extraction for the"
+            assert_msg="Shouldn't schedule extraction for the"
                        " unprocessable image",
         )
 
         self.upload_image(self.user, self.source)
-        run_pending_job('check_source', self.source.pk)
+        do_job('check_source', self.source.pk)
         self.assert_job_result_message(
             'check_source',
-            "Queued 1 feature extraction(s)",
-            assert_msg="Should still queue extraction for other images",
+            "Scheduled 1 feature extraction(s)",
+            assert_msg="Should still schedule extraction for other images",
         )
 
     def test_success(self):
@@ -90,7 +96,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
 
         # With LocalQueue, the result should be
         # available for collection immediately.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assertTrue(
             img.features.extracted, msg="Extracted boolean should be set")
@@ -104,7 +110,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
 
         # Extract features + collect results.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assertTrue(img1.features.extracted)
         self.assertTrue(img2.features.extracted)
@@ -120,7 +126,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         img = self.upload_image_with_dupe_points('1.png')
         # Extract features + process result.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assertTrue(img.features.extracted, "Features should be extracted")
 
@@ -141,7 +147,7 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
             self.user, self.source, image_options=dict(width=10, height=11))
         # Extract features + process result.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Let the next source-check get past the training and classification
         # checks.
@@ -176,7 +182,7 @@ class AbortCasesTest(
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Train a classifier.
         run_scheduled_jobs_until_empty()
@@ -222,7 +228,7 @@ class AbortCasesTest(
         img.delete()
 
         # Collect feature extraction.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'extract_features',
@@ -240,7 +246,7 @@ class AbortCasesTest(
             run_scheduled_jobs()
 
         # Collect feature extraction.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
     def test_spacer_priority_error(self):
         """Spacer error that's not in the non-priority categories."""
@@ -315,7 +321,7 @@ class AbortCasesTest(
         point.save()
 
         # Collect feature extraction.
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'extract_features',

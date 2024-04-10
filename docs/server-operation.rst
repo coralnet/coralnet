@@ -73,12 +73,16 @@ Run this as a ``.bat`` file:
   rem Start the PostgreSQL service (this does nothing if it's already started)
   net start postgresql-x64-<version number>
 
-  rem Start huey.
+  rem Start a huey instance.
   rem call runs another batch file and then returns control to this batch file.
   rem start /B runs a command asynchronously and without an extra command window,
   rem similarly to & in Linux.
   call <path to virtual environment>\Scripts\activate.bat
-  start /B python manage.py run_huey
+  start /B python manage.py djangohuey --queue realtime
+
+  rem Start a second huey instance for the second queue.
+  call <path to virtual environment>\Scripts\activate.bat
+  start /B python manage.py djangohuey --queue background
 
   rem Open a new command window with the virtual environment activated.
   rem Call opens a new command window, cmd /k ensures it waits for input
@@ -98,17 +102,20 @@ start postgres::
 
   postgres -D /usr/local/var/postgres/
 
-set environment variable::
-
-  export DJANGO_SETTINGS_MODULE=config.settings
-
 make sure messaging agent is running::
 
   redis-server
 
-start huey::
+set environment variable and start one huey instance in one terminal::
 
-  python manage.py run_huey
+  export DJANGO_SETTINGS_MODULE=config.settings
+  python manage.py djangohuey --queue realtime
+
+another huey instance in another terminal::
+
+  export DJANGO_SETTINGS_MODULE=config.settings
+  python manage.py djangohuey --queue background
+
 
 
 Checking test coverage

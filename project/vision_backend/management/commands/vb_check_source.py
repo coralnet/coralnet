@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from ...utils import queue_source_check
+from ...utils import schedule_source_check
 
 
 class Command(BaseCommand):
@@ -16,7 +16,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         source_ids = options.get('source_ids')
         for source_id in source_ids:
-            queue_source_check(source_id)
+            schedule_source_check(source_id)
         self.stdout.write(
-            f"Source checks have been queued for the"
+            f"Source checks have been scheduled for the"
             f" {len(source_ids)} source(s) requested.")

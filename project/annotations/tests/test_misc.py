@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 
 from images.model_utils import PointGen
-from jobs.models import Job
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..model_utils import AnnotationAreaUtils
@@ -429,7 +428,7 @@ class PointGenTest(ClientTest):
             reverse('annotation_area_edit', args=[img.pk]),
             data=dict(min_x=8, max_x=36, min_y=0, max_y=18))
 
-        points = img.point_set.all()
+        points = img.point_set.order_by('point_number')
         self.assertEqual(
             points.count(), 5*4,
             "Should generate the correct number of points")

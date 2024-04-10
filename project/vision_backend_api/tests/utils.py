@@ -13,7 +13,7 @@ from images.model_utils import PointGen
 from images.models import Source
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import create_sample_image
-from vision_backend.tests.tasks.utils import queue_and_run_collect_spacer_jobs
+from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 
 
 @override_settings(ENABLE_PERIODIC_JOBS=False)
@@ -103,10 +103,10 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train a classifier.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         cls.classifier = cls.source.get_current_classifier()
 
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])

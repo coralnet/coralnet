@@ -3,13 +3,13 @@ from django.core.files.storage import get_storage_class
 from django.test import override_settings
 
 from images.model_utils import PointGen
-from jobs.tests.utils import do_job, queue_and_run_job
+from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
 
 
-def queue_and_run_collect_spacer_jobs():
-    queue_and_run_job('collect_spacer_jobs')
+def do_collect_spacer_jobs():
+    do_job('collect_spacer_jobs')
 
 
 @override_settings(
@@ -105,10 +105,10 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         # other job runs in the meantime.
         for image in [*train_images, *val_images]:
             do_job('extract_features', image.pk, source_id=cls.source.pk)
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train classifier
         do_job('train_classifier', cls.source.pk, source_id=cls.source.pk)
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
     @classmethod
     def upload_image_for_classification(cls):
@@ -116,7 +116,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         image = cls.upload_image(cls.user, cls.source)
         # Extract features
         do_job('extract_features', image.pk, source_id=cls.source.pk)
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         return image
 

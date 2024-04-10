@@ -1,22 +1,23 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import functools
 from logging import getLogger
 import math
 import random
 import sys
 import traceback
-from typing import Optional
 import uuid
 
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.core.mail import mail_admins
-from django.db import DatabaseError, IntegrityError, transaction
-from django.utils import timezone
+from django.db import transaction
 from django.utils.module_loading import autodiscover_modules
 from django.views.debug import ExceptionReporter
+from django_huey import db_periodic_task, db_task
 from huey import crontab
-from huey.contrib.djhuey import db_periodic_task, db_task
 
 from errorlogs.utils import instantiate_error_log
+from lib.utils import context_scoped_cache
 from .exceptions import JobError, UnrecognizedJobNameError
 from .models import Job
 
@@ -27,155 +28,154 @@ task_logger = getLogger('coralnet_tasks')
 MANY_FAILURES = 5
 
 
-def queue_job(
-        name: str,
-        *task_args,
-        delay: timedelta = None,
-        source_id: int = None,
-        initial_status: str = Job.Status.PENDING) -> Optional[Job]:
+def get_or_create_job(
+    name: str,
+    *task_args,
+    source_id: int = None,
+    user: User = None,
+) -> tuple[Job, bool]:
+    """
+    Create a pending Job, or get a matching incomplete Job.
+    Return the Job, and a bool saying whether it was just created or not.
+
+    The get_or_create() call will be atomic due to our uniqueness
+    constraint on incomplete Jobs. This means we won't have
+    race conditions where two incomplete Jobs have the same name+args.
+    https://docs.djangoproject.com/en/4.2/ref/models/querysets/#get-or-create
+    But with this in mind, it's best to ensure this isn't called within a
+    larger transaction. So, views should always pair this with
+    transaction.on_commit().
+    """
+
+    arg_identifier = Job.args_to_identifier(task_args)
+    job_lookup_kwargs = dict(
+        job_name=name,
+        arg_identifier=arg_identifier,
+    )
+
+    # See if an incomplete Job exists with the lookup kwargs. If so, get it
+    # (guaranteed to be unique due to a DB-level uniqueness constraint).
+    # Else, create a new Job with the lookup kwargs and defaults.
+    job, created = Job.objects.incomplete().get_or_create(
+        **job_lookup_kwargs,
+        defaults=dict(
+            source_id=source_id,
+            status=Job.Status.PENDING,
+            user=user if user and user.is_authenticated else None,
+        )
+    )
+
+    if created:
+        # Set the new Job's attempt number.
+
+        attempt_number = 1
+
+        # See if the same job failed last time (if there was a last time).
+        # If so, set the attempt count accordingly.
+        try:
+            last_completed_job = Job.objects.completed().latest('pk')
+        except Job.DoesNotExist:
+            pass
+        else:
+            if last_completed_job.status == Job.Status.FAILURE:
+                attempt_number = last_completed_job.attempt_number + 1
+
+                if attempt_number > MANY_FAILURES:
+                    # Notify admins on repeated failure.
+                    mail_admins(
+                        f"Job has been failing repeatedly:"
+                        f" {last_completed_job}",
+                        f"Error info:\n\n{last_completed_job.result_message}",
+                    )
+
+        job.attempt_number = attempt_number
+        job.save()
+
+    return job, created
+
+
+def schedule_job(
+    name: str,
+    *task_args,
+    source_id: int = None,
+    user: User = None,
+    delay: timedelta = None,
+) -> tuple[Job, bool]:
+    """
+    Create a pending Job, or get a matching incomplete Job and update its
+    schedule if applicable.
+    Return the Job, and a bool saying whether it was just created or not.
+    """
+
+    job, created = get_or_create_job(
+        name, *task_args, source_id=source_id, user=user)
 
     if delay is None:
         # Use a random amount of jitter to slightly space out jobs that are
         # being submitted in quick succession.
         delay = timedelta(seconds=random.randrange(5, 30))
-    now = timezone.now()
+    now = datetime.now(timezone.utc)
     scheduled_start_date = now + delay
 
-    arg_identifier = Job.args_to_identifier(task_args)
-    job_kwargs = dict(
-        job_name=name,
-        arg_identifier=arg_identifier,
-    )
+    if created:
+        # Set the new Job's scheduled start date.
+        if job.attempt_number > MANY_FAILURES:
+            # Make sure it doesn't retry too quickly until the failure
+            # situation's manually resolved.
+            three_days_from_now = now + timedelta(days=3)
+            if scheduled_start_date < three_days_from_now:
+                scheduled_start_date = three_days_from_now
 
-    # See if the same job is already pending or in progress. This is just a
-    # best-effort check. We want this to be safe for views to call without
-    # crashing the current transaction, which is why we don't make this
-    # stricter against race conditions. We'll be stricter if actually
-    # starting a job (as opposed to just queueing it as pending).
-    jobs = Job.objects.filter(**job_kwargs)
-    try:
-        # There may be multiple such jobs; just get at most one.
-        # We'll leave the task of dupe cleanup to start_pending_job()
-        # (which is more strict on race conditions).
-        job = jobs.filter(status__in=[
-            Job.Status.PENDING, Job.Status.IN_PROGRESS]).earliest('pk')
-    except Job.DoesNotExist:
-        pass
+        job.scheduled_start_date = scheduled_start_date
+        job.save()
     else:
-        # job is already pending or in progress.
-
         if (
             job.status == Job.Status.PENDING
             and job.attempt_number <= MANY_FAILURES
         ):
-            # Update the scheduled start date if an earlier date was just
-            # requested
-            if scheduled_start_date < job.scheduled_start_date:
+            # Update the existing Job's scheduled start date
+            # if an earlier date was just requested (or if there
+            # is no scheduled date yet).
+            if (
+                job.scheduled_start_date is None
+                or scheduled_start_date < job.scheduled_start_date
+            ):
                 job.scheduled_start_date = scheduled_start_date
                 job.save()
-                logger.debug(f"Job [{job}]: updated scheduled start date.")
 
-        return None
-
-    # See if the same job failed last time (if there was a last time).
-    # If so, set the attempt count accordingly.
-    attempt_number = 1
-    try:
-        last_job = jobs.filter(
-            status__in=[Job.Status.SUCCESS, Job.Status.FAILURE]).latest('pk')
-    except Job.DoesNotExist:
-        pass
-    else:
-        if last_job.status == Job.Status.FAILURE:
-            attempt_number = last_job.attempt_number + 1
-
-            if attempt_number > MANY_FAILURES:
-                # Notify admins on repeated failure.
-                mail_admins(
-                    f"Job has been failing repeatedly: {last_job}",
-                    f"Error info:\n\n{last_job.result_message}",
-                )
-                # Make sure it doesn't retry too quickly until the failure
-                # situation's manually resolved.
-                three_days_from_now = now + timedelta(days=3)
-                if scheduled_start_date < three_days_from_now:
-                    scheduled_start_date = three_days_from_now
-
-    # Create a new job and proceed
-    job = Job(
-        scheduled_start_date=scheduled_start_date,
-        attempt_number=attempt_number,
-        source_id=source_id,
-        status=initial_status,
-        **job_kwargs
-    )
-    try:
-        job.save()
-    except IntegrityError:
-        # There's a DB-level uniqueness check which prevents duplicate
-        # in-progress jobs.
-        # This ensures that we don't have two threads starting the same
-        # job at the same time. (This works most effectively if we use
-        # short transactions or autocommit when creating in-progress jobs.)
-        logger.info(f"Job [{job}] is already in progress.")
-        return None
-
-    return job
+    return job, created
 
 
-def start_pending_job(job_name: str, arg_identifier: str) -> Optional[Job]:
+def schedule_job_on_commit(name: str, *args, **kwargs) -> None:
     """
-    Find a pending job matching the passed fields.
-    If job not found, or already in progress, return None.
-    Else, update the status to in-progress and return the job.
+    Call schedule_job() after the current transaction commits,
+    thus allowing get_or_create_job() to effectively prevent
+    race conditions.
     """
-    # select_for_update() locks these DB rows from evaluation time
-    # to the end of the transaction. This ensures that we don't
-    # have two threads starting the same job at the same time.
-    # Instead, the first thread will get to run, while the second thread
-    # will get a DatabaseError and return.
-    # (This works most effectively if we're using autocommit when entering
-    # this function.)
-    jobs_queryset = Job.objects.select_for_update(nowait=True).filter(
-        job_name=job_name,
-        arg_identifier=arg_identifier,
-        status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
-    )
-    with transaction.atomic():
-        # Evaluate the query.
-        try:
-            jobs = list(jobs_queryset)
-        except DatabaseError:
-            # Probably tripped the select_for_update() row locking, meaning
-            # there's another thread in here already.
-            logger.info(
-                f"Job [{job_name} / {arg_identifier}] is locked"
-                f" to prevent overlapping runs.")
-            return None
-
-        if len(jobs) == 0:
-            logger.debug(f"Job [{job_name} / {arg_identifier}] not found.")
-            return None
-
-        if Job.Status.IN_PROGRESS in [job.status for job in jobs]:
-            logger.debug(f"Job [{jobs[0]}] already in progress.")
-            return None
-
-        job = jobs[0]
-        if len(jobs) > 1:
-            for dupe_job in jobs[1:]:
-                # Delete any duplicate pending jobs
-                dupe_job.delete()
-
-        job.status = Job.Status.IN_PROGRESS
-        job.save()
-    return job
+    transaction.on_commit(
+        functools.partial(schedule_job, name, *args, **kwargs))
 
 
-def finish_job(job, success=False, result_message=None):
+def start_job(job: Job) -> None:
+    """
+    Immediately add an existing Job to huey's queue.
+
+    The Job's JobDecorator (part of the 'run function') will
+    presumably take care of updating the Job's status/fields.
+    """
+    starter_task = get_job_run_function(job.job_name)
+    starter_task(*Job.identifier_to_args(job.arg_identifier))
+
+
+def finish_job(
+    job: Job,
+    success: bool = False,
+    result_message: str = None,
+) -> None:
     """
     Update Job status to SUCCESS/FAILURE, and do associated bookkeeping.
     """
+
     # This field doesn't take None; no message is set as an empty string.
     job.result_message = result_message or ""
     job.status = Job.Status.SUCCESS if success else Job.Status.FAILURE
@@ -196,7 +196,7 @@ def finish_job(job, success=False, result_message=None):
         schedule = get_periodic_job_schedules().get(name, None)
         if schedule:
             interval, offset = schedule
-            queue_job(name, delay=next_run_delay(interval, offset))
+            schedule_job(name, delay=next_run_delay(interval, offset))
 
 
 class JobDecorator:
@@ -204,10 +204,15 @@ class JobDecorator:
         self, job_name: str = None,
         interval: timedelta = None, offset: datetime = None,
         huey_interval_minutes: int = None,
+        task_queue_name: str = None,
     ):
         # This can be left unspecified if the task name works as the
         # job name.
         self.job_name = job_name
+
+        # This can be left unspecified if the default django-huey queue
+        # works for this job.
+        self.task_queue_name = task_queue_name
 
         # This should be present if the job is to be run periodically
         # through run_scheduled_jobs().
@@ -247,12 +252,16 @@ class JobDecorator:
                 # to run the same every-3-minutes task 10 times as makeup.
                 expires=timedelta(minutes=self.huey_interval_minutes*2),
                 name=self.job_name,
+                queue=self.task_queue_name,
             )
         else:
             if self.interval:
                 set_periodic_job_schedule(
                     self.job_name, self.interval, self.offset)
-            huey_decorator = db_task(name=self.job_name)
+            huey_decorator = db_task(
+                name=self.job_name,
+                queue=self.task_queue_name,
+            )
 
         @huey_decorator
         def task_wrapper(*task_args):
@@ -273,7 +282,8 @@ class JobDecorator:
             ])
             start_time = datetime.now()
 
-            self.run_task_wrapper(task_func, task_args)
+            with context_scoped_cache():
+                self.run_task_wrapper(task_func, task_args)
 
             # Log a message after task exit.
             elapsed_seconds = (
@@ -320,22 +330,85 @@ class JobDecorator:
         )
         error_log.save()
 
+    @staticmethod
+    def update_pending_job_to_in_progress(
+        name: str,
+        *task_args,
+    ) -> Job | None:
+        """
+        Get the specified pending Job and update it to in-progress.
+        If there's no matching pending Job, return None.
+        """
+        arg_identifier = Job.args_to_identifier(task_args)
+        job_lookup_kwargs = dict(
+            job_name=name,
+            arg_identifier=arg_identifier,
+        )
+
+        try:
+            job = Job.objects.get(
+                status=Job.Status.PENDING, **job_lookup_kwargs)
+        except Job.DoesNotExist:
+            return None
+
+        job.status = Job.Status.IN_PROGRESS
+        job.start_date = datetime.now(timezone.utc)
+        job.save()
+        return job
+
+    @staticmethod
+    def create_in_progress_job(
+        name: str,
+        *task_args,
+        source_id: int = None,
+        user: User = None,
+    ) -> Job | None:
+        """
+        Create the specified Job as in-progress.
+        If there's already a matching incomplete Job, don't do anything with it
+        and return None.
+        """
+
+        job, created = get_or_create_job(
+            name, *task_args, source_id=source_id, user=user)
+
+        if created:
+            job.status = Job.Status.IN_PROGRESS
+            job.start_date = datetime.now(timezone.utc)
+            job.save()
+            return job
+        else:
+            return None
+
 
 class FullJobDecorator(JobDecorator):
     """
     Job is created as IN_PROGRESS at the start of the decorated task,
     and goes IN_PROGRESS -> SUCCESS/FAILURE at the end of it.
+
+    This decorator is only meant for the 'top-level' jobs which schedule other
+    jobs. This is the only type of Job we want scheduled periodically by huey.
+    We don't use huey's periodic-task construct for most kinds of tasks/jobs
+    because:
+
+    - It doesn't let us easily report when the next run of a particular job is.
+    - The logic isn't great for infrequent jobs on an unstable server: if we
+      have a daily job, and huey's cron doesn't get to run on the particular
+      minute that the job's scheduled for, then the job has to wait another day
+      before trying again.
+
+    However, we do depend on huey to begin the process of scheduling and
+    running jobs in the first place.
+
+    Note that huey periodic tasks can't have args.
+    https://huey.readthedocs.io/en/latest/guide.html#periodic-tasks
     """
     def run_task_wrapper(self, task_func, task_args):
-        job = queue_job(
+        job = self.create_in_progress_job(
             self.job_name,
             *task_args,
-            delay=timedelta(seconds=0),
-            initial_status=Job.Status.IN_PROGRESS,
-            # No usages are source-specific yet.
-            source_id=None,
         )
-        if not job:
+        if job is None:
             return
 
         success = False
@@ -370,11 +443,11 @@ class JobRunnerDecorator(JobDecorator):
     decorated task, and IN_PROGRESS -> SUCCESS/FAILURE at the end of it.
     """
     def run_task_wrapper(self, task_func, task_args):
-        job = start_pending_job(
-            job_name=self.job_name,
-            arg_identifier=Job.args_to_identifier(task_args),
+        job = self.update_pending_job_to_in_progress(
+            self.job_name,
+            *task_args,
         )
-        if not job:
+        if job is None:
             return
 
         success = False
@@ -404,11 +477,11 @@ class JobStarterDecorator(JobDecorator):
     (unless there's an error).
     """
     def run_task_wrapper(self, task_func, task_args):
-        job = start_pending_job(
-            job_name=self.job_name,
-            arg_identifier=Job.args_to_identifier(task_args),
+        job = self.update_pending_job_to_in_progress(
+            self.job_name,
+            *task_args,
         )
-        if not job:
+        if job is None:
             return
 
         try:
@@ -450,11 +523,6 @@ def set_job_run_function(name, task):
     _job_run_functions[name] = task
 
 
-def run_job(job):
-    starter_task = get_job_run_function(job.job_name)
-    starter_task(*Job.identifier_to_args(job.arg_identifier))
-
-
 _periodic_job_schedules = dict()
 
 
@@ -482,7 +550,7 @@ def next_run_delay(interval: int, offset: int = 0) -> timedelta:
     1/2 hour offset for the other), or pass in a specific date's timestamp to
     induce runs at specific times of day / days of week.
     """
-    now_timestamp = timezone.now().timestamp()
+    now_timestamp = datetime.now(timezone.utc).timestamp()
     interval_count = math.ceil((now_timestamp - offset) / interval)
     next_run_timestamp = offset + (interval_count * interval)
     delay_in_seconds = max(next_run_timestamp - now_timestamp, 0)

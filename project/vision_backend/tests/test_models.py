@@ -4,7 +4,7 @@ from django_migration_testcase import MigrationTest
 import numpy as np
 from spacer.messages import ClassifyReturnMsg
 
-from jobs.utils import queue_job
+from jobs.utils import schedule_job
 from lib.tests.utils import ClientTest, sample_image_as_file
 from images.models import Point
 from vision_backend.models import BatchJob, Score
@@ -86,7 +86,7 @@ class CascadeDeleteTest(ClientTest):
         BatchJobs should be deleted when their corresponding Jobs are
         deleted.
         """
-        job = queue_job('test')
+        job, _ = schedule_job('test')
 
         batch_job = BatchJob(internal_job=job)
         batch_job.save()

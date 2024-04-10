@@ -31,7 +31,7 @@ from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.urls import reverse
 from django.utils.html import escape as html_escape
-from huey.contrib.djhuey import HUEY
+import django_huey
 from spacer.messages import ClassifyReturnMsg
 
 from images.model_utils import PointGen
@@ -89,6 +89,8 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
     """
     PERMISSION_DENIED_TEMPLATE = 'permission_denied.html'
     NOT_FOUND_TEMPLATE = '404.html'
+
+    client: Client
 
     def assertStatusOK(self, response, msg=None):
         """Assert that an HTTP response's status is 200 OK."""
@@ -327,12 +329,15 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
                 filename, filetype, image_options)
             post_dict['name'] = filename
 
-        # Send the upload form
+        # Send the upload form.
+        # Ensure the on_commit() callback runs, which should schedule a
+        # source check.
         cls.client.force_login(user)
-        response = cls.client.post(
-            reverse('upload_images_ajax', kwargs={'source_id': source.id}),
-            post_dict,
-        )
+        with cls.captureOnCommitCallbacks(execute=True):
+            response = cls.client.post(
+                reverse('upload_images_ajax', kwargs={'source_id': source.id}),
+                post_dict,
+            )
         cls.client.logout()
 
         response_json = response.json()
@@ -395,9 +400,11 @@ class CustomTestRunner(DiscoverRunner):
         # huey consumer would run in a separate process, meaning it
         # wouldn't see the state of the current test's open DB-transaction.
         #
-        # We specify this behavior here because override_settings doesn't seem
-        # to work on huey. Modifying this HUEY singleton does work.
-        HUEY.immediate = True
+        # We specify this behavior here, because there doesn't seem to be a way
+        # to use override_settings with django-huey (it doesn't work with huey
+        # standalone either).
+        django_huey.get_queue('realtime').immediate = True
+        django_huey.get_queue('background').immediate = True
 
         storage_manager = get_storage_manager()
 
@@ -1129,9 +1136,9 @@ class ManagementCommandTest(ClientTest):
     Inherits from ClientTest because the client is still useful for setting up
     data.
     """
-    @staticmethod
+    @classmethod
     def call_command_and_get_output(
-            app_name, command_name, patch_input_value='y',
+            cls, app_name, command_name, patch_input_value='y',
             args=None, options=None):
         """
         Based loosely on: https://stackoverflow.com/questions/59382486/
@@ -1153,7 +1160,11 @@ class ManagementCommandTest(ClientTest):
         def input_without_prompt(_):
             return patch_input_value
 
-        with mock.patch(patch_target, input_without_prompt):
+        with (
+            mock.patch(patch_target, input_without_prompt),
+            # Ensure on_commit() callbacks run.
+            cls.captureOnCommitCallbacks(execute=True),
+        ):
             management.call_command(command_name, *args, **options)
 
         return stdout.getvalue().rstrip(), stderr.getvalue().rstrip()

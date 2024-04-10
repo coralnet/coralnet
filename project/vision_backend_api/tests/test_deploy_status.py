@@ -9,7 +9,7 @@ from rest_framework import status
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
 from jobs.models import Job
-from vision_backend.tests.tasks.utils import queue_and_run_collect_spacer_jobs
+from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
 
 
@@ -121,7 +121,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
         ]
         cls.data = json.dumps(dict(data=images))
 
-    def queue_deploy(self):
+    def schedule_deploy(self):
         self.client.post(
             self.deploy_url, self.data, **self.request_kwargs)
 
@@ -134,7 +134,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
         return response
 
     def test_no_progress_yet(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
         response = self.get_job_status(job)
 
         self.assertStatusOK(response)
@@ -158,7 +158,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Content type should be as expected")
 
     def test_some_images_in_progress(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
 
         # Mark one unit's status as in progress
         job_unit = ApiJobUnit.objects.filter(parent=job).latest('pk')
@@ -184,7 +184,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Response JSON should be as expected")
 
     def test_all_images_in_progress(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
 
         job_units = ApiJobUnit.objects.filter(parent=job)
         for job_unit in job_units:
@@ -210,7 +210,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Response JSON should be as expected")
 
     def test_some_images_success(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
 
         # Mark one unit's status as success
         job_units = ApiJobUnit.objects.filter(parent=job)
@@ -240,7 +240,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Response JSON should be as expected")
 
     def test_some_images_failure(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
 
         # Mark one unit's status as failure
         job_unit = ApiJobUnit.objects.filter(parent=job).latest('pk')
@@ -266,9 +266,9 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Response JSON should be as expected")
 
     def test_success(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
         self.run_scheduled_jobs_including_deploy()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         response = self.get_job_status(job)
 
@@ -286,7 +286,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
             "Location header should be as expected")
 
     def test_failure(self):
-        job = self.queue_deploy()
+        job = self.schedule_deploy()
 
         # Mark both units' status as done: one success, one failure.
         #

@@ -1,0 +1,2 @@
+class MediaRequestDenied(Exception):
+    pass

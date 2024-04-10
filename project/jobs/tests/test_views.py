@@ -1,23 +1,26 @@
 from abc import ABC, abstractmethod
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Callable
 
 from bs4 import BeautifulSoup
+from django.contrib.auth.models import User
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
-from django.utils import timezone
+from django.utils.timezone import get_current_timezone
 
 from api_core.models import ApiJob, ApiJobUnit
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run
 )
 from ..models import Job
-from ..utils import queue_job
-from .utils import queue_job_with_modify_date
+from ..utils import schedule_job
+from .utils import fabricate_job
 
 
 def date_display(date):
-    return date_template_filter(timezone.localtime(date), 'N j, Y, P')
+    return date_template_filter(
+        date.astimezone(get_current_timezone()), 'N j, Y, P')
 
 
 class PermissionTest(BasePermissionTest):
@@ -64,6 +67,10 @@ class PermissionTest(BasePermissionTest):
 
 class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
+    create_source: Callable
+    create_user: Callable
+    user: User
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -81,12 +88,15 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
     job_count = 0
 
     def job(
-        self, initial_status: Job.Status = Job.Status.PENDING,
-        source: int|None = None, job_name: str = None,
-        modified_time_ago: timedelta = None, delay: timedelta = None,
+        self,
+        status: Job.Status = Job.Status.PENDING,
+        source: int | None = None,
+        job_name: str = None,
+        modified_time_ago: timedelta = None,
+        **kwargs
     ):
         """
-        Shortcut method for queueing a job.
+        Shortcut method for creating a job for this class's purposes.
         """
         self.job_count += 1
         if not job_name:
@@ -94,16 +104,15 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
             # unique job name.
             job_name = str(self.job_count)
 
-        kwargs = dict(initial_status=initial_status, delay=delay)
+        updated_kwargs = kwargs | dict(status=status)
         if source:
-            kwargs['source_id'] = self.sources[source - 1].pk
+            updated_kwargs['source_id'] = self.sources[source - 1].pk
 
         if modified_time_ago:
             # This may also be negative to indicate time in future.
-            kwargs['modify_date'] = timezone.now() - modified_time_ago
-            job = queue_job_with_modify_date(job_name, **kwargs)
-        else:
-            job = queue_job(job_name, **kwargs)
+            updated_kwargs['modify_date'] = \
+                datetime.now(timezone.utc) - modified_time_ago
+        job = fabricate_job(job_name, **updated_kwargs)
 
         return job
 
@@ -397,7 +406,7 @@ class JobSummaryTest(JobViewTestMixin, ClientTest):
     def test_exclude_source_checks(self):
         # Not a source check, and older
         one_day = timedelta(days=1)
-        one_day_ago = timezone.now() - one_day
+        one_day_ago = datetime.now(timezone.utc) - one_day
         self.job(Job.Status.SUCCESS, source=1, modified_time_ago=one_day)
         # Source check
         self.job(Job.Status.SUCCESS, source=1, job_name='check_source')
@@ -540,9 +549,9 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
         if self.view_shows_source_jobs:
 
-            queue_job('extract_features', '1', source_id=self.sources[0].pk)
-            queue_job('train_classifier', '2', source_id=self.sources[0].pk)
-            queue_job('classify_features', '3', source_id=self.sources[0].pk)
+            schedule_job('extract_features', '1', source_id=self.sources[0].pk)
+            schedule_job('train_classifier', '2', source_id=self.sources[0].pk)
+            schedule_job('classify_features', '3', source_id=self.sources[0].pk)
 
             image_3_url = reverse('image_detail', args=['3'])
             image_1_url = reverse('image_detail', args=['1'])
@@ -559,9 +568,9 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
         if self.view_shows_non_source_jobs:
 
-            queue_job('Some job', '1', '2')
+            schedule_job('Some job', '1', '2')
 
-            job = queue_job('classify_image', '3', '4')
+            job, _ = schedule_job('classify_image', '3', '4')
             api_job = ApiJob(type='deploy', user=self.user)
             api_job.save()
             api_job_unit = ApiJobUnit(
@@ -623,7 +632,8 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             ]))
         )
 
-    def test_duration_column(self):
+    def test_time_column(self):
+        now = datetime.now(timezone.utc)
         jobs = [
             self.job(
                 Job.Status.PENDING,
@@ -634,18 +644,27 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 delay=timedelta(minutes=10),
             ),
             self.job(
+                Job.Status.PENDING,
+                create_date=now-timedelta(minutes=10),
+            ),
+            self.job(
                 Job.Status.IN_PROGRESS,
-                delay=-timedelta(minutes=10),
+                start_date=now-timedelta(minutes=10),
             ),
             self.job(
                 Job.Status.SUCCESS,
                 modified_time_ago=timedelta(minutes=5),
-                delay=-timedelta(minutes=15),
+                start_date=now-timedelta(minutes=15),
             ),
             self.job(
                 Job.Status.FAILURE,
                 modified_time_ago=timedelta(minutes=10),
-                delay=-timedelta(days=2, hours=18, minutes=20),
+                start_date=now-timedelta(days=2, hours=18, minutes=20),
+            ),
+            self.job(
+                Job.Status.FAILURE,
+                modified_time_ago=timedelta(minutes=10),
+                create_date=now-timedelta(days=2, hours=18, minutes=20),
             ),
         ]
 
@@ -654,37 +673,50 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         table_soup = response_soup.select('table#job-table')[0]
 
         # Be generous about time delays/inconsistencies during the test.
-        acceptable_durations_for_each_job = [
+        acceptable_cells_for_each_job = [
             ["0\xa0minutes until scheduled start"],
             [str(num) + "\xa0minutes until scheduled start"
              for num in [8, 9, 10, 11, 12]],
-            [str(num) + "\xa0minutes"
+            ["Created " + str(num) + "\xa0minutes ago"
              for num in [8, 9, 10, 11, 12]],
-            [str(num) + "\xa0minutes"
+            ["Started " + str(num) + "\xa0minutes ago"
              for num in [8, 9, 10, 11, 12]],
-            ["2\xa0days, 18\xa0hours"],
+            ["Completed in " + str(num) + "\xa0minutes"
+             for num in [8, 9, 10, 11, 12]],
+            ["Completed in 2\xa0days, 18\xa0hours"],
+            ["Completed 2\xa0days, 18\xa0hours after creation"],
         ]
 
-        for row_number, job, acceptable_durations in zip(
-            range(1, 1+len(jobs)), reversed(jobs),
-            reversed(acceptable_durations_for_each_job)
+        titles_for_each_job = [
+            f"Scheduled to start: {date_display(jobs[0].scheduled_start_date)}",
+            f"Scheduled to start: {date_display(jobs[1].scheduled_start_date)}",
+            f"Created: {date_display(jobs[2].create_date)}",
+            f"Started: {date_display(jobs[3].start_date)}",
+            f"Started: {date_display(jobs[4].start_date)}",
+            f"Started: {date_display(jobs[5].start_date)}",
+            f"Created: {date_display(jobs[6].create_date)}",
+        ]
+
+        for row_number, job, acceptable_cells, title in zip(
+            range(1, 1+len(jobs)),
+            reversed(jobs),
+            reversed(acceptable_cells_for_each_job),
+            reversed(titles_for_each_job),
         ):
             found_match = False
             error = None
 
-            for duration in acceptable_durations:
+            for cell in acceptable_cells:
                 try:
-                    duration_html = (
-                        f'<span title="Scheduled to start:'
-                        f' {date_display(job.scheduled_start_date)}">'
-                        f'{duration}</span>')
+                    time_html = (
+                        f'<span title="{title}">{cell}</span>')
                     self.assert_table_row_values(
                         table_soup,
-                        {"Duration": duration_html},
+                        {"Time": time_html},
                         row_number,
                     )
                 except AssertionError as e:
-                    # Try the next acceptable duration
+                    # Try the next acceptable values
                     error = str(e)
                 else:
                     found_match = True
@@ -692,7 +724,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
             if not found_match:
                 raise AssertionError(
-                    f"None of the acceptable durations worked for"
+                    f"None of the acceptable values worked for"
                     f" row {row_number}. Last attempt's error: {error}")
 
     @override_settings(JOBS_PER_PAGE=2)
@@ -729,7 +761,8 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             return self.job(
                 Job.Status.SUCCESS, modified_time_ago=timedelta(days=-2))
         def f6(_num):
-            # 6th: completed, modified 2nd latest (success/failure doesn't matter)
+            # 6th: completed, modified 2nd latest
+            # (success/failure doesn't matter)
             return self.job(
                 Job.Status.FAILURE, modified_time_ago=timedelta(days=-1))
         def f7(_num):
@@ -931,11 +964,11 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
         return False
 
     def job(
-        self, initial_status: Job.Status = Job.Status.PENDING,
+        self, status: Job.Status = Job.Status.PENDING,
         source: int|None = 1, **kwargs
     ):
         return super().job(
-            initial_status=initial_status,
+            status=status,
             source=source,
             **kwargs
         )
@@ -961,22 +994,21 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
             "This source hasn't been status-checked recently.")
 
         # In progress
-        job = queue_job(
+        job = fabricate_job(
             'check_source', self.sources[0].pk,
             source_id=self.sources[0].pk,
-            initial_status=Job.Status.IN_PROGRESS)
-        job.save()
+            status=Job.Status.IN_PROGRESS)
         self.assert_source_check_status_equal(
-            "This source is currently being checked for jobs to queue.")
+            "This source is currently being checked for jobs to schedule.")
 
         # Completed checks
         job.status = Job.Status.SUCCESS
         job.result_message = "Message 1"
         job.save()
-        job = queue_job(
+        job = fabricate_job(
             'check_source', self.sources[0].pk,
             source_id=self.sources[0].pk,
-            initial_status=Job.Status.SUCCESS)
+            status=Job.Status.SUCCESS)
         job.result_message = "Message 2"
         job.save()
         # Should show the most recent completed source check

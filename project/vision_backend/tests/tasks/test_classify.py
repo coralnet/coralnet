@@ -13,12 +13,12 @@ from events.models import ClassifyImageEvent
 from images.models import Point
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import (
-    do_job, JobUtilsMixin, queue_and_run_job, queue_job)
+from jobs.utils import schedule_job
+from jobs.tests.utils import do_job, JobUtilsMixin
 from ...exceptions import RowColumnMismatchError
 from ...models import Score
 from ...utils import clear_features
-from .utils import BaseTaskTest, queue_and_run_collect_spacer_jobs
+from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 def noop(*args, **kwargs):
@@ -27,10 +27,10 @@ def noop(*args, **kwargs):
 
 def classify(image, create_event=True):
     if create_event:
-        queue_and_run_job('classify_features', image.pk)
+        do_job('classify_features', image.pk)
     else:
         with mock.patch.object(ClassifyImageEvent, 'save', noop):
-            queue_and_run_job('classify_features', image.pk)
+            do_job('classify_features', image.pk)
 
 
 class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
@@ -45,15 +45,15 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         self.upload_image_for_classification()
         self.upload_image_for_classification()
         self.source_check_and_assert_message(
-            "Queued 2 image classification(s)")
+            "Scheduled 2 image classification(s)")
         self.source_check_and_assert_message(
             "Waiting for image classification(s) to finish")
 
-    def test_do_not_requeue(self):
+    def test_do_not_schedule_again(self):
         img1 = self.upload_image_for_classification()
         img2 = self.upload_image_for_classification()
         self.source_check_and_assert_message(
-            "Queued 2 image classification(s)")
+            "Scheduled 2 image classification(s)")
 
         self.upload_image_for_classification()
 
@@ -67,8 +67,8 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         )
 
         self.source_check_and_assert_message(
-            "Queued 1 image classification(s)",
-            assert_msg="Should not re-queue the original 2 classifications",
+            "Scheduled 1 image classification(s)",
+            assert_msg="Should not redo the original 2 classifications",
         )
 
     def check_is_pending(self):
@@ -78,27 +78,27 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             status=Job.Status.PENDING,
         ).exists()
 
-    def test_queue_check_after_last_classification(self):
+    def test_schedule_check_after_last_classification(self):
         """
         After the current classifier seems to have gone over all
-        classifiable images, another source-check should be queued
+        classifiable images, another source-check should be scheduled
         to confirm whether the source is all caught up. That's useful
         to know when looking at job/backend dashboards.
         """
         image_1 = self.upload_image_for_classification()
         image_2 = self.upload_image_for_classification()
         self.source_check_and_assert_message(
-            "Queued 2 image classification(s)")
+            "Scheduled 2 image classification(s)")
 
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
             self.check_is_pending(),
-            msg="Should not queue a check after classifying just 1 image",
+            msg="Should not schedule a check after classifying just 1 image",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
             self.check_is_pending(),
-            msg="Should queue a check after classifying both images",
+            msg="Should schedule a check after classifying both images",
         )
 
         # Accept another classifier.
@@ -114,14 +114,14 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
             self.check_is_pending(),
-            msg="Should not queue a check after classifying just 1 image,"
+            msg="Should not schedule a check after classifying just 1 image,"
                 " even if the other image was handled by the previous"
                 " classifier",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
             self.check_is_pending(),
-            msg="Should queue a check after classifying both images",
+            msg="Should schedule a check after classifying both images",
         )
 
     def test_various_image_cases_new_classifier_on_events_and_annotations(self):
@@ -223,41 +223,41 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
                 "img1 and img2 classification events shouldn't exist"
                 " (sanity check)")
 
-        # Don't really need to check how many images are queued here, because
-        # we'll check specifically which ones were queued after this.
+        # Don't really need to check how many images are scheduled here,
+        # because we'll check specifically which ones were scheduled after this.
         self.source_check_and_assert_message(
-            re.compile(r"Queued \d+ image classification\(s\)"),
+            re.compile(r"Scheduled \d+ image classification\(s\)"),
         )
 
-        queued_image_ids = Job.objects \
+        scheduled_image_ids = Job.objects \
             .filter(job_name='classify_features', status=Job.Status.PENDING) \
             .values_list('arg_identifier', flat=True)
-        queued_image_ids = [int(pk) for pk in queued_image_ids]
+        scheduled_image_ids = [int(pk) for pk in scheduled_image_ids]
 
         self.assertIn(
-            img3.pk, queued_image_ids,
-            msg="Unclassified image should have been queued")
+            img3.pk, scheduled_image_ids,
+            msg="Unclassified image should have been scheduled")
 
         if not create_events and not new_classifier_on_annotations:
             # If there's no sign of activity from the new classifier,
-            # then all unconfirmed images are queued for classification.
+            # then all unconfirmed images are scheduled for classification.
             self.assertIn(
-                img2.pk, queued_image_ids,
+                img2.pk, scheduled_image_ids,
                 msg="Image that was last classified by the previous classifier"
-                    " should have been queued")
+                    " should have been scheduled")
             self.assertIn(
-                img1.pk, queued_image_ids,
+                img1.pk, scheduled_image_ids,
                 msg="Image that was last classified by the current classifier"
-                    " should have been queued")
+                    " should have been scheduled")
         else:
             self.assertNotIn(
-                img2.pk, queued_image_ids,
+                img2.pk, scheduled_image_ids,
                 msg="Image that was last classified by the previous classifier"
-                    " should not have been queued")
+                    " should not have been scheduled")
             self.assertNotIn(
-                img1.pk, queued_image_ids,
+                img1.pk, scheduled_image_ids,
                 msg="Image that was last classified by the current classifier"
-                    " should not have been queued")
+                    " should not have been scheduled")
 
     def test_time_out(self):
         for _ in range(12):
@@ -265,10 +265,10 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
 
         with override_settings(JOB_MAX_MINUTES=-1):
             self.source_check_and_assert_message(
-                "Queued 10 image classification(s) (timed out)")
+                "Scheduled 10 image classification(s) (timed out)")
 
         self.source_check_and_assert_message(
-            "Queued 2 image classification(s)")
+            "Scheduled 2 image classification(s)")
 
 
 class ClassifyImageTest(
@@ -529,7 +529,7 @@ class ClassifyImageTest(
         self.add_annotations(self.user, img, {1: 'A'})
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -570,7 +570,7 @@ class ClassifyImageTest(
         img = self.upload_image_with_annotations('confirmed.png')
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Attempt to classify
         run_scheduled_jobs_until_empty()
 
@@ -613,10 +613,10 @@ class ClassifyImageTest(
         img = self.upload_image_with_dupe_points('has_dupe.png')
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Train
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -673,17 +673,17 @@ class ClassifyImageTest(
 class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
     """Test cases where the task would abort before reaching the end."""
 
-    def upload_image_and_queue_classification(self):
+    def upload_image_and_schedule_classification(self):
         # Upload and extract features
         img = self.upload_image_for_classification()
-        queue_job('classify_features', img.pk, source_id=self.source.pk)
+        schedule_job('classify_features', img.pk, source_id=self.source.pk)
         return img
 
     def test_classify_nonexistent_image(self):
         """Try to classify a nonexistent image ID."""
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
         # Delete img
         image_id = img.pk
         img.delete()
@@ -701,7 +701,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         """Try to classify an image without features extracted."""
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
         # Clear features
         clear_features(img)
 
@@ -719,7 +719,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         """Try to classify an image without a classifier for the source."""
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
         # Delete source's classifier
         self.source.get_current_classifier().delete()
 
@@ -771,7 +771,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
 
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
 
         # Try to classify
         with mock.patch(
@@ -803,7 +803,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
 
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
 
         # Try to classify
         with mock.patch(
@@ -831,7 +831,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
 
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
 
         # Try to classify
         with mock.patch(
@@ -855,7 +855,7 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
 
         self.upload_data_and_train_classifier()
 
-        img = self.upload_image_and_queue_classification()
+        img = self.upload_image_and_schedule_classification()
 
         # Try to classify
         with mock.patch(

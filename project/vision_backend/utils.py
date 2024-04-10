@@ -9,7 +9,7 @@ from spacer.extract_features import (
 from spacer.messages import DataLocation
 
 from images.models import Point
-from jobs.utils import queue_job
+from jobs.utils import schedule_job, schedule_job_on_commit
 from labels.models import Label, LocalLabel
 from .common import Extractors
 from .models import Score
@@ -161,22 +161,32 @@ def clear_features(image):
 
 def reset_features(image):
     clear_features(image)
-    # Try to re-extract features
-    queue_source_check(image.source_id)
+    # Try to re-extract features. Schedule on commit, since we may or may not
+    # be in the middle of a view transaction here. (If we're not in a
+    # transaction, view or otherwise, then this commits immediately.)
+    schedule_source_check_on_commit(image.source_id)
 
 
-def queue_source_check(source_id, delay=None):
+def schedule_source_check(source_id, delay=None):
     """
-    Site views should generally call this function if they want to initiate
-    any feature extraction, training, or classification.
-    They should not call those three tasks directly. Let check_source()
-    decide what needs to be run in what order.
-
-    Site views generally shouldn't worry about specifying a delay, since this
-    check_source Job only becomes visible to huey tasks when the view
-    finishes its transaction. However, if desired, they can specify a delay.
+    Most functions should call this instead of scheduling the
+    feature extraction, training, or classification tasks directly.
+    Let check_source() decide what needs to be run in what order.
     """
-    return queue_job(
+    return schedule_job(
+        'check_source',
+        source_id,
+        source_id=source_id,
+        delay=delay,
+    )
+
+
+def schedule_source_check_on_commit(source_id, delay=None):
+    """
+    Site views should call this function instead of
+    schedule_source_check() due to race-condition considerations.
+    """
+    schedule_job_on_commit(
         'check_source',
         source_id,
         source_id=source_id,

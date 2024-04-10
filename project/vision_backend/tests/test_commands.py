@@ -11,7 +11,7 @@ from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.storage_backends import get_storage_manager
 from lib.tests.utils import ManagementCommandTest
 from ..models import Features
-from .tasks.utils import queue_and_run_collect_spacer_jobs
+from .tasks.utils import do_collect_spacer_jobs
 
 
 class MockOpenFactory:
@@ -45,7 +45,7 @@ class CheckSourceTest(ManagementCommandTest):
         stdout_text, _ = self.call_command_and_get_output(
             'vision_backend', 'vb_check_source', args=[self.source_1.pk])
         self.assertIn(
-            f"Source checks have been queued for the"
+            f"Source checks have been scheduled for the"
             f" 1 source(s) requested.",
             stdout_text)
 
@@ -58,7 +58,7 @@ class CheckSourceTest(ManagementCommandTest):
             {
                 ('check_source', str(self.source_1.pk), Job.Status.PENDING),
             },
-            "Should queue the appropriate job",
+            "Should schedule the appropriate job",
         )
 
     def test_multiple_sources(self):
@@ -66,7 +66,7 @@ class CheckSourceTest(ManagementCommandTest):
             'vision_backend', 'vb_check_source',
             args=[self.source_1.pk, self.source_2.pk, self.source_3.pk])
         self.assertIn(
-            f"Source checks have been queued for the"
+            f"Source checks have been scheduled for the"
             f" 3 source(s) requested.",
             stdout_text)
 
@@ -81,7 +81,7 @@ class CheckSourceTest(ManagementCommandTest):
                 ('check_source', str(self.source_2.pk), Job.Status.PENDING),
                 ('check_source', str(self.source_3.pk), Job.Status.PENDING),
             },
-            "Should queue the appropriate jobs",
+            "Should schedule the appropriate jobs",
         )
 
 
@@ -106,7 +106,7 @@ class ResetFeaturesTest(ManagementCommandTest):
 
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Let remaining check_source jobs run (they should have nothing to do)
         run_scheduled_jobs_until_empty()
 
@@ -152,7 +152,7 @@ class ResetFeaturesTest(ManagementCommandTest):
                 ('check_source', str(self.source_1.pk)),
                 ('check_source', str(self.source_2.pk)),
             },
-            "Should queue the appropriate jobs",
+            "Should schedule the appropriate jobs",
         )
 
     def test_image_ids(self):
@@ -189,7 +189,7 @@ class ResetFeaturesTest(ManagementCommandTest):
                 ('check_source', str(self.source_1.pk)),
                 ('check_source', str(self.source_2.pk)),
             },
-            "Should queue the appropriate jobs",
+            "Should schedule the appropriate jobs",
         )
 
     def test_invalid_mode(self):
@@ -271,7 +271,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_features_ok(self):
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         stdout_text, features_log_content, errors_json = self.call_command(
             'image_ids', '--ids', self.image_1a.pk,
@@ -304,7 +304,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_bad_feature_dim(self):
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Modify features to have a mismatching feature_dim attribute.
         feature_loc = self.image_1a.features.data_loc
@@ -332,7 +332,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_rowcol_mismatch(self):
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Change a point without clearing features.
         point = self.image_1a.point_set.get(point_number=1)
@@ -362,7 +362,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_legacy_ok(self):
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Change features to the legacy format.
         feature_loc = self.image_1a.features.data_loc
@@ -382,7 +382,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_legacy_count_mismatch(self):
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
 
         # Change features to the legacy format and change the length.
         feature_loc = self.image_1a.features.data_loc
@@ -512,7 +512,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
     def test_do_correct(self):
         # Extract features
         run_scheduled_jobs_until_empty()
-        queue_and_run_collect_spacer_jobs()
+        do_collect_spacer_jobs()
         # Let remaining check_source jobs run (they should have nothing to do)
         run_scheduled_jobs_until_empty()
 
@@ -528,7 +528,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
             'all_sources',
         )
 
-        # Should have queued no jobs
+        # Should have scheduled no jobs
         self.assertFalse(Job.objects.filter(status=Job.Status.PENDING).exists())
 
         # Then, with corrections
@@ -536,7 +536,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
             'all_sources', '--do_correct',
         )
 
-        # Now there should be jobs queued
+        # Now there should be jobs scheduled
         self.assertTrue(Job.objects.filter(status=Job.Status.PENDING).exists())
 
         pending_job_details = {
@@ -549,7 +549,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
                 ('check_source', str(self.source_1.pk)),
                 ('check_source', str(self.source_2.pk)),
             },
-            "Should queue the appropriate jobs",
+            "Should schedule the appropriate jobs",
         )
 
 
@@ -566,7 +566,7 @@ class SubmitTrainTest(ManagementCommandTest):
         stdout_text, _ = self.call_command_and_get_output(
             'vision_backend', 'vb_submit_train', args=[self.source_1.pk])
         self.assertIn(
-            f"Training has been queued for this source.",
+            f"Training has been scheduled for this source.",
             stdout_text)
 
         job_details = {
@@ -581,5 +581,5 @@ class SubmitTrainTest(ManagementCommandTest):
                  self.source_1.pk,
                  Job.Status.PENDING),
             },
-            "Should queue the appropriate job",
+            "Should schedule the appropriate job",
         )

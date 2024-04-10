@@ -12,9 +12,15 @@ from django.urls import reverse
 from django.test.client import Client
 from django.test.utils import override_settings
 
+from jobs.models import Job
+from jobs.utils import full_job
 from ..forms import get_one_form_error, get_one_formset_error
 from ..middleware import ViewScopedCacheMiddleware
-from ..utils import CacheableValue, view_scoped_cache
+from ..utils import (
+    CacheableValue,
+    context_scoped_cache,
+    scoped_cache_context_var,
+)
 from .utils import (
     BasePermissionTest,
     BaseTest,
@@ -370,21 +376,44 @@ class AdminsSettingTest(BaseTest, EmailAssertionsMixin):
         )
 
 
-class ViewScopedCacheTest(ClientTest):
+class ContextScopedCacheTest(ClientTest):
 
-    def test_middleware_not_active(self):
+    def test_scope_not_active(self):
         self.assertIsNone(
-            view_scoped_cache.get(),
-            msg="Cache is not initialized when the middleware's not active,"
+            scoped_cache_context_var.get(),
+            msg="Cache is not initialized,"
                 " but access should return None instead of crashing")
 
     def test_middleware_active(self):
         def view(_request):
-            self.assertDictEqual(
-                view_scoped_cache.get(), dict(),
+            self.assertIsNotNone(
+                scoped_cache_context_var.get(),
                 msg="Cache should be initialized")
             return 'response'
         ViewScopedCacheMiddleware(view)('request')
+
+    def test_task_active(self):
+        @full_job()
+        def job_example():
+            self.assertIsNotNone(
+                scoped_cache_context_var.get(),
+                msg="Cache should be initialized")
+            return "Result message"
+
+        job_example()
+
+        job = Job.objects.latest('pk')
+        self.assertEqual(
+            job.result_message, "Result message", msg="Job shouldn't crash")
+
+    def test_decorator_active(self):
+        @context_scoped_cache()
+        def func():
+            self.assertIsNotNone(
+                scoped_cache_context_var.get(),
+                msg="Cache should be initialized")
+
+        func()
 
     def test_cache_usage(self):
         computed_value = 1
@@ -397,7 +426,7 @@ class ViewScopedCacheTest(ClientTest):
             compute_function=compute,
             cache_update_interval=60*60,
             cache_timeout_interval=60*60,
-            use_view_scoped_cache=True,
+            use_context_scoped_cache=True,
         )
 
         def view(_request):
@@ -437,9 +466,10 @@ class ViewScopedCacheTest(ClientTest):
             compute_function=compute,
             cache_update_interval=60*60,
             cache_timeout_interval=60*60,
-            use_view_scoped_cache=True,
+            use_context_scoped_cache=True,
         )
-        cacheable_value.update()
+        with context_scoped_cache():
+            cacheable_value.update()
 
         computed_value = 2
 
