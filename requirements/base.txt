@@ -17,7 +17,7 @@ django-guardian==2.4.0
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-Pillow==10.2.0
+Pillow==10.3.0
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
@@ -165,7 +165,7 @@ tqdm==4.65.0
 # with live preview and drag-and-drop image uploads.
 # Requires: Markdown
 # Changelog: https://github.com/neutronX/django-markdownx/releases
-django-markdownx==4.0.2
+django-markdownx>=4.0.7,<4.1
 
 # Scientific computing
 # We match whatever version of numpy pyspacer uses for development, for optimal
