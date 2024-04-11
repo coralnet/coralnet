@@ -37,7 +37,7 @@ from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
-from .utils import get_extractor, reset_features, schedule_source_check
+from .utils import get_extractor, reset_features_bulk, schedule_source_check
 
 logger = getLogger(__name__)
 
@@ -316,8 +316,7 @@ def submit_classifier(source_id, job_id):
     without_feature_rowcols = images.filter(features__has_rowcols=False)
     if without_feature_rowcols.exists():
         count = without_feature_rowcols.count()
-        for image in without_feature_rowcols:
-            reset_features(image)
+        reset_features_bulk(without_feature_rowcols)
         raise JobError(
             f"This source has {count} feature vector(s) without"
             f" rows/columns, and this is no longer accepted for training."
@@ -587,8 +586,7 @@ def reset_backend_for_source(source_id):
         'reset_classifiers_for_source', source_id,
         source_id=source_id)
 
-    for image in Image.objects.filter(source_id=source_id):
-        reset_features(image)
+    reset_features_bulk(Image.objects.filter(source_id=source_id))
 
 
 @job_runner()

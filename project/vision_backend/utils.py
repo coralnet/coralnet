@@ -12,7 +12,7 @@ from images.models import Point
 from jobs.utils import schedule_job, schedule_job_on_commit
 from labels.models import Label, LocalLabel
 from .common import Extractors
-from .models import Score
+from .models import Features, Score
 
 
 def acc(gt, est):
@@ -145,13 +145,6 @@ def labelset_mapper(labelmode, classids, source):
 
 
 def clear_features(image):
-    """
-    Clears features for image. Call this after any change that affects
-    the image point locations. E.g:
-    Re-generate point locations.
-    Change annotation area.
-    Add new points.
-    """
     image.refresh_from_db()
 
     features = image.features
@@ -160,11 +153,35 @@ def clear_features(image):
 
 
 def reset_features(image):
+    """
+    Mark image's features as invalid, and try to re-extract features.
+    Do this after any action that affects the image point locations, such as:
+    - Regenerating image points
+    - Importing points/annotations
+    - Changing annotation area
+
+    For large sets of images, use reset_features_bulk() instead.
+    """
     clear_features(image)
     # Try to re-extract features. Schedule on commit, since we may or may not
     # be in the middle of a view transaction here. (If we're not in a
     # transaction, view or otherwise, then this commits immediately.)
     schedule_source_check_on_commit(image.source_id)
+
+
+def reset_features_bulk(image_queryset):
+    """
+    Version of reset_features() that is performant for large sets of images.
+    """
+    # QuerySet.update() is the key to performance, but it can't be used on
+    # related models (e.g. `.update(features__extracted=False)`). So first, we
+    # have to get a Features QuerySet from the Image QuerySet.
+    features_queryset = Features.objects.filter(image__in=image_queryset)
+    features_queryset.update(extracted=False)
+
+    source_ids = image_queryset.values_list('source_id', flat=True).distinct()
+    for source_id in source_ids:
+        schedule_source_check_on_commit(source_id)
 
 
 def schedule_source_check(source_id, delay=None):
