@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from images.models import Image, Source
-from ...utils import reset_features
+from ...utils import reset_features, reset_features_bulk
 
 
 class Command(BaseCommand):
@@ -29,8 +29,7 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"Initiating feature resets for source"
                     f" {source_id} \"{source}\" ({images.count()} image(s))...")
-                for image in images:
-                    reset_features(image)
+                reset_features_bulk(images)
         else:
             # image_ids
             images = Image.objects.filter(pk__in=options['ids'])
