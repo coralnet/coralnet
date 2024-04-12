@@ -374,6 +374,14 @@ def submit_classifier(source_id, job_id):
     # This will not include the one we just created, b/c status isn't accepted.
     prev_classifiers = source.get_accepted_robots()
 
+    # Feature caching can greatly speed up training, but might make training
+    # fail if the amount to cache approaches the available storage space.
+    # If that's the case, disable caching.
+    if labels.label_count > settings.FEATURE_CACHING_ANNOTATION_LIMIT:
+        feature_cache_dir = TrainClassifierMsg.FeatureCache.DISABLED
+    else:
+        feature_cache_dir = TrainClassifierMsg.FeatureCache.AUTO
+
     # Create TrainClassifierMsg
     storage = get_storage_class()()
     task = TrainClassifierMsg(
@@ -389,7 +397,8 @@ def submit_classifier(source_id, job_id):
         model_loc=storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)),
         valresult_loc=storage.spacer_data_loc(
-            settings.ROBOT_MODEL_VALRESULT_PATTERN.format(pk=classifier.pk))
+            settings.ROBOT_MODEL_VALRESULT_PATTERN.format(pk=classifier.pk)),
+        feature_cache_dir=feature_cache_dir,
     )
 
     # Assemble the message body.

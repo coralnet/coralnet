@@ -344,6 +344,19 @@ NBR_TRAINING_EPOCHS = 10
 # Batch size for pyspacer's batching of training-annotations.
 TRAINING_BATCH_LABEL_COUNT = 5000
 
+# Feature caching can greatly speed up pyspacer training, but might make
+# training fail if the amount to cache approaches the available storage space.
+#
+# Since we no longer accept legacy-format (pre-2021) features for training,
+# we can expect feature vectors to be about 5.5 KB per point. (Legacy ones
+# were about 8x bigger.)
+# As of 2024/04, CoralNet's AWS Batch instances use 30 GB storage volumes.
+# That should leave at least 15 GB for feature caching.
+# 15 GB divided by 5.5 KB = a little over 2.5 million points. So we'll use
+# that as the default limit for allowing feature caching in training.
+FEATURE_CACHING_ANNOTATION_LIMIT = env(
+    'FEATURE_CACHING_ANNOTATION_LIMIT', default=2500000)
+
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.
 SPACER_JOB_HASH = env('SPACER_JOB_HASH', default='default_hash')
