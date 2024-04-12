@@ -11,6 +11,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 ## 1.12 (WIP)
 
 - New package to install: django-huey>=1.1.2,<1.2
+- Updates to required packages:
+  - pyspacer 0.8.0 -> 0.9.0
+  - Pillow 10.2.0 -> 10.3.0
+  - django-markdownx `==4.0.2` -> `>=4.0.7,<4.1`
 - New migrations to run for `jobs`.
 
 ## [1.11.1](https://github.com/coralnet/coralnet/tree/1.11.1)
