@@ -8,7 +8,9 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.12 (WIP)
+## [1.12](https://github.com/coralnet/coralnet/tree/1.12)
+
+Production: 2024-04-12
 
 - New package to install: django-huey>=1.1.2,<1.2
 - Updates to required packages:
