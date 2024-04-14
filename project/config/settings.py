@@ -211,6 +211,20 @@ elif SETTINGS_BASE in [Bases.DEV_LOCAL, Bases.DEV_S3]:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # Else (production), use the default email backend (smtp).
 
+# Any outgoing email with an element that could get very large (in bytes)
+# should truncate/limit that element according to this setting.
+# The resulting total size of the email (incorporating other elements, e.g.
+# both subject and body) may go above this limit, hence it's a 'soft' limit.
+#
+# We go for about 100 KB here. We consider the 'hard' limit to be around 10 MB,
+# which is where email software may start encountering issues. For example,
+# the default max outgoing message size in Postfix seems to be about 10 MB.
+# However, CoralNet only anticipates sending emails of pure text, and 10 MB
+# generally has images and attachment in mind. So, anything greater than 100 KB
+# is most likely a stack trace or data structure which isn't useful to print in
+# its entirety.
+EMAIL_SIZE_SOFT_LIMIT = 100000
+
 
 #
 # Database related

@@ -268,6 +268,52 @@ class AbortCasesTest(
             ["ValueError: A spacer error"],
         )
 
+    @override_settings(EMAIL_SIZE_SOFT_LIMIT=10000)
+    def test_spacer_priority_error_within_size_limit(self):
+        """
+        Priority error with a job result that's not so long as to require
+        truncation.
+        """
+        def raise_error(*args):
+            raise ValueError("A spacer error")
+        self.do_test_spacer_error(raise_error)
+
+        self.assert_job_result_message(
+            'extract_features',
+            "ValueError: A spacer error")
+
+        self.assert_error_log_saved(
+            "ValueError",
+            "A spacer error",
+        )
+        self.assert_latest_email(
+            "Spacer job failed: extract_features",
+            body_not_contains=["...(truncated)"],
+        )
+
+    @override_settings(EMAIL_SIZE_SOFT_LIMIT=50)
+    def test_spacer_priority_error_exceeding_size_limit(self):
+        """
+        Priority error with a job result that's long enough to require
+        truncation.
+        """
+        def raise_error(*args):
+            raise ValueError("A spacer error")
+        self.do_test_spacer_error(raise_error)
+
+        self.assert_job_result_message(
+            'extract_features',
+            "ValueError: A spacer error")
+
+        self.assert_error_log_saved(
+            "ValueError",
+            "A spacer error",
+        )
+        self.assert_latest_email(
+            "Spacer job failed: extract_features",
+            ["...(truncated)"],
+        )
+
     def test_spacer_assertion_error_no_message(self):
         """
         Another priority error type, and a special case for parsing
