@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## [1.12.1](https://github.com/coralnet/coralnet/tree/1.12.1)
+
+Production: 2024-04-13
+
 ## [1.12](https://github.com/coralnet/coralnet/tree/1.12)
 
 Production: 2024-04-12
