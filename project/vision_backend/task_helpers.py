@@ -203,9 +203,17 @@ class SpacerResultHandler(ABC):
 
             if error_class not in cls.non_priority_error_classes:
                 # Priority error; treat like an internal server error.
+
+                job_res_repr = repr(job_res)
+                if len(job_res_repr) > settings.EMAIL_SIZE_SOFT_LIMIT:
+                    job_res_repr = (
+                        job_res_repr[:settings.EMAIL_SIZE_SOFT_LIMIT]
+                        + " ...(truncated)"
+                    )
+
                 mail_admins(
                     f"Spacer job failed: {cls.job_name}",
-                    repr(job_res),
+                    job_res_repr,
                 )
 
                 error_class_name = error_class.split('.')[-1]
@@ -215,7 +223,7 @@ class SpacerResultHandler(ABC):
                     html=error_html,
                     path=f"Spacer - {cls.job_name}",
                     info=error_info,
-                    data=repr(job_res),
+                    data=job_res_repr,
                 )
                 error_log.save()
 

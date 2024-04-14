@@ -1083,6 +1083,7 @@ class EmailAssertionsMixin(TestCase):
         self,
         subject: str = None,
         body_contents: list[str] = None,
+        body_not_contains: list[str] = None,
         to: list[str] = None,
         cc: list[str] = None,
         bcc: list[str] = None,
@@ -1110,6 +1111,15 @@ class EmailAssertionsMixin(TestCase):
                 body_content,
                 email.body,
                 "Email body should have the expected content")
+
+        body_not_contains = body_not_contains or []
+        # Assert that each element of body_not_contains is NOT present in the
+        # body.
+        for body_content in body_not_contains:
+            self.assertNotIn(
+                body_content,
+                email.body,
+                "Email body should not have this content")
 
         if to is not None:
             self.assertSetEqual(
