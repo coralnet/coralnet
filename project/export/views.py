@@ -18,9 +18,9 @@ import pyexcel
 
 from annotations.model_utils import ImageAnnoStatuses
 from images.models import Source
-from images.utils import metadata_field_names_to_labels
 from lib.decorators import source_visibility_required
 from lib.forms import get_one_form_error
+from sources.utils import metadata_field_names_to_labels
 from .forms import ExportAnnotationsForm, ExportImageCoversForm
 from .utils import (
     create_csv_stream_response,

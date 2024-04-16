@@ -1,4 +1,4 @@
-{% extends "images/base_source.html" %}
+{% extends "sources/base_source.html" %}
 
 {% block title %}Edit Source ({{ source.name }}) | CoralNet{% endblock %}
 
@@ -23,7 +23,7 @@
         onsubmit="return SourceFormHelper.submitEditForm();"
         style="margin-bottom: 0; padding-bottom: 0;">
       {% csrf_token %}
-      {% include "images/form_source.html" with sourceForm=editSourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
+      {% include "sources/form_source.html" with sourceForm=editSourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
 
       <div class="submit_button_wrapper_column_form">
         <input type="submit" value="Save Changes" />

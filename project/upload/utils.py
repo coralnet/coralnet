@@ -12,12 +12,12 @@ from django.urls import reverse
 from annotations.models import ImageAnnotationInfo
 from images.forms import MetadataForm
 from images.models import Image, Metadata, Source
-from images.utils import (
+from images.utils import generate_points
+from lib.exceptions import FileProcessError
+from sources.utils import (
     aux_label_name_collisions,
-    generate_points,
     metadata_field_names_to_labels,
 )
-from lib.exceptions import FileProcessError
 from vision_backend.models import Features
 
 

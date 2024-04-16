@@ -3,8 +3,8 @@ from django.db.models import Count
 from django.urls import reverse
 
 from images.models import Source
-from images.utils import filter_out_test_sources
 from lib.utils import CacheableValue
+from sources.utils import filter_out_test_sources
 
 
 def compute_map_sources() -> list[dict[str, str|int]]:

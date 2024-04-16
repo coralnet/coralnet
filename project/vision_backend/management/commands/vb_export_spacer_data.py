@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from annotations.models import Label, Annotation
 from images.models import Source
-from images.utils import filter_out_test_sources
+from sources.utils import filter_out_test_sources
 from .utils import log
 
 

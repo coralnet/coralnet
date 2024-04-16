@@ -40,7 +40,7 @@ class ErrorLogTest(ClientTest):
     def test_post(self):
         user = self.create_user()
         self.client.force_login(user)
-        with mock.patch('images.views.render', self.mock_render):
+        with mock.patch('sources.views.render', self.mock_render):
             self.client.post(reverse('source_new'))
 
         log = ErrorLog.objects.latest('pk')

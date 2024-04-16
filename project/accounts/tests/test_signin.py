@@ -166,7 +166,7 @@ class SignInRedirectTest(BaseAccountsTest):
 
         self.assert_sign_in_success(response, self.user)
         self.assertTemplateUsed(
-            response, 'images/source_about.html',
+            response, 'sources/source_about.html',
             "Redirected to the About Sources page")
 
     def test_sign_in_with_sources(self):
@@ -180,7 +180,7 @@ class SignInRedirectTest(BaseAccountsTest):
 
         self.assert_sign_in_success(response, self.user)
         self.assertTemplateUsed(
-            response, 'images/source_list.html',
+            response, 'sources/source_list.html',
             "Redirected to the page that lists your sources")
 
     def test_sign_in_with_redirect_in_url(self):

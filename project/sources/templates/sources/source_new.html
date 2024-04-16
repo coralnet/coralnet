@@ -19,7 +19,7 @@
     {% with source_form_type="new" %}
 
     <form action="" method="post">{% csrf_token %}
-      {% include "images/form_source.html" with sourceForm=sourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
+      {% include "sources/form_source.html" with sourceForm=sourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
 
       <div class="submit_button_wrapper_column_form">
         <input type="submit" value="Create Source" />

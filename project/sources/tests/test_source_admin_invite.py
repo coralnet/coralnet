@@ -9,7 +9,7 @@ class PermissionTest(BasePermissionTest):
 
     def test_invites_manage(self):
         url = reverse('invites_manage')
-        template = 'images/invites_manage.html'
+        template = 'sources/invites_manage.html'
 
         self.assertPermissionLevel(
             url, self.SIGNED_IN, template=template,
@@ -17,7 +17,7 @@ class PermissionTest(BasePermissionTest):
 
     def test_source_admin(self):
         url = reverse('source_admin', args=[self.source.pk])
-        template = 'images/source_invite.html'
+        template = 'sources/source_invite.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_ADMIN, template=template)
@@ -73,7 +73,7 @@ class SourceInviteTest(BasePermissionTest):
         # Test that the given permission level works
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), new_member,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionDenied(
             reverse('upload_images', args=[self.source.pk]), new_member)
         self.assertPermissionDenied(
@@ -87,7 +87,7 @@ class SourceInviteTest(BasePermissionTest):
         # Test that the given permission level works
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), new_member,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionGranted(
             reverse('upload_images', args=[self.source.pk]), new_member,
             template='upload/upload_images.html')
@@ -102,13 +102,13 @@ class SourceInviteTest(BasePermissionTest):
         # Test that the given permission level works
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), new_member,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionGranted(
             reverse('upload_images', args=[self.source.pk]), new_member,
             template='upload/upload_images.html')
         self.assertPermissionGranted(
             reverse('source_admin', args=[self.source.pk]), new_member,
-            template='images/source_invite.html')
+            template='sources/source_invite.html')
 
     def test_send_and_decline_invite(self):
         receiver = self.create_user()
@@ -207,13 +207,13 @@ class ChangeMemberPermissionLevelTest(BasePermissionTest):
         # Test initial permission level
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), self.user_admin,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionGranted(
             reverse('upload_images', args=[self.source.pk]), self.user_admin,
             template='upload/upload_images.html')
         self.assertPermissionGranted(
             reverse('source_admin', args=[self.source.pk]), self.user_admin,
-            template='images/source_invite.html')
+            template='sources/source_invite.html')
 
         # Change user_admin's level from admin to view
         self.client.force_login(self.user)
@@ -230,7 +230,7 @@ class ChangeMemberPermissionLevelTest(BasePermissionTest):
         # Test that the new permission level works
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), self.user_admin,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionDenied(
             reverse('upload_images', args=[self.source.pk]), self.user_admin)
         self.assertPermissionDenied(
@@ -251,13 +251,13 @@ class RemoveMemberTest(BasePermissionTest):
         # Test initial permission level
         self.assertPermissionGranted(
             reverse('source_main', args=[self.source.pk]), self.user_admin,
-            template='images/source_main.html')
+            template='sources/source_main.html')
         self.assertPermissionGranted(
             reverse('upload_images', args=[self.source.pk]), self.user_admin,
             template='upload/upload_images.html')
         self.assertPermissionGranted(
             reverse('source_admin', args=[self.source.pk]), self.user_admin,
-            template='images/source_invite.html')
+            template='sources/source_invite.html')
 
         # Remove user_admin's membership
         self.client.force_login(self.user)
