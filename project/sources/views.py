@@ -20,7 +20,7 @@ from annotations.utils import (
 )
 from images.forms import PointGenForm
 from images.model_utils import PointGen
-from images.models import Image, Source, SourceInvite
+from images.models import Image, Source
 from images.utils import delete_image
 from jobs.utils import schedule_job
 from lib.decorators import (
@@ -36,6 +36,7 @@ from .forms import (
     SourceInviteForm,
     SourceRemoveUserForm,
 )
+from .models import SourceInvite
 
 
 def source_list(request):

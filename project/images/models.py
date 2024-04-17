@@ -490,34 +490,6 @@ class Source(models.Model):
         return self.name
 
 
-class SourceInvite(models.Model):
-    """
-    Invites will be deleted once they're accepted.
-    """
-    sender = models.ForeignKey(
-        User, on_delete=models.CASCADE,
-        related_name='invites_sent', editable=False)
-    recipient = models.ForeignKey(
-        User, on_delete=models.CASCADE,
-        related_name='invites_received')
-    source = models.ForeignKey(
-        Source, on_delete=models.CASCADE,
-        editable=False)
-    source_perm = models.CharField(
-        max_length=50, choices=Source._meta.permissions)
-
-    class Meta:
-        # A user can only be invited once to a source.
-        unique_together = ['recipient', 'source']
-
-    def source_perm_verbose(self):
-        for permType in [Source.PermTypes.ADMIN,
-                         Source.PermTypes.EDIT,
-                         Source.PermTypes.VIEW]:
-            if self.source_perm == permType.code:
-                return permType.verbose
-
-
 class Metadata(models.Model):
     name = models.CharField("Name", max_length=200, blank=True)
     photo_date = models.DateField(
