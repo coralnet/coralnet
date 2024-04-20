@@ -33,7 +33,7 @@ class Job(models.Model):
 
     # Source this Job applies to, if applicable.
     source = models.ForeignKey(
-        'images.Source', null=True, on_delete=models.CASCADE)
+        'sources.Source', null=True, on_delete=models.CASCADE)
 
     # User who initiated this Job, if applicable.
     user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)

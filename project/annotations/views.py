@@ -19,7 +19,7 @@ from .model_utils import AnnotationAreaUtils
 from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import (
     apply_alleviate, get_annotation_version_user_display)
-from images.models import Source, Image, Point
+from images.models import Image, Point
 from images.utils import (
     generate_points, get_next_image, get_date_and_aux_metadata_table,
     get_prev_image, get_image_order_placement)
@@ -28,6 +28,7 @@ from lib.decorators import (
     image_permission_required, image_annotation_area_must_be_editable,
     image_labelset_required, login_required_ajax, source_permission_required)
 from lib.forms import get_one_form_error
+from sources.models import Source
 from visualization.forms import HiddenForm, create_image_filter_form
 from vision_backend.utils import get_label_scores_for_image, reset_features
 

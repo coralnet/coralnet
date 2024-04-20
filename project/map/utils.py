@@ -2,8 +2,8 @@ from django.conf import settings
 from django.db.models import Count
 from django.urls import reverse
 
-from images.models import Source
 from lib.utils import CacheableValue
+from sources.models import Source
 from sources.utils import filter_out_test_sources
 
 

@@ -11,9 +11,10 @@ from django.urls import reverse
 
 from annotations.models import ImageAnnotationInfo
 from images.forms import MetadataForm
-from images.models import Image, Metadata, Source
+from images.models import Image, Metadata
 from images.utils import generate_points
 from lib.exceptions import FileProcessError
+from sources.models import Source
 from sources.utils import (
     aux_label_name_collisions,
     metadata_field_names_to_labels,

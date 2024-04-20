@@ -11,10 +11,10 @@ import pyexcel
 
 from export.utils import create_csv_stream_response
 from export.views import ImageStatsExportView
-from images.models import Source
 from lib.decorators import source_permission_required
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
+from sources.models import Source
 from upload.utils import text_file_to_unicode_stream
 from .forms import CalcifyRateTableForm, ExportCalcifyStatsForm
 from .models import CalcifyRateTable

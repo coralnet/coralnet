@@ -4,8 +4,8 @@ from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
 
-from images.models import Source
 from lib.tests.utils import ClientTest
+from sources.models import Source
 
 
 class BaseAPITest(ClientTest):

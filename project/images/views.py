@@ -16,10 +16,11 @@ from lib.decorators import (
     image_permission_required,
     image_visibility_required,
 )
+from sources.models import Source
 from vision_backend.utils import reset_features
 from . import utils
 from .forms import MetadataForm
-from .models import Source, Image, Metadata
+from .models import Image, Metadata
 
 
 @image_visibility_required('image_id')

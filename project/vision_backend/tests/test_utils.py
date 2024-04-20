@@ -2,11 +2,10 @@ import random
 
 import numpy as np
 
-from lib.tests.utils import BaseTest, ClientTest
-from vision_backend import utils
-
-from images.models import Source
 from labels.models import Label
+from lib.tests.utils import BaseTest, ClientTest
+from sources.models import Source
+from vision_backend import utils
 
 
 class TestLabelSetMapper(ClientTest):

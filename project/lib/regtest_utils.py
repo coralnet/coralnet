@@ -12,8 +12,8 @@ from django.test.client import Client
 from django.urls import reverse
 from storages.backends.s3boto3 import S3Boto3Storage
 
-from images.models import Source
 from labels.models import LabelGroup, Label, LabelSet, LocalLabel
+from sources.models import Source
 from .tests.utils import ClientTest
 
 User = get_user_model()

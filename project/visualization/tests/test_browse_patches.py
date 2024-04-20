@@ -7,8 +7,8 @@ from django.utils import timezone
 from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
 from images.model_utils import PointGen
-from images.models import Source
 from lib.tests.utils import BasePermissionTest, ClientTest
+from sources.models import Source
 
 tz = timezone.get_current_timezone()
 

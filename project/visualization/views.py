@@ -14,11 +14,12 @@ from calcification.utils import get_default_calcify_tables
 from cpce.forms import CpcExportForm
 from export.forms import ExportAnnotationsForm, ExportImageCoversForm
 from images.forms import MetadataFormForGrid, BaseMetadataFormSet
-from images.models import Source, Image, Metadata
+from images.models import Image, Metadata
 from images.utils import delete_images
 from labels.models import LabelGroup, Label
 from lib.decorators import source_visibility_required, source_permission_required
 from lib.utils import paginate
+from sources.models import Source
 from .forms import (
     CheckboxForm,
     create_image_filter_form,

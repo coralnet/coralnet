@@ -10,8 +10,8 @@ from django.utils import timezone
 
 from accounts.utils import is_alleviate_user, is_robot_user
 from images.model_utils import PointGen
-from images.models import Source
 from lib.tests.utils import BasePermissionTest, ClientTest
+from sources.models import Source
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import AnnotationHistoryTestMixin
 

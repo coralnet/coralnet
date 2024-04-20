@@ -1,10 +1,10 @@
 from django.test import override_settings
 from django.urls import reverse
 
-from images.models import Source
 from jobs.models import Job
 from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
+from sources.models import Source
 from ..utils import cacheable_map_sources
 
 

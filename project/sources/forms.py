@@ -4,9 +4,8 @@ from django.forms import Form, ModelForm
 from django.forms.fields import CharField, ChoiceField
 from django.forms.widgets import NumberInput, TextInput
 
-from images.models import Source
 from images.utils import get_aux_label_field_names
-from .models import SourceInvite
+from .models import Source, SourceInvite
 from .utils import aux_label_name_collisions
 
 

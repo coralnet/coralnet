@@ -6,9 +6,9 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from images.models import Source
 from lib.decorators import source_permission_required
 from lib.utils import paginate
+from sources.models import Source
 from .forms import JobSearchForm, JobSummaryForm
 from .models import Job
 

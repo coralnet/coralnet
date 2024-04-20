@@ -1,5 +1,6 @@
 import re
-from images.models import Source
+
+from sources.models import Source
 from .models import Label
 
 

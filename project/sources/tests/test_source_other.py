@@ -10,7 +10,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from images.model_utils import PointGen
-from images.models import Source
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest
 from newsfeed.models import NewsItem
@@ -18,6 +17,7 @@ from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, do_collect_spacer_jobs)
 from vision_backend.utils import schedule_source_check
+from ..models import Source
 
 
 class PermissionTest(BasePermissionTest):

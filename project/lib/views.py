@@ -6,9 +6,10 @@ from django.template import loader, TemplateDoesNotExist
 from django.urls import reverse
 
 from annotations.utils import cacheable_annotation_count
-from images.models import Image, Source
+from images.models import Image
 from images.utils import get_carousel_images
 from map.utils import cacheable_map_sources
+from sources.models import Source
 
 
 def index(request):

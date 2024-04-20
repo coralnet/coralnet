@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from tqdm import tqdm
 
-from images.models import Source
+from sources.models import Source
 
 
 class Command(BaseCommand):

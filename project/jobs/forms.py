@@ -10,8 +10,8 @@ from django.db.models.lookups import LessThan
 from django.db.models.expressions import Case, F, Value, When
 from django.utils import timezone
 
-from images.models import Source
 from lib.forms import BoxFormRenderer
+from sources.models import Source
 from .models import Job
 
 

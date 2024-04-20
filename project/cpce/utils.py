@@ -8,8 +8,9 @@ from django.conf import settings
 
 from annotations.model_utils import AnnotationAreaUtils
 from export.utils import create_zip_stream_response, write_zip
-from images.models import Image, Point, Source
+from images.models import Image, Point
 from lib.exceptions import FileProcessError
+from sources.models import Source
 from upload.utils import csv_to_dicts
 
 

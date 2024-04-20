@@ -4,10 +4,10 @@ from django.utils import timezone
 
 from annotations.model_utils import AnnotationAreaUtils
 from images.model_utils import PointGen
-from images.models import Source
 from jobs.models import Job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.tests.tasks.utils import BaseTaskTest
+from ..models import Source
 
 
 class PermissionTest(BasePermissionTest):

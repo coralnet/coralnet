@@ -4,9 +4,9 @@ from reversion import revisions
 from tqdm import tqdm
 
 from annotations.models import Annotation
-from images.models import Source
 from jobs.utils import schedule_job
 from labels.models import Label
+from sources.models import Source
 
 User = get_user_model()
 

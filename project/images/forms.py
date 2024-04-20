@@ -4,8 +4,9 @@ from django.forms import BaseModelFormSet, Form, ModelForm
 from django.forms.fields import ChoiceField, IntegerField
 from django.forms.widgets import NumberInput, Select, TextInput
 
+from sources.models import Source
 from .model_utils import PointGen
-from .models import Metadata, Source
+from .models import Metadata
 
 
 class MetadataForm(ModelForm):

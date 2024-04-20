@@ -2,8 +2,8 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import permission_required
 from lib.decorators import news_item_permission_required
 
+from sources.models import Source
 from .models import NewsItem, NewsSubItem
-from images.models import Source
 
 
 @permission_required('is_superuser')

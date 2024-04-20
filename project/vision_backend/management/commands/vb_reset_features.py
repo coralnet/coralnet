@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 
-from images.models import Image, Source
+from images.models import Image
+from sources.models import Source
 from ...utils import reset_features, reset_features_bulk
 
 

@@ -9,8 +9,9 @@ from django.forms.widgets import TextInput, HiddenInput, NumberInput
 from accounts.utils import is_robot_user
 from annotations.model_utils import AnnotationAreaUtils
 from annotations.models import Annotation, AnnotationToolSettings
-from images.models import Point, Source, Metadata
+from images.models import Metadata, Point
 from labels.models import LocalLabel
+from sources.models import Source
 
 
 class AnnotationForm(forms.Form):

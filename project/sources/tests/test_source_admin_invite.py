@@ -1,9 +1,9 @@
 from django.urls import reverse
 
-from images.models import Image, Metadata, Source
+from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.models import Features
-from ..models import SourceInvite
+from ..models import Source, SourceInvite
 
 
 class PermissionTest(BasePermissionTest):
