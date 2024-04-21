@@ -13,7 +13,7 @@ from accounts.utils import (
     get_alleviate_user, get_imported_user, get_robot_user)
 from annotations.model_utils import ImageAnnoStatuses
 from annotations.models import Annotation
-from images.models import Source, Metadata, Image
+from images.models import Image, Metadata
 from images.utils import (
     get_aux_field_name,
     get_aux_label,
@@ -22,6 +22,7 @@ from images.utils import (
 )
 from labels.models import LabelGroup, Label
 from lib.forms import BoxFormRenderer, EnhancedForm
+from sources.models import Source
 from .utils import get_annotation_tool_users, image_search_kwargs_to_queryset
 
 tz = timezone.get_current_timezone()

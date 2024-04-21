@@ -8,8 +8,9 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
 from annotations.utils import image_annotation_area_is_editable
-from images.models import Source, Image
+from images.models import Image
 from newsfeed.models import NewsItem
+from sources.models import Source
 
 
 class ModelViewDecorator():

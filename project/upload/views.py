@@ -12,13 +12,14 @@ from annotations.model_utils import AnnotationAreaUtils
 from annotations.models import Annotation
 from images.forms import MetadataForm
 from images.model_utils import PointGen
-from images.models import Source, Metadata, Image, Point
-from images.utils import metadata_obj_to_dict, get_aux_labels, \
-    metadata_field_names_to_labels
+from images.models import Image, Metadata, Point
+from images.utils import get_aux_labels, metadata_obj_to_dict
 from lib.decorators import source_permission_required, source_labelset_required
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from lib.utils import filesize_display
+from sources.models import Source
+from sources.utils import metadata_field_names_to_labels
 from vision_backend.utils import reset_features, schedule_source_check_on_commit
 from visualization.forms import ImageSpecifyByIdForm
 from .forms import (

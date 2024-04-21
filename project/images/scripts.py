@@ -6,11 +6,11 @@ import os
 import re
 import subprocess
 
+from django.conf import settings
 import numpy as np
 
-from django.conf import settings
-
-from images.models import Source, Image
+from images.models import Image
+from sources.models import Source
 
 
 def export_imgage_and_annotations(source_idlist, outdir):

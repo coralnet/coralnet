@@ -6,8 +6,8 @@ from django.core.files.base import ContentFile
 from django.test import override_settings
 from django.urls import reverse
 
-from images.models import Source
 from lib.tests.utils import BasePermissionTest, sample_image_as_file
+from sources.models import Source
 from ..models import LabelGroup, Label
 from .utils import LabelTest
 

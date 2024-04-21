@@ -9,6 +9,7 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from images.model_utils import PointGen
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest
 from newsfeed.models import NewsItem
@@ -16,7 +17,6 @@ from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, do_collect_spacer_jobs)
 from vision_backend.utils import schedule_source_check
-from ..model_utils import PointGen
 from ..models import Source
 
 
@@ -36,7 +36,7 @@ class PermissionTest(BasePermissionTest):
 
     def test_source_main(self):
         url = reverse('source_main', args=[self.source.pk])
-        template = 'images/source_main.html'
+        template = 'sources/source_main.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_VIEW, template=template)
@@ -64,7 +64,7 @@ class SourceAboutTest(ClientTest):
 
     def test_load_page_anonymous(self):
         response = self.client.get(reverse('source_about'))
-        self.assertTemplateUsed(response, 'images/source_about.html')
+        self.assertTemplateUsed(response, 'sources/source_about.html')
         self.assertContains(
             response, "You need an account to work with Sources")
         # Source list should just have the public source
@@ -74,7 +74,7 @@ class SourceAboutTest(ClientTest):
     def test_load_page_without_source_memberships(self):
         self.client.force_login(self.user_without_sources)
         response = self.client.get(reverse('source_about'))
-        self.assertTemplateUsed(response, 'images/source_about.html')
+        self.assertTemplateUsed(response, 'sources/source_about.html')
         self.assertContains(
             response, "You're not part of any Sources")
         # Source list should just have the public source
@@ -84,7 +84,7 @@ class SourceAboutTest(ClientTest):
     def test_load_page_with_source_memberships(self):
         self.client.force_login(self.user_with_sources)
         response = self.client.get(reverse('source_about'))
-        self.assertTemplateUsed(response, 'images/source_about.html')
+        self.assertTemplateUsed(response, 'sources/source_about.html')
         self.assertContains(
             response, "See your Sources")
         # Source list should just have the public source
@@ -113,7 +113,7 @@ class SourceListTest(ClientTest):
     def test_anonymous(self):
         response = self.client.get(reverse('source_list'), follow=True)
         # Should redirect to source_about
-        self.assertTemplateUsed(response, 'images/source_about.html')
+        self.assertTemplateUsed(response, 'sources/source_about.html')
 
     def test_member_of_none(self):
         user = self.create_user()
@@ -121,7 +121,7 @@ class SourceListTest(ClientTest):
 
         response = self.client.get(reverse('source_list'), follow=True)
         # Should redirect to source_about
-        self.assertTemplateUsed(response, 'images/source_about.html')
+        self.assertTemplateUsed(response, 'sources/source_about.html')
 
     def test_member_of_public(self):
         user = self.create_user()
@@ -130,7 +130,7 @@ class SourceListTest(ClientTest):
         self.client.force_login(user)
 
         response = self.client.get(reverse('source_list'))
-        self.assertTemplateUsed(response, 'images/source_list.html')
+        self.assertTemplateUsed(response, 'sources/source_list.html')
         self.assertListEqual(
             list(response.context['your_sources']),
             [dict(
@@ -149,7 +149,7 @@ class SourceListTest(ClientTest):
         self.client.force_login(user)
 
         response = self.client.get(reverse('source_list'))
-        self.assertTemplateUsed(response, 'images/source_list.html')
+        self.assertTemplateUsed(response, 'sources/source_list.html')
         self.assertListEqual(
             list(response.context['your_sources']),
             [
@@ -173,7 +173,7 @@ class SourceListTest(ClientTest):
         self.client.force_login(user)
 
         response = self.client.get(reverse('source_list'))
-        self.assertTemplateUsed(response, 'images/source_list.html')
+        self.assertTemplateUsed(response, 'sources/source_list.html')
         # Sources should be in name-alphabetical order
         self.assertListEqual(
             list(response.context['your_sources']),

@@ -14,14 +14,14 @@ from django.views.decorators.http import require_POST, require_GET
 from annotations.models import Annotation
 from annotations.utils import label_ids_with_confirmed_annotations_in_source
 from calcification.utils import get_default_calcify_tables
-from images.models import Source
-from images.utils import filter_out_test_sources
 from jobs.utils import schedule_job
 from lib.decorators import (
     login_required_ajax, source_permission_required,
     source_visibility_required, source_labelset_required)
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_formset_error, get_one_form_error
+from sources.models import Source
+from sources.utils import filter_out_test_sources
 from upload.forms import CSVImportForm
 from visualization.utils import generate_patch_if_doesnt_exist, get_patch_url
 from .decorators import label_edit_permission_required

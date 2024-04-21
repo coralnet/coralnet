@@ -40,9 +40,9 @@ class PermissionTest(BasePermissionTest):
         # Index redirects if you're logged in.
         self.assertPermissionGranted(url, None, template='lib/index.html')
         self.assertPermissionGranted(
-            url, self.user_outsider, template='images/source_about.html')
+            url, self.user_outsider, template='sources/source_about.html')
         self.assertPermissionGranted(
-            url, self.superuser, template='images/source_list.html')
+            url, self.superuser, template='sources/source_list.html')
 
     def test_about(self):
         url = reverse('about')

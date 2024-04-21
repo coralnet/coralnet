@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
 
 from export.utils import get_request_images
-from images.models import Source
 from lib.decorators import (
     login_required_ajax,
     session_key_required,
@@ -19,6 +18,7 @@ from lib.decorators import (
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from lib.utils import save_session_data
+from sources.models import Source
 from upload.utils import annotations_preview, text_file_to_unicode_stream
 from upload.views import AnnotationsUploadConfirmView
 from .forms import (

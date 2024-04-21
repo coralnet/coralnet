@@ -35,8 +35,9 @@ import django_huey
 from spacer.messages import ClassifyReturnMsg
 
 from images.model_utils import PointGen
-from images.models import Source, Point, Image
+from images.models import Image, Point
 from labels.models import LabelGroup, Label
+from sources.models import Source
 from vision_backend.models import Classifier
 import vision_backend.task_helpers as backend_task_helpers
 from ..storage_backends import get_storage_manager

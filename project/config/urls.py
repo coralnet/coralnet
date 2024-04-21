@@ -8,6 +8,7 @@ import lib.views as lib_views
 import lib.tests.js.views as lib_js_test_views
 
 
+IMAGE_ID = 'image/<int:image_id>/'
 SOURCE_ID = 'source/<int:source_id>/'
 
 urlpatterns = [
@@ -26,10 +27,11 @@ urlpatterns = [
     path(SOURCE_ID + 'export/', include('export.urls')),
     # Flatpages, such as the help page
     path('pages/', include('flatpages_custom.urls', namespace='pages')),
-    path('', include('images.urls')),
+    path(IMAGE_ID, include('images.urls')),
     path('', include('jobs.urls')),
     path('', include('labels.urls')),
     path('newsfeed/', include('newsfeed.urls')),
+    path('', include('sources.urls')),
     path(SOURCE_ID + 'upload/', include('upload.urls')),
     path('', include('vision_backend.urls')),
     path('', include('visualization.urls')),

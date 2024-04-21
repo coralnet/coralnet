@@ -15,7 +15,7 @@ class Classifier(models.Model):
     """
 
     # Source this classifier belongs to and is trained on.
-    source = models.ForeignKey('images.Source', on_delete=models.CASCADE)
+    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
 
     # Job that tracks the training status of this classifier.
     train_job = models.ForeignKey(Job, null=True, on_delete=models.SET_NULL)
@@ -137,7 +137,7 @@ class Score(models.Model):
 
     label = models.ForeignKey(Label, on_delete=models.CASCADE)
     point = models.ForeignKey('images.Point', on_delete=models.CASCADE)
-    source = models.ForeignKey('images.Source', on_delete=models.CASCADE)
+    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
     image = models.ForeignKey('images.Image', on_delete=models.CASCADE)
 
     # Integer between 0 and 99, representing the percent probability

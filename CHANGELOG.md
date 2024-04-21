@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.13 (WIP)
+
+- New migrations to run for `annotations`, `calcification`, `images`, `jobs`, `sources`, `vision_backend`. Runtime should be less than 20 minutes in production.
+
 ## [1.12.1](https://github.com/coralnet/coralnet/tree/1.12.1)
 
 Production: 2024-04-13

@@ -7,11 +7,11 @@ from django.utils.html import escape as html_escape
 
 from calcification.tests.utils import create_default_calcify_table
 from images.model_utils import PointGen
-from images.models import Source
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, sample_image_as_file)
 from lib.utils import context_scoped_cache
+from sources.models import Source
 from visualization.utils import get_patch_path
 from ..models import LabelGroup, Label
 from ..templatetags.labels import (

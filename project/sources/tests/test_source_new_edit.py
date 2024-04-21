@@ -4,17 +4,17 @@ from django.utils import timezone
 
 from annotations.model_utils import AnnotationAreaUtils
 from images.model_utils import PointGen
-from images.models import Source
 from jobs.models import Job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.tests.tasks.utils import BaseTaskTest
+from ..models import Source
 
 
 class PermissionTest(BasePermissionTest):
 
     def test_source_new(self):
         url = reverse('source_new')
-        template = 'images/source_new.html'
+        template = 'sources/source_new.html'
 
         self.assertPermissionLevel(
             url, self.SIGNED_IN, template=template,
@@ -22,7 +22,7 @@ class PermissionTest(BasePermissionTest):
 
     def test_source_edit(self):
         url = reverse('source_edit', args=[self.source.pk])
-        template = 'images/source_edit.html'
+        template = 'sources/source_edit.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_ADMIN, template=template)
@@ -31,7 +31,7 @@ class PermissionTest(BasePermissionTest):
 
     def test_source_edit_cancel(self):
         url = reverse('source_edit_cancel', args=[self.source.pk])
-        template = 'images/source_main.html'
+        template = 'sources/source_main.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_ADMIN, template=template)
@@ -74,7 +74,7 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.get(reverse('source_new'))
         self.assertStatusOK(response)
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
 
     def test_source_defaults(self):
         """
@@ -104,7 +104,7 @@ class SourceNewTest(ClientTest):
         response = self.create_source()
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
         self.assertContains(response, "Source successfully created.")
 
@@ -150,7 +150,7 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(name="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         # Should have no source created.
@@ -160,7 +160,7 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(affiliation="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         self.assertEqual(Source.objects.all().count(), 0)
@@ -169,7 +169,7 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(description="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         self.assertEqual(Source.objects.all().count(), 0)
@@ -178,23 +178,23 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(key1="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(key2="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(key3="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(key4="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(key5="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         # Should have no source created.
@@ -215,7 +215,7 @@ class SourceNewTest(ClientTest):
         )
 
         # Should be back on the new source form with errors.
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         error_dont_use_temporal = (
             "Date of image acquisition is already a default metadata field."
             " Do not use auxiliary metadata fields"
@@ -247,7 +247,7 @@ class SourceNewTest(ClientTest):
         )
 
         # Should be back on the new source form with errors.
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         error_conflict = (
             "This conflicts with either a built-in metadata"
             " field or another auxiliary field."
@@ -274,7 +274,7 @@ class SourceNewTest(ClientTest):
         )
 
         # Should be back on the new source form with errors.
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         error_conflict = (
             "This conflicts with either a built-in metadata"
             " field or another auxiliary field."
@@ -293,19 +293,19 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(min_x="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(max_x="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(min_y="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(max_y="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         self.assertEqual(Source.objects.all().count(), 0)
@@ -314,13 +314,13 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(min_x="50", max_x="49")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(
             response,
             "The right boundary x must be greater than the left boundary x.")
 
         response = self.create_source(min_y="100", max_y="0")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(
             response,
             "The bottom boundary y must be greater than the top boundary y.")
@@ -329,14 +329,14 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(point_generation_type="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
     def test_pointgen_type_invalid(self):
         self.client.force_login(self.user)
 
         response = self.create_source(point_generation_type="straight line")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(
             response,
             "Select a valid choice. straight line is not one of the available"
@@ -351,7 +351,7 @@ class SourceNewTest(ClientTest):
             number_of_cell_columns='', stratified_points_per_cell='')
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
 
         self.assertEqual(
@@ -369,7 +369,7 @@ class SourceNewTest(ClientTest):
             number_of_cell_columns=5, stratified_points_per_cell=6)
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
 
         self.assertEqual(
@@ -388,7 +388,7 @@ class SourceNewTest(ClientTest):
             number_of_cell_columns=7, stratified_points_per_cell='')
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
 
         self.assertEqual(
@@ -408,7 +408,7 @@ class SourceNewTest(ClientTest):
             number_of_cell_columns=7, stratified_points_per_cell=10000)
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
 
         self.assertEqual(
@@ -425,7 +425,7 @@ class SourceNewTest(ClientTest):
             simple_number_of_points='', number_of_cell_rows='',
             number_of_cell_columns='', stratified_points_per_cell='')
 
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -441,7 +441,7 @@ class SourceNewTest(ClientTest):
             simple_number_of_points='', number_of_cell_rows='',
             number_of_cell_columns='', stratified_points_per_cell='')
 
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -459,7 +459,7 @@ class SourceNewTest(ClientTest):
             simple_number_of_points='', number_of_cell_rows='',
             number_of_cell_columns='', stratified_points_per_cell='')
 
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -475,7 +475,7 @@ class SourceNewTest(ClientTest):
             point_generation_type=PointGen.Types.SIMPLE,
             simple_number_of_points=0, number_of_cell_rows='',
             number_of_cell_columns='', stratified_points_per_cell='')
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -491,7 +491,7 @@ class SourceNewTest(ClientTest):
             point_generation_type=PointGen.Types.STRATIFIED,
             simple_number_of_points='', number_of_cell_rows=0,
             number_of_cell_columns=0, stratified_points_per_cell=0)
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -515,7 +515,7 @@ class SourceNewTest(ClientTest):
             number_of_cell_columns=10, stratified_points_per_cell=10)
 
         new_source = Source.objects.latest('create_date')
-        self.assertTemplateUsed('images/source_main.html')
+        self.assertTemplateUsed('sources/source_main.html')
         self.assertEqual(response.context['source'], new_source)
 
         self.assertEqual(
@@ -533,7 +533,7 @@ class SourceNewTest(ClientTest):
             point_generation_type=PointGen.Types.STRATIFIED,
             simple_number_of_points='', number_of_cell_rows=7,
             number_of_cell_columns=11, stratified_points_per_cell=13)
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertDictEqual(
             response.context['pointGenForm'].errors,
             dict(
@@ -547,11 +547,11 @@ class SourceNewTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.create_source(latitude="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         response = self.create_source(longitude="")
-        self.assertTemplateUsed(response, 'images/source_new.html')
+        self.assertTemplateUsed(response, 'sources/source_new.html')
         self.assertContains(response, "This field is required.")
 
         self.assertEqual(Source.objects.all().count(), 0)
@@ -601,7 +601,7 @@ class SourceEditTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.get(self.url)
         self.assertStatusOK(response)
-        self.assertTemplateUsed(response, 'images/source_edit.html')
+        self.assertTemplateUsed(response, 'sources/source_edit.html')
 
     def test_source_edit(self):
         self.client.force_login(self.user)
@@ -649,7 +649,7 @@ class SourceEditTest(ClientTest):
         response = self.client.get(
             reverse('source_edit_cancel', args=[self.source.pk]), follow=True)
         self.assertTemplateUsed(
-            response, 'images/source_main.html',
+            response, 'sources/source_main.html',
             "Should redirect to source main")
         self.assertContains(
             response, "Edit cancelled.",

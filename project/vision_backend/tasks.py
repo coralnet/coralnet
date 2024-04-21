@@ -27,11 +27,12 @@ from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from config.constants import SpacerJobSpec
 from events.models import ClassifyImageEvent
-from images.models import Source, Image, Point
+from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
 from jobs.utils import job_runner, job_starter, schedule_job
 from labels.models import Label
+from sources.models import Source
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError

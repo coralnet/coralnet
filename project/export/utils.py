@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 
-from images.utils import metadata_field_names_to_labels
+from sources.utils import metadata_field_names_to_labels
 from vision_backend.utils import get_label_scores_for_point
 from visualization.forms import create_image_filter_form
 

@@ -1,6 +1,6 @@
 from django.db import models
 
-from images.models import Source
+from sources.models import Source
 
 
 class CalcifyRateTable(models.Model):

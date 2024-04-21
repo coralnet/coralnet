@@ -1,11 +1,9 @@
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from images.models import Source
-from django.contrib.auth.models import User
-
-# Create your models here.
+from sources.models import Source
 
 
 def log_item(source, user, category, message):

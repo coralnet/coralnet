@@ -2,8 +2,9 @@ from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-from images.models import Image, Point, Source
+from images.models import Image, Point
 from labels.models import Label, LocalLabel
+from sources.models import Source
 from vision_backend.models import Classifier
 from vision_backend.utils import schedule_source_check_on_commit
 from .managers import AnnotationManager, AnnotationQuerySet

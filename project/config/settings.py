@@ -849,6 +849,7 @@ CORALNET_APPS = [
     'map',
     # Logs of site events/actions (likely being replaced by 'events')
     'newsfeed',
+    'sources',
     'upload',
     'visualization',
     'vision_backend',

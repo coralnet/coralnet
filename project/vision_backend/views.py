@@ -8,10 +8,11 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from spacer.data_classes import ValResults
 
-from images.models import Source, Image
+from images.models import Image
 from jobs.models import Job
 from lib.decorators import source_visibility_required
 from lib.utils import paginate
+from sources.models import Source
 from .confmatrix import ConfMatrix
 from .forms import TreshForm, CmTestForm
 from .models import Classifier

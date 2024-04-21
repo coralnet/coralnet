@@ -4,7 +4,7 @@ from django.forms.fields import CharField, ChoiceField
 from django.forms.widgets import FileInput, HiddenInput, RadioSelect, TextInput
 from django.utils.safestring import mark_safe
 
-from images.models import Source
+from sources.models import Source
 from upload.forms import CsvFileField, MultipleFileField
 from upload.utils import text_file_to_unicode_stream
 from .utils import get_previous_cpcs_status, labelset_has_plus_code
