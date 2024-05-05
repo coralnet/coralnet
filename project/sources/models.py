@@ -74,12 +74,19 @@ class Source(models.Model):
     default_point_generation_method = models.CharField(
         "Point generation method",
         max_length=50,
-        default=PointGen(type='simple', points=200).db_value,
+        # 30 is the median for public sources as of late 2023.
+        default=PointGen(type='simple', points=30).db_value,
     )
 
     image_annotation_area = models.CharField(
         "Default image annotation area",
         max_length=50,
+        # Whole image is a reasonable non-arbitrary default, and
+        # serves to demonstrate what a valid value looks like for
+        # this field.
+        default=AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES,
+            min_x=0, max_x=100, min_y=0, max_y=100).db_value,
     )
 
     # CPCe parameters given during the last .cpc import or export.
