@@ -93,7 +93,7 @@ $(document).ready(function() {
             <div style="float:left; width: 50%">
             <ul>
                 {% if source.image_annotation_area %}
-                    <li>Default image annotation area: {{ source.image_annotation_area_display }}</li>
+                    <li>Default image annotation area: {{ source.annotation_area_display }}</li>
                 {% endif %}
                 <li>Annotation point generation: {{ source.point_gen_method_display }}</li>
                 <li>Feature extractor: {{ source.get_feature_extractor_setting_display }}</li>

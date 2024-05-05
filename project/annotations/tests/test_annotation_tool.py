@@ -9,7 +9,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.utils import is_alleviate_user, is_robot_user
-from images.model_utils import PointGen
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
@@ -641,8 +640,7 @@ class LoadAnnotationFormTest(ClientTest):
 
         cls.source = cls.create_source(
             cls.user, visibility=Source.VisibilityTypes.PUBLIC,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -746,8 +744,7 @@ class IsAnnotationAllDoneTest(ClientTest):
 
         cls.source = cls.create_source(
             cls.user, visibility=Source.VisibilityTypes.PUBLIC,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -804,8 +801,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
 
         cls.source = cls.create_source(
             cls.user, visibility=Source.VisibilityTypes.PUBLIC,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -1286,8 +1282,7 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=2,
+            default_point_generation_method=dict(type='simple', points=2),
             confidence_threshold=80,
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')

@@ -6,7 +6,6 @@ from django.urls import reverse
 from django.utils.html import escape as html_escape
 
 from calcification.tests.utils import create_default_calcify_table
-from images.model_utils import PointGen
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, sample_image_as_file)
@@ -303,8 +302,7 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=20,
+            default_point_generation_method=dict(type='simple', points=20),
         )
 
         cls.labels = cls.create_labels(
@@ -464,22 +462,19 @@ class LabelMainPatchLinksTest(BaseLabelMainTest):
         cls.users_private_source = cls.create_source(
             cls.user,
             visibility=Source.VisibilityTypes.PRIVATE,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5,
+            default_point_generation_method=dict(type='simple', points=5),
         )
 
         cls.user2 = cls.create_user()
         cls.public_source = cls.create_source(
             cls.user2,
             visibility=Source.VisibilityTypes.PUBLIC,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5,
+            default_point_generation_method=dict(type='simple', points=5),
         )
         cls.other_private_source = cls.create_source(
             cls.user2,
             visibility=Source.VisibilityTypes.PRIVATE,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5,
+            default_point_generation_method=dict(type='simple', points=5),
         )
 
         # Create labels
@@ -527,8 +522,7 @@ class PopularityTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=2)
+            default_point_generation_method=dict(type='simple', points=2))
 
         cls.labels = cls.create_labels(
             cls.user, ['A', 'B'], "Group1")

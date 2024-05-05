@@ -1,41 +1,48 @@
 {% extends "sources/base_source.html" %}
+{% load static %}
 
 {% block title %}Edit Source ({{ source.name }}) | CoralNet{% endblock %}
-
-{% block page-specific-includes %}
-    {% include "form_media_versioned.html" with form=pointGenForm %}
-    {% include "form_media_versioned.html" with form=editSourceForm %}
-{% endblock %}
-
-{% block js-includes %}
-    {% include "javascript-includes.html" with jquery_form="yes" jquery_ui="yes" %}
-{% endblock %}
 
 {% block content %}
 
   <legend>Edit Source</legend>
 
-  {# TODO: The inline styles below are a big hack to allow the cancel button to line up well with the save button, while both are in separate forms. The form and submit-button styles need to be reworked to make this less hacky. This will involve double-checking the appearance of most forms on the site. #}
+  <div class="narrow_column">
+    <div class="page-section">
 
-  {% with source_form_type="edit" %}
+      <form action="" method="post" id="source-form" class="no-padding">
+        {% csrf_token %}
 
-    <form action="" method="post"
-        onsubmit="return SourceFormHelper.submitEditForm();"
-        style="margin-bottom: 0; padding-bottom: 0;">
-      {% csrf_token %}
-      {% include "sources/form_source.html" with sourceForm=editSourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
+        {{ edit_source_form }}
 
-      <div class="submit_button_wrapper_column_form">
-        <input type="submit" value="Save Changes" />
-      </div>
-    </form>
+        <div>
+          <input type="submit" class="red" value="Save Changes" />
+        </div>
+      </form>
 
-  {% endwith %}
+      <form action="{% url 'source_edit_cancel' source.pk %}" method="get" class="no-padding">
+        <div>
+          <input type="submit" class="red" value="Cancel Changes" />
+        </div>
+      </form>
 
-  <form action="{% url 'source_edit_cancel' source.pk %}" method="get" class="no-padding">
-    <div class="submit_button_wrapper_column_form" style="margin-left: 346px;">
-      <input type="submit" value="Cancel Changes" />
     </div>
-  </form>
+  </div>
+
+  {# Javascript will be used to 1) move this element into the appropriate part of the form, and 2) toggle its visibility. #}
+  <div class="helptext_long" id="feature-extractor-change-warning" hidden>
+    WARNING: The feature extractor has been changed. If you save this change, this source's entire classifier history will be deleted, and a new classifier will be generated.
+  </div>
+
+  {# Script in the body will run on page load. #}
+
+  <script type="module">
+    import MultiValueFieldHelper from "{% static 'js/MultiValueFieldHelper.js' %}";
+    let sourceForm = document.getElementById('source-form');
+    MultiValueFieldHelper.setUpFieldBasedVisibility(sourceForm);
+
+    import SourceFormHelper from "{% static 'js/SourceFormHelper.js' %}";
+    let sourceFormHelper = new SourceFormHelper();
+  </script>
 
 {% endblock %}

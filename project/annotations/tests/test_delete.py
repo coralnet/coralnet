@@ -43,7 +43,9 @@ class BaseDeleteTest(ClientTest):
         super().setUpTestData()
 
         cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user, simple_number_of_points=2)
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=2))
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
@@ -282,7 +284,9 @@ class OtherSourceTest(BaseDeleteTest):
         cls.img2 = cls.upload_image(
             cls.user, cls.source, dict(filename='2.png'))
 
-        source2 = cls.create_source(cls.user, simple_number_of_points=2)
+        source2 = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=2))
         cls.create_labelset(cls.user, source2, cls.labels)
         cls.img21 = cls.upload_image(
             cls.user, source2, dict(filename='21.png'))

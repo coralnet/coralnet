@@ -508,9 +508,7 @@ class JobSpecsTest(BaseTaskTest):
                 filename = f'train{num}.png'
 
             self.source.default_point_generation_method = \
-                PointGen.args_to_db_format(
-                    point_generation_type=PointGen.Types.SIMPLE,
-                    simple_number_of_points=image_point_count)
+                PointGen(type='simple', points=image_point_count).db_value
             self.source.save()
             image = self.upload_image_with_annotations(filename)
 

@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from accounts.utils import get_imported_user
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from annotations.models import Annotation
 from annotations.tests.utils import AnnotationHistoryTestMixin
 from images.model_utils import PointGen
@@ -134,22 +134,18 @@ class UploadAnnotationsGeneralCasesTest(
         self.img1.refresh_from_db()
         self.assertEqual(
             self.img1.point_generation_method,
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.IMPORTED,
-                imported_number_of_points=5))
+            PointGen(type='imported', points=5).db_value)
         self.assertEqual(
             self.img1.metadata.annotation_area,
-            AnnotationAreaUtils.IMPORTED_STR)
+            AnnotationArea(type=AnnotationArea.TYPE_IMPORTED).db_value)
 
         self.img2.refresh_from_db()
         self.assertEqual(
             self.img2.point_generation_method,
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.IMPORTED,
-                imported_number_of_points=3))
+            PointGen(type='imported', points=3).db_value)
         self.assertEqual(
             self.img2.metadata.annotation_area,
-            AnnotationAreaUtils.IMPORTED_STR)
+            AnnotationArea(type=AnnotationArea.TYPE_IMPORTED).db_value)
 
     def check_all_annotations(self, preview_response, upload_response):
 

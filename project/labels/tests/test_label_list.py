@@ -3,7 +3,6 @@ from django.contrib.auth.models import Group
 from django.urls import reverse
 
 from calcification.tests.utils import create_default_calcify_table
-from images.model_utils import PointGen
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import LabelGroup, Label
@@ -298,8 +297,7 @@ class LabelSearchOtherFieldsTest(BaseLabelSearchTest):
     def test_show_by_popularity(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=4)
+            default_point_generation_method=dict(type='simple', points=4))
         self.create_labelset(self.user, source, Label.objects.all())
         img = self.upload_image(self.user, source)
         self.add_annotations(
@@ -330,8 +328,7 @@ class LabelSearchOtherFieldsTest(BaseLabelSearchTest):
         # A and C have popularity
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=4)
+            default_point_generation_method=dict(type='simple', points=4))
         self.create_labelset(self.user, source, Label.objects.all())
         img = self.upload_image(self.user, source)
         self.add_annotations(

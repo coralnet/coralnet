@@ -1,0 +1,17 @@
+{% load field_visibility_attrs from common_tags %}
+
+{% for subwidget in widget.subwidgets %}
+
+  <label
+    for="{{ subwidget.attrs.id }}"
+    class="left-col-label {{ subwidget.input_type }}"
+    {% field_visibility_attrs subwidget %}
+  >
+    {{ subwidget.label }}:
+  </label>
+
+  <div {% field_visibility_attrs subwidget %} >
+    {% include subwidget.template_name with widget=subwidget %}
+  </div>
+
+{% endfor %}

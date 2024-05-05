@@ -11,6 +11,26 @@ from django.utils.safestring import mark_safe
 register = template.Library()
 
 
+@register.simple_tag
+def field_visibility_attrs(widget):
+    """
+    The passed widget should have attrs defining that its visibility
+    toggles when a certain field is a certain value.
+    This template tag echoes those attrs so that another element can
+    use the same visibility logic.
+    """
+    widget_attrs = widget['attrs']
+
+    return mark_safe(' '.join([
+        f'{attr_name}="{widget_attrs[attr_name]}"'
+        for attr_name in [
+            'data-visibility-control-field',
+            'data-visibility-activating-values',
+        ]
+        if attr_name in widget_attrs
+    ]))
+
+
 # Usage: {% get_form_media form as form_media %}
 @register.simple_tag
 def get_form_media(form):

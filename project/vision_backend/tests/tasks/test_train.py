@@ -109,9 +109,8 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         # Check that the point-count in val_res is what it should be.
         val_res = ValResults.load(storage.spacer_data_loc(valresult_path))
-        point_gen_method = PointGen.db_to_args_format(
-            self.source.default_point_generation_method)
-        points_per_image = point_gen_method['simple_number_of_points']
+        points_per_image = PointGen.from_db_value(
+            self.source.default_point_generation_method).total_points
         self.assertEqual(
             len(val_res.gt),
             val_image_count * points_per_image)
@@ -630,9 +629,7 @@ class TrainRefValSetsTest(BaseTaskTest):
         self, train_image_count=0, val_image_count=0, points_per_image=2,
     ):
         self.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.SIMPLE,
-                simple_number_of_points=points_per_image)
+            PointGen(type='simple', points=points_per_image).db_value
         self.source.save()
         self.upload_images_for_training(
             train_image_count=train_image_count,
@@ -703,9 +700,7 @@ class LabelFilteringTest(BaseTaskTest):
         super().setUpClass()
 
         cls.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.SIMPLE,
-                simple_number_of_points=3)
+            PointGen(type='simple', points=3).db_value
         cls.source.save()
 
     def test_annotations_not_in_training_labelset(self):

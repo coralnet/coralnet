@@ -6,7 +6,7 @@ from django.core.validators import validate_comma_separated_integer_list
 from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
-from django.forms.widgets import HiddenInput, MultiWidget
+from django.forms.widgets import HiddenInput
 from django.utils import timezone
 
 from accounts.utils import (
@@ -21,22 +21,31 @@ from images.utils import (
     get_num_aux_fields,
 )
 from labels.models import LabelGroup, Label
-from lib.forms import BoxFormRenderer, EnhancedForm
+from lib.forms import (
+    BoxFormRenderer, EnhancedMultiWidget, FieldsetsFormComponent)
 from sources.models import Source
 from .utils import get_annotation_tool_users, image_search_kwargs_to_queryset
 
 tz = timezone.get_current_timezone()
 
 
-class DateFilterWidget(MultiWidget):
+class DateFilterWidget(EnhancedMultiWidget):
 
-    def __init__(self, date_filter_field, attrs=None):
-        self.date_lookup = date_filter_field.date_lookup
-        self.is_datetime_field = date_filter_field.is_datetime_field
-        widgets = [
-            getattr(date_filter_field, field_name).widget
-            for field_name in date_filter_field.field_order]
-        super().__init__(widgets, attrs)
+    visibility_specs = {
+        # Conditionally visible field: (
+        #     control field,
+        #     control value(s) that would make the field visible,
+        # )
+        'year': ('date_filter_type', ['year']),
+        'date': ('date_filter_type', ['date']),
+        'start_date': ('date_filter_type', ['date_range']),
+        'end_date': ('date_filter_type', ['date_range']),
+    }
+
+    def __init__(self, field, attrs=None):
+        self.date_lookup = field.date_lookup
+        self.is_datetime_field = field.is_datetime_field
+        super().__init__(field, attrs)
 
     def decompress(self, value):
         if value is None:
@@ -112,7 +121,7 @@ class DateFilterField(MultiValueField):
     field_order = [
         'date_filter_type', 'year', 'date', 'start_date', 'end_date']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         # This field class is used in a search box, and the search action has
         # a primary model whose objects are being filtered by the search.
         # date_lookup describes how to go from that primary model to the
@@ -150,39 +159,29 @@ class DateFilterField(MultiValueField):
             choices=kwargs.pop('year_choices'),
             required=False,
         )
-        self.widget = DateFilterWidget(date_filter_field=self)
+        self.widget = DateFilterWidget(field=self)
 
-        self.date.widget.attrs['size'] = 10
-        self.date.widget.attrs['placeholder'] = "Select date"
-        self.start_date.widget.attrs['size'] = 10
-        self.start_date.widget.attrs['placeholder'] = "Start date"
-        self.end_date.widget.attrs['size'] = 10
-        self.end_date.widget.attrs['placeholder'] = "End date"
+        # This gives the widgets datepickers in modern browsers.
+        # Values will be sent to the server as yyyy-mm-dd, which works out
+        # of the box since it's one format included in DATE_INPUT_FORMATS.
+        self.date.widget.input_type = 'date'
+        self.start_date.widget.input_type = 'date'
+        self.end_date.widget.input_type = 'date'
 
-        # Define how the filter type field value controls the visibility
-        # of the other fields.
-        date_filter_type_index = str(
-            self.field_order.index('date_filter_type'))
-        self.year.widget.attrs['data-visibility-condition'] = \
-            date_filter_type_index + '=year'
-        self.date.widget.attrs['data-visibility-condition'] = \
-            date_filter_type_index + '=date'
-        self.start_date.widget.attrs['data-visibility-condition'] = \
-            date_filter_type_index + '=date_range'
-        self.end_date.widget.attrs['data-visibility-condition'] = \
-            date_filter_type_index + '=date_range'
-
-        # Define fields which should have datepickers.
-        # `True` specifies an HTML5 boolean attribute, where it just has the
-        # attribute name without any value.
-        self.date.widget.attrs['data-has-datepicker'] = True
-        self.start_date.widget.attrs['data-has-datepicker'] = True
-        self.end_date.widget.attrs['data-has-datepicker'] = True
+        self.date.widget.attrs |= {
+            'size': 10, 'placeholder': "Select date",
+        }
+        self.start_date.widget.attrs |= {
+            'size': 10, 'placeholder': "Start date",
+        }
+        self.end_date.widget.attrs |= {
+            'size': 10, 'placeholder': "End date",
+        }
 
         super().__init__(
             fields=[
                 getattr(self, field_name) for field_name in self.field_order],
-            require_all_fields=False, *args, **kwargs)
+            require_all_fields=False, **kwargs)
 
     def compress(self, data_list):
         # Unsure why data_list is an empty list sometimes, but one
@@ -245,14 +244,19 @@ class DateFilterField(MultiValueField):
         return queryset_kwargs
 
 
-class AnnotatorFilterWidget(MultiWidget):
+class AnnotatorFilterWidget(EnhancedMultiWidget):
 
-    def __init__(self, annotator_filter_field, attrs=None):
-        self.annotator_lookup = annotator_filter_field.annotator_lookup
-        widgets = [
-            getattr(annotator_filter_field, field_name).widget
-            for field_name in annotator_filter_field.field_order]
-        super().__init__(widgets, attrs)
+    visibility_specs = {
+        # Conditionally visible field: (
+        #     control field,
+        #     control value(s) that would make the field visible,
+        # )
+        'annotation_tool_user': ('annotation_method', ['annotation_tool']),
+    }
+
+    def __init__(self, field, attrs=None):
+        self.annotator_lookup = field.annotator_lookup
+        super().__init__(field, attrs)
 
     def decompress(self, value):
         if value is None:
@@ -312,7 +316,7 @@ class AnnotatorFilterField(MultiValueField):
 
     field_order = ['annotation_method', 'annotation_tool_user']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, **kwargs):
         source = kwargs.pop('source')
 
         # annotator_lookup describes how to go from the search's primary
@@ -326,19 +330,12 @@ class AnnotatorFilterField(MultiValueField):
             empty_label="Any user",
         )
 
-        # Define how the annotation method field value controls the
-        # visibility of the other fields.
-        annotation_method_index = str(
-            self.field_order.index('annotation_method'))
-        self.annotation_tool_user.widget.attrs['data-visibility-condition'] = \
-            annotation_method_index + '=annotation_tool'
-
-        self.widget = AnnotatorFilterWidget(annotator_filter_field=self)
+        self.widget = AnnotatorFilterWidget(field=self)
 
         super().__init__(
             fields=[
                 getattr(self, field_name) for field_name in self.field_order],
-            require_all_fields=False, *args, **kwargs)
+            require_all_fields=False, **kwargs)
 
     def compress(self, data_list):
         if not data_list:
@@ -366,7 +363,7 @@ class AnnotatorFilterField(MultiValueField):
         return queryset_kwargs
 
 
-class BaseImageSearchForm(EnhancedForm):
+class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
     # This field makes it easier to tell which kind of image-specifying
     # form has been submitted.

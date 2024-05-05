@@ -13,7 +13,7 @@ from guardian.shortcuts import (
     remove_perm,
 )
 
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from labels.models import LabelSet
 from vision_backend.models import Classifier
@@ -71,37 +71,22 @@ class Source(models.Model):
     key4 = models.CharField('Aux. metadata 4', max_length=50, default="Aux4")
     key5 = models.CharField('Aux. metadata 5', max_length=50, default="Aux5")
 
-    POINT_GENERATION_CHOICES = (
-        (PointGen.Types.SIMPLE, PointGen.Types.SIMPLE_VERBOSE),
-        (PointGen.Types.STRATIFIED, PointGen.Types.STRATIFIED_VERBOSE),
-        (PointGen.Types.UNIFORM, PointGen.Types.UNIFORM_VERBOSE),
-    )
     default_point_generation_method = models.CharField(
         "Point generation method",
-        help_text=(
-            "When we create annotation points for uploaded images, this is how"
-            " we'll generate the point locations. Note that if you change this"
-            " setting later on, it will NOT apply to images that are already"
-            " uploaded."),
         max_length=50,
-        default=PointGen.args_to_db_format(
-                    point_generation_type=PointGen.Types.SIMPLE,
-                    simple_number_of_points=200)
+        # 30 is the median for public sources as of late 2023.
+        default=PointGen(type='simple', points=30).db_value,
     )
 
     image_annotation_area = models.CharField(
         "Default image annotation area",
-        help_text=(
-            "This defines a rectangle of the image where annotation points are"
-            " allowed to be generated.\n"
-            "For example, X boundaries of 10% and 95% mean that the leftmost"
-            " 10% and the rightmost 5% of the image will not have any points."
-            " Decimals like 95.6% are allowed.\n"
-            "Later, you can also set these boundaries as pixel counts on a"
-            " per-image basis; for images that don't have a specific value"
-            " set, these percentages will be used."),
         max_length=50,
-        null=True
+        # Whole image is a reasonable non-arbitrary default, and
+        # serves to demonstrate what a valid value looks like for
+        # this field.
+        default=AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES,
+            min_x=0, max_x=100, min_y=0, max_y=100).db_value,
     )
 
     # CPCe parameters given during the last .cpc import or export.
@@ -125,15 +110,10 @@ class Source(models.Model):
         default=100,
     )
 
+    # Whether or not to train new classifiers at all.
     enable_robot_classifier = models.BooleanField(
         "Enable robot classifier",
         default=True,
-        help_text=(
-            "With this option on, the automatic classification system will"
-            " go through your images and add unconfirmed annotations to them."
-            " Then when you enter the annotation tool, you will be able to"
-            " start from the system's suggestions instead of from a blank"
-            " slate."),
     )
 
     FEATURE_EXTRACTOR_CHOICES = (
@@ -357,29 +337,20 @@ class Source(models.Model):
         else:
             return robot.accuracy
 
-    def image_annotation_area_display(self):
-        """
-        Display the annotation-area parameters in templates.
-        Usage: {{ mysource.annotation_area_display }}
-        """
-        return AnnotationAreaUtils.db_format_to_display(
-            self.image_annotation_area)
-
     def point_gen_method_display(self):
         """
         Display the point generation method in templates.
         Usage: {{ mysource.point_gen_method_display }}
         """
-        return PointGen.db_to_readable_format(
-            self.default_point_generation_method)
+        return str(
+            PointGen.from_db_value(self.default_point_generation_method))
 
     def annotation_area_display(self):
         """
         Display the annotation area parameters in templates.
         Usage: {{ mysource.annotation_area_display }}
         """
-        return AnnotationAreaUtils.db_format_to_display(
-            self.image_annotation_area)
+        return str(AnnotationArea.from_db_value(self.image_annotation_area))
 
     def get_current_classifier(self):
         """

@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
-from images.model_utils import PointGen
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
 
@@ -56,9 +55,8 @@ class BaseSearchTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
             # Make it easy to have confirmed and partially annotated images
-            simple_number_of_points=2,
+            default_point_generation_method=dict(type='simple', points=2),
         )
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
@@ -1074,9 +1072,8 @@ class ImageStatusIndicatorTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
             # Make it easy to have confirmed and partially annotated images
-            simple_number_of_points=2)
+            default_point_generation_method=dict(type='simple', points=2))
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
 

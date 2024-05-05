@@ -4,10 +4,9 @@ from unittest import skip
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
-from images.model_utils import PointGen
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
-from ..model_utils import AnnotationAreaUtils
+from ..model_utils import AnnotationArea
 from ..utils import cacheable_annotation_count
 
 
@@ -77,8 +76,12 @@ class AnnotationAreaEditTest(ClientTest):
         super().setUpTestData()
 
         cls.user = cls.create_user()
+        # Passing decimals as strings prevents the decimal places from
+        # getting expanded due to floating-point imprecision, which would
+        # cause issues with the area field's decimal-place limit.
         cls.source = cls.create_source(
-            cls.user, min_x=19, max_x=62, min_y=7, max_y=90.2)
+            cls.user, image_annotation_area=dict(
+                min_x=19, max_x=62, min_y=7, max_y='90.2'))
 
         cls.img = cls.upload_image(
             cls.user, cls.source, image_options=dict(width=40, height=50))
@@ -127,15 +130,17 @@ class AnnotationAreaEditTest(ClientTest):
 
     def test_change_annotation_area(self):
         self.client.force_login(self.user)
+        area_dict = dict(min_x=8, max_x=36, min_y=0, max_y=18)
         response = self.client.post(
-            self.url, data=dict(min_x=8, max_x=36, min_y=0, max_y=18),
+            self.url, data=area_dict,
             follow=True)
         self.assertContains(response, "Annotation area successfully edited.")
 
         self.img.metadata.refresh_from_db()
         self.assertEqual(
             self.img.metadata.annotation_area,
-            AnnotationAreaUtils.pixels_to_db_format(8, 36, 0, 18),
+            AnnotationArea(
+                type=AnnotationArea.TYPE_PIXELS, **area_dict).db_value,
             msg="Annotation area should be successfully changed")
 
     def test_min_or_max_past_limits(self):
@@ -232,9 +237,8 @@ class PointGenTest(ClientTest):
     def test_simple_random_whole_image(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=100,
-            min_x=0, max_x=100, min_y=0, max_y=100)
+            image_annotation_area=dict(min_x=0, max_x=100, min_y=0, max_y=100),
+            default_point_generation_method=dict(type='simple', points=100))
         # Make the resolution small so that we have a good chance of
         # testing the annotation area boundaries.
         img = self.upload_image(
@@ -251,9 +255,9 @@ class PointGenTest(ClientTest):
     def test_simple_random_source_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=100,
-            min_x=19, max_x=62, min_y=7, max_y=90.2)
+            default_point_generation_method=dict(type='simple', points=100),
+            image_annotation_area=dict(
+                min_x=19, max_x=62, min_y=7, max_y='90.2'))
         img = self.upload_image(
             self.user, source, image_options=dict(width=40, height=50))
 
@@ -272,8 +276,7 @@ class PointGenTest(ClientTest):
     def test_simple_random_image_specific_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=100)
+            default_point_generation_method=dict(type='simple', points=100))
         img = self.upload_image(
             self.user, source, image_options=dict(width=40, height=50))
 
@@ -293,10 +296,10 @@ class PointGenTest(ClientTest):
     def test_stratified_random_whole_image(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.STRATIFIED,
-            number_of_cell_columns=5, number_of_cell_rows=4,
-            stratified_points_per_cell=6,
-            min_x=0, max_x=100, min_y=0, max_y=100)
+            default_point_generation_method=dict(
+                type='stratified', cell_rows=4, cell_columns=5, per_cell=6),
+            image_annotation_area=dict(min_x=0, max_x=100, min_y=0, max_y=100),
+        )
         img = self.upload_image(
             self.user, source, image_options=dict(width=20, height=30))
 
@@ -318,10 +321,10 @@ class PointGenTest(ClientTest):
     def test_stratified_random_source_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.STRATIFIED,
-            number_of_cell_columns=5, number_of_cell_rows=4,
-            stratified_points_per_cell=6,
-            min_x=19, max_x=62, min_y=7, max_y=90.2)
+            default_point_generation_method=dict(
+                type='stratified', cell_rows=4, cell_columns=5, per_cell=6),
+            image_annotation_area=dict(
+                min_x=19, max_x=62, min_y=7, max_y='90.2'))
         img = self.upload_image(
             self.user, source, image_options=dict(width=20, height=30))
 
@@ -343,9 +346,8 @@ class PointGenTest(ClientTest):
     def test_stratified_random_image_specific_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.STRATIFIED,
-            number_of_cell_columns=5, number_of_cell_rows=4,
-            stratified_points_per_cell=6)
+            default_point_generation_method=dict(
+                type='stratified', cell_rows=4, cell_columns=5, per_cell=6))
         img = self.upload_image(
             self.user, source, image_options=dict(width=40, height=50))
 
@@ -372,9 +374,9 @@ class PointGenTest(ClientTest):
     def test_uniform_grid_whole_image(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_columns=5, number_of_cell_rows=4,
-            min_x=0, max_x=100, min_y=0, max_y=100)
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=4, cell_columns=5),
+            image_annotation_area=dict(min_x=0, max_x=100, min_y=0, max_y=100))
         img = self.upload_image(
             self.user, source, image_options=dict(width=20, height=30))
 
@@ -395,9 +397,10 @@ class PointGenTest(ClientTest):
     def test_uniform_grid_source_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_columns=5, number_of_cell_rows=4,
-            min_x=19, max_x=62, min_y=7, max_y=90.2)
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=4, cell_columns=5),
+            image_annotation_area=dict(
+                min_x=19, max_x=62, min_y=7, max_y='90.2'))
         img = self.upload_image(
             self.user, source, image_options=dict(width=20, height=30))
 
@@ -418,8 +421,8 @@ class PointGenTest(ClientTest):
     def test_uniform_grid_image_specific_annotation_area(self):
         source = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_columns=5, number_of_cell_rows=4)
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=4, cell_columns=5))
         img = self.upload_image(
             self.user, source, image_options=dict(width=40, height=50))
 

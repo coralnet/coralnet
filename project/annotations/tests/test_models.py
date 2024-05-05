@@ -1,7 +1,6 @@
 from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
-from images.model_utils import PointGen
 from images.models import Point
 from lib.tests.utils import ClientTest, sample_image_as_file
 from ..model_utils import (
@@ -21,8 +20,7 @@ class ImageStatusLogicTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
 
         cls.classifier = cls.create_robot(cls.source)
@@ -111,8 +109,7 @@ class AnnoInfoUpdateTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
 
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')

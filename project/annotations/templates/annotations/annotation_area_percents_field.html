@@ -1,0 +1,14 @@
+{% for subwidget in widget.subwidgets %}
+
+  <label
+    for="{{ subwidget.attrs.id }}"
+    class="left-col-label {{ subwidget.input_type }}"
+  >
+    {{ subwidget.label }}:
+  </label>
+
+  <div>
+    {% include subwidget.template_name with widget=subwidget %} %
+  </div>
+
+{% endfor %}

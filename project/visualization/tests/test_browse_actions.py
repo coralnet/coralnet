@@ -9,7 +9,6 @@ from django.test import override_settings
 from django.urls import reverse
 
 from images.models import Image
-from images.model_utils import PointGen
 from lib.tests.utils import (
     BrowserTest, EC_alert_is_not_present, EC_javascript_global_var_value)
 
@@ -25,8 +24,7 @@ class DeleteTest(BrowserTest):
         cls.user = cls.create_user(username='userA', password='DeleteTest')
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=2,
+            default_point_generation_method=dict(type='simple', points=2),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)

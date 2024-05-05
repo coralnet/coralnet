@@ -5,7 +5,9 @@ import datetime
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
+from annotations.model_utils import AnnotationArea
 from lib.tests.utils import BasePermissionTest, ClientTest
+from ..model_utils import PointGen
 
 
 class PermissionTest(BasePermissionTest):
@@ -44,7 +46,9 @@ class ImageDetailTest(ClientTest):
         super().setUpTestData()
 
         cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user, simple_number_of_points=2)
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=2))
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
@@ -105,34 +109,93 @@ class ImageDetailTest(ClientTest):
                 reverse('image_detail', args=[img2.pk])),
             response.content.decode())
 
+    def test_point_gen_method_text(self):
+        image = self.upload_image(self.user, self.source)
+
+        def assert_pointgen_text(new_method, expected_text):
+            image.point_generation_method = PointGen(**new_method).db_value
+            image.save()
+
+            response = self.client.get(reverse('image_detail', args=[image.pk]))
+            self.assertInHTML(
+                f"Point generation method: {expected_text}",
+                response.content.decode())
+
+        self.client.force_login(self.user)
+        assert_pointgen_text(
+            dict(type='simple', points=5),
+            "Simple random, 5 points",
+        )
+        assert_pointgen_text(
+            dict(type='stratified', cell_rows=3, cell_columns=4, per_cell=5),
+            "Stratified random, 3 rows x 4 columns of cells,"
+            " 5 points per cell (total of 60 points)",
+        )
+        assert_pointgen_text(
+            dict(type='uniform', cell_rows=8, cell_columns=12),
+            "Uniform grid, 8 rows x 12 columns"
+            " (total of 96 points)",
+        )
+        assert_pointgen_text(
+            dict(type='imported', points=10),
+            "Imported, 10 points",
+        )
+
+    def test_annotation_area_text(self):
+        image = self.upload_image(
+            self.user, self.source,
+            image_options=dict(width=200, height=200))
+
+        def assert_area_text(new_area, expected_text):
+            image.metadata.annotation_area = AnnotationArea(
+                **new_area).db_value
+            image.metadata.save()
+
+            response = self.client.get(reverse('image_detail', args=[image.pk]))
+            self.assertIn(
+                f"Annotation area: {expected_text}",
+                response.content.decode())
+
+        self.client.force_login(self.user)
+        assert_area_text(
+            dict(
+                type=AnnotationArea.TYPE_PERCENTAGES,
+                min_x=0, max_x=100, min_y='15.47', max_y='84.53'),
+            "X: 0 - 100% / Y: 15.47 - 84.53%",
+        )
+        assert_area_text(
+            dict(
+                type=AnnotationArea.TYPE_PIXELS,
+                min_x=21, max_x=179, min_y=0, max_y=199),
+            "X: 21 - 179 pixels / Y: 0 - 199 pixels",
+        )
+        assert_area_text(
+            dict(type=AnnotationArea.TYPE_IMPORTED),
+            "(Imported points; not specified)",
+        )
+
     def test_annotation_status_text(self):
         """Test all the possible annotation-status displays on this page."""
         image = self.upload_image(self.user, self.source)
 
+        def assert_status_text(expected_text):
+            response = self.client.get(reverse('image_detail', args=[image.pk]))
+            self.assertInHTML(
+                f"Annotation status: <b>{expected_text}</b>",
+                response.content.decode())
+
         self.client.force_login(self.user)
-        response = self.client.get(reverse('image_detail', args=[image.pk]))
-        self.assertInHTML(
-            'Annotation status: <b>Not started</b>',
-            response.content.decode())
+        assert_status_text("Not started")
 
         robot = self.create_robot(self.source)
         self.add_robot_annotations(robot, image)
-        response = self.client.get(reverse('image_detail', args=[image.pk]))
-        self.assertInHTML(
-            'Annotation status: <b>Unconfirmed</b>',
-            response.content.decode())
+        assert_status_text("Unconfirmed")
 
         self.add_annotations(self.user, image, {1: 'A'})
-        response = self.client.get(reverse('image_detail', args=[image.pk]))
-        self.assertInHTML(
-            'Annotation status: <b>Partially confirmed</b>',
-            response.content.decode())
+        assert_status_text("Partially confirmed")
 
         self.add_annotations(self.user, image, {2: 'B'})
-        response = self.client.get(reverse('image_detail', args=[image.pk]))
-        self.assertInHTML(
-            'Annotation status: <b>Confirmed (completed)</b>',
-            response.content.decode())
+        assert_status_text("Confirmed (completed)")
 
 
 class ImageDetailEditTest(ClientTest):

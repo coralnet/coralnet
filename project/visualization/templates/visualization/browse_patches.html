@@ -1,4 +1,5 @@
 {% extends "sources/base_source.html" %}
+{% load static %}
 {% load get_obj_perms from guardian_tags %}
 {% load async_media_batch_key patch_async from async_media_tags %}
 
@@ -8,8 +9,6 @@
 {% endblock %}
 
 {% block page-specific-includes %}
-  {% include "static-local-include.html" with type="js" path="js/ImageSearchHelper.js" %}
-
   {% include "static-local-include.html" with type="css" path="css/browse.css" %}
 {% endblock %}
 
@@ -62,8 +61,10 @@
   {% endif %}
 
   {# Script in the body will run on page load. #}
-  <script type="text/javascript">
-    ImageSearchHelper.init();
+  <script type="module">
+    import MultiValueFieldHelper from "{% static 'js/MultiValueFieldHelper.js' %}";
+    MultiValueFieldHelper.setUpFieldBasedVisibility(
+        document.getElementById('search-form'));
   </script>
 
 {% endblock %}

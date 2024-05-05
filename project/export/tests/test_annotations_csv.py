@@ -6,7 +6,6 @@ from django.urls import reverse
 
 from annotations.models import Annotation
 from export.tests.utils import BaseExportTest
-from images.model_utils import PointGen
 from lib.tests.utils import BasePermissionTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
 
@@ -36,8 +35,8 @@ class ImageSetTest(BaseExportTest):
         cls.source = cls.create_source(
             cls.user,
             # Uniform grid gives us consistent point locations.
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=2,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=2),
         )
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
@@ -192,8 +191,8 @@ class ImageSetTest(BaseExportTest):
 
         source2 = self.create_source(
             self.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=2)
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=2))
         self.create_labelset(self.user, source2, self.labels)
         img2 = self.upload_image(self.user, source2, dict(filename='2.jpg'))
         self.add_annotations(self.user, img2, {1: 'A', 2: 'B'})
@@ -221,8 +220,8 @@ class AnnotationStatusTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=2,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=2),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -296,8 +295,8 @@ class AnnotatorInfoColumnsTest(BaseExportTest, UploadAnnotationsCsvTestMixin):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -376,8 +375,8 @@ class MachineSuggestionColumnsTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -452,8 +451,8 @@ class MetadataAuxColumnsTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -525,8 +524,8 @@ class MetadataOtherColumnsTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -589,8 +588,8 @@ class MoreOptionalColumnsCasesTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -746,8 +745,8 @@ class UnicodeTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
 
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
@@ -785,8 +784,8 @@ class UploadAndExportSameDataTest(BaseExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
