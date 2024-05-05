@@ -73,26 +73,12 @@ class Source(models.Model):
 
     default_point_generation_method = models.CharField(
         "Point generation method",
-        help_text=(
-            "When we create annotation points for uploaded images, this is how"
-            " we'll generate the point locations. Note that if you change this"
-            " setting later on, it will NOT apply to images that are already"
-            " uploaded."),
         max_length=50,
         default=PointGen(type='simple', points=200).db_value,
     )
 
     image_annotation_area = models.CharField(
         "Default image annotation area",
-        help_text=(
-            "This defines a rectangle of the image where annotation points are"
-            " allowed to be generated.\n"
-            "For example, X boundaries of 10% and 95% mean that the leftmost"
-            " 10% and the rightmost 5% of the image will not have any points."
-            " Decimals like 95.6% are allowed.\n"
-            "Later, you can also set these boundaries as pixel counts on a"
-            " per-image basis; for images that don't have a specific value"
-            " set, these percentages will be used."),
         max_length=50,
         null=True
     )
@@ -118,15 +104,10 @@ class Source(models.Model):
         default=100,
     )
 
+    # Whether or not to train new classifiers at all.
     enable_robot_classifier = models.BooleanField(
         "Enable robot classifier",
         default=True,
-        help_text=(
-            "With this option on, the automatic classification system will"
-            " go through your images and add unconfirmed annotations to them."
-            " Then when you enter the annotation tool, you will be able to"
-            " start from the system's suggestions instead of from a blank"
-            " slate."),
     )
 
     FEATURE_EXTRACTOR_CHOICES = (
