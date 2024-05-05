@@ -176,9 +176,6 @@ class AnnotationAreaPercentsField(MultiValueField):
         # Some kwargs from the model field (which would be passed in by a
         # ModelForm) can't be applied directly to MultiValueField.
         kwargs.pop('max_length')
-        # TODO: Might not need this line if image_annotation_area model field
-        #  becomes non-null, which it seems it should.
-        kwargs.pop('empty_value')
 
         super().__init__(
             fields=[

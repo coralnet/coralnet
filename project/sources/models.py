@@ -80,7 +80,6 @@ class Source(models.Model):
     image_annotation_area = models.CharField(
         "Default image annotation area",
         max_length=50,
-        null=True
     )
 
     # CPCe parameters given during the last .cpc import or export.
