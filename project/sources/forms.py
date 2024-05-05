@@ -139,7 +139,12 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
 
                     dict(
                         header="Point generation method",
-                        help_text="""When we create annotation points for uploaded images, this is how we'll generate the point locations.
+                        help_text="""When we create annotation points for uploaded images, this is how we'll generate the point locations within each image.
+                        
+                            Simple Random: For every point, we randomly pick a pixel location from the image's entire annotation area.
+                            Stratified Random: We consider the annotation area to be divided into a grid of cells; for example, 3 rows and 4 columns of cells, for a total of 12 cells. Then, within each cell, we generate a certain number of random points.
+                            Uniform Grid: Again, we divide the annotation area into a grid of cells. Then, within each cell, we place 1 point at the center of that cell.
+                            
                             Note that if you change this setting later on, it will NOT apply to images that are already uploaded.""",
                         fields=[
                             'default_point_generation_method',
