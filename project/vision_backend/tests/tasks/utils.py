@@ -28,8 +28,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5)
+            default_point_generation_method=dict(type='simple', points=5))
         cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
@@ -155,9 +154,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
 
         img.refresh_from_db()
         self.assertEqual(
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.IMPORTED,
-                imported_number_of_points=3),
+            PointGen(type='imported', points=3).db_value,
             img.point_generation_method,
             "Points should be saved successfully")
 

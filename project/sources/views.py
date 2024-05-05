@@ -10,16 +10,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 
-from annotations.forms import AnnotationAreaPercentsForm
-from annotations.model_utils import (
-    AnnotationAreaUtils,
-    ImageAnnoStatuses,
-)
-from annotations.utils import (
-    cacheable_annotation_count,
-)
-from images.forms import PointGenForm
-from images.model_utils import PointGen
+from annotations.model_utils import ImageAnnoStatuses
+from annotations.utils import cacheable_annotation_count
 from images.models import Image
 from images.utils import delete_image
 from jobs.utils import schedule_job
@@ -31,8 +23,8 @@ from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
 from vision_backend.models import Classifier
 from .forms import (
-    ImageSourceForm,
     SourceChangePermissionForm,
+    SourceForm,
     SourceInviteForm,
     SourceRemoveUserForm,
 )
@@ -100,53 +92,35 @@ def source_new(request):
     # page, or we just submitted the form.  If POST, we submitted; if
     # GET, we just got here.
     if request.method == 'POST':
-        # Bind the forms to the submitted POST data.
-        sourceForm = ImageSourceForm(request.POST)
-        pointGenForm = PointGenForm(request.POST)
-        annotationAreaForm = AnnotationAreaPercentsForm(request.POST)
+        # Bind the form to the submitted POST data.
+        source_form = SourceForm(request.POST)
 
         # <form>.is_valid() calls <form>.clean() and checks field validity.
-        # Make sure is_valid() is called for all forms, so all forms are checked and
-        # all relevant error messages appear.
-        source_form_is_valid = sourceForm.is_valid()
-        point_gen_form_is_valid = pointGenForm.is_valid()
-        annotation_area_form_is_valid = annotationAreaForm.is_valid()
+        if source_form.is_valid():
 
-        if source_form_is_valid and point_gen_form_is_valid \
-         and annotation_area_form_is_valid:
-
-            # Since sourceForm is a ModelForm, after calling sourceForm's
-            # is_valid(), a Source instance is created.  We retrieve this
-            # instance and add the other values to it before saving to the DB.
-            newSource = sourceForm.instance
-
-            newSource.default_point_generation_method = PointGen.args_to_db_format(**pointGenForm.cleaned_data)
-            newSource.image_annotation_area = AnnotationAreaUtils.percentages_to_db_format(**annotationAreaForm.cleaned_data)
-            newSource.save()
+            # Since source_form is a ModelForm, after calling its
+            # is_valid(), a Source is instantiated. We retrieve it here.
+            new_source = source_form.instance
+            new_source.save()
 
             # Make the current user an admin of the new source
-            newSource.assign_role(request.user, Source.PermTypes.ADMIN.code)
+            new_source.assign_role(request.user, Source.PermTypes.ADMIN.code)
 
             # Add a success message
-            messages.success(request, 'Source successfully created.')
+            messages.success(request, "Source successfully created.")
 
             # Redirect to the source's main page
-            return HttpResponseRedirect(reverse('source_main', args=[newSource.id]))
+            return HttpResponseRedirect(
+                reverse('source_main', args=[new_source.id]))
         else:
             # Show the form again, with error message
-            messages.error(request, 'Please correct the errors below.')
+            messages.error(request, "Please correct the errors below.")
     else:
-        # Unbound (empty) forms
-        sourceForm = ImageSourceForm()
-        pointGenForm = PointGenForm()
-        annotationAreaForm = AnnotationAreaPercentsForm()
+        # Unbound (empty) form
+        source_form = SourceForm()
 
-    # RequestContext is needed for CSRF verification of the POST form,
-    # and to correctly get the path of the CSS file being used.
     return render(request, 'sources/source_new.html', {
-        'sourceForm': sourceForm,
-        'pointGenForm': pointGenForm,
-        'annotationAreaForm': annotationAreaForm,
+        'source_form': source_form,
         'map_minimum_images': settings.MAP_IMAGE_COUNT_TIERS[0],
     })
 
@@ -242,29 +216,18 @@ def source_edit(request, source_id):
 
     if request.method == 'POST':
 
-        sourceForm = ImageSourceForm(request.POST, instance=source)
-        pointGenForm = PointGenForm(request.POST)
-        annotationAreaForm = AnnotationAreaPercentsForm(request.POST)
+        source_form = SourceForm(
+            request.POST, instance=source)
 
-        # Make sure is_valid() is called for all forms, so all forms are checked and
-        # all relevant error messages appear.
-        source_form_is_valid = sourceForm.is_valid()
-        point_gen_form_is_valid = pointGenForm.is_valid()
-        annotation_area_form_is_valid = annotationAreaForm.is_valid()
+        if source_form.is_valid():
 
-        if source_form_is_valid and point_gen_form_is_valid \
-         and annotation_area_form_is_valid:
+            edited_source = source_form.instance
 
-            editedSource = sourceForm.instance
-
-            editedSource.default_point_generation_method = PointGen.args_to_db_format(**pointGenForm.cleaned_data)
-            editedSource.image_annotation_area = AnnotationAreaUtils.percentages_to_db_format(**annotationAreaForm.cleaned_data)
-
-            if 'feature_extractor_setting' in sourceForm.changed_data:
+            if 'feature_extractor_setting' in source_form.changed_data:
 
                 # Feature extractor setting changed. Wipe this source's
                 # features and classifiers.
-                editedSource.save()
+                edited_source.save()
                 schedule_job(
                     'reset_backend_for_source', source_id,
                     source_id=source_id)
@@ -275,25 +238,22 @@ def source_edit(request, source_id):
 
             else:
 
-                editedSource.save()
+                edited_source.save()
                 messages.success(request, "Source successfully edited.")
 
-            return HttpResponseRedirect(reverse('source_main', args=[source_id]))
+            return HttpResponseRedirect(
+                reverse('source_main', args=[source_id]))
 
         else:
 
             messages.error(request, 'Please correct the errors below.')
     else:
         # Just reached this form page
-        sourceForm = ImageSourceForm(instance=source)
-        pointGenForm = PointGenForm(source=source)
-        annotationAreaForm = AnnotationAreaPercentsForm(source=source)
+        source_form = SourceForm(instance=source)
 
     return render(request, 'sources/source_edit.html', {
         'source': source,
-        'editSourceForm': sourceForm,
-        'pointGenForm': pointGenForm,
-        'annotationAreaForm': annotationAreaForm,
+        'edit_source_form': source_form,
         'map_minimum_images': settings.MAP_IMAGE_COUNT_TIERS[0],
     })
 

@@ -9,7 +9,6 @@ from django.urls import reverse
 from rest_framework import status
 
 from api_core.tests.utils import BaseAPITest
-from images.model_utils import PointGen
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import create_sample_image
 from sources.models import Source
@@ -28,8 +27,7 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
         cls.source = cls.create_source(
             cls.user,
             visibility=Source.VisibilityTypes.PUBLIC,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=2,
+            default_point_generation_method=dict(type='simple', points=2),
         )
 
         label_names = ['A', 'B']

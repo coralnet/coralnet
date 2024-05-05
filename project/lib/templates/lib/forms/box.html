@@ -3,26 +3,38 @@
 {% if fieldsets %}
 
   {% for fieldset in fieldsets %}
-    {% for subfieldset in fieldset %}
-      {% for field, errors in subfieldset %}
-        {% include 'lib/forms/box_field.html' %}
+
+    {# No headers or help text for any box forms' fieldsets yet. #}
+
+    {% if fieldset.subfieldsets %}
+
+      {% for subfieldset in fieldset.subfieldsets %}
+
+        {# No headers or help text for any box forms' fieldsets yet. #}
+
+        {% include 'lib/forms/box_fields.html' with fields=subfieldset.fields %}
+
+        {% if not forloop.last %}
+          <br/>
+        {% endif %}
+
       {% endfor %}
 
-      {% if not forloop.last %}
-        <br/>
-      {% endif %}
-    {% endfor %}
+    {% else %}
+
+      {% include 'lib/forms/box_fields.html' with fields=fieldset.fields %}
+
+    {% endif %}
 
     {% if not forloop.last %}
       <hr/>
     {% endif %}
+
   {% endfor %}
 
 {% else %}
 
-  {% for field, errors in fields %}
-    {% include 'lib/forms/box_field.html' %}
-  {% endfor %}
+  {% include 'lib/forms/box_fields.html' with fields=fields %}
 
 {% endif %}
 

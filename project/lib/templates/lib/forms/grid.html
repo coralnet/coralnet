@@ -10,53 +10,57 @@ Use the pattern {{ my_form }} to automatically use this template, and update the
 {% endif %}
 
 
-<div class="form-fields-grid">
+{% if fieldsets %}
 
-  {# Elements here should be defined in pairs, in order to make the grid layout work. First element goes on the left column, second element goes on the right column. Alternatively, an element can have the CSS rule `grid-column: span 2;` to take up an entire row. #}
+  {% for fieldset in fieldsets %}
+    <fieldset>
 
-  {% for field, errors in fields %}
-    {% with widget=field.field.widget %}
+      {% if fieldset.header %}
+        <h2 class="form">{{ fieldset.header }}</h2>
+      {% endif %}
 
-        <div class="field-errors">
-          {{ errors|safe }}
+      {% if fieldset.help_text %}
+        <div class="helptext_long">
+          {{ fieldset.help_text|safe|linebreaksbr }}
         </div>
+      {% endif %}
 
-        {% if widget.input_type == 'checkbox' and not widget.allow_multiple_selected %}
+      {% if fieldset.subfieldsets %}
 
-          {# Single checkbox #}
+        {% for subfieldset in fieldset.subfieldsets %}
 
-          <div></div>
+          {% if subfieldset.header %}
+            <h3 class="form">{{ subfieldset.header }}</h3>
+          {% endif %}
 
-          <div>
-            {{ field }}
-            <label for="{{ field.id_for_label }}">
-              {{ field.label }}
-            </label>
-            {% include "form_generic_one_field_help_text.html" with field=field %}
-          </div>
+          {% if subfieldset.help_text %}
+            <div class="helptext_long">
+              {{ subfieldset.help_text|safe|linebreaksbr }}
+            </div>
+          {% endif %}
 
-        {% else %}
+          {% include 'lib/forms/grid_fieldset.html' with fieldset=subfieldset %}
 
-          {# All other field types #}
+          {% if not forloop.last %}
+            <hr class="subfieldset"/>
+          {% endif %}
 
-          {% with input_type=widget.input_type %}
-            <label for="{{ field.id_for_label }}"
-                   class="left-col-label {{ input_type }}">
-              {{ field.label }}:
-            </label>
-          {% endwith %}
+        {% endfor %}
 
-          <div>
-            {{ field }}
-            {% include "form_generic_one_field_help_text.html" with field=field %}
-          </div>
+      {% else %}
 
-        {% endif %}
+        {% include 'lib/forms/grid_fieldset.html' with fieldset=fieldset %}
 
-    {% endwith %}
+      {% endif %}
+
+    </fieldset>
   {% endfor %}
 
-</div>
+{% else %}
+
+  {% include 'lib/forms/grid_fields.html' with fields=fields %}
+
+{% endif %}
 
 
 {% for field in hidden_fields %}

@@ -1,0 +1,5 @@
+{% if fieldset.template_name %}
+  {% include fieldset.template_name with fieldset=fieldset %}
+{% else %}
+  {% include 'lib/forms/grid_fields.html' with fields=fieldset.fields %}
+{% endif %}

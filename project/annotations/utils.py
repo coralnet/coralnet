@@ -24,11 +24,11 @@ def image_annotation_area_is_editable(image):
     (1) there are no confirmed annotations for the image yet, and
     (2) the points are not imported.
     """
-    point_gen_method = PointGen.db_to_args_format(image.point_generation_method)
+    point_gen_type = PointGen.from_db_value(image.point_generation_method).type
     return (
         (not image_has_any_confirmed_annotations(image))
         and
-        (point_gen_method['point_generation_type'] != PointGen.Types.IMPORTED)
+        (point_gen_type != PointGen.Types.IMPORTED.value)
     )
 
 

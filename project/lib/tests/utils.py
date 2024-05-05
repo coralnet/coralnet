@@ -34,6 +34,7 @@ from django.utils.html import escape as html_escape
 import django_huey
 from spacer.messages import ClassifyReturnMsg
 
+from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from images.models import Image, Point
 from labels.models import LabelGroup, Label
@@ -170,12 +171,14 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         key3="Aux3",
         key4="Aux4",
         key5="Aux5",
-        min_x=0,
-        max_x=100,
-        min_y=0,
-        max_y=100,
-        point_generation_type=PointGen.Types.SIMPLE,
-        simple_number_of_points=5,
+        # X 0-100%, Y 0-100%
+        image_annotation_area_0=0,
+        image_annotation_area_1=100,
+        image_annotation_area_2=0,
+        image_annotation_area_3=100,
+        # Simple random, 5 points
+        default_point_generation_method_0=PointGen.Types.SIMPLE.value,
+        default_point_generation_method_1=5,
         confidence_threshold=100,
         feature_extractor_setting='efficientnet_b0_ver1',
         latitude='0.0',
@@ -183,22 +186,41 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
     )
 
     @classmethod
-    def create_source(cls, user, name=None, **options):
+    def create_source(
+        cls, user, name=None,
+        image_annotation_area: dict = None,
+        default_point_generation_method: dict = None,
+        **options
+    ):
         """
         Create a source.
         :param user: User who is creating this source.
         :param name: Source name. "Source <number>" if not given.
+        :param image_annotation_area: Shortcut for specifying this
+          source option as one concise dict (min_x, max_x, min_y, max_y)
+          instead of 4 verbose kwargs.
+        :param default_point_generation_method: Shortcut for specifying
+          this source option as one concise dict instead of 2-4 verbose
+          kwargs.
         :param options: Other params to POST into the new source form.
         :return: The new source.
         """
         cls.source_count += 1
         if not name:
-            name = 'Source {n:04d}'.format(n=cls.source_count)
+            name = f'Source {cls.source_count:04d}'
 
         post_dict = dict()
         post_dict.update(cls.source_defaults)
         post_dict.update(options)
         post_dict['name'] = name
+
+        if image_annotation_area:
+            area = AnnotationArea(
+                type=AnnotationArea.TYPE_PERCENTAGES, **image_annotation_area)
+            post_dict |= area.source_form_kwargs
+        if default_point_generation_method:
+            post_dict |= PointGen(
+                **default_point_generation_method).source_form_kwargs
 
         cls.client.force_login(user)
         # Create source.

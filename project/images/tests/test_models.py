@@ -115,40 +115,27 @@ class PointGenTest(BaseTest):
 
     def test_point_count_simple_random(self):
         self.assertEqual(
-            PointGen.db_to_point_count(PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.SIMPLE,
-                simple_number_of_points=15,
-            )),
+            PointGen(type='simple', points=15).total_points,
             15,
         )
 
     def test_point_count_stratified_random(self):
         self.assertEqual(
-            PointGen.db_to_point_count(PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.STRATIFIED,
-                number_of_cell_rows=3,
-                number_of_cell_columns=5,
-                stratified_points_per_cell=7,
-            )),
+            PointGen(type='stratified', cell_rows=3,
+                     cell_columns=5, per_cell=7).total_points,
             105,
         )
 
     def test_point_count_uniform_grid(self):
         self.assertEqual(
-            PointGen.db_to_point_count(PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.UNIFORM,
-                number_of_cell_rows=10,
-                number_of_cell_columns=17,
-            )),
+            PointGen(type='uniform', cell_rows=10,
+                     cell_columns=17).total_points,
             170,
         )
 
     def test_point_count_imported(self):
         self.assertEqual(
-            PointGen.db_to_point_count(PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.IMPORTED,
-                imported_number_of_points=40,
-            )),
+            PointGen(type='imported', points=40).total_points,
             40,
         )
 

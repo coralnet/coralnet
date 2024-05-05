@@ -15,7 +15,7 @@ from reversion.models import Version, Revision
 from .forms import (
     AnnotationForm, AnnotationAreaPixelsForm, AnnotationToolSettingsForm,
     AnnotationImageOptionsForm)
-from .model_utils import AnnotationAreaUtils
+from .model_utils import AnnotationArea
 from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import (
     apply_alleviate, get_annotation_version_user_display)
@@ -60,8 +60,9 @@ def annotation_area_edit(request, image_id):
             request.POST, image=image)
 
         if annotation_area_form.is_valid():
-            metadata.annotation_area = AnnotationAreaUtils.pixels_to_db_format(
-                **annotation_area_form.cleaned_data)
+            metadata.annotation_area = AnnotationArea(
+                type=AnnotationArea.TYPE_PIXELS,
+                **annotation_area_form.cleaned_data).db_value
             metadata.save()
 
             if metadata.annotation_area != old_annotation_area:

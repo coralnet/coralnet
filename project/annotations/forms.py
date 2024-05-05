@@ -1,17 +1,20 @@
 from decimal import Decimal
 import json
+
 from django.core.exceptions import ValidationError
 from django import forms
 from django.forms import Form
-from django.forms.fields import BooleanField, CharField, DecimalField, IntegerField
+from django.forms.fields import (
+    BooleanField, CharField, DecimalField, IntegerField, MultiValueField)
 from django.forms.models import ModelForm
-from django.forms.widgets import TextInput, HiddenInput, NumberInput
+from django.forms.widgets import HiddenInput, NumberInput, TextInput
+
 from accounts.utils import is_robot_user
-from annotations.model_utils import AnnotationAreaUtils
-from annotations.models import Annotation, AnnotationToolSettings
 from images.models import Metadata, Point
 from labels.models import LocalLabel
-from sources.models import Source
+from lib.forms import EnhancedMultiWidget
+from .model_utils import AnnotationArea
+from .models import Annotation, AnnotationToolSettings
 
 
 class AnnotationForm(forms.Form):
@@ -110,7 +113,31 @@ class AnnotationImageOptionsForm(Form):
     contrast = IntegerField(initial=0, min_value=-100, max_value=100)
 
 
-class AnnotationAreaPercentsForm(Form):
+class AnnotationAreaPercentsWidget(EnhancedMultiWidget):
+
+    template_name = 'annotations/annotation_area_percents_field.html'
+
+    def decompress(self, value):
+        if value is None:
+            return [None for _ in self.field.field_order]
+
+        area_spec = AnnotationArea.from_db_value(value)
+        return [
+            getattr(area_spec, field_name)
+            for field_name in self.field.field_order
+        ]
+
+
+error_messages = {
+    'min_value': "Each value must be between 0 and 100.",
+    'max_value': "Each value must be between 0 and 100.",
+    'max_decimal_places': "Up to %(max)s decimal places are allowed.",
+}
+
+
+class AnnotationAreaPercentsField(MultiValueField):
+    # To be filled in by __init__()
+    widget = None
 
     # decimal_places=3 defines the max decimal places for the server-side form.
     # But for the client-side experience, we define step='any' for two reasons:
@@ -122,56 +149,69 @@ class AnnotationAreaPercentsForm(Form):
     min_x = DecimalField(
         label="Left boundary X", required=True,
         min_value=Decimal(0), max_value=Decimal(100), initial=Decimal(0),
-        decimal_places=3, widget=NumberInput(attrs={'step': 'any'}))
+        decimal_places=3, error_messages=error_messages)
     max_x = DecimalField(
         label="Right boundary X", required=True,
         min_value=Decimal(0), max_value=Decimal(100), initial=Decimal(100),
-        decimal_places=3, widget=NumberInput(attrs={'step': 'any'}))
+        decimal_places=3, error_messages=error_messages)
     min_y = DecimalField(
         label="Top boundary Y", required=True,
         min_value=Decimal(0), max_value=Decimal(100), initial=Decimal(0),
-        decimal_places=3, widget=NumberInput(attrs={'step': 'any'}))
+        decimal_places=3, error_messages=error_messages)
     max_y = DecimalField(
         label="Bottom boundary Y", required=True,
         min_value=Decimal(0), max_value=Decimal(100), initial=Decimal(100),
-        decimal_places=3, widget=NumberInput(attrs={'step': 'any'}))
+        decimal_places=3, error_messages=error_messages)
 
-    def __init__(self, *args, **kwargs):
-        """
-        If a Source is passed in as an argument, then get
-        the annotation area of that Source,
-        and use that to fill the form fields' initial values.
-        """
-        if 'source' in kwargs:
-            source = kwargs.pop('source')
+    field_order = AnnotationArea.number_field_order
 
-            if source.image_annotation_area:
-                kwargs['initial'] = AnnotationAreaUtils.db_format_to_percentages(source.image_annotation_area)
+    def __init__(self, **kwargs):
+        self.widget = AnnotationAreaPercentsWidget(field=self)
 
-        self.form_help_text = Source._meta.get_field('image_annotation_area').help_text
+        self.min_x.widget.attrs |= {'step': 'any', 'size': 3}
+        self.max_x.widget.attrs |= {'step': 'any', 'size': 3}
+        self.min_y.widget.attrs |= {'step': 'any', 'size': 3}
+        self.max_y.widget.attrs |= {'step': 'any', 'size': 3}
 
-        super().__init__(*args, **kwargs)
+        # Some kwargs from the model field (which would be passed in by a
+        # ModelForm) can't be applied directly to MultiValueField.
+        kwargs.pop('max_length')
+        # TODO: Might not need this line if image_annotation_area model field
+        #  becomes non-null, which it seems it should.
+        kwargs.pop('empty_value')
 
+        super().__init__(
+            fields=[
+                getattr(self, field_name) for field_name in self.field_order],
+            require_all_fields=True,
+            error_messages = {
+                'required': "All of these fields are required.",
+            },
+            **kwargs)
 
-    def clean(self):
-        data = self.cleaned_data
+    def compress(self, data_list):
+        # For DateFilterField, data_list was empty sometimes. Not sure if that
+        # also applies to this field, but here's a case to handle it.
+        if not data_list:
+            return dict()
 
-        if 'min_x' in data and 'max_x' in data:
+        values_dict = dict(zip(self.field_order, data_list))
+        area = AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES, **values_dict)
 
-            if data['min_x'] >= data['max_x']:
-                self.add_error('max_x', "The right boundary x must be greater than the left boundary x.")
-                # Also mark min_x as being errored
-                del data['min_x']
+        if area.min_x >= area.max_x:
+            raise ValidationError(
+                "The right boundary x must be greater than"
+                " the left boundary x.",
+                code='require_positive_width')
 
-        if 'min_y' in data and 'max_y' in data:
+        if area.min_y >= area.max_y:
+            raise ValidationError(
+                "The bottom boundary y must be greater than"
+                " the top boundary y.",
+                code='require_positive_height')
 
-            if data['min_y'] >= data['max_y']:
-                self.add_error('max_y', "The bottom boundary y must be greater than the top boundary y.")
-                # Also mark min_y as being errored
-                del data['min_y']
-
-        self.cleaned_data = data
-        super().clean()
+        return area.db_value
 
 
 class AnnotationAreaPixelsForm(Form):
@@ -197,14 +237,15 @@ class AnnotationAreaPixelsForm(Form):
         image = kwargs.pop('image')
 
         if image.metadata.annotation_area:
-            d = AnnotationAreaUtils.db_format_to_numbers(image.metadata.annotation_area)
-            annoarea_type = d.pop('type')
-            if annoarea_type == AnnotationAreaUtils.TYPE_PERCENTAGES:
-                kwargs['initial'] = AnnotationAreaUtils.percentages_to_pixels(width=image.original_width, height=image.original_height, **d)
-            elif annoarea_type == AnnotationAreaUtils.TYPE_PIXELS:
-                kwargs['initial'] = d
-            elif annoarea_type == AnnotationAreaUtils.TYPE_IMPORTED:
-                raise ValueError("Points were imported; annotation area should be un-editable.")
+            area = AnnotationArea.from_db_value(image.metadata.annotation_area)
+            area = AnnotationArea.to_pixels(
+                area, width=image.original_width, height=image.original_height)
+            kwargs['initial'] = dict(
+                min_x=area.min_x,
+                max_x=area.max_x,
+                min_y=area.min_y,
+                max_y=area.max_y,
+            )
 
         super().__init__(*args, **kwargs)
 

@@ -6,7 +6,6 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 
-from images.model_utils import PointGen
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
@@ -180,9 +179,9 @@ class FilepathFieldsTest(CPCExportBaseTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
             # 1 point per image
-            number_of_cell_rows=1, number_of_cell_columns=1,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1),
             confidence_threshold=80,
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
@@ -449,7 +448,8 @@ class AnnotationAreaTest(
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(
-            cls.user, min_x=5, max_x=95, min_y=10, max_y=90)
+            cls.user,
+            image_annotation_area=dict(min_x=5, max_x=95, min_y=10, max_y=90))
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
 
@@ -585,9 +585,9 @@ class PointLocationsTest(CPCExportBaseTest, UploadAnnotationsCsvTestMixin):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.UNIFORM,
             # 2 points per image
-            number_of_cell_rows=1, number_of_cell_columns=2)
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=2))
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
 
@@ -831,7 +831,7 @@ class AnnotationFilterTest(CPCExportBaseTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
             confidence_threshold=80,
         )
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
@@ -928,7 +928,7 @@ class LabelMappingTest(CPCExportBaseTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
         labels = cls.create_labels(
             cls.user, ['A', 'B+X', 'C+Y+Z'], 'GroupA')
@@ -1119,7 +1119,7 @@ class UnicodeTest(CPCExportBaseTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            simple_number_of_points=3,
+            default_point_generation_method=dict(type='simple', points=3),
         )
 
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')

@@ -1,4 +1,5 @@
 {% extends "sources/base_source.html" %}
+{% load static %}
 {% load async_media_batch_key thumbnail_async from async_media_tags %}
 {% load jsonify from common_tags %}
 
@@ -8,7 +9,6 @@
 {% endblock %}
 
 {% block page-specific-includes %}
-  {% include "static-local-include.html" with type="js" path="js/ImageSearchHelper.js" %}
   {% include "static-local-include.html" with type="js" path="js/BrowseActionHelper.js" %}
   {% include "static-local-include.html" with type="js" path="js/CalcifyTablesHelper.js" %}
 
@@ -64,9 +64,14 @@
   {% endif %}
 
   {# Script in the body will run on page load. #}
-  <script type="text/javascript">
-    ImageSearchHelper.init();
 
+  <script type="module">
+    import MultiValueFieldHelper from "{% static 'js/MultiValueFieldHelper.js' %}";
+    MultiValueFieldHelper.setUpFieldBasedVisibility(
+        document.getElementById('search-form'));
+  </script>
+
+  <script type="text/javascript">
     {% if page_results.paginator.count > 0 and user.is_authenticated %}
       {# Action form is present. #}
       let browseActionHelper = new BrowseActionHelper(

@@ -18,6 +18,11 @@ class QUnitView(View, ABC):
 
     # Subclasses can override this if they need a specific template's
     # content for the test runs.
+    #
+    # Important: watch out for Javascript that runs on page load! In general,
+    # the page elements active on page load won't be the same as the page
+    # elements active during the QUnit tests (fixture loading has no
+    # guarantees about that).
     test_template_name = 'base.html'
 
     # Subclasses must specify these.

@@ -2,7 +2,6 @@ import os
 import tempfile
 from unittest import mock, skip
 
-from images.model_utils import PointGen
 from images.models import Point
 from lib.tests.utils import ManagementCommandTest
 
@@ -36,8 +35,8 @@ class RemovePointOutliersTest(ManagementCommandTest):
         # Set up data
         user = self.create_user()
         source = self.create_source(
-            user, point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5)
+            user,
+            default_point_generation_method=dict(type='simple', points=5))
         labels = self.create_labels(user, ['A', 'B'], 'GroupA')
         self.create_labelset(user, source, labels)
 

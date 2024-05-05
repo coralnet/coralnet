@@ -1,0 +1,52 @@
+<div class="form-fields-grid">
+
+  {# Elements here should be defined in pairs, in order to make the grid layout work. First element goes on the left column, second element goes on the right column. Alternatively, an element can have the CSS rule `grid-column: span 2;` to take up an entire row. #}
+
+  {% for field, errors in fields %}
+    {% with widget=field.field.widget %}
+
+      <div class="field-errors" id="{{ field.html_name }}-field-errors">
+        {{ errors|safe }}
+      </div>
+
+      {% if widget.input_type == 'checkbox' and not widget.allow_multiple_selected %}
+
+        {# Single checkbox #}
+
+        <div></div>
+
+        <div>
+          {{ field }}
+          <label for="{{ field.id_for_label }}">
+            {{ field.label }}
+          </label>
+          {% include "form_generic_one_field_help_text.html" with field=field %}
+        </div>
+
+      {% elif widget.use_subfield_labels %}
+
+        {# The field is a MultiValueField with a flag set to use subfield labels. In this case we make sure to not show the overall field's label, and the field's specific template should take care of showing the subfield labels. #}
+        {{ field }}
+
+      {% else %}
+
+        {# All other field types #}
+
+        {% with input_type=widget.input_type %}
+          <label for="{{ field.id_for_label }}"
+                 class="left-col-label {{ input_type }}">
+            {{ field.label }}:
+          </label>
+        {% endwith %}
+
+        <div>
+          {{ field }}
+          {% include "form_generic_one_field_help_text.html" with field=field %}
+        </div>
+
+      {% endif %}
+
+    {% endwith %}
+  {% endfor %}
+
+</div>

@@ -82,7 +82,8 @@ class FileTypeTest(BaseCalcifyStatsExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            min_x=0, max_x=100, min_y=0, max_y=100, simple_number_of_points=5)
+            image_annotation_area=dict(min_x=0, max_x=100, min_y=0, max_y=100),
+            default_point_generation_method=dict(type='simple', points=5))
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
@@ -197,7 +198,8 @@ class ExportTest(BaseCalcifyStatsExportTest):
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(
-            cls.user, name="Test source", simple_number_of_points=5)
+            cls.user, name="Test source",
+            default_point_generation_method=dict(type='simple', points=5))
 
         cls.labels = cls.create_labels(
             cls.user, ['A', 'B', 'C'], 'GroupA')
@@ -530,7 +532,8 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(
-            cls.user, simple_number_of_points=5)
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=5))
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
@@ -682,7 +685,9 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
 
-        source2 = self.create_source(self.user, simple_number_of_points=5)
+        source2 = self.create_source(
+            self.user,
+            default_point_generation_method=dict(type='simple', points=5))
         self.create_labelset(self.user, source2, self.labels)
         img2 = self.upload_image(self.user, source2, dict(filename='2.jpg'))
         self.add_annotations(self.user, img2, {
@@ -704,7 +709,7 @@ class LabelColumnsTest(BaseCalcifyStatsExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            min_x=0, max_x=100, min_y=0, max_y=100, simple_number_of_points=5)
+            default_point_generation_method=dict(type='simple', points=5))
         # To test ordering by group and then name/code, we'll stagger the
         # alphabetical ordering between two label groups.
         labels_a = cls.create_labels(cls.user, ['A1', 'B1', 'C1'], 'Group1')
@@ -799,7 +804,8 @@ class UnicodeTest(BaseCalcifyStatsExportTest):
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(
-            cls.user, simple_number_of_points=5)
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=5))
 
         labels = cls.create_labels(cls.user, ['A'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
@@ -973,7 +979,7 @@ class PerformanceTest(BaseCalcifyStatsExportTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(
             cls.user,
-            min_x=0, max_x=100, min_y=0, max_y=100, simple_number_of_points=20)
+            default_point_generation_method=dict(type='simple', points=20))
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 

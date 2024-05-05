@@ -1,10 +1,15 @@
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.forms import Form, ModelForm
 from django.forms.fields import CharField, ChoiceField
 from django.forms.widgets import NumberInput, TextInput
+from django.urls import reverse
 
+from annotations.forms import AnnotationAreaPercentsField
+from images.forms import PointGenField
 from images.utils import get_aux_label_field_names
+from lib.forms import FieldsetsFormComponent, GridFormRenderer
 from .models import Source, SourceInvite
 from .utils import aux_label_name_collisions
 
@@ -25,24 +30,38 @@ def validate_aux_meta_field_name(field_name):
     return field_name
 
 
-class ImageSourceForm(ModelForm):
+# This probably would go better in a '?' button's help text,
+# which is generally defined in an HTML template.
+confidence_threshold_help_text = \
+"""The CoralNet alleviate feature offers a trade-off between fully automated and fully manual annotation. This is done by auto-accepting machine annotations when they are sufficiently confident.
 
-    class Media:
-        js = (
-            "js/SourceFormHelper.js",
-        )
+This auto-acceptance happens when you enter the annotation tool for an image. Effectively, the machine's most confident points are "alleviated" from your annotation workload (for that image). Alleviated annotation decisions are treated as 'Confirmed', and are included when you export your annotations.
+
+Users control this functionality by specifying the classifier confidence threshold. For example, with 90% confidence threshold all point annotation for which the classifier is more than 90% confident will be done automatically.
+
+When the first robot version is trained for your source, you can see the trade-off between confidence threshold, the fraction of points above each threshold, and the annotation accuracy. We recommend that you set the confidence threshold to 100% until you have seen this trade-off curve.
+
+<a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">This study</a> suggests that a 5% drop is annotation accuracy has marginal (if any) impact on derived cover estimates. We therefore suggest that you set the level of confidence threshold corresponding to a 5% drop in accuracy.
+"""
+
+
+class SourceForm(FieldsetsFormComponent, ModelForm):
 
     class Meta:
         model = Source
-        # Some of the fields are handled by separate forms, so this form
-        # doesn't have all of the Source model's fields.
         fields = [
             'name', 'visibility', 'description', 'affiliation',
             'key1', 'key2', 'key3', 'key4', 'key5',
+            'default_point_generation_method',
+            'image_annotation_area',
             'confidence_threshold',
             'feature_extractor_setting',
             'longitude', 'latitude',
         ]
+        field_classes = {
+            'default_point_generation_method': PointGenField,
+            'image_annotation_area': AnnotationAreaPercentsField,
+        }
         widgets = {
             'confidence_threshold': NumberInput(
                 attrs={'min': 0, 'max': 100, 'size': 3}),
@@ -50,25 +69,105 @@ class ImageSourceForm(ModelForm):
             'latitude': TextInput(attrs={'size': 10}),
         }
 
+    default_renderer = GridFormRenderer
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        if self.instance.pk:
+        is_edit_form = self.instance.pk is not None
+
+        if is_edit_form:
             # Edit source form should have a way to detect and indicate (via
             # Javascript) that the feature extractor setting has changed.
             self.fields['feature_extractor_setting'].widget.attrs.update({
                 'data-original-value': self.instance.feature_extractor_setting,
-                'onchange': 'SourceFormHelper.updateVisibilityOfExtractorChangeWarning()',
             })
-        else:
-            # New source form shouldn't have this field.
+
+        if not is_edit_form or not self.instance.enable_robot_classifier:
+            # This field should not be in the new source form, or in the
+            # edit source form when classifiers are disabled.
             del self.fields['confidence_threshold']
+
+        if is_edit_form and not self.instance.enable_robot_classifier:
+            # This field should not be in the edit form when classifiers are
+            # disabled.
+            del self.fields['feature_extractor_setting']
 
         # These aren't required by the model (probably to support old sources)
         # but should be required in the form.
         self.fields['longitude'].required = True
         self.fields['latitude'].required = True
+
+        # This fieldsets definition uses stuff that can't be evaluated
+        # at import time, such as reverse(), so we define it
+        # in __init__() here.
+        self.fieldsets = [
+            dict(
+                header="General Information",
+                help_text=f"""To learn about the differences between public and private sources, please read our <a href="{reverse('about')}#datapolicy">data policy</a>.""",
+                fields=[
+                    'name', 'visibility', 'affiliation', 'description',
+                ],
+            ),
+
+            dict(
+                header="Names for Auxiliary Metadata Fields",
+                help_text="""We provide several standard metadata fields for your images such as Date, Camera, Photographer, etc. These 5 auxiliary metadata fields, on the other hand, can be named anything you like.
+                
+                    We encourage using these auxiliary metadata fields to guide how your images are organized. For example, if your coral images are taken at 5 different sites, then you can name one of these metadata fields Site, and then specify a site for each image: North Point, East Shore, etc. You will then be able to do things such as browse through all unannotated images from North Point, or aggregate coral coverage statistics over the images from East Shore.
+                 
+                    You can use as few or as many of these 5 metadata fields as you like.""",
+                fields=[
+                    'key1', 'key2', 'key3', 'key4', 'key5',
+                ],
+            ),
+
+            dict(
+                header="Image Annotation",
+                subfieldsets=[
+                    dict(
+                        header="Default image annotation area",
+                        help_text="""This defines a rectangle of the image where annotation points are allowed to be generated.
+                            For example, X boundaries of 10% and 95% mean that the leftmost 10% and the rightmost 5% of the image will not have any points. Decimals like 95.6% are allowed.
+                            Later, you can also set these boundaries as pixel counts on a per-image basis; for images that don't have a specific value set, these percentages will be used.""",
+                        fields=[
+                            'image_annotation_area',
+                        ],
+                        template_name='annotations/annotation_area_percents_fieldset.html',
+                    ),
+
+                    dict(
+                        header="Point generation method",
+                        help_text="""When we create annotation points for uploaded images, this is how we'll generate the point locations.
+                            Note that if you change this setting later on, it will NOT apply to images that are already uploaded.""",
+                        fields=[
+                            'default_point_generation_method',
+                        ],
+                    ),
+
+                    dict(
+                        header="Level of alleviation",
+                        help_text=confidence_threshold_help_text,
+                        fields=['confidence_threshold'],
+                    ),
+
+                    dict(
+                        header="Feature extractor",
+                        help_text="""We recommend the EfficientNet extractor for all use-cases. It is faster and 2-3% more accurate on average. It is a more modern neural network architecture and trained on more data. The legacy VGG16 extractor is provided only for sources that want to retain their old classifiers, for example, if they are already deployed in a survey.""",
+                        fields=['feature_extractor_setting'],
+                    ),
+                ],
+            ),
+
+            dict(
+                header="World Location",
+                help_text=f"""We'll use this to mark your source on our front-page map. Your source will be shown on the map if it contains at least {settings.MAP_IMAGE_COUNT_TIERS[0]} images, and the source name doesn't include words like "test". To get your source's coordinates, try <a href="https://www.latlong.net/" target="_blank">latlong.net</a>.""",
+                fields=[
+                    'latitude', 'longitude',
+                ],
+            ),
+        ]
 
     def clean_key1(self):
         return validate_aux_meta_field_name(self.cleaned_data['key1'])
@@ -85,7 +184,7 @@ class ImageSourceForm(ModelForm):
         data = self.cleaned_data['latitude']
         try:
             latitude = float(data)
-        except:
+        except ValueError:
             raise ValidationError("Latitude is not a number.")
         if latitude < -90 or latitude > 90:
             raise ValidationError("Latitude is out of range.")
@@ -95,7 +194,7 @@ class ImageSourceForm(ModelForm):
         data = self.cleaned_data['longitude']
         try:
             longitude = float(data)
-        except:
+        except ValueError:
             raise ValidationError("Longitude is not a number.")
         if longitude < -180 or longitude > 180:
             raise ValidationError("Longitude is out of range.")

@@ -1,11 +1,11 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.forms import BaseModelFormSet, Form, ModelForm
-from django.forms.fields import ChoiceField, IntegerField
-from django.forms.widgets import NumberInput, Select, TextInput
+from django.forms import BaseModelFormSet, ModelForm
+from django.forms.fields import ChoiceField, IntegerField, MultiValueField
+from django.forms.widgets import TextInput
 
-from sources.models import Source
-from .model_utils import PointGen
+from lib.forms import EnhancedMultiWidget
+from .model_utils import PointGen, PointGenerationTypes
 from .models import Metadata
 
 
@@ -121,135 +121,141 @@ class BaseMetadataFormSet(BaseModelFormSet):
                 )
 
 
-class PointGenForm(Form):
+class PointGenWidget(EnhancedMultiWidget):
 
-    class Media:
-        js = (
-            "js/PointGenFormHelper.js",
-        )
+    template_name = 'images/point_gen_field.html'
 
-    point_generation_type = ChoiceField(
+    use_subfield_labels = True
+
+    visibility_specs = {
+        # Conditionally visible field: (
+        #     control field,
+        #     control value(s) that would make the field visible,
+        # )
+        'points': (
+            'type',
+            [PointGen.Types.SIMPLE.value],
+        ),
+
+        'cell_rows': (
+            'type',
+            [PointGen.Types.STRATIFIED.value,
+             PointGen.Types.UNIFORM.value],
+        ),
+
+        'cell_columns': (
+            'type',
+            [PointGen.Types.STRATIFIED.value,
+             PointGen.Types.UNIFORM.value],
+        ),
+
+        'per_cell': (
+            'type',
+            [PointGen.Types.STRATIFIED.value],
+        ),
+    }
+
+    def decompress(self, value):
+        point_gen_spec = PointGen.from_db_value(value)
+        return [
+            getattr(point_gen_spec, field_name, None)
+            for field_name in self.field.field_order
+        ]
+
+
+number_error_messages = {
+    'min_value': "Please use positive integers only.",
+}
+
+
+class PointGenField(MultiValueField):
+    # To be filled in by __init__()
+    widget = None
+
+    type = ChoiceField(
         label='Point generation type',
-        choices=Source.POINT_GENERATION_CHOICES,
-        widget=Select(
-            attrs={'onchange': 'PointGenFormHelper.showOnlyRelevantFields()'}),
+        choices=PointGenerationTypes.choices,
+        # Seems the 'incomplete' message is used when a subfield
+        # like this is required and not filled in.
+        error_messages={'incomplete': "Missing type value."},
     )
 
-    # The following fields may or may not be required depending on the
-    # point_generation_type. We'll make all of them not required by default
-    # (so that browser-side required field checks don't block form submission),
-    # Then in clean(), we'll account for errors on fields that
-    # we decide are required.
-
     # For simple random
-    simple_number_of_points = IntegerField(
-        label='Number of annotation points', required=False,
-        min_value=1, max_value=settings.MAX_POINTS_PER_IMAGE,
-        widget=NumberInput(attrs={'size': 3}),
+    points = IntegerField(
+        label='Number of points', required=False, min_value=1,
+        error_messages=number_error_messages,
     )
 
     # For stratified random and uniform grid
-    number_of_cell_rows = IntegerField(
-        label='Number of cell rows', required=False,
-        min_value=1, max_value=settings.MAX_POINTS_PER_IMAGE,
-        widget=NumberInput(attrs={'size': 3}),
+    cell_rows = IntegerField(
+        label='Number of cell rows', required=False, min_value=1,
+        error_messages=number_error_messages,
     )
-    number_of_cell_columns = IntegerField(
-        label='Number of cell columns', required=False,
-        min_value=1, max_value=settings.MAX_POINTS_PER_IMAGE,
-        widget=NumberInput(attrs={'size': 3}),
+    cell_columns = IntegerField(
+        label='Number of cell columns', required=False, min_value=1,
+        error_messages=number_error_messages,
     )
 
     # For stratified random
-    stratified_points_per_cell = IntegerField(
-        label='Points per cell', required=False,
-        min_value=1, max_value=settings.MAX_POINTS_PER_IMAGE,
-        widget=NumberInput(attrs={'size': 3}),
+    per_cell = IntegerField(
+        label='Points per cell', required=False, min_value=1,
+        error_messages=number_error_messages,
     )
 
-    def __init__(self, *args, **kwargs):
-        """
-        If a Source is passed in as an argument, then get
-        the point generation method of that Source,
-        and use that to fill the form fields' initial values.
-        """
-        if 'source' in kwargs:
-            source = kwargs.pop('source')
-            kwargs['initial'] = PointGen.db_to_args_format(
-                source.default_point_generation_method)
+    field_order = PointGen.source_form_field_order
 
-        self.form_help_text = \
-            Source._meta.get_field('default_point_generation_method').help_text
+    def __init__(self, **kwargs):
+        self.widget = PointGenWidget(field=self)
 
-        super().__init__(*args, **kwargs)
+        self.points.widget.attrs |= {'size': 3}
+        self.cell_rows.widget.attrs |= {'size': 3}
+        self.cell_columns.widget.attrs |= {'size': 3}
+        self.per_cell.widget.attrs |= {'size': 3}
 
-    def clean(self):
-        cleaned_data = super().clean()
-        point_gen_type = cleaned_data.get('point_generation_type')
-        if not point_gen_type:
-            # Already have an error on the type, no need to clean further
-            return
+        # Some kwargs from the model field (which would be passed in by a
+        # ModelForm) can't be applied directly to MultiValueField.
+        kwargs.pop('max_length')
 
-        point_gen_number_fields = {
-            'simple_number_of_points', 'number_of_cell_rows',
-            'number_of_cell_columns', 'stratified_points_per_cell'}
+        super().__init__(
+            fields=[
+                getattr(self, field_name) for field_name in self.field_order],
+            require_all_fields=False, **kwargs)
 
-        # Depending on the point generation type that was picked, different
-        # fields are going to be required or not. Identify the required fields
-        # (other than the point-gen type).
-        required_number_fields = set()
-        if point_gen_type == PointGen.Types.SIMPLE:
-            required_number_fields = {'simple_number_of_points'}
-        elif point_gen_type == PointGen.Types.STRATIFIED:
-            required_number_fields = {
-                'number_of_cell_rows', 'number_of_cell_columns',
-                'stratified_points_per_cell'}
-        elif point_gen_type == PointGen.Types.UNIFORM:
-            required_number_fields = {
-                'number_of_cell_rows', 'number_of_cell_columns'}
+    def compress(self, data_list):
+        # For DateFilterField, data_list was empty sometimes. Not sure if that
+        # also applies to this field, but here's a case to handle it.
+        if not data_list:
+            return dict()
 
-        # Delete errors on the non-applicable fields. It would be
-        # confusing if these errors counted, since the fields would be
-        # invisible.
-        non_applicable_fields = point_gen_number_fields - required_number_fields
-        for field_name in non_applicable_fields:
-            if field_name in self._errors:
-                del self._errors[field_name]
+        field_values = {
+            field_name: data_list[index]
+            for index, field_name in enumerate(self.field_order)
+        }
+        field_labels = {
+            field_name: getattr(self, field_name).label
+            for field_name in self.field_order
+        }
 
-        # Add 'required' errors to blank applicable fields.
-        for field_name in required_number_fields:
-            if field_name not in cleaned_data:
-                # The field is non-blank with an invalid value.
-                continue
-            if cleaned_data[field_name] is None:
-                # The field is blank.
-                self.add_error(
-                    field_name,
-                    ValidationError("This field is required.", code='required'))
+        point_gen_spec = PointGen(**field_values)
 
-        if not self._errors:
-            # No errors so far, so do a final check of
-            # the total number of points specified.
-            # It should be between 1 and settings.MAX_POINTS_PER_IMAGE.
-            num_points = 0
+        # Validate that the applicable fields are present for the type.
+        missing_fields = [
+            name for name in point_gen_spec.number_fields
+            if getattr(point_gen_spec, name) is None
+        ]
+        if missing_fields:
+            missing_values_str = ', '.join([
+                field_labels[name] for name in missing_fields])
+            raise ValidationError(
+                f"Missing value(s): {missing_values_str}",
+                code='incomplete')
 
-            if point_gen_type == PointGen.Types.SIMPLE:
-                num_points = cleaned_data['simple_number_of_points']
-            elif point_gen_type == PointGen.Types.STRATIFIED:
-                num_points = (
-                    cleaned_data['number_of_cell_rows']
-                    * cleaned_data['number_of_cell_columns']
-                    * cleaned_data['stratified_points_per_cell'])
-            elif point_gen_type == PointGen.Types.UNIFORM:
-                num_points = (
-                    cleaned_data['number_of_cell_rows']
-                    * cleaned_data['number_of_cell_columns'])
+        point_count = point_gen_spec.total_points
+        if point_count > settings.MAX_POINTS_PER_IMAGE:
+            raise ValidationError(
+                f"You specified {point_count} points total."
+                f" Please make it no more than"
+                f" {settings.MAX_POINTS_PER_IMAGE}.",
+                code='too_many_points')
 
-            if num_points > settings.MAX_POINTS_PER_IMAGE:
-                # Raise a non-field error (error applying to the form as a
-                # whole).
-                raise ValidationError(
-                    "You specified {num_points} points total."
-                    " Please make it no more than {max_points}.".format(
-                        num_points=num_points,
-                        max_points=settings.MAX_POINTS_PER_IMAGE))
+        return point_gen_spec.db_value

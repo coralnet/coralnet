@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 from django.conf import settings
 
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from export.utils import create_zip_stream_response, write_zip
 from images.models import Image, Point
 from lib.exceptions import FileProcessError
@@ -198,26 +198,21 @@ def write_annotations_cpc(cpc_stream: StringIO, img: Image, cpc_prefs: dict):
     # Order: Bottom left, bottom right, top right, top left.
     # Get from the image model if present, otherwise make it the whole image.
 
-    anno_area = AnnotationAreaUtils.db_format_to_numbers(
-        img.metadata.annotation_area)
-    anno_area_type = anno_area.pop('type')
-    if anno_area_type == AnnotationAreaUtils.TYPE_PIXELS:
-        # This is the format we want
-        pass
-    elif anno_area_type == AnnotationAreaUtils.TYPE_PERCENTAGES:
-        # Convert to pixels
-        anno_area = AnnotationAreaUtils.percentages_to_pixels(
-            width=img.original_width, height=img.original_height, **anno_area)
-    elif anno_area_type == AnnotationAreaUtils.TYPE_IMPORTED:
-        # Unspecified; just use the whole image
-        anno_area = dict(
+    anno_area = AnnotationArea.from_db_value(img.metadata.annotation_area)
+    try:
+        anno_area = AnnotationArea.to_pixels(
+            anno_area, width=img.original_width, height=img.original_height)
+    except ValueError:
+        # Unspecified pixels (i.e. imported); just use the whole image
+        anno_area = AnnotationArea(
+            type=AnnotationArea.TYPE_PIXELS,
             min_x=0, max_x=img.max_column,
             min_y=0, max_y=img.max_row)
 
-    bound_left = str(anno_area['min_x'] * 15)
-    bound_right = str(anno_area['max_x'] * 15)
-    bound_top = str(anno_area['min_y'] * 15)
-    bound_bottom = str(anno_area['max_y'] * 15)
+    bound_left = str(anno_area.min_x * 15)
+    bound_right = str(anno_area.max_x * 15)
+    bound_top = str(anno_area.min_y * 15)
+    bound_bottom = str(anno_area.max_y * 15)
     annotation_area = dict(
         bottom_left=[bound_left, bound_bottom],
         bottom_right=[bound_right, bound_bottom],

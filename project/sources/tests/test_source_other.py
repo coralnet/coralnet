@@ -9,7 +9,6 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from images.model_utils import PointGen
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest
 from newsfeed.models import NewsItem
@@ -284,9 +283,8 @@ class SourceMainTest(ClientTest):
     def test_source_fields_box_1_basics(self):
         source = self.create_source(
             self.user,
-            min_x=0, max_x=100, min_y=5, max_y=95,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=5,
+            image_annotation_area=dict(min_x=0, max_x=100, min_y=5, max_y=95),
+            default_point_generation_method=dict(type='simple', points=5),
             confidence_threshold=80,
             feature_extractor_setting='efficientnet_b0_ver1',
             description="This is a\nmultiline description.")
@@ -364,8 +362,8 @@ class SourceMainTest(ClientTest):
 
     def test_image_status_box(self):
         source = self.create_source(
-            self.user, point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=1)
+            self.user,
+            default_point_generation_method=dict(type='simple', points=1))
         labels = self.create_labels(self.user, ['A', 'B'], 'GroupA')
         self.create_labelset(self.user, source, labels)
         robot = self.create_robot(source)

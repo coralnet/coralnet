@@ -1,56 +1,69 @@
-var SourceFormHelper = {
+/*
+For now, the functionality here only applies to the edit source form,
+not the new source form. That may change later though.
+ */
+class SourceFormHelper {
+
+    constructor() {
+        this.extractorSettingField =
+            document.getElementById('id_feature_extractor_setting');
+        if (!this.extractorSettingField) {
+            // Currently, everything in this class is only relevant when
+            // the feature extractor setting field is there.
+            return;
+        }
+
+        this.warningElement =
+            document.getElementById('feature-extractor-change-warning');
+        this.form =
+            document.getElementById('source-form');
+
+        // Move the warning element into the appropriate part of the form.
+        let extractorSettingFieldGrid =
+            this.extractorSettingField.closest('.form-fields-grid');
+        extractorSettingFieldGrid.parentNode.insertBefore(
+            this.warningElement, extractorSettingFieldGrid);
+
+        // When field changes, update visibility of the warning.
+        this.extractorSettingField.addEventListener(
+            'change',
+            this.updateVisibilityOfExtractorChangeWarning.bind(this));
+        // Initialize visibility.
+        this.updateVisibilityOfExtractorChangeWarning();
+
+        // Custom form-submit handler to show a confirmation dialog.
+        this.form.addEventListener(
+            'submit',
+            this.submitForm.bind(this));
+    }
 
     /*
     See if the value of the extractor field is different from what the
     value initially was.
     */
-    extractorHasChanged: function() {
-        var extractorSettingElement = document.getElementById(
-            'id_feature_extractor_setting');
-
-        if (!extractorSettingElement.hasAttribute('data-original-value')) {
-            // If no original value, then this is the new source form, and
-            // we just report as not changed.
-            return false;
-        }
-
-        var originalValue = extractorSettingElement.getAttribute(
-            'data-original-value');
-        var currentValue = extractorSettingElement.value;
-
-        return originalValue !== currentValue;
-    },
+    extractorHasChanged() {
+        let originalValue = this.extractorSettingField.dataset.originalValue;
+        return originalValue !== this.extractorSettingField.value;
+    }
 
     /*
     If the extractor has changed, show the associated warning message.
     */
-    updateVisibilityOfExtractorChangeWarning: function() {
-        var warningElement = document.getElementById(
-            'feature-extractor-change-warning');
-        if (!warningElement) {
-            // New source form. No action needed here.
-            return;
-        }
+    updateVisibilityOfExtractorChangeWarning() {
+        this.warningElement.hidden = !this.extractorHasChanged();
+    }
 
-        if (SourceFormHelper.extractorHasChanged()) {
-            warningElement.style.display = 'block';
-        }
-        else {
-            warningElement.style.display = 'none';
-        }
-    },
-
-    submitEditForm: function() {
-        if (SourceFormHelper.extractorHasChanged()) {
-            return window.confirm(
+    submitForm(event) {
+        if (this.extractorHasChanged()) {
+            if (!window.confirm(
                 "Since the feature extractor has been changed,"
                 + " this source's entire classifier history will be deleted,"
                 + " and a new classifier will be generated."
-                + " Is this OK?");
+                + " Is this OK?")) {
+                event.preventDefault();
+            }
         }
-
-        return true;
     }
-};
+}
 
-util.addLoadEvent(SourceFormHelper.updateVisibilityOfExtractorChangeWarning);
+export default SourceFormHelper;

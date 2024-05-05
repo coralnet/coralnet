@@ -27,6 +27,9 @@ div.form-fields-grid .left-col-label {
 div.form-fields-grid .left-col-label.file {
     line-height: 1.9em;
 }
+div.form-fields-grid .left-col-label.number {
+    line-height: 1.5em;
+}
 div.form-fields-grid .left-col-label.select {
     line-height: 1.9em;
 }
@@ -73,7 +76,105 @@ div.form-box div.field-and-label-wrapper {
 }
 
 
-/* Sizing specific fields */
+/* For sets of fields that should be grouped closely together. */
+fieldset {
+    padding-bottom: 5px;
+    border-bottom: 1px solid hsl(0, 0%, 70%);
+    margin-bottom: 20px;
+}
+
+/* Another level of grouping fields. */
+hr.subfieldset {
+    background-color: hsl(0, 0%, 90%);
+    border: none;
+    height: 1px;
+}
+
+
+/*
+Headers for forms, with subheaders delineating fieldsets, etc.
+
+<legend> is a special header, conventionally for fieldsets.
+Actually, legends are only supposed to be in fieldsets, according to W3C,
+so we should ensure we don't use them in other situations.
+In contrast, h1, h2, etc. can go anywhere and are thus suitable for
+general use.
+*/
+
+legend {
+    padding: 5px 0 6px 0;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 5px;
+    font-size: 1.3em;
+    color: #777;
+    font-weight: bold;
+	text-transform: uppercase;
+}
+h2.form,
+legend.small {
+    padding-bottom: 3px;
+    border-bottom: 1px solid hsl(0, 0%, 70%);
+    font-size: 1.2em;
+    color: hsl(0, 0%, 30%);
+    text-transform: none;
+}
+h3.form {
+    padding-bottom: 2px;
+    border-bottom: 1px solid hsl(0, 0%, 90%);
+    font-size: 1.0em;
+    color: hsl(0, 0%, 40%);
+    text-transform: none;
+}
+
+
+/* Help text for fields or fieldsets. For example, "No more than 20
+   characters", or a couple paragraphs on what a group of fields do. */
+
+.helptext {
+    display: block;
+    line-height: 120%;
+    width: 500px;
+}
+
+.helptext_small {
+    display: block;
+    font-size: 0.9em;
+    width: 500px;
+}
+
+.helptext_long {
+    line-height: 120%;
+    width: 800px;
+    margin: 10px 0;
+}
+
+.extra_help_text, .dialog_help_text {
+    /* Extra help text starts out hidden, and can be shown via Javascript
+       when the user clicks a button. */
+    display: none;
+}
+
+/* TODO: Link-styled elements that actually act as buttons instead of links
+    are confusing. Replace these at some point. */
+a.extra_help_text_link, a.dialog_help_text_link {
+    cursor: pointer;
+
+    font-size: 0.9em;
+}
+
+
+/* Sizing number fields. Browser support of `size` for input type number
+   is particularly unreliable, because this case actually isn't supported
+   in the W3C spec.
+   https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input#size
+   So we instead have CSS width rules which look at the size attribute. */
+
+input[type="number"][size="3"] {
+    width: 4em;
+}
+
+
+/* Specific fields. */
 
 #export-annotations-cpc-ajax-form input.cpc-filepath {
     width: 25em;
@@ -81,4 +182,9 @@ div.form-box div.field-and-label-wrapper {
 
 #label-search-form input[name="min_popularity"] {
     width: 50px;
+}
+
+#annotation-area-percent-fields-grid {
+    /* 4 columns: label, field, label, field */
+    grid-template-columns: 10em 7em 10em 7em;
 }

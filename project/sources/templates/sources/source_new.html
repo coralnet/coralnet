@@ -1,31 +1,35 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}New Source | CoralNet{% endblock %}
 
-{% block page-specific-includes %}
-    {% include "form_media_versioned.html" with form=pointGenForm %}
-    {% include "form_media_versioned.html" with form=sourceForm %}
-{% endblock %}
-
-{% block js-includes %}
-    {% include "javascript-includes.html" with jquery_form="yes" jquery_ui="yes" %}
-{% endblock %}
-
 {% block content %}
 
-    <legend>Create a New Source</legend>
-    <p>If you're not sure how to get started here, consider viewing our <a href="http://vimeo.com/104152471">Source setup tutorial</a> on Vimeo.</p>
+  <legend>Create a New Source</legend>
+  <p>If you're not sure how to get started here, consider viewing our <a href="https://vimeo.com/104152471">Source setup tutorial</a> on Vimeo.</p>
 
-    {% with source_form_type="new" %}
+  <div class="narrow_column">
+    <div class="page-section">
 
-    <form action="" method="post">{% csrf_token %}
-      {% include "sources/form_source.html" with sourceForm=sourceForm pointGenForm=pointGenForm annotationAreaForm=annotationAreaForm %}
+      <form action="" method="post" id="source-form" class="no-padding">
+        {% csrf_token %}
 
-      <div class="submit_button_wrapper_column_form">
-        <input type="submit" value="Create Source" />
-      </div>
-    </form>
+        {{ source_form }}
 
-    {% endwith %}
+        <div>
+          <input type="submit" class="red" value="Create Source" />
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  {# Script in the body will run on page load. #}
+
+  <script type="module">
+    import MultiValueFieldHelper from "{% static 'js/MultiValueFieldHelper.js' %}";
+    let sourceForm = document.getElementById('source-form');
+    MultiValueFieldHelper.setUpFieldBasedVisibility(sourceForm);
+  </script>
 
 {% endblock %}

@@ -13,7 +13,7 @@ from guardian.shortcuts import (
     remove_perm,
 )
 
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from labels.models import LabelSet
 from vision_backend.models import Classifier
@@ -71,11 +71,6 @@ class Source(models.Model):
     key4 = models.CharField('Aux. metadata 4', max_length=50, default="Aux4")
     key5 = models.CharField('Aux. metadata 5', max_length=50, default="Aux5")
 
-    POINT_GENERATION_CHOICES = (
-        (PointGen.Types.SIMPLE, PointGen.Types.SIMPLE_VERBOSE),
-        (PointGen.Types.STRATIFIED, PointGen.Types.STRATIFIED_VERBOSE),
-        (PointGen.Types.UNIFORM, PointGen.Types.UNIFORM_VERBOSE),
-    )
     default_point_generation_method = models.CharField(
         "Point generation method",
         help_text=(
@@ -84,9 +79,7 @@ class Source(models.Model):
             " setting later on, it will NOT apply to images that are already"
             " uploaded."),
         max_length=50,
-        default=PointGen.args_to_db_format(
-                    point_generation_type=PointGen.Types.SIMPLE,
-                    simple_number_of_points=200)
+        default=PointGen(type='simple', points=200).db_value,
     )
 
     image_annotation_area = models.CharField(
@@ -357,29 +350,20 @@ class Source(models.Model):
         else:
             return robot.accuracy
 
-    def image_annotation_area_display(self):
-        """
-        Display the annotation-area parameters in templates.
-        Usage: {{ mysource.annotation_area_display }}
-        """
-        return AnnotationAreaUtils.db_format_to_display(
-            self.image_annotation_area)
-
     def point_gen_method_display(self):
         """
         Display the point generation method in templates.
         Usage: {{ mysource.point_gen_method_display }}
         """
-        return PointGen.db_to_readable_format(
-            self.default_point_generation_method)
+        return str(
+            PointGen.from_db_value(self.default_point_generation_method))
 
     def annotation_area_display(self):
         """
         Display the annotation area parameters in templates.
         Usage: {{ mysource.annotation_area_display }}
         """
-        return AnnotationAreaUtils.db_format_to_display(
-            self.image_annotation_area)
+        return str(AnnotationArea.from_db_value(self.image_annotation_area))
 
     def get_current_classifier(self):
         """

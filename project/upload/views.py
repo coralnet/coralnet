@@ -8,7 +8,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from accounts.utils import get_imported_user
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from annotations.models import Annotation
 from images.forms import MetadataForm
 from images.model_utils import PointGen
@@ -68,11 +68,11 @@ def upload_images(request, source_id):
 
     auto_generate_points_message = (
         "We will generate points for the images you upload.\n"
-        "Your Source's point generation settings: {pointgen}\n"
-        "Your Source's annotation area settings: {annoarea}").format(
-            pointgen=PointGen.db_to_readable_format(
+        "Your Source's point generation settings: {point_gen}\n"
+        "Your Source's annotation area settings: {anno_area}").format(
+            point_gen=PointGen.from_db_value(
                 source.default_point_generation_method),
-            annoarea=AnnotationAreaUtils.db_format_to_display(
+            anno_area=AnnotationArea.from_db_value(
                 source.image_annotation_area),
         )
 
@@ -422,14 +422,14 @@ class AnnotationsUploadConfirmView(View):
         pass
 
     def update_image_and_metadata_fields(self, image, new_points):
-        image.point_generation_method = PointGen.args_to_db_format(
-            point_generation_type=PointGen.Types.IMPORTED,
-            imported_number_of_points=len(new_points)
-        )
+        image.point_generation_method = PointGen(
+            type=PointGen.Types.IMPORTED.value,
+            points=len(new_points)).db_value
         # Clear previously-uploaded CPC info.
         image.cpc_content = ''
         image.cpc_filename = ''
         image.save()
 
-        image.metadata.annotation_area = AnnotationAreaUtils.IMPORTED_STR
+        image.metadata.annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_IMPORTED).db_value
         image.metadata.save()

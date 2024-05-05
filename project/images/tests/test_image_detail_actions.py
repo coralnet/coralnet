@@ -4,7 +4,7 @@ from abc import ABC
 
 from django.urls import reverse
 
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest
@@ -24,9 +24,7 @@ class ImageDetailActionBaseTest(
         super().setUpTestData()
 
         cls.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.SIMPLE,
-                simple_number_of_points=2)
+            PointGen(type='simple', points=2).db_value
         cls.source.save()
 
         cls.img = cls.upload_image(cls.user, cls.source)
@@ -392,9 +390,7 @@ class ResetPointGenTest(ImageDetailActionBaseTest):
         # Change the source default point-gen method, so that it doesn't match
         # any of the images'
         self.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.UNIFORM,
-                number_of_cell_rows=1, number_of_cell_columns=2)
+            PointGen(type='uniform', cell_rows=1, cell_columns=2).db_value
         self.source.save()
 
         self.source_to_private()
@@ -404,9 +400,7 @@ class ResetPointGenTest(ImageDetailActionBaseTest):
         # Change the source default point-gen method, so that it doesn't match
         # any of the images'
         self.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.UNIFORM,
-                number_of_cell_rows=1, number_of_cell_columns=2)
+            PointGen(type='uniform', cell_rows=1, cell_columns=2).db_value
         self.source.save()
 
         self.source_to_public()
@@ -420,9 +414,7 @@ class ResetPointGenTest(ImageDetailActionBaseTest):
 
         # Change source point gen method
         self.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.UNIFORM,
-                number_of_cell_rows=1, number_of_cell_columns=2)
+            PointGen(type='uniform', cell_rows=1, cell_columns=2).db_value
         self.source.save()
         self.assertNotEqual(
             self.source.default_point_generation_method,
@@ -477,9 +469,7 @@ class ResetPointGenTest(ImageDetailActionBaseTest):
 
     def test_show_button_if_point_gen_method_is_not_default(self):
         self.source.default_point_generation_method = \
-            PointGen.args_to_db_format(
-                point_generation_type=PointGen.Types.UNIFORM,
-                number_of_cell_rows=1, number_of_cell_columns=2)
+            PointGen(type='uniform', cell_rows=1, cell_columns=2).db_value
         self.source.save()
 
         self.assertLinkPresent(self.user, self.img)
@@ -492,8 +482,9 @@ class ResetAnnotationAreaTest(ImageDetailActionBaseTest):
         # Change the default annotation area so that it doesn't match any of
         # the images'
         self.source.refresh_from_db()
-        self.source.image_annotation_area = \
-            AnnotationAreaUtils.percentages_to_db_format(5, 95, 5, 95)
+        self.source.image_annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES,
+            min_x=5, max_x=95, min_y=5, max_y=95).db_value
         self.source.save()
 
         self.source_to_private()
@@ -502,8 +493,9 @@ class ResetAnnotationAreaTest(ImageDetailActionBaseTest):
     def test_permission_public_source(self):
         # Change the default annotation area
         self.source.refresh_from_db()
-        self.source.image_annotation_area = \
-            AnnotationAreaUtils.percentages_to_db_format(5, 95, 5, 95)
+        self.source.image_annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES,
+            min_x=5, max_x=95, min_y=5, max_y=95).db_value
         self.source.save()
 
         self.source_to_public()
@@ -571,8 +563,9 @@ class ResetAnnotationAreaTest(ImageDetailActionBaseTest):
         self.assertLinkAbsent(self.user, self.img)
 
     def test_show_button_if_source_annotation_area_changed(self):
-        self.source.image_annotation_area = \
-            AnnotationAreaUtils.percentages_to_db_format(12, 88, 12, 88)
+        self.source.image_annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_PERCENTAGES,
+            min_x=12, max_x=88, min_y=12, max_y=88).db_value
         self.source.save()
 
         self.assertLinkPresent(self.user, self.img)

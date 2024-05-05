@@ -1,0 +1,12 @@
+{% for field, errors in fieldset.fields %}
+  {# The only field should be the MultiValueField. #}
+
+  <div class="field-errors" id="{{ field.html_name }}-field-errors">
+    {{ errors|safe }}
+  </div>
+
+  <div class="form-fields-grid" id="annotation-area-percent-fields-grid">
+    {# This delegates to the MultiWidget's template. #}
+    {{ field }}
+  </div>
+{% endfor %}

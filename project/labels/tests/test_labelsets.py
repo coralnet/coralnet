@@ -3,7 +3,6 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from calcification.models import CalcifyRateTable
-from images.model_utils import PointGen
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest
 from ..models import Label
@@ -154,8 +153,7 @@ class LabelsetAddRemoveTest(LabelTest):
         # Create source and labelset
         cls.source = cls.create_source(
             cls.user,
-            point_generation_type=PointGen.Types.SIMPLE,
-            simple_number_of_points=1)
+            default_point_generation_method=dict(type='simple', points=1))
         cls.create_labelset(cls.user, cls.source, Label.objects.filter(
             default_code__in=['A', 'B', 'C']))
 

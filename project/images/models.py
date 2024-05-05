@@ -9,7 +9,7 @@ from django.db import models
 from easy_thumbnails.fields import ThumbnailerImageField
 
 from accounts.utils import is_robot_user
-from annotations.model_utils import AnnotationAreaUtils
+from annotations.model_utils import AnnotationArea
 from lib.utils import rand_string
 from sources.models import Source
 from .managers import ImageQuerySet, PointQuerySet
@@ -157,12 +157,6 @@ class Image(models.Model):
         User, on_delete=models.SET_NULL,
         editable=False, null=True)
 
-    POINT_GENERATION_CHOICES = (
-        (PointGen.Types.SIMPLE, PointGen.Types.SIMPLE_VERBOSE),
-        (PointGen.Types.STRATIFIED, PointGen.Types.STRATIFIED_VERBOSE),
-        (PointGen.Types.UNIFORM, PointGen.Types.UNIFORM_VERBOSE),
-        (PointGen.Types.IMPORTED, PointGen.Types.IMPORTED_VERBOSE),
-    )
     point_generation_method = models.CharField(
         'How points were generated',
         max_length=50,
@@ -249,7 +243,7 @@ class Image(models.Model):
         Display the point generation method in templates.
         Usage: {{ myimage.point_gen_method_display }}
         """
-        return PointGen.db_to_readable_format(self.point_generation_method)
+        return str(PointGen.from_db_value(self.point_generation_method))
 
     def height_cm(self):
         return self.metadata.height_in_cm
@@ -259,8 +253,8 @@ class Image(models.Model):
         Display the annotation area parameters in templates.
         Usage: {{ myimage.annotation_area_display }}
         """
-        return AnnotationAreaUtils.db_format_to_display(
-            self.metadata.annotation_area)
+        return str(
+            AnnotationArea.from_db_value(self.metadata.annotation_area))
 
     def get_process_date_short_str(self):
         """

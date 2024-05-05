@@ -10,99 +10,153 @@ import math
 from django.db import models
 
 
-class AnnotationAreaUtils():
+class AnnotationArea:
+    """
+    Utility class for specifying annotation-area specs.
 
-    # Percentages are decimals.
-    # Pixels are integers.
-    # Database (db) format:
-    #     percentages - "5.7;94.5;10;90"
-    #     pixels - "125,1880,80,1600"
+    Percentages are decimals.
+    Pixels are integers.
+    Database (db) format:
+        percentages - '5.7;94.5;10;90'
+        pixels - '125,1880,80,1600'
+        imported - 'imported'
+    """
 
-    IMPORTED_STR = 'imported'
-    IMPORTED_DISPLAY = "(Imported points; not specified)"
+    IMPORTED_DB_VALUE = 'imported'
     TYPE_PERCENTAGES = 'percentages'
     TYPE_PIXELS = 'pixels'
     TYPE_IMPORTED = 'imported'
 
-    @staticmethod
-    def percentages_to_db_format(min_x, max_x, min_y, max_y):
-        return ';'.join([
-            str(min_x), str(max_x), str(min_y), str(max_y)
-        ])
+    number_field_order = [
+        'min_x', 'max_x', 'min_y', 'max_y',
+    ]
 
-    @staticmethod
-    def pixels_to_db_format(min_x, max_x, min_y, max_y):
-        return ','.join([
-            str(min_x), str(max_x), str(min_y), str(max_y)
-        ])
+    def __init__(self, type, min_x=None, max_x=None, min_y=None, max_y=None):
+        self.type = type
 
-    @staticmethod
-    def db_format_to_numbers(s):
-        d = dict()
-        if s == AnnotationAreaUtils.IMPORTED_STR:
-            d['type'] = AnnotationAreaUtils.TYPE_IMPORTED
-        elif s.find(';') != -1:
+        match self.type:
+            case self.TYPE_PERCENTAGES:
+                conversion = Decimal
+            case self.TYPE_PIXELS:
+                conversion = int
+            case self.TYPE_IMPORTED:
+                # Identity function; imported doesn't care about other args.
+                def conversion(x):
+                    return x
+            case _:
+                raise ValueError(f"Unsupported type: {self.type}")
+
+        self.min_x = conversion(min_x)
+        self.max_x = conversion(max_x)
+        self.min_y = conversion(min_y)
+        self.max_y = conversion(max_y)
+
+    @property
+    def db_value(self):
+        match self.type:
+            case self.TYPE_PERCENTAGES:
+                return ';'.join([
+                    str(getattr(self, field_name))
+                    for field_name in self.number_field_order
+                ])
+            case self.TYPE_PIXELS:
+                return ','.join([
+                    str(getattr(self, field_name))
+                    for field_name in self.number_field_order
+                ])
+            case self.TYPE_IMPORTED:
+                return self.IMPORTED_DB_VALUE
+            case _:
+                raise ValueError(f"Unsupported type: {self.type}")
+
+    @property
+    def source_form_kwargs(self):
+        """
+        Kwargs that can be submitted to the new source or edit source form.
+        """
+        if self.type != self.TYPE_PERCENTAGES:
+            raise ValueError(
+                "Sources can only have percentage annotation areas.")
+
+        return {
+            f'image_annotation_area_{index}': getattr(self, field_name)
+            for index, field_name in enumerate(self.number_field_order)
+        }
+
+    def __str__(self):
+        match self.type:
+            case self.TYPE_PERCENTAGES:
+                return (
+                    f"X: {self.min_x} - {self.max_x}%"
+                    f" / Y: {self.min_y} - {self.max_y}%"
+                )
+            case self.TYPE_PIXELS:
+                return (
+                    f"X: {self.min_x} - {self.max_x} pixels"
+                    f" / Y: {self.min_y} - {self.max_y} pixels"
+                )
+            case self.TYPE_IMPORTED:
+                return "(Imported points; not specified)"
+            case _:
+                raise ValueError(f"Unsupported type: {self.type}")
+
+    @classmethod
+    def from_db_value(cls, db_value):
+        if db_value == cls.IMPORTED_DB_VALUE:
+            return cls(type=cls.TYPE_IMPORTED)
+        elif ';' in db_value:
             # percentages
-            d['min_x'], d['max_x'], d['min_y'], d['max_y'] = [Decimal(dec_str) for dec_str in s.split(';')]
-            d['type'] = AnnotationAreaUtils.TYPE_PERCENTAGES
-        elif s.find(',') != -1:
+            number_values = [
+                Decimal(dec_str) for dec_str in db_value.split(';')]
+            d = dict(zip(cls.number_field_order, number_values))
+            return cls(type=cls.TYPE_PERCENTAGES, **d)
+        elif ',' in db_value:
             # pixels
-            d['min_x'], d['max_x'], d['min_y'], d['max_y'] = [int(int_str) for int_str in s.split(',')]
-            d['type'] = AnnotationAreaUtils.TYPE_PIXELS
+            number_values = [
+                int(int_str) for int_str in db_value.split(',')]
+            d = dict(zip(cls.number_field_order, number_values))
+            return cls(type=cls.TYPE_PIXELS, **d)
         else:
             raise ValueError("Annotation area isn't in a valid DB format.")
-        return d
 
-    @staticmethod
-    def db_format_to_percentages(s):
-        d = AnnotationAreaUtils.db_format_to_numbers(s)
-        if d['type'] == AnnotationAreaUtils.TYPE_PERCENTAGES:
-            return d
-        else:
-            raise ValueError("Annotation area type is '{0}' expected {1}.".format(
-                d['type'], AnnotationAreaUtils.TYPE_PERCENTAGES))
+    @classmethod
+    def to_pixels(cls, instance, width, height):
+        match instance.type:
+            case cls.TYPE_PERCENTAGES:
+                # Convert to Decimal pixel values ranging from 0 to the
+                # width/height.
+                #
+                # Type progression of the computation:
+                # (Decimal / int) * int
+                # Decimal * int
+                # Decimal
+                d = {
+                    'min_x': (instance.min_x / 100) * width,
+                    'max_x': (instance.max_x / 100) * width,
+                    'min_y': (instance.min_y / 100) * height,
+                    'max_y': (instance.max_y / 100) * height,
+                }
 
-    @staticmethod
-    def db_format_to_display(s):
-        d = AnnotationAreaUtils.db_format_to_numbers(s)
+                for key in d.keys():
+                    # Convert the Decimal pixel values to integers.
 
-        if d['type'] == AnnotationAreaUtils.TYPE_IMPORTED:
-            return AnnotationAreaUtils.IMPORTED_DISPLAY
-        elif d['type'] == AnnotationAreaUtils.TYPE_PERCENTAGES:
-            return "X: {0} - {1}% / Y: {2} - {3}%".format(
-                d['min_x'], d['max_x'], d['min_y'], d['max_y']
-            )
-        elif d['type'] == AnnotationAreaUtils.TYPE_PIXELS:
-            return "X: {0} - {1} pixels / Y: {2} - {3} pixels".format(
-                d['min_x'], d['max_x'], d['min_y'], d['max_y']
-            )
+                    # At this point our values range from 0.0 to width/height.
+                    # Round up, then subtract 1.
+                    d[key] = int(math.ceil(d[key]) - 1)
 
-    @staticmethod
-    def percentages_to_pixels(min_x, max_x, min_y, max_y, width, height):
-        d = dict()
+                    # Clamp the -1 edge-value to 0.
+                    # We thus map 0.000-1.000 to 0, 1.001-2.000 to 1,
+                    # 2.001-3.000 to 2, etc.
+                    d[key] = max(d[key], 0)
 
-        # The min/max x/y percentage arguments are Decimals.
-
-        # Convert to Decimal pixel values ranging from 0 to the width/height.
-        # (Decimal / int) * int -> Decimal * int -> Decimal.
-        d['min_x'] = (min_x / 100) * width
-        d['max_x'] = (max_x / 100) * width
-        d['min_y'] = (min_y / 100) * height
-        d['max_y'] = (max_y / 100) * height
-
-        for key in d.keys():
-            # Convert the Decimal pixel values to integers.
-
-            # At this point our values range from 0.0 to width/height.
-            # Round up, then subtract 1.
-            d[key] = int(math.ceil(d[key]) - 1)
-
-            # Clamp the -1 edge-value to 0.
-            # We thus map 0.000-1.000 to 0, 1.001-2.000 to 1,
-            # 2.001-3.000 to 2, etc.
-            d[key] = max(d[key], 0)
-
-        return d
+                return cls(type=cls.TYPE_PIXELS, **d)
+            case cls.TYPE_PIXELS:
+                return instance
+            case cls.TYPE_IMPORTED:
+                raise ValueError(
+                    "Points were imported; area pixels not specified.")
+            case _:
+                raise ValueError(f"Unsupported type: {instance.type}")
 
 
 class ImageAnnoStatuses(models.TextChoices):
