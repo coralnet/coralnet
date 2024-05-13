@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.forms import model_to_dict
 from easy_thumbnails.fields import ThumbnailerImageField
 
 from lib.utils import CacheableValue, rand_string
@@ -255,6 +256,30 @@ class LabelSet(models.Model):
         except LocalLabel.DoesNotExist:
             return None
         return local_label.code
+
+    def save_copy(self) -> 'LabelSet':
+        # Copy fields and save a new instance
+        kwargs = model_to_dict(self, exclude=['id'])
+        labelset_copy = LabelSet(**kwargs)
+        labelset_copy.save()
+
+        # Copy LocalLabel entries
+        for local_label in list(self.locallabel_set.all()):
+            ll_copy = LocalLabel(
+                code=local_label.code,
+                global_label_id=local_label.global_label_id,
+                labelset=labelset_copy,
+            )
+            ll_copy.save()
+
+        return labelset_copy
+
+    def has_same_labels(self, other: 'LabelSet') -> bool:
+        self_set = set(
+            self.locallabel_set.values_list('global_label_id', flat=True))
+        other_set = set(
+            other.locallabel_set.values_list('global_label_id', flat=True))
+        return self_set == other_set
 
     def __str__(self):
         source = self.source_set.first()

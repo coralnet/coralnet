@@ -413,16 +413,16 @@ class AbortCasesTest(
     Test cases (besides retrain logic) where the train task or collection would
     abort before reaching the end.
     """
-    def test_classification_disabled(self):
-        """Try to train for a source which has classification disabled."""
+    def test_training_disabled(self):
+        """Try to train for a source which has training disabled."""
         # Ensure the source is otherwise ready for training.
         self.upload_images_for_training()
         # Extract features
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
 
-        # Disable classification.
-        self.source.enable_robot_classifier = False
+        # Disable training.
+        self.source.trains_own_classifiers = False
         self.source.save()
 
         # Check source
@@ -431,7 +431,7 @@ class AbortCasesTest(
         self.assert_job_result_message(
             'check_source',
             f"Can't train first classifier:"
-            f" Source has classifier disabled"
+            f" Source has training disabled"
         )
 
     def test_below_minimum_images(self):

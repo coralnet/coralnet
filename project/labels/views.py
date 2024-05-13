@@ -136,6 +136,12 @@ def labelset_add(request, source_id):
     """
     source = get_object_or_404(Source, id=source_id)
 
+    if source.deployed_classifier:
+        return render(request, 'lib/function_unavailable.html', {
+            'message': "Since this source relies on an outside classifier,"
+                       " the labelset can't be edited.",
+        })
+
     if request.method == 'POST':
 
         # Cancel (available for edit only)

@@ -14,7 +14,7 @@ class SourceEditQUnitView(QUnitView):
     def test_template_contexts(self):
         source = Source(
             id=0,
-            enable_robot_classifier=True,
+            trains_own_classifiers=True,
             confidence_threshold=80,
             feature_extractor_setting='efficientnet_b0_ver1',
         )

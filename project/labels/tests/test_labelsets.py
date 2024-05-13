@@ -5,6 +5,7 @@ from django.utils.html import escape
 from calcification.models import CalcifyRateTable
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest
+from sources.models import Source
 from ..models import Label
 from .utils import LabelTest
 
@@ -298,6 +299,51 @@ class LabelsetAddRemoveTest(LabelTest):
                 'code', flat=True)),
             {'A', 'B'},
             "Labelset changes should be saved to the DB")
+
+    def test_cant_reach_page_when_in_deploy_mode(self):
+        source_2 = self.create_source(self.user)
+        source_2_robot = self.create_robot(source_2)
+        source = Source.objects.get(pk=self.source.pk)
+        source.trains_own_classifiers = False
+        source.deployed_classifier = source_2_robot
+        source.save()
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
+        self.assertContains(
+            response,
+            escape(
+                "Since this source relies on an outside classifier,"
+                " the labelset can't be edited."
+            ))
+
+    def test_cant_post_submit_when_in_deploy_mode(self):
+        source_2 = self.create_source(self.user)
+        source_2_robot = self.create_robot(source_2)
+        source = Source.objects.get(pk=self.source.pk)
+        source.trains_own_classifiers = False
+        source.deployed_classifier = source_2_robot
+        source.save()
+
+        label_pks = [
+            Label.objects.get(default_code=default_code).pk
+            for default_code in ['A', 'B']
+        ]
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url,
+            dict(label_ids=','.join(str(pk) for pk in label_pks)),
+            follow=True,
+        )
+        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
+        self.assertContains(
+            response,
+            escape(
+                "Since this source relies on an outside classifier,"
+                " the labelset can't be edited."
+            ))
 
     def test_labelset_change_resets_backend_for_source(self):
         # Create robot and robot annotations

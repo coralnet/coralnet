@@ -179,6 +179,7 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         # Simple random, 5 points
         default_point_generation_method_0=PointGen.Types.SIMPLE.value,
         default_point_generation_method_1=5,
+        trains_own_classifiers=True,
         confidence_threshold=100,
         feature_extractor_setting='efficientnet_b0_ver1',
         latitude='0.0',

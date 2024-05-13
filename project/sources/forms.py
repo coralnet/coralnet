@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.forms import Form, ModelForm
 from django.forms.fields import CharField, ChoiceField
-from django.forms.widgets import NumberInput, TextInput
+from django.forms.widgets import NumberInput, Select, TextInput
 from django.urls import reverse
 
 from annotations.forms import AnnotationAreaPercentsField
@@ -35,13 +35,13 @@ def validate_aux_meta_field_name(field_name):
 confidence_threshold_help_text = \
 """The CoralNet alleviate feature offers a trade-off between fully automated and fully manual annotation. This is done by auto-accepting machine annotations when they are sufficiently confident.
 
-This auto-acceptance happens when you enter the annotation tool for an image. Effectively, the machine's most confident points are "alleviated" from your annotation workload (for that image). Alleviated annotation decisions are treated as 'Confirmed', and are included when you export your annotations.
+This auto-acceptance happens when you enter the annotation tool for an image. Effectively, the classifier's most confident points are "alleviated" from your annotation workload (for that image). Alleviated annotation decisions are treated as 'Confirmed', and are included when you export your annotations.
 
-Users control this functionality by specifying the classifier confidence threshold. For example, with 90% confidence threshold all point annotation for which the classifier is more than 90% confident will be done automatically.
+Here you can control this functionality by specifying the classifier confidence threshold. For example, with a 90% confidence threshold, all point annotations for which the classifier is more than 90% confident will be auto-confirmed when you enter the annotation tool.
 
-When the first robot version is trained for your source, you can see the trade-off between confidence threshold, the fraction of points above each threshold, and the annotation accuracy. We recommend that you set the confidence threshold to 100% until you have seen this trade-off curve.
+Once you've trained or chosen a source classifier, you can visit the source's Backend page to see the trade-off between confidence threshold, the fraction of points above each threshold, and the annotation accuracy. We recommend that you leave the confidence threshold at 100% (meaning, nothing gets auto-confirmed) until you have seen this trade-off curve.
 
-<a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">This study</a> suggests that a 5% drop is annotation accuracy has marginal (if any) impact on derived cover estimates. We therefore suggest that you set the level of confidence threshold corresponding to a 5% drop in accuracy.
+The best confidence threshold to use depends on your research goals, but we'll note that <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312">this study</a> suggests a 5% drop in annotation accuracy has marginal (if any) impact on derived cover estimates. Therefore, you might consider using a confidence threshold corresponding to a 5% drop in accuracy.
 """
 
 
@@ -54,8 +54,9 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
             'key1', 'key2', 'key3', 'key4', 'key5',
             'default_point_generation_method',
             'image_annotation_area',
-            'confidence_threshold',
+            'trains_own_classifiers', 'deployed_classifier',
             'feature_extractor_setting',
+            'confidence_threshold',
             'longitude', 'latitude',
         ]
         field_classes = {
@@ -63,36 +64,51 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
             'image_annotation_area': AnnotationAreaPercentsField,
         }
         widgets = {
+            'trains_own_classifiers': Select(
+                choices=[(True, "Train"), (False, "Use existing")]),
+            'deployed_classifier': TextInput(attrs={
+                'size': 6,
+                'data-visibility-control-field': 'trains_own_classifiers',
+                'data-visibility-activating-values': 'False',
+            }),
             'confidence_threshold': NumberInput(
                 attrs={'min': 0, 'max': 100, 'size': 3}),
             'longitude': TextInput(attrs={'size': 10}),
             'latitude': TextInput(attrs={'size': 10}),
         }
+        labels = {
+            'trains_own_classifiers': "Classifier mode",
+            'deployed_classifier': "Classifier's global ID number",
+        }
+        error_messages = {
+            'deployed_classifier': {
+                'invalid_choice': "This isn't an existing classifier ID.",
+            },
+        }
 
     default_renderer = GridFormRenderer
 
-    def __init__(self, *args, **kwargs):
-
+    def __init__(self, *args, request=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        is_edit_form = self.instance.pk is not None
+        if self.is_bound and not request:
+            raise ValueError(
+                "request kwarg is required if this form is bound.")
+        self.request = request
 
-        if is_edit_form:
+        self.is_edit_form = self.instance.pk is not None
+
+        if self.is_edit_form:
             # Edit source form should have a way to detect and indicate (via
             # Javascript) that the feature extractor setting has changed.
             self.fields['feature_extractor_setting'].widget.attrs.update({
                 'data-original-value': self.instance.feature_extractor_setting,
             })
 
-        if not is_edit_form or not self.instance.enable_robot_classifier:
-            # This field should not be in the new source form, or in the
-            # edit source form when classifiers are disabled.
+        if not self.is_edit_form:
+            # Remove this field from the new source form. It's generally
+            # a step to take later after seeing how the classifier performs.
             del self.fields['confidence_threshold']
-
-        if is_edit_form and not self.instance.enable_robot_classifier:
-            # This field should not be in the edit form when classifiers are
-            # disabled.
-            del self.fields['feature_extractor_setting']
 
         # These aren't required by the model (probably to support old sources)
         # but should be required in the form.
@@ -124,7 +140,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
             ),
 
             dict(
-                header="Image Annotation",
+                header="Point Generation",
                 subfieldsets=[
                     dict(
                         header="Default image annotation area",
@@ -139,9 +155,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
 
                     dict(
                         header="Point generation method",
-                        help_text="""When we create annotation points for uploaded images, this is how we'll generate the point locations within each image.
-                        
-                            Simple Random: For every point, we randomly pick a pixel location from the image's entire annotation area.
+                        help_text="""Simple Random: For every point, we randomly pick a pixel location from the image's entire annotation area.
                             Stratified Random: We consider the annotation area to be divided into a grid of cells; for example, 3 rows and 4 columns of cells, for a total of 12 cells. Then, within each cell, we generate a certain number of random points.
                             Uniform Grid: Again, we divide the annotation area into a grid of cells. Then, within each cell, we place 1 point at the center of that cell.
                             
@@ -150,17 +164,35 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
                             'default_point_generation_method',
                         ],
                     ),
+                ],
+            ),
+
+            dict(
+                header="Automatic classification",
+                subfieldsets=[
+                    dict(
+                        header="Classifiers",
+                        help_text="""Your source can either use its own image and annotation data to train new classifiers (the default behavior), or you can specify an existing CoralNet classifier to use.
+                        
+                            If using an existing classifier, this source's labelset must match the classifier's source's labelset. We'll automatically create a matching labelset as needed.""",
+                        fields=[
+                            'trains_own_classifiers',
+                            'deployed_classifier',
+                        ],
+                    ),
+
+                    dict(
+                        header="Feature extractor ('Train' classifier mode only)",
+                        help_text="""Before machine classifiers can process images, CoralNet must extract numeric features from the images first. In the 'Train' classifier mode, this setting determines the format used. In the 'Use existing' classifier mode, the extractor setting of that classifier's source determines the format used.
+                        
+                        We recommend the EfficientNet extractor for all use-cases. It is faster and 2-3% more accurate on average. It is a more modern neural network architecture and trained on more data. The legacy VGG16 extractor is provided only for sources that want to retain their old classifiers, for example, if they are already deployed in a survey.""",
+                        fields=['feature_extractor_setting'],
+                    ),
 
                     dict(
                         header="Level of alleviation",
                         help_text=confidence_threshold_help_text,
                         fields=['confidence_threshold'],
-                    ),
-
-                    dict(
-                        header="Feature extractor",
-                        help_text="""We recommend the EfficientNet extractor for all use-cases. It is faster and 2-3% more accurate on average. It is a more modern neural network architecture and trained on more data. The legacy VGG16 extractor is provided only for sources that want to retain their old classifiers, for example, if they are already deployed in a survey.""",
-                        fields=['feature_extractor_setting'],
                     ),
                 ],
             ),
@@ -205,6 +237,31 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
             raise ValidationError("Longitude is out of range.")
         return data
 
+    def clean_deployed_classifier(self):
+        deployed_classifier = self.cleaned_data['deployed_classifier']
+
+        if deployed_classifier is not None:
+
+            source_accessible = deployed_classifier.source.visible_to_user(
+                self.request.user)
+            if not source_accessible:
+                raise ValidationError(
+                    "You don't have access to this classifier's source.",
+                    code='source_access_denied',
+                )
+
+            if self.is_edit_form and self.instance.labelset is not None:
+                if not self.instance.labelset.has_same_labels(
+                    deployed_classifier.source.labelset
+                ):
+                    raise ValidationError(
+                        "This source's labelset must match the"
+                        " classifier's source's labelset.",
+                        code='labelset_mismatch',
+                    )
+
+        return deployed_classifier
+
     def clean(self):
         """
         Check for aux label name collisions with other aux fields or built-in
@@ -236,6 +293,35 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
                             " field or another auxiliary field.",
                             code='dupe_label',
                         ))
+
+    def save(self, **kwargs):
+        if self.instance.trains_own_classifiers:
+            self.instance.deployed_classifier = None
+
+        if self.instance.deployed_classifier:
+            self.instance.deployed_source_id = \
+                self.instance.deployed_classifier.source_id
+        else:
+            self.instance.deployed_source_id = None
+
+        # Besides this form, the other ways that deployed_classifier can be
+        # nulled are:
+        # 1. That classifier getting deleted.
+        # 2. That classifier's source changing its labelset.
+        # In these cases it's good to keep deployed_source_id unchanged.
+        # This distinguishes the source's state from a source that had
+        # never chosen a classifier, and lets us display a reminder like
+        # "you previously chose a classifier from this source".
+
+        if self.instance.deployed_classifier and not self.instance.labelset:
+            # No labelset yet; copy the labelset the deployed
+            # classifier uses. This applies to both new and edit.
+            copied_labelset = (
+                self.instance.deployed_classifier.source
+                .labelset.save_copy())
+            self.instance.labelset = copied_labelset
+
+        return super().save(**kwargs)
 
 
 class SourceChangePermissionForm(Form):

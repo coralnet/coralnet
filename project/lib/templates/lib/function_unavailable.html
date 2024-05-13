@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content_title %}
+  <h2>{{ title|default:"Function unavailable" }}</h2>
+{% endblock %}
+
+{% block content %}
+  <p>{{ message|linebreaks }}</p>
+{% endblock %}

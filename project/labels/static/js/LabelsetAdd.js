@@ -371,7 +371,7 @@ var LabelsetAdd = (function() {
 
                 if (hasClassifier) {
                     return window.confirm(
-                        "This will regenerate the source's classifiers." +
+                        "This will delete the source's classifiers." +
                         " Is this OK?");
                 }
 

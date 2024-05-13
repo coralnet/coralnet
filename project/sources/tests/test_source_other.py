@@ -4,13 +4,13 @@ import re
 from unittest import skip
 
 from bs4 import BeautifulSoup
-from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
-from django.utils import timezone
 
 from jobs.tasks import run_scheduled_jobs_until_empty
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import (
+    BasePermissionTest, ClientTest, HtmlAssertionsMixin)
+from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import (
@@ -246,7 +246,7 @@ class SourceDetailBoxTest(ClientTest):
         self.assertIn('class="source-example-image"', detail_html)
 
 
-class SourceMainTest(ClientTest):
+class SourceMainTest(ClientTest, HtmlAssertionsMixin):
     """
     Test a source's main page.
     """
@@ -256,8 +256,27 @@ class SourceMainTest(ClientTest):
 
         cls.user = cls.create_user("user1")
 
-    def test_source_members_box(self):
-        source = self.create_source(self.user)
+    def source_main_soup(self, source):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('source_main', args=[source.pk]))
+        return BeautifulSoup(response.content, 'html.parser')
+
+    def test_description(self):
+        source = self.create_source(
+            self.user,
+            description="This is a\nmultiline description.")
+        soup = self.source_main_soup(source)
+        # assertInHTML() can't pick up just a subset of child nodes, which
+        # is what we're testing for here, so we use assertIn() and make
+        # sure to get it right char-for-char.
+        self.assertIn(
+            'This is a<br/>multiline description.',
+            str(soup.find(id='description-box')))
+
+    def test_members_box(self):
+        source = self.create_source(
+            self.user,
+            affiliation="Unit Test Institute")
 
         user_viewer = self.create_user("user2")
         self.add_source_member(
@@ -266,68 +285,67 @@ class SourceMainTest(ClientTest):
         self.add_source_member(
             self.user, source, user_editor, Source.PermTypes.EDIT.code)
 
-        self.client.force_login(self.user)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
+        soup = self.source_main_soup(source)
+        members_column_soup = soup.find(id='members-column')
+
+        self.assertInHTML(
+            "Unit Test Institute", str(members_column_soup))
+
+        def profile_url(user):
+            return reverse('profile_detail', args=[user.pk])
 
         # Should be ordered by role first, not by username first
-        self.assertInHTML(
-            '<tr><td><a href="{}">{}</a></td><td><b>Admin</b></td></tr>'
-            '<tr><td><a href="{}">{}</a></td><td><b>Edit</b></td></tr>'
-            '<tr><td><a href="{}">{}</a></td><td><b>View</b></td></tr>'.format(
-                reverse('profile_detail', args=[self.user.pk]), "user1",
-                reverse('profile_detail', args=[user_editor.pk]), "user3",
-                reverse('profile_detail', args=[user_viewer.pk]), "user2",
-            ),
-            response.content.decode())
+        self.assert_table_values(
+            members_column_soup.find('table'),
+            [
+                [f'<a href="{profile_url(self.user)}">user1</a>',
+                 '<strong>Admin</strong>'],
+                [f'<a href="{profile_url(user_editor)}">user3</a>',
+                 '<strong>Edit</strong>'],
+                [f'<a href="{profile_url(user_viewer)}">user2</a>',
+                 '<strong>View</strong>'],
+            ])
 
-    def test_source_fields_box_1_basics(self):
+    def test_details_box(self):
         source = self.create_source(
             self.user,
+            visibility=Source.VisibilityTypes.PUBLIC,
             image_annotation_area=dict(min_x=0, max_x=100, min_y=5, max_y=95),
             default_point_generation_method=dict(type='simple', points=5),
-            confidence_threshold=80,
-            feature_extractor_setting='efficientnet_b0_ver1',
-            description="This is a\nmultiline description.")
-
-        self.client.force_login(self.user)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
-
-        self.assertContains(
-            response,
-            "Default image annotation area: X: 0 - 100% / Y: 5 - 95%")
-        self.assertContains(
-            response, "Annotation point generation: Simple random, 5 points")
-        self.assertContains(
-            response, "Feature extractor: EfficientNet (default)")
-        self.assertContains(response, "Confidence threshold: 80%")
-        self.assertInHTML(
-            '<br><br>This is a<br>multiline description.',
-            response.content.decode())
-
-    def test_source_fields_box_1_without_robot(self):
-        """
-        With-robot test is in another class which better
-        supports running tasks.
-        """
-        source = self.create_source(self.user)
-        self.client.force_login(self.user)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
-
-        self.assertNotContains(response, "Last classifier saved:")
-        self.assertNotContains(response, "Last classifier trained:")
-
-    def test_source_fields_box_2(self):
-        source = self.create_source(
-            self.user, visibility=Source.VisibilityTypes.PUBLIC,
             latitude='30.0296', longitude='-15.6402',
         )
 
-        self.client.force_login(self.user)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
+        soup = self.source_main_soup(source)
+        right_column_soup = soup.find(id='right-column')
 
-        self.assertContains(response, 'Visibility: <b>Public</b>')
-        self.assertContains(response, 'Latitude: <b>30.0296</b>')
-        self.assertContains(response, 'Longitude: <b>-15.6402</b>')
+        def detail_html(key, value):
+            return f'<li><span>{key}:</span><span>{value}</span></li>'
+
+        self.assertInHTML(
+            detail_html(
+                "Visibility",
+                "Public"),
+            str(right_column_soup))
+        self.assertInHTML(
+            detail_html(
+                "Default image annotation area",
+                "X: 0 - 100% / Y: 5 - 95%"),
+            str(right_column_soup))
+        self.assertInHTML(
+            detail_html(
+                "Point generation method",
+                "Simple random, 5 points"),
+            str(right_column_soup))
+        self.assertInHTML(
+            detail_html(
+                "Latitude & Longitude",
+                "30.0296, -15.6402"),
+            str(right_column_soup))
+        self.assertInHTML(
+            detail_html(
+                "Created",
+                date_display(source.create_date)),
+            str(right_column_soup))
 
     def test_latest_images(self):
         source = self.create_source(self.user)
@@ -434,26 +452,6 @@ class SourceMainTest(ClientTest):
                         "Following the browse link should show only image"
                         " results of the specified status"))
 
-    @override_settings(TRAINING_MIN_IMAGES=3)
-    def test_automated_annotation_section(self):
-        source = self.create_source(self.user)
-
-        self.client.force_login(self.user)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
-        self.assertContains(
-            response,
-            "This source does not have a classifier yet."
-            " Need a minimum of 3 Confirmed images to train a classifier.")
-        self.assertNotContains(response, '<div id="acc_overview"')
-
-        self.create_robot(source)
-        response = self.client.get(reverse('source_main', args=[source.pk]))
-        self.assertNotContains(
-            response,
-            "This source does not have a classifier yet."
-            " Need a minimum of 3 Confirmed images to train a classifier.")
-        self.assertContains(response, '<div id="acc_overview"')
-
     @skip("Removed newsfeed box until we're actually using newsitems.")
     def test_newsfeed_box(self):
         source = self.create_source(self.user)
@@ -491,13 +489,20 @@ class SourceMainTest(ClientTest):
             response, reverse('newsfeed_details', args=[other_news_item.pk]))
 
 
-class SourceMainRobotTest(BaseTaskTest):
+class SourceMainBackendColumnTest(BaseTaskTest):
 
-    @staticmethod
-    def date_display(date):
-        return date_template_filter(timezone.localtime(date), 'N j, Y, P')
+    def source_main_soup(self, source):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('source_main', args=[source.pk]))
+        return BeautifulSoup(response.content, 'html.parser')
 
-    def test_source_fields_with_robot(self):
+    def assert_detail(self, soup, detail):
+        self.assertInHTML(f'<li>{detail}</li>', str(soup))
+
+    acc_overview_id = 'acc-overview'
+
+    @override_settings(TRAINING_MIN_IMAGES=3)
+    def test_has_own_classifiers(self):
         # Train and accept a classifier.
         self.upload_data_and_train_classifier()
 
@@ -521,20 +526,32 @@ class SourceMainRobotTest(BaseTaskTest):
         classifier_2 = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)
 
-        self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('source_main', args=[self.source.pk]))
+        soup = self.source_main_soup(self.source)
+        backend_soup = soup.find(id='backend-column')
 
+        self.assertIsNotNone(backend_soup.find(id=self.acc_overview_id))
         save_date = classifier_1.train_job.modify_date
-        self.assertContains(
-            response,
-            f"Last classifier saved: {self.date_display(save_date)}")
+        self.assert_detail(
+            backend_soup,
+            f"Last classifier saved: {datetime_display(save_date)}")
         train_date = classifier_2.train_job.modify_date
-        self.assertContains(
-            response,
-            f"Last classifier trained: {self.date_display(train_date)}")
+        self.assert_detail(
+            backend_soup,
+            f"Last classifier trained: {datetime_display(train_date)}")
+        self.assert_detail(
+            backend_soup,
+            "Feature extractor: EfficientNet (default)")
+        self.assert_detail(
+            backend_soup,
+            "Confidence threshold: 100%")
 
-    def test_source_fields_with_robot_without_job(self):
+    @override_settings(TRAINING_MIN_IMAGES=3)
+    def test_has_own_classifiers_but_no_job(self):
+        """
+        A mainly-legacy case where a trained classifier exists, but no
+        corresponding training Job exists, thus necessitating getting the
+        train date a different (less accurate) way.
+        """
         # Train and accept a classifier.
         self.upload_data_and_train_classifier()
 
@@ -546,14 +563,98 @@ class SourceMainRobotTest(BaseTaskTest):
         # a fallback for the train-finish date.
         classifier.train_job.delete()
 
-        self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('source_main', args=[self.source.pk]))
+        soup = self.source_main_soup(self.source)
+        backend_soup = soup.find(id='backend-column')
 
         date = classifier.create_date
-        self.assertContains(
-            response,
-            f"Last classifier saved: {self.date_display(date)}")
-        self.assertContains(
-            response,
-            f"Last classifier trained: {self.date_display(date)}")
+        self.assert_detail(
+            backend_soup,
+            f"Last classifier saved: {datetime_display(date)}")
+        self.assert_detail(
+            backend_soup,
+            f"Last classifier trained: {datetime_display(date)}")
+
+    @override_settings(TRAINING_MIN_IMAGES=3)
+    def test_has_not_trained_classifier_yet(self):
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=True,
+            feature_extractor_setting='vgg16_coralnet_ver1',
+        )
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            "Classifier status: No classifier yet."
+            " Need a minimum of 3 Confirmed images to train a classifier.")
+        self.assert_detail(
+            backend_soup,
+            "Feature extractor: VGG16 (legacy)")
+
+    def test_deployed_classifier(self):
+        train_source = self.create_source(self.user)
+        self.create_labelset(
+            self.user, train_source, self.labels.filter(name__in=['A', 'B']))
+        classifier = self.create_robot(train_source)
+
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier.pk,
+        )
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            f"Classifier ID in use: {classifier.pk}")
+        train_source_url = reverse('source_main', args=[train_source.pk])
+        self.assert_detail(
+            backend_soup,
+            f"""Classifier's source: <a href="{train_source_url}">"""
+            f"""{train_source.name}</a>""")
+        self.assert_detail(
+            backend_soup,
+            "Confidence threshold: 100%")
+
+    def test_deployed_source_id(self):
+        train_source = self.create_source(self.user)
+        self.create_labelset(
+            self.user, train_source, self.labels.filter(name__in=['A', 'B']))
+        classifier = self.create_robot(train_source)
+
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier.pk,
+        )
+        classifier.delete()
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            f"Classifier ID in use: None. Previously used a classifier"
+            f" from source {train_source.pk}.")
+
+    def test_deployed_none(self):
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier='',
+        )
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            "Classifier ID in use: None")

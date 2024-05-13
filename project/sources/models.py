@@ -110,10 +110,35 @@ class Source(models.Model):
         default=100,
     )
 
-    # Whether or not to train new classifiers at all.
-    enable_robot_classifier = models.BooleanField(
-        "Enable robot classifier",
+    trains_own_classifiers = models.BooleanField(
+        "Source trains its own classifiers",
         default=True,
+    )
+    # Classifier belonging to another source which is deployed for
+    # classification in this source.
+    deployed_classifier = models.ForeignKey(
+        Classifier,
+        # This field should not place any restrictions on the other source's
+        # ability to manage its classifiers. So, for example, this shouldn't
+        # be PROTECT.
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='deploying_sources',
+    )
+    # In case the deployed classifier gets deleted, this is a 'backup' pointer
+    # to the source that the classifier was from.
+    # This is a BigIntegerField instead of a ForeignKey because:
+    # 1) This way we can distinguish between a source which simply does not
+    #    use robots vs. a source which had its deployed-source deleted.
+    # 2) This way we don't worry about any complexities regarding
+    #    self-referential FKs.
+    # 3) This is just a backup pointer. Generally,
+    #    `deployed_classifier__source` can be used to get the same
+    #    relationship.
+    #
+    # Since this is a redundant field, we automatically set it in save().
+    deployed_source_id = models.BigIntegerField(
+        null=True, blank=True,
     )
 
     FEATURE_EXTRACTOR_CHOICES = (
@@ -369,7 +394,7 @@ class Source(models.Model):
         source
         """
         return self.classifier_set.filter(
-            status=Classifier.ACCEPTED).order_by('-pk')
+            status=Classifier.ACCEPTED).order_by('pk')
 
     def need_new_robot(self) -> Tuple[bool, str]:
         """
@@ -377,8 +402,8 @@ class Source(models.Model):
         1) True if the source needs to train a new robot, False otherwise.
         2) The reason why it needs a new robot or not.
         """
-        if not self.enable_robot_classifier:
-            return False, "Source has classifier disabled"
+        if not self.trains_own_classifiers:
+            return False, "Source has training disabled"
 
         nbr_confirmed_images_with_features = (
             self.image_set.confirmed().with_features().count()
@@ -417,7 +442,7 @@ class Source(models.Model):
         """
         Returns True if source has an accepted robot.
         """
-        return self.get_accepted_robots().count() > 0
+        return self.get_current_classifier() is not None
 
     def all_image_names_are_unique(self):
         """

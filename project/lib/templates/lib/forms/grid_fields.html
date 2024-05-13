@@ -1,3 +1,5 @@
+{% load field_visibility_attrs from common_tags %}
+
 <div class="form-fields-grid">
 
   {# Elements here should be defined in pairs, in order to make the grid layout work. First element goes on the left column, second element goes on the right column. Alternatively, an element can have the CSS rule `grid-column: span 2;` to take up an entire row. #}
@@ -33,13 +35,16 @@
         {# All other field types #}
 
         {% with input_type=widget.input_type %}
-          <label for="{{ field.id_for_label }}"
-                 class="left-col-label {{ input_type }}">
+          <label
+            for="{{ field.id_for_label }}"
+            class="left-col-label {{ input_type }}"
+            {% field_visibility_attrs widget %}
+          >
             {{ field.label }}:
           </label>
         {% endwith %}
 
-        <div>
+        <div {% field_visibility_attrs widget %} >
           {{ field }}
           {% include "form_generic_one_field_help_text.html" with field=field %}
         </div>

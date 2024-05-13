@@ -24,7 +24,7 @@ def backend_overview(request):
     total = Image.objects.filter().count()
 
     images_backend_enabled = \
-        Image.objects.filter(source__enable_robot_classifier=True)
+        Image.objects.filter(source__trains_own_classifiers=True)
     confirmed = images_backend_enabled.confirmed().count()
     unconfirmed = images_backend_enabled.unconfirmed().count()
     unclassified_with_features = \
@@ -32,7 +32,7 @@ def backend_overview(request):
     unclassified_without_features = \
         images_backend_enabled.unclassified().without_features().count()
     backend_disabled = \
-        Image.objects.filter(source__enable_robot_classifier=False).count()
+        Image.objects.filter(source__trains_own_classifiers=False).count()
 
     def percent_display(numerator, denominator):
         return format(100*numerator / denominator, '.1f') + "%"
