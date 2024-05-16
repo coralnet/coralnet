@@ -89,84 +89,27 @@ class ResetTaskTest(BaseTaskTest):
                 image.annoinfo.confirmed,
                 "Confirmed image should still be confirmed")
 
-    def test_reset_backend_for_source(self):
+    def test_reset_features_for_source(self):
 
-        # Classify image and verify that it worked
-
-        self.upload_data_and_train_classifier()
-        img = self.upload_image_and_machine_classify()
-
-        classifier = self.source.get_current_classifier()
-        self.assertIsNotNone(classifier, "Should have a classifier")
-        classifier_id = classifier.pk
-
+        img = self.upload_image(self.user, self.source)
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
         self.assertTrue(img.features.extracted, "img should have features")
-        self.assertTrue(img.annoinfo.classified, "img should be classified")
-        self.assertGreater(
-            Score.objects.filter(image=img).count(), 0,
-            "img should have scores")
-        self.assertGreater(
-            Annotation.objects.filter(image=img).count(), 0,
-            "img should have annotations")
 
-        # Reset backend
+        # Reset features
         job, _ = schedule_job(
-            'reset_backend_for_source', self.source.pk,
+            'reset_features_for_source', self.source.pk,
             source_id=self.source.pk)
         run_scheduled_jobs_until_empty()
 
         job.refresh_from_db()
         self.assertEqual(
             job.status, Job.Status.SUCCESS, "Job should be marked as succeeded")
-        self.assertTrue(
-            job.persist, "Job should be marked as persistent")
 
-        # Verify that backend objects were cleared
-
-        with self.assertRaises(
-            Classifier.DoesNotExist, msg="Classifier should be deleted"
-        ):
-            Classifier.objects.get(pk=classifier_id)
+        # Verify that features were cleared
 
         img.features.refresh_from_db()
-        img.annoinfo.refresh_from_db()
         self.assertFalse(img.features.extracted, "img shouldn't have features")
-        self.assertFalse(img.annoinfo.classified, "img shouldn't be classified")
-        self.assertEqual(
-            Score.objects.filter(image=img).count(), 0,
-            "img shouldn't have scores")
-        self.assertEqual(
-            Annotation.objects.filter(image=img).count(), 0,
-            "img shouldn't have annotations")
-
-        # Extract features
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-        # Train
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-        # Classify
-        run_scheduled_jobs_until_empty()
-
-        img.features.refresh_from_db()
-        img.annoinfo.refresh_from_db()
-        self.assertTrue(img.features.extracted, "img should have features")
-        self.assertTrue(img.annoinfo.classified, "img should be classified")
-        self.assertGreater(
-            Score.objects.filter(image=img).count(), 0,
-            "img should have scores")
-        self.assertGreater(
-            Annotation.objects.filter(image=img).count(), 0,
-            "img should have annotations")
-
-        # Ensure confirmed annotations weren't deleted
-        for image in self.source.image_set.exclude(pk=img.pk):
-            self.assertTrue(
-                image.annotation_set.confirmed().exists(),
-                "Confirmed annotations should still exist")
-            self.assertTrue(
-                image.annoinfo.confirmed,
-                "Confirmed image should still be confirmed")
 
     def test_point_change_cleanup(self):
         """

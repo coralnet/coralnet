@@ -7,7 +7,8 @@ from spacer.messages import ClassifyReturnMsg
 from jobs.utils import schedule_job
 from lib.tests.utils import ClientTest, sample_image_as_file
 from images.models import Point
-from vision_backend.models import BatchJob, Score
+from ..common import Extractors
+from ..models import BatchJob, Score
 import vision_backend.task_helpers as th
 
 
@@ -289,3 +290,64 @@ class PopulateHasRowcolsTest(MigrationTest):
         self.assertFalse(has_rowcols_values[0])
         self.assertTrue(has_rowcols_values[1])
         self.assertIsNone(has_rowcols_values[2])
+
+
+class PopulateFeaturesExtractorTest(MigrationTest):
+
+    before = [
+        ('sources', '0009_add_deployed_classifier_and_more'),
+        ('vision_backend', '0023_source_fk_restore_constraint'),
+    ]
+    after = [('vision_backend', '0025_features_populate_extractor')]
+
+    def test_migration(self):
+        User = self.get_model_before('auth.User')
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+        Image = self.get_model_before('images.Image')
+        Features = self.get_model_before('vision_backend.Features')
+
+        user = User(username='testuser')
+        user.save()
+        source_effnet = Source(
+            name="EfficientNet source",
+            feature_extractor_setting=Extractors.EFFICIENTNET.value)
+        source_effnet.save()
+        source_vgg = Source(
+            name="VGG16 source",
+            feature_extractor_setting=Extractors.VGG16.value)
+        source_vgg.save()
+        images = []
+        for extracted, source in [
+            (True, source_effnet),
+            (True, source_vgg),
+            (False, source_effnet),
+            (False, source_vgg),
+        ]:
+            metadata = Metadata()
+            metadata.save()
+            image = Image(
+                original_file=sample_image_as_file('a.png'),
+                uploaded_by=user,
+                point_generation_method=source.default_point_generation_method,
+                metadata=metadata,
+                source=source,
+            )
+            image.save()
+            images.append(image)
+
+            features = Features(image=image, extracted=extracted)
+            features.save()
+
+        self.run_migration()
+
+        Features = self.get_model_after('vision_backend.Features')
+
+        extractor_values = [
+            Features.objects.get(pk=image.features.pk).extractor
+            for image in images
+        ]
+        self.assertEqual(extractor_values[0], Extractors.EFFICIENTNET.value)
+        self.assertEqual(extractor_values[1], Extractors.VGG16.value)
+        self.assertEqual(extractor_values[2], '')
+        self.assertEqual(extractor_values[3], '')

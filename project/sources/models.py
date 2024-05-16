@@ -16,6 +16,7 @@ from guardian.shortcuts import (
 from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from labels.models import LabelSet
+from vision_backend.common import SourceExtractorChoices
 from vision_backend.models import Classifier
 
 
@@ -141,15 +142,11 @@ class Source(models.Model):
         null=True, blank=True,
     )
 
-    FEATURE_EXTRACTOR_CHOICES = (
-        ('efficientnet_b0_ver1', "EfficientNet (default)"),
-        ('vgg16_coralnet_ver1', "VGG16 (legacy)"),
-    )
     feature_extractor_setting = models.CharField(
         "Feature extractor",
         max_length=50,
-        choices=FEATURE_EXTRACTOR_CHOICES,
-        default='efficientnet_b0_ver1')
+        choices=SourceExtractorChoices.choices,
+        default=SourceExtractorChoices.EFFICIENTNET.value)
 
     longitude = models.CharField(max_length=20, blank=True)
     latitude = models.CharField(max_length=20, blank=True)
@@ -181,14 +178,23 @@ class Source(models.Model):
             verbose = 'View'
 
     @property
-    def feature_extractor(self) -> str:
+    def feature_extractor(self) -> str | None:
+        if not self.trains_own_classifiers and not self.deployed_classifier:
+            # We consider this source to have no feature extraction config.
+            return None
+
         if settings.FORCE_DUMMY_EXTRACTOR:
             # Use dummy extractor for tests.
             # The real extractors are relatively slow.
             return 'dummy'
 
-        # Else, read feature extractor name from DB.
-        return self.feature_extractor_setting
+        if self.trains_own_classifiers:
+            # Read feature extractor name from this source's field.
+            return self.feature_extractor_setting
+
+        # Else, using deployed_classifier.
+        # Read feature extractor name from the classifier's source's field.
+        return self.deployed_classifier.source.feature_extractor_setting
 
     ##########
     # Helper methods for sources

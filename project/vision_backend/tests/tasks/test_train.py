@@ -421,8 +421,14 @@ class AbortCasesTest(
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
 
-        # Disable training.
+        # Create a classifier in another source.
+        other_source = self.create_source(self.user)
+        self.create_labelset(self.user, other_source, self.labels)
+        classifier = self.create_robot(other_source)
+
+        # Disable training, opting to deploy the existing classifier instead.
         self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
         self.source.save()
 
         # Check source

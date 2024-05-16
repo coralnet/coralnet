@@ -1,4 +1,5 @@
 from lib.tests.utils_qunit import QUnitView
+from vision_backend.common import Extractors
 from ...forms import SourceForm
 from ...models import Source
 
@@ -16,7 +17,7 @@ class SourceEditQUnitView(QUnitView):
             id=0,
             trains_own_classifiers=True,
             confidence_threshold=80,
-            feature_extractor_setting='efficientnet_b0_ver1',
+            feature_extractor_setting=Extractors.EFFICIENTNET.value,
         )
         return {
             'main': {

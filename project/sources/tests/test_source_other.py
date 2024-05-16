@@ -12,6 +12,7 @@ from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin)
 from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
+from vision_backend.common import Extractors
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, do_collect_spacer_jobs)
@@ -579,7 +580,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         source = self.create_source(
             self.user,
             trains_own_classifiers=True,
-            feature_extractor_setting='vgg16_coralnet_ver1',
+            feature_extractor_setting=Extractors.VGG16.value,
         )
 
         soup = self.source_main_soup(source)

@@ -185,7 +185,6 @@ def finish_job(
     if success and name in [
         'train_classifier',
         'reset_classifiers_for_source',
-        'reset_backend_for_source',
     ]:
         job.persist = True
 

@@ -22,7 +22,7 @@ from lib.decorators import (
 from lib.utils import date_display, datetime_display
 from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
-from vision_backend.models import Classifier
+from vision_backend.models import Classifier, Features
 from .forms import (
     SourceChangePermissionForm,
     SourceForm,
@@ -270,21 +270,36 @@ def source_edit(request, source_id):
             # Save the edits to the Source.
             source_form.save()
 
+            # Schedule classifier reset if needed.
             if 'feature_extractor_setting' in source_form.changed_data:
-
-                # Feature extractor setting changed. Wipe this source's
-                # features and classifiers.
+                # Changed the feature extractor setting for train-classifiers
+                # mode. Wipe this source's trained classifiers.
                 schedule_job(
-                    'reset_backend_for_source', source_id,
+                    'reset_classifiers_for_source', source_id,
                     source_id=source_id)
                 messages.success(
                     request,
                     "Source successfully edited."
                     " Classifier history will be cleared.")
-
             else:
-
                 messages.success(request, "Source successfully edited.")
+
+            # Schedule feature reset if needed.
+            source_features = Features.objects.filter(
+                image__source=source_form.instance, extracted=True)
+            if (
+                source_form.instance.feature_extractor is not None
+                and source_features.exclude(
+                    extractor=source_form.instance.feature_extractor).exists()
+            ):
+                # There exist features in the source that don't match
+                # the new active extractor.
+                # Going by the assumption that all extracted features in the
+                # source must use the same extractor, we reset all extracted
+                # features in the source.
+                schedule_job(
+                    'reset_features_for_source', source_id,
+                    source_id=source_id)
 
             return HttpResponseRedirect(
                 reverse('source_main', args=[source_id]))

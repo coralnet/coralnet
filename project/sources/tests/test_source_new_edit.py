@@ -7,6 +7,7 @@ from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from jobs.models import Job
 from lib.tests.utils import BasePermissionTest, ClientTest
+from vision_backend.common import Extractors
 from vision_backend.tests.tasks.utils import BaseTaskTest
 from ..models import Source
 
@@ -96,7 +97,7 @@ class BaseSourceTest(ClientTest):
             default_point_generation_method_3='',
             default_point_generation_method_4='',
             trains_own_classifiers=True,
-            feature_extractor_setting='efficientnet_b0_ver1',
+            feature_extractor_setting=Extractors.EFFICIENTNET.value,
             latitude='-17.3776', longitude='25.1982')
         data.update(**kwargs)
         response = cls.client.post(
@@ -202,7 +203,8 @@ class SourceNewTest(BaseSourceTest):
         self.assert_select_field_value(
             response, 'id_trains_own_classifiers', 'True')
         self.assert_select_field_value(
-            response, 'id_feature_extractor_setting', 'efficientnet_b0_ver1')
+            response, 'id_feature_extractor_setting',
+            Extractors.EFFICIENTNET.value)
 
     def test_source_create(self):
         """
@@ -756,7 +758,7 @@ source_kwargs_2 = dict(
     default_point_generation_method_4=3,
     confidence_threshold=80,
     trains_own_classifiers=True,
-    feature_extractor_setting='vgg16_coralnet_ver1',
+    feature_extractor_setting=Extractors.VGG16.value,
     latitude='5.789',
     longitude='-50',
 )
@@ -820,7 +822,7 @@ class SourceEditTest(BaseSourceTest):
         )
         self.assertEqual(self.source.confidence_threshold, 80)
         self.assertEqual(
-            self.source.feature_extractor_setting, 'vgg16_coralnet_ver1')
+            self.source.feature_extractor_setting, Extractors.VGG16.value)
         self.assertEqual(self.source.latitude, '5.789')
         self.assertEqual(self.source.longitude, '-50')
 
@@ -992,6 +994,7 @@ class SourceFormFieldAvailability(ClientTest):
             self.without_training_url, 'id_confidence_threshold'))
 
 
+@override_settings(FORCE_DUMMY_EXTRACTOR=False)
 class SourceEditBackendStatusTest(BaseTaskTest):
 
     @classmethod
@@ -1000,34 +1003,74 @@ class SourceEditBackendStatusTest(BaseTaskTest):
 
         cls.url = reverse('source_edit', args=[cls.source.pk])
 
-    def test_backend_reset_if_extractor_changed(self):
-        edit_kwargs = source_kwargs_2.copy()
-        edit_kwargs['feature_extractor_setting'] = 'vgg16_coralnet_ver1'
-        self.client.force_login(self.user)
+        source_effnet = cls.create_source(
+            cls.user,
+            trains_own_classifier=True,
+            feature_extractor_setting=Extractors.EFFICIENTNET.value)
+        cls.create_labelset(cls.user, source_effnet, cls.labels)
+        cls.effnet_robot = cls.create_robot(source_effnet)
+        cls.effnet_robot_2 = cls.create_robot(source_effnet)
 
-        # Edit source with changed extractor setting
-        response = self.client.post(self.url, edit_kwargs, follow=True)
+        source_vgg = cls.create_source(
+            cls.user,
+            trains_own_classifier=True,
+            feature_extractor_setting=Extractors.VGG16.value)
+        cls.create_labelset(cls.user, source_vgg, cls.labels)
+        cls.vgg_robot = cls.create_robot(source_vgg)
+
+    def edit_source(self, **kwargs):
+        self.client.force_login(self.user)
+        data = source_kwargs_2 | kwargs
+        response = self.client.post(self.url, data, follow=True)
+        return response
+
+    def do_test(
+        self,
+        trains_own_classifiers=(True, True),
+        feature_extractor_setting=(
+            Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+        deployed_classifier=(None, None),
+    ):
+        # Fake-extract EfficientNet features for one image. (Just mark as
+        # extracted.)
+        image = self.upload_image(self.user, self.source)
+        image.features.extracted = True
+        image.features.extractor = Extractors.EFFICIENTNET.value
+        image.features.save()
+
+        self.source.refresh_from_db()
+        self.source.trains_own_classifiers = trains_own_classifiers[0]
+        self.source.feature_extractor_setting = feature_extractor_setting[0]
+        self.source.deployed_classifier = deployed_classifier[0]
+        self.source.save()
+
+        if deployed_classifier[1] is None:
+            deployed_classifier_form_value = ''
+        else:
+            deployed_classifier_form_value = deployed_classifier[1].pk
+        response = self.edit_source(
+            trains_own_classifiers=trains_own_classifiers[1],
+            feature_extractor_setting=feature_extractor_setting[1],
+            deployed_classifier=deployed_classifier_form_value,
+        )
+        return response
+
+    def assert_classifier_reset(self, response):
         self.assertTrue(
             Job.objects.filter(
-                job_name='reset_backend_for_source').exists(),
-            msg="Reset job should be scheduled")
+                job_name='reset_classifiers_for_source').exists(),
+            msg="Should schedule classifier reset")
 
         self.assertContains(
             response,
             "Source successfully edited. Classifier history will be cleared.",
             msg_prefix="Page should show the appropriate message")
 
-    def test_backend_not_reset_if_extractor_same(self):
-        edit_kwargs = source_kwargs_2.copy()
-        edit_kwargs['feature_extractor_setting'] = 'efficientnet_b0_ver1'
-        self.client.force_login(self.user)
-
-        # Edit source with same extractor setting
-        response = self.client.post(self.url, edit_kwargs, follow=True)
+    def assert_no_classifier_reset(self, response):
         self.assertFalse(
             Job.objects.filter(
-                job_name='reset_backend_for_source').exists(),
-            msg="Reset job should not be scheduled")
+                job_name='reset_classifiers_for_source').exists(),
+            msg="Should not schedule classifier reset")
 
         self.assertContains(
             response, "Source successfully edited.",
@@ -1035,3 +1078,131 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         self.assertNotContains(
             response, "Classifier history will be cleared.",
             msg_prefix="Page should show the appropriate message")
+
+    def assert_feature_reset(self):
+        self.assertTrue(
+            Job.objects.filter(
+                job_name='reset_features_for_source').exists(),
+            msg="Should schedule feature reset")
+
+    def assert_no_feature_reset(self):
+        self.assertFalse(
+            Job.objects.filter(
+                job_name='reset_features_for_source').exists(),
+            msg="Should not schedule feature reset")
+
+    def test_extractor_changed_in_train_mode(self):
+        response = self.do_test(
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.VGG16.value),
+        )
+        self.assert_classifier_reset(response)
+        self.assert_feature_reset()
+
+    def test_extractor_same_in_train_mode(self):
+        response = self.do_test(
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_train_mode_to_deploying_classifier_of_other_extractor(self):
+        response = self.do_test(
+            trains_own_classifiers=(True, False),
+            deployed_classifier=(None, self.vgg_robot),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_feature_reset()
+
+    def test_train_mode_to_deploying_classifier_of_same_extractor(self):
+        response = self.do_test(
+            trains_own_classifiers=(True, False),
+            deployed_classifier=(None, self.effnet_robot),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_train_mode_to_deploying_no_classifier(self):
+        response = self.do_test(
+            trains_own_classifiers=(True, False),
+            deployed_classifier=(None, None),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_change_to_classifier_of_same_extractor_in_deploy_mode(self):
+        response = self.do_test(
+            trains_own_classifiers=(False, False),
+            deployed_classifier=(self.effnet_robot, self.effnet_robot_2),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_change_to_classifier_of_other_extractor_in_deploy_mode(self):
+        response = self.do_test(
+            trains_own_classifiers=(False, False),
+            deployed_classifier=(self.effnet_robot, self.vgg_robot),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_feature_reset()
+
+    def test_null_out_classifier_in_deploy_mode(self):
+        response = self.do_test(
+            trains_own_classifiers=(False, False),
+            deployed_classifier=(self.effnet_robot, None),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_null_to_classifier_matching_previous_features(self):
+        response = self.do_test(
+            trains_own_classifiers=(False, False),
+            deployed_classifier=(None, self.effnet_robot),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_no_feature_reset()
+
+    def test_null_to_classifier_not_matching_previous_features(self):
+        response = self.do_test(
+            trains_own_classifiers=(False, False),
+            deployed_classifier=(None, self.vgg_robot),
+        )
+        self.assert_no_classifier_reset(response)
+        self.assert_feature_reset()
+
+    def test_deploy_mode_to_training_with_same_extractor(self):
+        self.do_test(
+            trains_own_classifiers=(False, True),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+            deployed_classifier=(self.effnet_robot, None),
+        )
+        self.assert_no_feature_reset()
+
+    def test_deploy_mode_to_training_with_other_extractor(self):
+        self.do_test(
+            trains_own_classifiers=(False, True),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.VGG16.value),
+            deployed_classifier=(self.effnet_robot, None),
+        )
+        self.assert_feature_reset()
+
+    def test_null_to_training_matching_previous_features(self):
+        self.do_test(
+            trains_own_classifiers=(False, True),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+            deployed_classifier=(None, None),
+        )
+        self.assert_no_feature_reset()
+
+    def test_null_to_training_not_matching_previous_features(self):
+        self.do_test(
+            trains_own_classifiers=(False, True),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.VGG16.value),
+            deployed_classifier=(None, None),
+        )
+        self.assert_feature_reset()

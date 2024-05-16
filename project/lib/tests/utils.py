@@ -39,6 +39,7 @@ from images.model_utils import PointGen
 from images.models import Image, Point
 from labels.models import LabelGroup, Label
 from sources.models import Source
+from vision_backend.common import Extractors
 from vision_backend.models import Classifier
 import vision_backend.task_helpers as backend_task_helpers
 from ..storage_backends import get_storage_manager
@@ -181,7 +182,7 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         default_point_generation_method_1=5,
         trains_own_classifiers=True,
         confidence_threshold=100,
-        feature_extractor_setting='efficientnet_b0_ver1',
+        feature_extractor_setting=Extractors.EFFICIENTNET.value,
         latitude='0.0',
         longitude='0.0',
     )

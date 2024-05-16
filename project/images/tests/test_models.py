@@ -7,6 +7,7 @@ from django.test import override_settings
 from easy_thumbnails.files import get_thumbnailer
 
 from lib.tests.utils import BaseTest, ClientTest
+from vision_backend.common import Extractors
 from ..model_utils import PointGen
 from ..models import Point
 
@@ -21,11 +22,12 @@ class SourceExtractorPropertyTest(ClientTest):
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(
-            cls.user, feature_extractor_setting='efficientnet_b0_ver1')
+            cls.user, feature_extractor_setting=Extractors.EFFICIENTNET.value)
 
     @override_settings(FORCE_DUMMY_EXTRACTOR=False)
     def test_do_not_force_dummy(self):
-        self.assertEqual('efficientnet_b0_ver1', self.source.feature_extractor)
+        self.assertEqual(
+            Extractors.EFFICIENTNET.value, self.source.feature_extractor)
 
     @override_settings(FORCE_DUMMY_EXTRACTOR=True)
     def test_force_dummy(self):

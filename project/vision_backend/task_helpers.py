@@ -4,7 +4,6 @@ This file contains helper functions to vision_backend.tasks.
 from abc import ABC
 from logging import getLogger
 import re
-from typing import List, Optional
 
 import numpy as np
 from django.conf import settings
@@ -31,7 +30,7 @@ from jobs.utils import finish_job
 from labels.models import Label, LabelSet
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
-from .utils import schedule_source_check
+from .utils import extractor_to_name, schedule_source_check
 
 logger = getLogger(__name__)
 
@@ -42,7 +41,7 @@ logger = getLogger(__name__)
 @revisions.create_revision(atomic=True)
 def add_annotations(image_id: int,
                     res: ClassifyReturnMsg,
-                    label_objs: List[Label],
+                    label_objs: list[Label],
                     classifier: Classifier):
     """
     Adds DB Annotations using the scores in the spacer return message.
@@ -104,7 +103,7 @@ def add_annotations(image_id: int,
 
 def add_scores(image_id: int,
                res: ClassifyReturnMsg,
-               label_objs: List[Label]):
+               label_objs: list[Label]):
     """
     Adds DB Scores using the scores in the spacer return message.
 
@@ -150,7 +149,7 @@ def add_scores(image_id: int,
     Score.objects.bulk_create(score_objs)
 
 
-def make_dataset(images: List[Image]) -> ImageLabels:
+def make_dataset(images: list[Image]) -> ImageLabels:
     """
     Helper function for classifier_submit.
     Assembles all features and ground truth annotations
@@ -288,7 +287,7 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
             cls,
             task: ExtractFeaturesMsg,
             job_res: JobReturnMsg,
-            spacer_error: Optional[str]) -> None:
+            spacer_error: str | None) -> None:
 
         internal_job = cls.get_internal_job(task)
         image_id = internal_job.arg_identifier
@@ -313,6 +312,7 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
 
         # If all is ok store meta-data.
         img.features.extracted = True
+        img.features.extractor = extractor_to_name(task.extractor)
         img.features.runtime_total = task_res.runtime
 
         img.features.extractor_loaded_remotely = \
@@ -330,7 +330,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             cls,
             task: TrainClassifierMsg,
             job_res: JobReturnMsg,
-            spacer_error: Optional[str]) -> Optional[str]:
+            spacer_error: str | None) -> str | None:
 
         # Parse out pk for current and previous classifiers.
         regex_pattern = (
@@ -449,7 +449,7 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
             cls,
             task: ClassifyImageMsg,
             job_res: JobReturnMsg,
-            spacer_error: Optional[str]) -> None:
+            spacer_error: str | None) -> None:
 
         internal_job = cls.get_internal_job(task)
         try:

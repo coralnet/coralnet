@@ -32,6 +32,10 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
+    def setUp(self):
+        super().setUp()
+        self.source.refresh_from_db()
+
     def assertExistsInStorage(self, filepath):
         storage = get_storage_class()()
         self.assertTrue(storage.exists(filepath))

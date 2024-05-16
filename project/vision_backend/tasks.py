@@ -75,6 +75,12 @@ def check_source(source_id):
     except Source.DoesNotExist:
         raise JobError(f"Can't find source {source_id}")
 
+    if source.feature_extractor is None:
+        # None of the backend processes can happen without being able to
+        # extract features.
+        raise JobError(
+            "Machine classification isn't configured for this source")
+
     start = timezone.now()
     wrap_up_time = start + timedelta(minutes=settings.JOB_MAX_MINUTES)
     timed_out = False
@@ -279,6 +285,9 @@ def submit_features(image_id, job_id):
         img = Image.objects.get(pk=image_id)
     except Image.DoesNotExist:
         raise JobError(f"Image {image_id} does not exist.")
+
+    if img.source.feature_extractor is None:
+        raise JobError(f"No feature extractor configured for this source.")
 
     # Setup the job payload.
     storage = get_storage_class()()
@@ -587,15 +596,10 @@ def collect_spacer_jobs():
 
 
 @job_runner()
-def reset_backend_for_source(source_id):
+def reset_features_for_source(source_id):
     """
-    Removes all traces of the backend for this source, including
-    classifiers and features.
+    Clears all extracted features for this source.
     """
-    schedule_job(
-        'reset_classifiers_for_source', source_id,
-        source_id=source_id)
-
     reset_features_bulk(Image.objects.filter(source_id=source_id))
 
 
