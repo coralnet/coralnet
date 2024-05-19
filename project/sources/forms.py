@@ -79,7 +79,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
         }
         labels = {
             'trains_own_classifiers': "Classifier mode",
-            'deployed_classifier': "Classifier's global ID number",
+            'deployed_classifier': "Classifier global ID number",
         }
         error_messages = {
             'deployed_classifier': {
