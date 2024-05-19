@@ -149,13 +149,17 @@ $(document).ready(function() {
   </div>
 
   {% if has_classifier %}
+    <p>Active classifier: {{ source.get_deployed_classifier_html|safe }}</p>
     <p>
-      This plot shows the latest classifier's evaluated accuracy when we only include points over a certain confidence threshold. The source's confidence threshold setting is {{ source.confidence_threshold }}%; to change it, ask the source admin to visit the <a href="{% url 'source_edit' source.id %}">source admin page</a>.
+      This page contains the active classifier's evaluation results, computed on the date it was trained. The classifier is evaluated on a random 1/8ths-subset of the confirmed point annotations (the other 7/8ths are used for training). For more info, click the '?' button above.
+    </p>
+    <p>
+      The below plot shows the accuracy when we only include points over a certain confidence threshold.
     </p>
     <div id="alleviate"></div>
 
     <p>
-      The below confusion matrix shows which labels the classifier performs better or worse on, and which labels it frequently confuses with other labels. Note that the classifier is evaluated on a random 1/8ths-subset of the confirmed point annotations (the other 7/8ths are used for training). For more info, click the '?' button above.
+      The below confusion matrix shows which labels the classifier performs better or worse on, and which labels it frequently confuses with other labels.
     </p>
     <h3>
       Confusion matrix options

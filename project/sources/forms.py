@@ -10,6 +10,7 @@ from annotations.forms import AnnotationAreaPercentsField
 from images.forms import PointGenField
 from images.utils import get_aux_label_field_names
 from lib.forms import FieldsetsFormComponent, GridFormRenderer
+from vision_backend.models import Classifier
 from .models import Source, SourceInvite
 from .utils import aux_label_name_collisions
 
@@ -82,7 +83,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
         }
         error_messages = {
             'deployed_classifier': {
-                'invalid_choice': "This isn't an existing classifier ID.",
+                'invalid_choice': "This isn't a valid classifier ID.",
             },
         }
 
@@ -105,7 +106,12 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
                 'data-original-value': self.instance.feature_extractor_setting,
             })
 
-        if not self.is_edit_form:
+            if self.instance.deployed_classifier:
+                self.fields['deployed_classifier'].help_text = (
+                    f"Currently selected:"
+                    f" {self.instance.get_deployed_classifier_html()}"
+                )
+        else:
             # Remove this field from the new source form. It's generally
             # a step to take later after seeing how the classifier performs.
             del self.fields['confidence_threshold']
@@ -174,7 +180,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
                         header="Classifiers",
                         help_text="""Your source can either use its own image and annotation data to train new classifiers (the default behavior), or you can specify an existing CoralNet classifier to use.
                         
-                            If using an existing classifier, this source's labelset must match the classifier's source's labelset. We'll automatically create a matching labelset as needed.""",
+                            If using an existing classifier from another source, this source's labelset must match the classifier's source's labelset. We'll automatically create a matching labelset as needed.""",
                         fields=[
                             'trains_own_classifiers',
                             'deployed_classifier',
@@ -242,6 +248,12 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
 
         if deployed_classifier is not None:
 
+            if deployed_classifier.status != Classifier.ACCEPTED:
+                raise ValidationError(
+                    "This isn't a valid classifier ID.",
+                    code='classifier_not_accepted',
+                )
+
             source_accessible = deployed_classifier.source.visible_to_user(
                 self.request.user)
             if not source_accessible:
@@ -296,7 +308,11 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
 
     def save(self, **kwargs):
         if self.instance.trains_own_classifiers:
-            self.instance.deployed_classifier = None
+            if self.is_edit_form:
+                self.instance.deployed_classifier = \
+                    self.instance.last_accepted_classifier
+            else:
+                self.instance.deployed_classifier = None
 
         if self.instance.deployed_classifier:
             self.instance.deployed_source_id = \

@@ -1,6 +1,7 @@
 # Utility classes and functions for tests.
 from abc import ABCMeta
 from contextlib import contextmanager
+import datetime
 from io import BytesIO, StringIO
 import json
 import math
@@ -399,11 +400,11 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         cls.client.logout()
 
     @staticmethod
-    def create_robot(source):
+    def create_robot(source, set_as_deployed=True):
         """
         Add a robot to a source.
         """
-        return create_robot(source)
+        return create_robot(source, set_as_deployed=set_as_deployed)
 
     @staticmethod
     def add_robot_annotations(robot, image, annotations=None):
@@ -1298,7 +1299,7 @@ def sample_image_as_file(filename, filetype=None, image_options=None):
     return image_file
 
 
-def create_robot(source):
+def create_robot(source, set_as_deployed=True):
     """
     Add a robot (Classifier) to a source.
     NOTE: This does not use any standard task or utility function
@@ -1314,6 +1315,11 @@ def create_robot(source):
         status=Classifier.ACCEPTED,
     )
     classifier.save()
+
+    if set_as_deployed:
+        source.deployed_classifier = classifier
+        source.save()
+
     return classifier
 
 

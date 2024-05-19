@@ -78,8 +78,7 @@ def check_source(source_id):
     if source.feature_extractor is None:
         # None of the backend processes can happen without being able to
         # extract features.
-        raise JobError(
-            "Machine classification isn't configured for this source")
+        return "Machine classification isn't configured for this source"
 
     start = timezone.now()
     wrap_up_time = start + timedelta(minutes=settings.JOB_MAX_MINUTES)
@@ -169,8 +168,8 @@ def check_source(source_id):
 
     # Classifier training
 
-    need_new_robot, reason = source.need_new_robot()
-    if need_new_robot:
+    ready_to_train, reason = source.ready_to_train()
+    if ready_to_train:
         # Try to schedule training
         job, created = schedule_job(
             'train_classifier', source_id, source_id=source_id)
@@ -183,7 +182,10 @@ def check_source(source_id):
 
     # Image classification
 
-    if not source.has_robot():
+    if not source.deployed_classifier:
+        # We know that we must be in train mode here. If we were in
+        # use-existing-classifier mode, then we wouldn't have passed the
+        # source.feature_extractor check earlier.
         return f"Can't train first classifier: {reason}"
 
     classifiable_images = source.image_set.incomplete().with_features()
@@ -199,7 +201,7 @@ def check_source(source_id):
     # for annotations attributed to the current classifier, but that can
     # miss cases where the current classifier agreed with the previous
     # classifier on all points.
-    current_classifier = source.get_current_classifier()
+    current_classifier = source.deployed_classifier
     current_classifier_events = ClassifyImageEvent.objects \
         .filter(classifier_id=current_classifier.pk, source_id=source_id)
     current_classifier_annotations = source.annotation_set \
@@ -320,6 +322,9 @@ def submit_classifier(source_id, job_id):
     # We know the Source exists since we got past the job_starter decorator,
     # and deleting the Source would've cascade-deleted the Job.
     source = Source.objects.get(pk=source_id)
+
+    if not source.trains_own_classifiers:
+        raise JobError("Training is disabled for this source")
 
     images = source.image_set.confirmed().with_features().order_by('pk')
 
@@ -492,7 +497,7 @@ def classify_image(image_id):
             f"Image {image_id} needs to have features extracted"
             f" before being classified.")
 
-    classifier = img.source.get_current_classifier()
+    classifier = img.source.deployed_classifier
     if not classifier:
         raise JobError(
             f"Image {image_id} can't be classified;"

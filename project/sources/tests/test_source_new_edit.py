@@ -8,6 +8,7 @@ from images.model_utils import PointGen
 from jobs.models import Job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.common import Extractors
+from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import BaseTaskTest
 from ..models import Source
 
@@ -725,7 +726,7 @@ class SourceNewTest(BaseSourceTest):
             deployed_classifier='0')
         self.assert_field_error(
             response, 'deployed_classifier',
-            "This isn't an existing classifier ID.")
+            "This isn't a valid classifier ID.")
 
     def test_deployed_classifier_permission_denied(self):
         response = self.create_source(
@@ -734,6 +735,24 @@ class SourceNewTest(BaseSourceTest):
         self.assert_field_error(
             response, 'deployed_classifier',
             "You don't have access to this classifier's source.")
+
+    def test_deployed_classifier_not_accepted(self):
+        for status in [
+            Classifier.LACKING_UNIQUE_LABELS,
+            Classifier.TRAIN_PENDING,
+            Classifier.TRAIN_ERROR,
+            Classifier.REJECTED_ACCURACY,
+        ]:
+            classifier = self.create_robot(self.source_ab)
+            classifier.status = status
+            classifier.save()
+
+            response = self.create_source(
+                trains_own_classifiers=False,
+                deployed_classifier=classifier.pk)
+            self.assert_field_error(
+                response, 'deployed_classifier',
+                "This isn't a valid classifier ID.")
 
 
 # Make these all different from what create_source() would use.
@@ -880,7 +899,7 @@ class SourceEditTest(BaseSourceTest):
         self.assertIsNone(self.source.deployed_classifier)
         self.assertIsNone(self.source.deployed_source_id)
 
-    def test_mode_to_train(self):
+    def test_mode_to_train_without_trained_classifier(self):
         # First be in deploy mode...
         self.edit_source(
             trains_own_classifiers=False,
@@ -896,6 +915,25 @@ class SourceEditTest(BaseSourceTest):
         self.assertTrue(self.source.trains_own_classifiers)
         self.assertIsNone(self.source.deployed_classifier)
         self.assertIsNone(self.source.deployed_source_id)
+
+    def test_mode_to_train_with_trained_classifier(self):
+        own_robot = self.create_robot(self.source)
+
+        # First be in deploy mode...
+        self.edit_source(
+            trains_own_classifiers=False,
+            deployed_classifier=self.source_ab_robot_1.pk)
+        self.source.refresh_from_db()
+        self.assertFalse(self.source.trains_own_classifiers)
+
+        # Then switch back to train mode
+        self.edit_source(
+            trains_own_classifiers=True,
+            deployed_classifier='')
+        self.source.refresh_from_db()
+        self.assertTrue(self.source.trains_own_classifiers)
+        self.assertEqual(self.source.deployed_classifier.pk, own_robot.pk)
+        self.assertEqual(self.source.deployed_source_id, self.source.pk)
 
     def test_deployed_classifier_different(self):
         self.edit_source(
@@ -919,7 +957,7 @@ class SourceEditTest(BaseSourceTest):
             deployed_classifier='0')
         self.assert_field_error(
             response, 'deployed_classifier',
-            "This isn't an existing classifier ID.")
+            "This isn't a valid classifier ID.")
 
     def test_deployed_classifier_permission_denied(self):
         response = self.edit_source(
@@ -956,6 +994,45 @@ class SourceEditTest(BaseSourceTest):
         # Same size, one label different
         self.do_test_deployed_classifier_labelset_mismatch(
             ['A', 'C'], self.source_ab_robot_1)
+
+    def test_classifiers_help_text_this_source(self):
+        self.create_labelset(self.user, self.source, self.labels)
+        own_robot = self.create_robot(self.source)
+        self.edit_source(trains_own_classifiers=True)
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+        self.assertContains(
+            response,
+            f"Currently selected: {own_robot.pk},"
+            f" from this source")
+
+    def test_classifiers_help_text_other_source(self):
+        self.edit_source(
+            trains_own_classifiers=False,
+            deployed_classifier=self.source_ab_robot_1.pk)
+        self.source.refresh_from_db()
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+
+        classifier_source_link = reverse(
+            'source_main', args=[self.source_ab.pk])
+        self.assertContains(
+            response,
+            f'Currently selected: {self.source_ab_robot_1.pk}, from'
+            f' <a href="{classifier_source_link}" target="_blank">'
+            f'{self.source_ab.name}</a>')
+
+    def test_classifiers_help_text_none_selected(self):
+        self.edit_source(
+            trains_own_classifiers=False,
+            deployed_classifier='')
+        self.source.refresh_from_db()
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+        self.assertNotContains(response, "Currently selected:")
 
 
 class SourceFormFieldAvailability(ClientTest):
@@ -1003,6 +1080,8 @@ class SourceEditBackendStatusTest(BaseTaskTest):
 
         cls.url = reverse('source_edit', args=[cls.source.pk])
 
+        cls.own_robot = cls.create_robot(cls.source)
+
         source_effnet = cls.create_source(
             cls.user,
             trains_own_classifier=True,
@@ -1038,7 +1117,6 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         image.features.extractor = Extractors.EFFICIENTNET.value
         image.features.save()
 
-        self.source.refresh_from_db()
         self.source.trains_own_classifiers = trains_own_classifiers[0]
         self.source.feature_extractor_setting = feature_extractor_setting[0]
         self.source.deployed_classifier = deployed_classifier[0]
@@ -1110,7 +1188,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
     def test_train_mode_to_deploying_classifier_of_other_extractor(self):
         response = self.do_test(
             trains_own_classifiers=(True, False),
-            deployed_classifier=(None, self.vgg_robot),
+            deployed_classifier=(self.own_robot, self.vgg_robot),
         )
         self.assert_no_classifier_reset(response)
         self.assert_feature_reset()
@@ -1118,7 +1196,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
     def test_train_mode_to_deploying_classifier_of_same_extractor(self):
         response = self.do_test(
             trains_own_classifiers=(True, False),
-            deployed_classifier=(None, self.effnet_robot),
+            deployed_classifier=(self.own_robot, self.effnet_robot),
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
@@ -1126,7 +1204,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
     def test_train_mode_to_deploying_no_classifier(self):
         response = self.do_test(
             trains_own_classifiers=(True, False),
-            deployed_classifier=(None, None),
+            deployed_classifier=(self.own_robot, None),
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()

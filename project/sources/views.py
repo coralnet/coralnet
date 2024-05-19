@@ -166,15 +166,15 @@ def source_main(request, source_id):
 
     # Setup the classifier overview info, and plot if applicable
     classifier_plot_data = []
-    current_classifier = source.get_current_classifier()
+    last_accepted_classifier = source.last_accepted_classifier
 
-    if source.trains_own_classifiers and current_classifier:
+    if source.trains_own_classifiers and last_accepted_classifier:
 
         trained_classifiers = source.classifier_set.filter(
             status__in=[Classifier.ACCEPTED, Classifier.REJECTED_ACCURACY])
         classifier_details = [
             ("Last classifier saved",
-             datetime_display(current_classifier.train_completion_date)),
+             datetime_display(last_accepted_classifier.train_completion_date)),
             ("Last classifier trained",
              datetime_display(
                  trained_classifiers.latest('pk').train_completion_date)),
@@ -208,35 +208,18 @@ def source_main(request, source_id):
 
     elif source.deployed_classifier:
 
-        deployed_source = source.deployed_classifier.source
-        deployed_source_link = reverse(
-            'source_main', args=[deployed_source.pk])
-
         classifier_details = [
-            ("Classifier ID in use",
-             source.deployed_classifier.pk),
-            ("Classifier's source",
-             f'<a href="{deployed_source_link}">{deployed_source.name}</a>'),
+            ("Active classifier",
+             source.get_deployed_classifier_html()),
             ("Confidence threshold",
              f'{source.confidence_threshold}%'),
-        ]
-
-    elif source.deployed_source_id:
-
-        # This could be fleshed out later to say exactly what's going on in
-        # that other source: classifier deleted, source labelset changed, or
-        # source deleted.
-        classifier_details = [
-            ("Classifier ID in use",
-             f"None. Previously used a classifier from source"
-             f" {source.deployed_source_id}."),
         ]
 
     else:
 
         classifier_details = [
-            ("Classifier ID in use",
-             "None"),
+            ("Active classifier",
+             source.get_deployed_classifier_html()),
         ]
 
     return render(request, 'sources/source_main.html', {

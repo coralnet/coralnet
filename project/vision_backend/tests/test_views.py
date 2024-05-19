@@ -82,7 +82,7 @@ class BackendMainTest(ClientTest):
         # http://stackoverflow.com/a/4454671/
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         self.client.force_login(self.user)
@@ -143,7 +143,7 @@ class BackendMainTest(ClientTest):
 
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         self.client.force_login(self.user)
@@ -201,9 +201,13 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         image2a = self.upload_image(self.user, self.source2)
         image2b = self.upload_image(self.user, self.source2)
         image2c = self.upload_image(self.user, self.source2)
+        image2d = self.upload_image(self.user, self.source2)
+        _image2e = self.upload_image(self.user, self.source2)
         self.add_annotations(self.user, image2a)
         self.add_robot_annotations(classifier2, image2b)
         self.add_robot_annotations(classifier2, image2c)
+        do_job('extract_features', image2d.pk, source_id=self.source2.pk)
+        do_collect_spacer_jobs()
 
         self.client.force_login(self.superuser)
         response = self.client.get(self.url)
@@ -212,12 +216,18 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         image_counts_table_soup = response_soup.select(
             'table#image-counts-table')[0]
         self.assert_table_values(image_counts_table_soup, [
-            ["Confirmed", "3", "42.9%"],
-            ["Unconfirmed", "2", "28.6%"],
-            ["Unclassified, with features", "1", "14.3%"],
-            ["Unclassified, without features", "1", "14.3%"],
-            ["Source has backend disabled", "0", "0.0%"],
-            ["All", "7", "100.0%"],
+            # 1a, 1b, 2a
+            ["Confirmed", "3", "33.3%"],
+            # 2b, 2c
+            ["Unconfirmed", "2", "22.2%"],
+            # 1d, 2e
+            ["Unclassified, need features", "2", "22.2%"],
+            # 2d
+            ["Unclassified, need classification", "1", "11.1%"],
+            # 1c
+            ["Unclassified, not ready for features/classification",
+             "1", "11.1%"],
+            ["All", "9", "100.0%"],
         ])
 
         sources_table_soup = response_soup.select(
@@ -230,7 +240,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
                     f'{self.source2.pk}'
                     f'</a>'
                 ),
-                "# Imgs": 3,
+                "# Imgs": 5,
                 "# Conf.": 1,
             },
             {
@@ -276,7 +286,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
         # Add valres to the session so that we don't have to create it in S3.
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         self.client.force_login(self.user)
@@ -300,7 +310,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
         )
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         self.client.force_login(self.user)
@@ -329,7 +339,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
         )
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         self.client.force_login(self.user)
@@ -353,7 +363,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
         )
         session = self.client.session
         session['valres'] = valres
-        session['ccpk'] = robot.pk
+        session['classifier_id'] = robot.pk
         session.save()
 
         local_label_a = self.source.labelset.get_labels().get(code='A')

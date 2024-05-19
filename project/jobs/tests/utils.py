@@ -113,8 +113,10 @@ class JobUtilsMixin(TestCase):
             )
 
     def source_check_and_assert_message(
-        self, expected_message, assert_msg=None,
+        self, expected_message, assert_msg=None, source=None,
     ):
-        do_job('check_source', self.source.pk, source_id=self.source.pk)
+        source = source or self.source
+
+        do_job('check_source', source.pk, source_id=source.pk)
         self.assert_job_result_message(
             'check_source', expected_message, assert_msg=assert_msg)

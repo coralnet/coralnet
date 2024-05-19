@@ -21,37 +21,59 @@ from .utils import labelset_mapper, map_labels, get_alleviate
 
 @permission_required('is_superuser')
 def backend_overview(request):
-    total = Image.objects.filter().count()
+    images_all = Image.objects.all()
+    total = images_all.count()
 
-    images_backend_enabled = \
-        Image.objects.filter(source__trains_own_classifiers=True)
-    confirmed = images_backend_enabled.confirmed().count()
-    unconfirmed = images_backend_enabled.unconfirmed().count()
-    unclassified_with_features = \
-        images_backend_enabled.unclassified().with_features().count()
-    unclassified_without_features = \
-        images_backend_enabled.unclassified().without_features().count()
-    backend_disabled = \
-        Image.objects.filter(source__trains_own_classifiers=False).count()
+    confirmed = images_all.confirmed().count()
+    unconfirmed = images_all.unconfirmed().count()
+    images_unclassified = images_all.unclassified()
+    images_need_features = \
+        images_unclassified.without_features().exclude(
+            source__deployed_classifier__isnull=True,
+            source__trains_own_classifiers=False)
+    images_need_classification = \
+        images_unclassified.with_features().exclude(
+            source__deployed_classifier__isnull=True)
+    need_features = images_need_features.count()
+    need_classification = images_need_classification.count()
+    not_ready = \
+        images_unclassified.count() - need_features - need_classification
 
     def percent_display(numerator, denominator):
         return format(100*numerator / denominator, '.1f') + "%"
 
-    img_stats = {
-        'total': total,
-        'confirmed': confirmed,
-        'unconfirmed': unconfirmed,
-        'unclassified_with_features': unclassified_with_features,
-        'unclassified_without_features': unclassified_without_features,
-        'backend_disabled': backend_disabled,
-        'pct_confirmed': percent_display(confirmed, total),
-        'pct_unconfirmed': percent_display(unconfirmed, total),
-        'pct_unclassified_with_features': percent_display(
-            unclassified_with_features, total),
-        'pct_unclassified_without_features': percent_display(
-            unclassified_without_features, total),
-        'pct_backend_disabled': percent_display(backend_disabled, total),
-    }
+    image_stats = [
+        [
+            "Confirmed",
+            confirmed,
+            percent_display(confirmed, total),
+        ],
+        [
+            "Unconfirmed",
+            unconfirmed,
+            percent_display(unconfirmed, total),
+        ],
+        [
+            "Unclassified, need features",
+            need_features,
+            percent_display(need_features, total),
+        ],
+        [
+            "Unclassified, need classification",
+            need_classification,
+            percent_display(need_classification, total),
+        ],
+        [
+            "Unclassified, not ready for features/classification",
+            not_ready,
+            percent_display(not_ready, total),
+        ],
+        [
+            "All",
+            total,
+            "100.0%",
+        ],
+    ]
 
     all_sources = Source.objects.all()
     all_classifiers = Classifier.objects.all()
@@ -106,7 +128,7 @@ def backend_overview(request):
     for source_dict in page_results.object_list:
         source_id = source_dict['source_id']
         source = source_dict['source']
-        current_classifier = source.get_current_classifier()
+        last_accepted_classifier = source.last_accepted_classifier
         page_sources.append(dict(
             pk=source_id,
             status=source_dict['status'],
@@ -114,8 +136,8 @@ def backend_overview(request):
             image_count=source.image_set.count(),
             confirmed_image_count=source.image_set.confirmed().count(),
             classifier_image_count=(
-                current_classifier.nbr_train_images
-                if current_classifier
+                last_accepted_classifier.nbr_train_images
+                if last_accepted_classifier
                 else 0
             ),
             check_message=latest_check_lookup.get(source_id) or "(None)",
@@ -124,7 +146,7 @@ def backend_overview(request):
     return render(request, 'vision_backend/overview.html', {
         'page_results': page_results,
         'page_sources': page_sources,
-        'img_stats': img_stats,
+        'image_stats': image_stats,
         'clf_stats': clf_stats,
     })
 
@@ -151,22 +173,22 @@ def backend_main(request, source_id):
     source = Source.objects.get(id=source_id)
 
     # Make sure that there is a classifier for this source.
-    if not source.has_robot():
+    if not source.deployed_classifier:
         return render(request, 'vision_backend/backend_main.html', {
             'form': form,
             'has_classifier': False,
             'source': source,
         })
 
-    cc = source.get_current_classifier()
+    classifier = source.deployed_classifier
     if 'valres' in request.session.keys() and \
-            'ccpk' in request.session.keys() and \
-            request.session['ccpk'] == cc.pk:
+            'classifier_id' in request.session.keys() and \
+            request.session['classifier_id'] == classifier.pk:
         pass
     else:
-        valres: ValResults = cc.valres
+        valres: ValResults = classifier.valres
         request.session['valres'] = valres.serialize()
-        request.session['ccpk'] = cc.pk
+        request.session['classifier_id'] = classifier.pk
     
     # Load stored variables to local namespace
     valres: ValResults = ValResults.deserialize(request.session['valres'])

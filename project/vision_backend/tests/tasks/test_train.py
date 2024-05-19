@@ -121,6 +121,12 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         self.assert_job_persist_value('train_classifier', True)
 
+        self.source.refresh_from_db()
+        self.assertEqual(
+            self.source.deployed_classifier.pk, classifier.pk,
+            msg="Should auto-populate deployed_classifier",
+        )
+
     @override_settings(
         TRAINING_MIN_IMAGES=3,
         NEW_CLASSIFIER_TRAIN_TH=1.1,
@@ -141,7 +147,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         # Collect classifier.
         do_collect_spacer_jobs()
 
-        clf_1 = self.source.get_current_classifier()
+        clf_1 = self.source.last_accepted_classifier
 
         # Upload enough additional images for the next training to happen.
         self.upload_images_for_training(
@@ -160,12 +166,18 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_collect_spacer_jobs()
 
-        clf_2 = self.source.get_current_classifier()
+        clf_2 = self.source.last_accepted_classifier
 
         self.assertNotEqual(clf_1.pk, clf_2.pk, "Should have a new classifier")
         self.assertEqual(
             clf_2.status, Classifier.ACCEPTED, "Should be accepted")
         self.assertEqual(clf_2.nbr_train_images, clf_1.nbr_train_images + 2)
+
+        self.source.refresh_from_db()
+        self.assertEqual(
+            self.source.deployed_classifier.pk, clf_2.pk,
+            msg="Should auto-populate deployed_classifier"
+        )
 
     def test_train_on_confirmed_only(self):
         def upload_image_without_annotations(filename):
@@ -290,7 +302,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
-        first_classifier = cls.source.get_current_classifier()
+        first_classifier = cls.source.last_accepted_classifier
         assert first_classifier.status == Classifier.ACCEPTED
 
         # Another classifier. Tests can change the status of this one to try
@@ -305,7 +317,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_collect_spacer_jobs()
 
-        cls.previous_classifier = cls.source.get_current_classifier()
+        cls.previous_classifier = cls.source.last_accepted_classifier
         assert cls.previous_classifier.status == Classifier.ACCEPTED
 
     def do_test_retrain_logic(
@@ -413,8 +425,10 @@ class AbortCasesTest(
     Test cases (besides retrain logic) where the train task or collection would
     abort before reaching the end.
     """
-    def test_training_disabled(self):
-        """Try to train for a source which has training disabled."""
+    def test_training_disabled_at_source_check(self):
+        """
+        Try to schedule training for a source which has training disabled.
+        """
         # Ensure the source is otherwise ready for training.
         self.upload_images_for_training()
         # Extract features
@@ -436,7 +450,7 @@ class AbortCasesTest(
 
         self.assert_job_result_message(
             'check_source',
-            f"Can't train first classifier:"
+            f"Source seems to be all caught up."
             f" Source has training disabled"
         )
 
@@ -461,6 +475,34 @@ class AbortCasesTest(
             'check_source',
             f"Can't train first classifier:"
             f" Not enough annotated images for initial training"
+        )
+
+    def test_training_disabled_at_train_task(self):
+        """
+        Try to start training for a source which has training disabled.
+        """
+        # Ensure the source is otherwise ready for training.
+        self.upload_images_for_training()
+        # Extract features
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Create a classifier in another source.
+        other_source = self.create_source(self.user)
+        self.create_labelset(self.user, other_source, self.labels)
+        classifier = self.create_robot(other_source)
+
+        # Disable training, opting to deploy the existing classifier instead.
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
+        self.source.save()
+
+        # Try to train
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+
+        self.assert_job_result_message(
+            'train_classifier',
+            "Training is disabled for this source"
         )
 
     def do_lacking_unique_labels_test(self, uploads):
@@ -488,7 +530,7 @@ class AbortCasesTest(
             f" weren't enough annotations of at least 2 different labels.")
 
         self.assertFalse(
-            self.source.need_new_robot()[0],
+            self.source.ready_to_train()[0],
             msg="Source should not immediately be considered for retraining")
 
     def test_train_ref_one_common_label(self):

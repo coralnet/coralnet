@@ -16,7 +16,7 @@ from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
 from jobs.tests.utils import do_job, JobUtilsMixin
 from ...exceptions import RowColumnMismatchError
-from ...models import Score
+from ...models import Classifier, Score
 from ...utils import clear_features
 from .utils import BaseTaskTest, do_collect_spacer_jobs
 
@@ -259,6 +259,27 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
                 msg="Image that was last classified by the current classifier"
                     " should not have been scheduled")
 
+    def test_can_still_classify_with_training_disabled(self):
+        """
+        Should be able to skip over the training part of the source check
+        and proceed to classification, if training's disabled and there's
+        a deployed classifier.
+        """
+        other_source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=self.source.last_accepted_classifier.pk,
+        )
+
+        image = self.upload_image(self.user, other_source)
+        # Extract features
+        do_job('extract_features', image.pk, source_id=other_source.pk)
+        do_collect_spacer_jobs()
+
+        self.assertIsNone(other_source.last_accepted_classifier)
+        self.source_check_and_assert_message(
+            "Scheduled 1 image classification(s)", source=other_source)
+
     def test_time_out(self):
         for _ in range(12):
             self.upload_image_for_classification()
@@ -290,7 +311,7 @@ class ClassifyImageTest(
 
     def test_classify_unannotated_image(self):
         """Classify an image where all points are unannotated."""
-        self.upload_data_and_train_classifier()
+        classifier = self.upload_data_and_train_classifier()
 
         img = self.upload_image_and_machine_classify()
 
@@ -309,7 +330,6 @@ class ClassifyImageTest(
 
         codes = self.image_label_codes(img)
         label_ids = self.image_label_ids(img)
-        classifier = self.source.get_current_classifier()
 
         event = ClassifyImageEvent.objects.get(image_id=img.pk)
         self.assertEqual(event.source_id, self.source.pk)
@@ -426,8 +446,7 @@ class ClassifyImageTest(
             for i, score in enumerate(scores):
                 self_.scores.append((score[0], score[1], scores_simple[i]))
 
-        self.upload_data_and_train_classifier()
-        clf_1 = self.source.get_current_classifier()
+        clf_1 = self.upload_data_and_train_classifier()
 
         # Upload, extract, and classify with a particular set of scores
         with mock.patch(
@@ -440,7 +459,8 @@ class ClassifyImageTest(
             NEW_CLASSIFIER_TRAIN_TH=0.0001,
             NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
         ):
-            self.upload_data_and_train_classifier(new_train_images_count=0)
+            clf_2 = self.upload_data_and_train_classifier(
+                new_train_images_count=0)
 
         # Re-classify with a different set of
         # scores so that specific points get their labels changed (and
@@ -450,7 +470,6 @@ class ClassifyImageTest(
         ):
             run_scheduled_jobs_until_empty()
 
-        clf_2 = self.source.get_current_classifier()
         all_classifiers = self.source.classifier_set.all()
         message = (
             f"clf 1 and 2 IDs: {clf_1.pk}, {clf_2.pk}"
@@ -594,7 +613,7 @@ class ClassifyImageTest(
 
         img = self.upload_image_and_machine_classify()
 
-        for point in Point.objects.filter(image__id=img.id):
+        for point in img.point_set.all():
             ann = point.annotation
             scores = Score.objects.filter(point=point)
             posteriors = [score.score for score in scores]
@@ -602,6 +621,63 @@ class ClassifyImageTest(
                 scores[int(np.argmax(posteriors))].label, ann.label,
                 "Max score label should match the annotation label."
                 " Posteriors: {}".format(posteriors))
+
+    def test_use_old_classifier_from_this_source(self):
+        clf_1 = self.upload_data_and_train_classifier()
+
+        # Accept another classifier.
+        with override_settings(
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
+        ):
+            clf_2 = self.upload_data_and_train_classifier(
+                new_train_images_count=0)
+        self.assertNotEqual(clf_1.pk, clf_2.pk)
+        self.assertEqual(clf_2.status, Classifier.ACCEPTED)
+
+        # Actually use the first classifier.
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = clf_1
+        self.source.save()
+
+        img = self.upload_image_and_machine_classify()
+
+        points = img.point_set.all()
+        self.assertEqual(points.count(), 5)
+        for point in points:
+            self.assertEqual(
+                point.annotation.robot_version_id, clf_1.pk,
+                msg="Should classify with the first classifier",
+            )
+
+    def test_use_classifier_from_different_source(self):
+        # The convenience function to train a classifier for self.source is
+        # really nice to have, so we use that and then use the classifier in
+        # other_source, instead of having the sources the other way around.
+        classifier = self.upload_data_and_train_classifier()
+
+        other_source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier.pk,
+        )
+
+        # Image without annotations
+        image = self.upload_image(self.user, other_source)
+        # Extract features
+        do_job('extract_features', image.pk, source_id=other_source.pk)
+        do_collect_spacer_jobs()
+        # Classify image
+        do_job('classify_features', image.pk, source_id=other_source.pk)
+        image.refresh_from_db()
+
+        points = image.point_set.all()
+        self.assertEqual(points.count(), 5)
+        for point in points:
+            self.assertEqual(
+                point.annotation.robot_version_id, classifier.pk,
+                msg="Should classify with the deployed classifier",
+            )
 
     def test_with_dupe_points(self):
         """
@@ -715,13 +791,13 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
             classify_job.result_message,
             "Job should have the expected error")
 
-    def test_classify_without_classifier(self):
+    def test_no_classifier_at_classify_task(self):
         """Try to classify an image without a classifier for the source."""
-        self.upload_data_and_train_classifier()
+        classifier = self.upload_data_and_train_classifier()
 
         img = self.upload_image_and_schedule_classification()
         # Delete source's classifier
-        self.source.get_current_classifier().delete()
+        classifier.delete()
 
         # Try to classify
         run_scheduled_jobs()

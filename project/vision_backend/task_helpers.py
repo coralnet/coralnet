@@ -420,6 +420,12 @@ class SpacerTrainResultHandler(SpacerResultHandler):
         classifier.status = Classifier.ACCEPTED
         classifier.save()
 
+        # Set as the deployed classifier, if applicable
+        source = classifier.source
+        if source.trains_own_classifiers:
+            source.deployed_classifier = classifier
+            source.save()
+
         return f"New classifier accepted: {classifier.pk}"
 
 

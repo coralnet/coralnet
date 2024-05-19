@@ -136,9 +136,9 @@ def labelset_add(request, source_id):
     """
     source = get_object_or_404(Source, id=source_id)
 
-    if source.deployed_classifier:
+    if not source.trains_own_classifiers and source.deployed_classifier:
         return render(request, 'lib/function_unavailable.html', {
-            'message': "Since this source relies on an outside classifier,"
+            'message': "Since this source relies on a specific classifier,"
                        " the labelset can't be edited.",
         })
 

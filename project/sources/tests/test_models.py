@@ -328,3 +328,53 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
             image=image,
         )
         self.assert_save_raises_constraint_based_error(score)
+
+
+class PopulateDeployedClassifierTest(MigrationTest):
+
+    before = [
+        ('sources', '0008_source_annoarea_and_pointgen_defaults'),
+    ]
+    after = [
+        ('sources', '0010_populate_deployed_classifier'),
+    ]
+
+    def test_migration(self):
+        Source = self.get_model_before('sources.Source')
+        Classifier = self.get_model_before('vision_backend.Classifier')
+
+        source_without_classifier = Source(name="Source without classifier")
+        source_without_classifier.save()
+        source_with_classifier = Source(name="Source with classifier")
+        source_with_classifier.save()
+        classifier = Classifier(
+            source=source_with_classifier,
+            # Accepted, earlier
+            status='AC',
+        )
+        classifier.save()
+        classifier_2 = Classifier(
+            source=source_with_classifier,
+            # Accepted, later
+            status='AC',
+        )
+        classifier_2.save()
+        classifier_3 = Classifier(
+            source=source_with_classifier,
+            # Rejected
+            status='RJ',
+        )
+        classifier_3.save()
+
+        self.run_migration()
+
+        Source = self.get_model_after('sources.Source')
+
+        source_without_classifier = Source.objects.get(
+            pk=source_without_classifier.pk)
+        self.assertIsNone(source_without_classifier.deployed_classifier)
+
+        source_with_classifier = Source.objects.get(
+            pk=source_with_classifier.pk)
+        self.assertEqual(
+            source_with_classifier.deployed_classifier.pk, classifier_2.pk)

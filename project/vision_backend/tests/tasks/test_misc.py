@@ -22,7 +22,7 @@ class ResetTaskTest(BaseTaskTest):
         self.upload_data_and_train_classifier()
         img = self.upload_image_and_machine_classify()
 
-        classifier = self.source.get_current_classifier()
+        classifier = self.source.last_accepted_classifier
         self.assertIsNotNone(classifier, "Should have a classifier")
         classifier_id = classifier.pk
 

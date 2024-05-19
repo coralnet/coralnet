@@ -5,7 +5,6 @@ from django.utils.html import escape
 from calcification.models import CalcifyRateTable
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest
-from sources.models import Source
 from ..models import Label
 from .utils import LabelTest
 
@@ -130,6 +129,111 @@ class LabelsetCreateTest(LabelTest):
 
         self.source.refresh_from_db()
         self.assertIsNone(self.source.labelset)
+
+
+class LabelsetAddRemoveAvailabilityBasedOnDeploy(LabelTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        # Call the parent's setup (while still using this class as cls)
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+        # Create labels and group
+        cls.group = cls.create_label_group("Group1")
+        cls.create_label(cls.user, "Label A", 'A', cls.group)
+        cls.create_label(cls.user, "Label B", 'B', cls.group)
+
+        # Create sources and labelsets
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=1))
+        cls.create_labelset(cls.user, cls.source, Label.objects.filter(
+            default_code__in=['A', 'B']))
+
+        cls.url = reverse('labelset_add', args=[cls.source.pk])
+
+    def setUp(self):
+        super().setUp()
+        self.source.refresh_from_db()
+
+    def assert_can_reach_page(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+        self.assertTemplateUsed(response, 'labels/labelset_add.html')
+
+    def assert_cannot_reach_page(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
+        self.assertContains(
+            response,
+            escape(
+                "Since this source relies on a specific classifier,"
+                " the labelset can't be edited."
+            ))
+
+    def assert_can_post_submit(self):
+        label_pks = [
+            Label.objects.get(default_code=default_code).pk
+            for default_code in ['A', 'B']
+        ]
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url,
+            dict(label_ids=','.join(str(pk) for pk in label_pks)),
+            follow=True,
+        )
+        self.assertTemplateUsed(response, 'labels/labelset_main.html')
+
+    def assert_cannot_post_submit(self):
+        label_pks = [
+            Label.objects.get(default_code=default_code).pk
+            for default_code in ['A', 'B']
+        ]
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url,
+            dict(label_ids=','.join(str(pk) for pk in label_pks)),
+            follow=True,
+        )
+        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
+        self.assertContains(
+            response,
+            escape(
+                "Since this source relies on a specific classifier,"
+                " the labelset can't be edited."
+            ))
+
+    def test_training_enabled_without_classifier(self):
+        self.assert_can_reach_page()
+        self.assert_can_post_submit()
+
+    def test_training_enabled_with_classifier(self):
+        self.create_robot(self.source, set_as_deployed=True)
+
+        self.assert_can_reach_page()
+        self.assert_can_post_submit()
+
+    def test_training_disabled_without_classifier(self):
+        self.source.trains_own_classifiers = False
+        self.source.save()
+
+        self.assert_can_reach_page()
+        self.assert_can_post_submit()
+
+    def test_training_disabled_with_classifier(self):
+        source_2 = self.create_source(self.user)
+        source_2_robot = self.create_robot(source_2)
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = source_2_robot
+        self.source.save()
+
+        self.assert_cannot_reach_page()
+        self.assert_cannot_post_submit()
 
 
 class LabelsetAddRemoveTest(LabelTest):
@@ -299,51 +403,6 @@ class LabelsetAddRemoveTest(LabelTest):
                 'code', flat=True)),
             {'A', 'B'},
             "Labelset changes should be saved to the DB")
-
-    def test_cant_reach_page_when_in_deploy_mode(self):
-        source_2 = self.create_source(self.user)
-        source_2_robot = self.create_robot(source_2)
-        source = Source.objects.get(pk=self.source.pk)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = source_2_robot
-        source.save()
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
-        self.assertContains(
-            response,
-            escape(
-                "Since this source relies on an outside classifier,"
-                " the labelset can't be edited."
-            ))
-
-    def test_cant_post_submit_when_in_deploy_mode(self):
-        source_2 = self.create_source(self.user)
-        source_2_robot = self.create_robot(source_2)
-        source = Source.objects.get(pk=self.source.pk)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = source_2_robot
-        source.save()
-
-        label_pks = [
-            Label.objects.get(default_code=default_code).pk
-            for default_code in ['A', 'B']
-        ]
-
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url,
-            dict(label_ids=','.join(str(pk) for pk in label_pks)),
-            follow=True,
-        )
-        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
-        self.assertContains(
-            response,
-            escape(
-                "Since this source relies on an outside classifier,"
-                " the labelset can't be edited."
-            ))
 
     def test_labelset_change_resets_backend_for_source(self):
         # Create robot and robot annotations
