@@ -106,6 +106,7 @@ def backend_overview(request):
         elif (
             "all caught up" in check_message
             or "Can't train first classifier" in check_message
+            or "Machine classification isn't configured" in check_message
         ):
             status = 'caught_up'
             status_order = 3
