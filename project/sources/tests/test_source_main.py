@@ -395,6 +395,38 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             backend_soup,
             "Confidence threshold: 100%")
 
+    def test_deployed_classifier_not_newest(self):
+        train_source = self.create_source(self.user)
+        self.create_labelset(
+            self.user, train_source, self.labels.filter(name__in=['A', 'B']))
+        classifier_1 = self.create_robot(train_source)
+        classifier_2 = self.create_robot(train_source)
+
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier_1.pk,
+        )
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+        train_source_url = reverse('source_main', args=[train_source.pk])
+        train_date_1 = date_display(classifier_1.train_completion_date)
+        train_date_2 = date_display(classifier_2.train_completion_date)
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            f'Active classifier: {classifier_1.pk}, from'
+            f' <a href="{train_source_url}" target="_blank">'
+            f'{train_source.name}</a>,'
+            f' trained {train_date_1}'
+            f' (latest: {classifier_2.pk}, trained {train_date_2})'
+        )
+        self.assert_detail(
+            backend_soup,
+            "Confidence threshold: 100%")
+
     def test_deployed_classifier_this_source(self):
         source = self.create_source(
             self.user,
@@ -415,6 +447,34 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             f'Active classifier: {classifier.pk}, from'
             f' this source,'
             f' trained {train_date}')
+        self.assert_detail(
+            backend_soup,
+            "Confidence threshold: 100%")
+
+    def test_deployed_classifier_this_source_not_newest(self):
+        source = self.create_source(
+            self.user,
+            trains_own_classifiers=True,
+        )
+        classifier_1 = self.create_robot(source)
+        classifier_2 = self.create_robot(source)
+        source.trains_own_classifiers = False
+        source.deployed_classifier = classifier_1
+        source.save()
+
+        soup = self.source_main_soup(source)
+        backend_soup = soup.find(id='backend-column')
+        train_date_1 = date_display(classifier_1.train_completion_date)
+        train_date_2 = date_display(classifier_2.train_completion_date)
+
+        self.assertIsNone(backend_soup.find(id=self.acc_overview_id))
+        self.assert_detail(
+            backend_soup,
+            f'Active classifier: {classifier_1.pk}, from'
+            f' this source,'
+            f' trained {train_date_1}'
+            f' (latest: {classifier_2.pk}, trained {train_date_2})'
+        )
         self.assert_detail(
             backend_soup,
             "Confidence threshold: 100%")

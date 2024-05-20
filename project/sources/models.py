@@ -203,23 +203,32 @@ class Source(models.Model):
 
         if self.deployed_classifier:
 
+            if self.deployed_classifier.source.pk == self.pk:
+                deployed_source = self
+                html = (
+                    f"{self.deployed_classifier.pk},"
+                    f" from this source")
+            else:
+                deployed_source = self.deployed_classifier.source
+                deployed_source_link = reverse(
+                    'source_main', args=[deployed_source.pk])
+
+                html = (
+                    f'{self.deployed_classifier.pk}, from'
+                    f' <a href="{deployed_source_link}" target="_blank">'
+                    f'{deployed_source.name}</a>'
+                )
+
             date = date_display(
                 self.deployed_classifier.train_completion_date)
+            html += f", trained {date}"
 
-            if self.deployed_classifier.source.pk == self.pk:
-                return (
-                    f"{self.deployed_classifier.pk},"
-                    f" from this source, trained {date}")
+            last_accepted = deployed_source.last_accepted_classifier
+            if last_accepted.pk != self.deployed_classifier.pk:
+                date = date_display(last_accepted.train_completion_date)
+                html += f" (latest: {last_accepted.pk}, trained {date})"
 
-            deployed_source = self.deployed_classifier.source
-            deployed_source_link = reverse(
-                'source_main', args=[deployed_source.pk])
-
-            return (
-                f'{self.deployed_classifier.pk}, from'
-                f' <a href="{deployed_source_link}" target="_blank">'
-                f'{deployed_source.name}</a>, trained {date}'
-            )
+            return html
 
         if self.deployed_source_id:
 
