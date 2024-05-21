@@ -15,6 +15,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
 from jobs.tests.utils import do_job, JobUtilsMixin
+from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
 from ...models import Classifier, Score
 from ...utils import clear_features
@@ -767,11 +768,9 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
-            f"Image {image_id} does not exist.",
-            classify_job.result_message,
-            "Job should have the expected error")
+        self.assert_job_failure_message(
+            'classify_features',
+            f"Image {image_id} does not exist.")
 
     def test_classify_without_features(self):
         """Try to classify an image without features extracted."""
@@ -784,12 +783,10 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Image {img.pk} needs to have features extracted"
-            f" before being classified.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" before being classified.")
 
     def test_no_classifier_at_classify_task(self):
         """Try to classify an image without a classifier for the source."""
@@ -802,12 +799,27 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Image {img.pk} can't be classified;"
-            f" its source doesn't have a classifier.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" its source doesn't have a classifier.")
+
+    def test_feature_format_mismatch(self):
+        self.upload_data_and_train_classifier()
+
+        img = self.upload_image_and_schedule_classification()
+
+        # Different extractor from the source's.
+        img.features.extractor = Extractors.VGG16.value
+        img.features.save()
+
+        # Try to classify.
+        run_scheduled_jobs()
+
+        self.assert_job_failure_message(
+            'classify_features',
+            "This image's features don't match the source's feature format."
+            " Feature extraction will be redone to fix this.")
 
     def test_integrity_error_when_saving_annotations(self):
 
@@ -857,13 +869,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save annotations for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points/annotations.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points/annotations.")
 
         # Although the error occurred on point 2, nothing should have been
         # saved, including point 1.
@@ -888,13 +898,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save annotations for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points/annotations.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points/annotations.")
 
     def test_integrity_error_when_saving_scores(self):
 
@@ -916,13 +924,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save scores for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points.")
 
     def test_row_col_mismatch_when_saving_scores(self):
 
@@ -940,10 +946,8 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save scores for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points.")

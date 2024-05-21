@@ -303,16 +303,23 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
         # If there was no spacer error, then a task result is available.
         task_res = job_res.results[0]
 
-        # Double-check that the row-col information is still correct.
+        # Check that the row-col information hasn't changed.
         rowcols = [(p.row, p.column) for p in Point.objects.filter(image=img)]
         if not set(rowcols) == set(task.rowcols):
             raise JobError(
                 f"Row-col data for {img} has changed"
                 f" since this task was submitted.")
 
+        # Check that the active feature-extractor hasn't changed.
+        task_extractor = extractor_to_name(task.extractor)
+        if task_extractor != img.source.feature_extractor:
+            raise JobError(
+                f"Feature extractor selection has changed"
+                f" since this task was submitted.")
+
         # If all is ok store meta-data.
         img.features.extracted = True
-        img.features.extractor = extractor_to_name(task.extractor)
+        img.features.extractor = task_extractor
         img.features.runtime_total = task_res.runtime
 
         img.features.extractor_loaded_remotely = \

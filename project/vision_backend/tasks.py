@@ -38,7 +38,8 @@ from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
-from .utils import get_extractor, reset_features_bulk, schedule_source_check
+from .utils import (
+    get_extractor, reset_features, reset_features_bulk, schedule_source_check)
 
 logger = getLogger(__name__)
 
@@ -337,6 +338,16 @@ def submit_classifier(source_id, job_id):
             f" rows/columns, and this is no longer accepted for training."
             f" Feature extractions will be redone to fix this.")
 
+    in_wrong_feature_format = images.exclude(
+        features__extractor=source.feature_extractor)
+    if in_wrong_feature_format.exists():
+        count = in_wrong_feature_format.count()
+        reset_features_bulk(in_wrong_feature_format)
+        raise JobError(
+            f"This source has {count} feature vector(s) which don't match"
+            f" the source's feature format."
+            f" Feature extractions will be redone to fix this.")
+
     # Create new classifier
     classifier = Classifier(
         source=source, train_job_id=job_id, nbr_train_images=len(images))
@@ -502,6 +513,12 @@ def classify_image(image_id):
         raise JobError(
             f"Image {image_id} can't be classified;"
             f" its source doesn't have a classifier.")
+
+    if img.features.extractor != img.source.feature_extractor:
+        reset_features(img)
+        raise JobError(
+            "This image's features don't match the source's feature format."
+            " Feature extraction will be redone to fix this.")
 
     # Create task message
     storage = get_storage_class()()

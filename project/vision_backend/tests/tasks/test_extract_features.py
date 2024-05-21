@@ -405,3 +405,21 @@ class AbortCasesTest(
             'extract_features',
             f"Row-col data for {img} has changed"
             f" since this task was submitted.")
+
+    def test_extractor_changed_during_extract(self):
+        # Upload image.
+        self.upload_image(self.user, self.source)
+        # Submit feature extraction.
+        run_scheduled_jobs_until_empty()
+
+        # Collect feature extraction.
+        # The task extractor should be dummy (due to FORCE_DUMMY_EXTRACTOR
+        # being True outside of the below context manager) while the
+        # source extractor is EfficientNet.
+        with override_settings(FORCE_DUMMY_EXTRACTOR=False):
+            do_collect_spacer_jobs()
+
+        self.assert_job_result_message(
+            'extract_features',
+            f"Feature extractor selection has changed since this task"
+            f" was submitted.")

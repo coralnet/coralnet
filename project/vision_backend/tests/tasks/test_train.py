@@ -12,6 +12,7 @@ from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
+from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
@@ -500,10 +501,93 @@ class AbortCasesTest(
         # Try to train
         do_job('train_classifier', self.source.pk, source_id=self.source.pk)
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             "Training is disabled for this source"
         )
+
+    def test_train_invalid_rowcol(self):
+
+        train_images, _ = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say one training image's features are legacy format.
+        train_image = train_images[0]
+        train_image.features.has_rowcols = False
+        train_image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 1 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        train_image.features.refresh_from_db()
+        self.assertFalse(
+            train_image.features.extracted, "Features should be reset")
+
+    def test_val_invalid_rowcol(self):
+
+        _, val_images = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=3,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say at least one validation image's features are legacy format.
+        for image in [val_images[0], val_images[1]]:
+            image.features.has_rowcols = False
+            image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 2 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        for image in [val_images[0], val_images[1]]:
+            image.features.refresh_from_db()
+            self.assertFalse(
+                image.features.extracted, "Features should be reset")
+
+    def test_feature_format_mismatch(self):
+
+        train_images, val_images = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say at least one image's features are a different extractor format.
+        for image in [train_images[0], val_images[0]]:
+            image.features.extractor = Extractors.VGG16.value
+            image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 2 feature vector(s) which don't match"
+            " the source's feature format."
+            " Feature extractions will be redone to fix this.")
+        for image in [train_images[0], val_images[0]]:
+            image.features.refresh_from_db()
+            self.assertFalse(
+                image.features.extracted, "Features should be reset")
 
     def do_lacking_unique_labels_test(self, uploads):
         for filename, annotations in uploads:
@@ -523,7 +607,7 @@ class AbortCasesTest(
             classifier.status, Classifier.LACKING_UNIQUE_LABELS,
             msg="Classifier status should be correct")
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             f"Classifier {classifier.pk} [Source: {self.source.name}"
             f" [{self.source.pk}]] was declined training, because there"
@@ -581,7 +665,7 @@ class AbortCasesTest(
         # Collect training.
         do_collect_spacer_jobs()
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             "ValueError: A spacer error")
 
@@ -616,7 +700,7 @@ class AbortCasesTest(
         # Collect training.
         do_collect_spacer_jobs()
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             f"Classifier {classifier_id} doesn't exist anymore.")
 
@@ -805,67 +889,3 @@ class LabelFilteringTest(BaseTaskTest):
             "Training should have succeeded, indicating no issues"
             " loading features for the training, despite the"
             " filtered-out annotation")
-
-
-class InvalidRowcolFeaturesTest(BaseTaskTest):
-
-    def test_train_invalid_rowcol(self):
-
-        train_images, _ = self.upload_images_for_training(
-            train_image_count=2,
-            val_image_count=1,
-        )
-
-        # Extract features normally.
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-
-        # Say one training image's features are legacy format.
-        train_image = train_images[0]
-        train_image.features.has_rowcols = False
-        train_image.features.save()
-
-        # Try to train.
-        job = do_job(
-            'train_classifier', self.source.pk, source_id=self.source.pk)
-        job.refresh_from_db()
-        self.assertEqual(job.status, Job.Status.FAILURE)
-        self.assertEqual(
-            job.result_message,
-            "This source has 1 feature vector(s) without rows/columns,"
-            " and this is no longer accepted for training."
-            " Feature extractions will be redone to fix this.")
-        train_image.features.refresh_from_db()
-        self.assertFalse(
-            train_image.features.extracted, "Features should be reset")
-
-    def test_val_invalid_rowcol(self):
-
-        _, val_images = self.upload_images_for_training(
-            train_image_count=2,
-            val_image_count=3,
-        )
-
-        # Extract features normally.
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-
-        # Say at least one validation image's features are legacy format.
-        for image in [val_images[0], val_images[1]]:
-            image.features.has_rowcols = False
-            image.features.save()
-
-        # Try to train.
-        job = do_job(
-            'train_classifier', self.source.pk, source_id=self.source.pk)
-        job.refresh_from_db()
-        self.assertEqual(job.status, Job.Status.FAILURE)
-        self.assertEqual(
-            job.result_message,
-            "This source has 2 feature vector(s) without rows/columns,"
-            " and this is no longer accepted for training."
-            " Feature extractions will be redone to fix this.")
-        for image in [val_images[0], val_images[1]]:
-            image.features.refresh_from_db()
-            self.assertFalse(
-                image.features.extracted, "Features should be reset")
