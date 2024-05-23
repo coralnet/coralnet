@@ -192,25 +192,40 @@ def check_source(source_id):
     classifiable_images = source.image_set.incomplete().with_features()
     unclassified_images = classifiable_images.unclassified()
 
-    # Here we detect whether the current classifier has been used for ANY
-    # classifications so far. We check this because, most of the time,
-    # the current classifier has either taken a pass on ALL classifiable
+    # Here we detect whether the deployed classifier is the latest one used
+    # for ANY classifications. We check this because, most of the time,
+    # a given classifier has either taken a pass on ALL classifiable
     # images, or it hasn't run at all yet.
     #
     # Checking the events should work for any classifications that happened
     # after such events were introduced (CoralNet 1.7). Otherwise, we look
-    # for annotations attributed to the current classifier, but that can
-    # miss cases where the current classifier agreed with the previous
-    # classifier on all points.
-    current_classifier = source.deployed_classifier
-    current_classifier_events = ClassifyImageEvent.objects \
-        .filter(classifier_id=current_classifier.pk, source_id=source_id)
-    current_classifier_annotations = source.annotation_set \
-        .filter(robot_version=current_classifier)
-    current_classifier_used = current_classifier_events.exists() \
-        or current_classifier_annotations.exists()
+    # for annotations attributed to the deployed classifier, but that
+    # 1) can miss cases where the current classifier agreed with the previous
+    # classifier on all points, and
+    # 2) is imprecise in terms of getting the latest robot annotation activity,
+    # because we can get the last unconfirmed annotation, but the last robot
+    # activity might've been on a now-confirmed annotation.
+    deployed_classifier = source.deployed_classifier
+    try:
+        latest_event = ClassifyImageEvent.objects.filter(
+            source_id=source_id).latest('pk')
+    except ClassifyImageEvent.DoesNotExist:
+        try:
+            latest_annotation_with_robot = \
+                source.annotation_set.unconfirmed().latest('annotation_date')
+        except Annotation.DoesNotExist:
+            deployed_classifier_used = False
+        else:
+            deployed_classifier_used = (
+                latest_annotation_with_robot.robot_version.pk
+                == deployed_classifier.pk
+            )
+    else:
+        deployed_classifier_used = (
+            latest_event.classifier_id == deployed_classifier.pk
+        )
 
-    if current_classifier_used:
+    if deployed_classifier_used:
         # Has been used; so most likely the only images to look at are the
         # unclassified ones.
         images_to_classify = unclassified_images
