@@ -23,6 +23,7 @@ from lib.utils import date_display, datetime_display
 from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
 from vision_backend.models import Classifier, Features
+from vision_backend.utils import schedule_source_check_on_commit
 from .forms import (
     SourceChangePermissionForm,
     SourceForm,
@@ -253,6 +254,8 @@ def source_edit(request, source_id):
             # Save the edits to the Source.
             source_form.save()
 
+            resetting_something = False
+
             # Schedule classifier reset if needed.
             if 'feature_extractor_setting' in source_form.changed_data:
                 # Changed the feature extractor setting for train-classifiers
@@ -264,6 +267,7 @@ def source_edit(request, source_id):
                     request,
                     "Source successfully edited."
                     " Classifier history will be cleared.")
+                resetting_something = True
             else:
                 messages.success(request, "Source successfully edited.")
 
@@ -283,6 +287,16 @@ def source_edit(request, source_id):
                 schedule_job(
                     'reset_features_for_source', source_id,
                     source_id=source_id)
+                resetting_something = True
+
+            classifier_settings_changed = (
+                ('trains_own_classifiers' in source_form.changed_data)
+                or ('deployed_classifier' in source_form.changed_data)
+            )
+            if classifier_settings_changed and not resetting_something:
+                # A source check may be warranted, and may not be scheduled
+                # soon unless we do so now.
+                schedule_source_check_on_commit(source_id)
 
             return HttpResponseRedirect(
                 reverse('source_main', args=[source_id]))

@@ -6,6 +6,7 @@ from django.utils import timezone
 from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from jobs.models import Job
+from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.common import Extractors
 from vision_backend.models import Classifier
@@ -1116,21 +1117,28 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         image.features.extracted = True
         image.features.extractor = Extractors.EFFICIENTNET.value
         image.features.save()
+        # Process any source checks, so that later we know any scheduled source
+        # checks were scheduled by edit-source.
+        run_scheduled_jobs_until_empty()
 
+        # Directly set initial state of fields.
         self.source.trains_own_classifiers = trains_own_classifiers[0]
         self.source.feature_extractor_setting = feature_extractor_setting[0]
         self.source.deployed_classifier = deployed_classifier[0]
         self.source.save()
 
+        # Set final state of fields through the edit-source view, and return
+        # response.
         if deployed_classifier[1] is None:
             deployed_classifier_form_value = ''
         else:
             deployed_classifier_form_value = deployed_classifier[1].pk
-        response = self.edit_source(
-            trains_own_classifiers=trains_own_classifiers[1],
-            feature_extractor_setting=feature_extractor_setting[1],
-            deployed_classifier=deployed_classifier_form_value,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.edit_source(
+                trains_own_classifiers=trains_own_classifiers[1],
+                feature_extractor_setting=feature_extractor_setting[1],
+                deployed_classifier=deployed_classifier_form_value,
+            )
         return response
 
     def assert_classifier_reset(self, response):
@@ -1169,6 +1177,18 @@ class SourceEditBackendStatusTest(BaseTaskTest):
                 job_name='reset_features_for_source').exists(),
             msg="Should not schedule feature reset")
 
+    def assert_source_check(self):
+        self.assertTrue(
+            Job.objects.incomplete().filter(
+                job_name='check_source').exists(),
+            msg="Should schedule source check")
+
+    def assert_no_source_check(self):
+        self.assertFalse(
+            Job.objects.incomplete().filter(
+                job_name='check_source').exists(),
+            msg="Should not schedule source check")
+
     def test_extractor_changed_in_train_mode(self):
         response = self.do_test(
             feature_extractor_setting=(
@@ -1176,6 +1196,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_classifier_reset(response)
         self.assert_feature_reset()
+        self.assert_no_source_check()
 
     def test_extractor_same_in_train_mode(self):
         response = self.do_test(
@@ -1184,6 +1205,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_no_source_check()
 
     def test_train_mode_to_deploying_classifier_of_other_extractor(self):
         response = self.do_test(
@@ -1192,6 +1214,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_feature_reset()
+        self.assert_no_source_check()
 
     def test_train_mode_to_deploying_classifier_of_same_extractor(self):
         response = self.do_test(
@@ -1200,6 +1223,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_train_mode_to_deploying_no_classifier(self):
         response = self.do_test(
@@ -1208,6 +1232,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_change_to_classifier_of_same_extractor_in_deploy_mode(self):
         response = self.do_test(
@@ -1216,6 +1241,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_change_to_classifier_of_other_extractor_in_deploy_mode(self):
         response = self.do_test(
@@ -1224,6 +1250,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_feature_reset()
+        self.assert_no_source_check()
 
     def test_null_out_classifier_in_deploy_mode(self):
         response = self.do_test(
@@ -1232,6 +1259,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_null_to_classifier_matching_previous_features(self):
         response = self.do_test(
@@ -1240,6 +1268,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_null_to_classifier_not_matching_previous_features(self):
         response = self.do_test(
@@ -1248,6 +1277,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_no_classifier_reset(response)
         self.assert_feature_reset()
+        self.assert_no_source_check()
 
     def test_deploy_mode_to_training_with_same_extractor(self):
         self.do_test(
@@ -1257,6 +1287,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
             deployed_classifier=(self.effnet_robot, None),
         )
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_deploy_mode_to_training_with_other_extractor(self):
         self.do_test(
@@ -1266,6 +1297,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
             deployed_classifier=(self.effnet_robot, None),
         )
         self.assert_feature_reset()
+        self.assert_no_source_check()
 
     def test_null_to_training_matching_previous_features(self):
         self.do_test(
@@ -1275,6 +1307,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
             deployed_classifier=(None, None),
         )
         self.assert_no_feature_reset()
+        self.assert_source_check()
 
     def test_null_to_training_not_matching_previous_features(self):
         self.do_test(
@@ -1284,3 +1317,4 @@ class SourceEditBackendStatusTest(BaseTaskTest):
             deployed_classifier=(None, None),
         )
         self.assert_feature_reset()
+        self.assert_no_source_check()
