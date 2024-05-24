@@ -12,6 +12,7 @@ from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
+from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
@@ -121,6 +122,12 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
 
         self.assert_job_persist_value('train_classifier', True)
 
+        self.source.refresh_from_db()
+        self.assertEqual(
+            self.source.deployed_classifier.pk, classifier.pk,
+            msg="Should auto-populate deployed_classifier",
+        )
+
     @override_settings(
         TRAINING_MIN_IMAGES=3,
         NEW_CLASSIFIER_TRAIN_TH=1.1,
@@ -141,7 +148,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         # Collect classifier.
         do_collect_spacer_jobs()
 
-        clf_1 = self.source.get_current_classifier()
+        clf_1 = self.source.last_accepted_classifier
 
         # Upload enough additional images for the next training to happen.
         self.upload_images_for_training(
@@ -160,12 +167,18 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_collect_spacer_jobs()
 
-        clf_2 = self.source.get_current_classifier()
+        clf_2 = self.source.last_accepted_classifier
 
         self.assertNotEqual(clf_1.pk, clf_2.pk, "Should have a new classifier")
         self.assertEqual(
             clf_2.status, Classifier.ACCEPTED, "Should be accepted")
         self.assertEqual(clf_2.nbr_train_images, clf_1.nbr_train_images + 2)
+
+        self.source.refresh_from_db()
+        self.assertEqual(
+            self.source.deployed_classifier.pk, clf_2.pk,
+            msg="Should auto-populate deployed_classifier"
+        )
 
     def test_train_on_confirmed_only(self):
         def upload_image_without_annotations(filename):
@@ -290,7 +303,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
-        first_classifier = cls.source.get_current_classifier()
+        first_classifier = cls.source.last_accepted_classifier
         assert first_classifier.status == Classifier.ACCEPTED
 
         # Another classifier. Tests can change the status of this one to try
@@ -305,7 +318,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_collect_spacer_jobs()
 
-        cls.previous_classifier = cls.source.get_current_classifier()
+        cls.previous_classifier = cls.source.last_accepted_classifier
         assert cls.previous_classifier.status == Classifier.ACCEPTED
 
     def do_test_retrain_logic(
@@ -413,16 +426,24 @@ class AbortCasesTest(
     Test cases (besides retrain logic) where the train task or collection would
     abort before reaching the end.
     """
-    def test_classification_disabled(self):
-        """Try to train for a source which has classification disabled."""
+    def test_training_disabled_at_source_check(self):
+        """
+        Try to schedule training for a source which has training disabled.
+        """
         # Ensure the source is otherwise ready for training.
         self.upload_images_for_training()
         # Extract features
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
 
-        # Disable classification.
-        self.source.enable_robot_classifier = False
+        # Create a classifier in another source.
+        other_source = self.create_source(self.user)
+        self.create_labelset(self.user, other_source, self.labels)
+        classifier = self.create_robot(other_source)
+
+        # Disable training, opting to deploy the existing classifier instead.
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
         self.source.save()
 
         # Check source
@@ -430,8 +451,8 @@ class AbortCasesTest(
 
         self.assert_job_result_message(
             'check_source',
-            f"Can't train first classifier:"
-            f" Source has classifier disabled"
+            f"Source seems to be all caught up."
+            f" Source has training disabled"
         )
 
     def test_below_minimum_images(self):
@@ -457,6 +478,117 @@ class AbortCasesTest(
             f" Not enough annotated images for initial training"
         )
 
+    def test_training_disabled_at_train_task(self):
+        """
+        Try to start training for a source which has training disabled.
+        """
+        # Ensure the source is otherwise ready for training.
+        self.upload_images_for_training()
+        # Extract features
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Create a classifier in another source.
+        other_source = self.create_source(self.user)
+        self.create_labelset(self.user, other_source, self.labels)
+        classifier = self.create_robot(other_source)
+
+        # Disable training, opting to deploy the existing classifier instead.
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
+        self.source.save()
+
+        # Try to train
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+
+        self.assert_job_failure_message(
+            'train_classifier',
+            "Training is disabled for this source"
+        )
+
+    def test_train_invalid_rowcol(self):
+
+        train_images, _ = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say one training image's features are legacy format.
+        train_image = train_images[0]
+        train_image.features.has_rowcols = False
+        train_image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 1 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        train_image.features.refresh_from_db()
+        self.assertFalse(
+            train_image.features.extracted, "Features should be reset")
+
+    def test_val_invalid_rowcol(self):
+
+        _, val_images = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=3,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say at least one validation image's features are legacy format.
+        for image in [val_images[0], val_images[1]]:
+            image.features.has_rowcols = False
+            image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 2 feature vector(s) without rows/columns,"
+            " and this is no longer accepted for training."
+            " Feature extractions will be redone to fix this.")
+        for image in [val_images[0], val_images[1]]:
+            image.features.refresh_from_db()
+            self.assertFalse(
+                image.features.extracted, "Features should be reset")
+
+    def test_feature_format_mismatch(self):
+
+        train_images, val_images = self.upload_images_for_training(
+            train_image_count=2,
+            val_image_count=1,
+        )
+
+        # Extract features normally.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+
+        # Say at least one image's features are a different extractor format.
+        for image in [train_images[0], val_images[0]]:
+            image.features.extractor = Extractors.VGG16.value
+            image.features.save()
+
+        # Try to train.
+        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        self.assert_job_failure_message(
+            'train_classifier',
+            "This source has 2 feature vector(s) which don't match"
+            " the source's feature format."
+            " Feature extractions will be redone to fix this.")
+        for image in [train_images[0], val_images[0]]:
+            image.features.refresh_from_db()
+            self.assertFalse(
+                image.features.extracted, "Features should be reset")
+
     def do_lacking_unique_labels_test(self, uploads):
         for filename, annotations in uploads:
             img = self.upload_image(
@@ -475,14 +607,14 @@ class AbortCasesTest(
             classifier.status, Classifier.LACKING_UNIQUE_LABELS,
             msg="Classifier status should be correct")
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             f"Classifier {classifier.pk} [Source: {self.source.name}"
             f" [{self.source.pk}]] was declined training, because there"
             f" weren't enough annotations of at least 2 different labels.")
 
         self.assertFalse(
-            self.source.need_new_robot()[0],
+            self.source.ready_to_train()[0],
             msg="Source should not immediately be considered for retraining")
 
     def test_train_ref_one_common_label(self):
@@ -533,7 +665,7 @@ class AbortCasesTest(
         # Collect training.
         do_collect_spacer_jobs()
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             "ValueError: A spacer error")
 
@@ -568,7 +700,7 @@ class AbortCasesTest(
         # Collect training.
         do_collect_spacer_jobs()
 
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'train_classifier',
             f"Classifier {classifier_id} doesn't exist anymore.")
 
@@ -757,67 +889,3 @@ class LabelFilteringTest(BaseTaskTest):
             "Training should have succeeded, indicating no issues"
             " loading features for the training, despite the"
             " filtered-out annotation")
-
-
-class InvalidRowcolFeaturesTest(BaseTaskTest):
-
-    def test_train_invalid_rowcol(self):
-
-        train_images, _ = self.upload_images_for_training(
-            train_image_count=2,
-            val_image_count=1,
-        )
-
-        # Extract features normally.
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-
-        # Say one training image's features are legacy format.
-        train_image = train_images[0]
-        train_image.features.has_rowcols = False
-        train_image.features.save()
-
-        # Try to train.
-        job = do_job(
-            'train_classifier', self.source.pk, source_id=self.source.pk)
-        job.refresh_from_db()
-        self.assertEqual(job.status, Job.Status.FAILURE)
-        self.assertEqual(
-            job.result_message,
-            "This source has 1 feature vector(s) without rows/columns,"
-            " and this is no longer accepted for training."
-            " Feature extractions will be redone to fix this.")
-        train_image.features.refresh_from_db()
-        self.assertFalse(
-            train_image.features.extracted, "Features should be reset")
-
-    def test_val_invalid_rowcol(self):
-
-        _, val_images = self.upload_images_for_training(
-            train_image_count=2,
-            val_image_count=3,
-        )
-
-        # Extract features normally.
-        run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
-
-        # Say at least one validation image's features are legacy format.
-        for image in [val_images[0], val_images[1]]:
-            image.features.has_rowcols = False
-            image.features.save()
-
-        # Try to train.
-        job = do_job(
-            'train_classifier', self.source.pk, source_id=self.source.pk)
-        job.refresh_from_db()
-        self.assertEqual(job.status, Job.Status.FAILURE)
-        self.assertEqual(
-            job.result_message,
-            "This source has 2 feature vector(s) without rows/columns,"
-            " and this is no longer accepted for training."
-            " Feature extractions will be redone to fix this.")
-        for image in [val_images[0], val_images[1]]:
-            image.features.refresh_from_db()
-            self.assertFalse(
-                image.features.extracted, "Features should be reset")

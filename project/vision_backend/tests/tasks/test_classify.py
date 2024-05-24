@@ -1,4 +1,3 @@
-import re
 from unittest import mock
 
 from django.core.cache import cache
@@ -15,22 +14,15 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
 from jobs.tests.utils import do_job, JobUtilsMixin
+from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
-from ...models import Score
+from ...models import Classifier, Score
 from ...utils import clear_features
 from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
 def noop(*args, **kwargs):
     pass
-
-
-def classify(image, create_event=True):
-    if create_event:
-        do_job('classify_features', image.pk)
-    else:
-        with mock.patch.object(ClassifyImageEvent, 'save', noop):
-            do_job('classify_features', image.pk)
 
 
 class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
@@ -124,30 +116,83 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             msg="Should schedule a check after classifying both images",
         )
 
-    def test_various_image_cases_new_classifier_on_events_and_annotations(self):
-        self.do_test_various_image_cases(True, True)
+    def test_can_still_classify_with_training_disabled(self):
+        """
+        Should be able to skip over the training part of the source check
+        and proceed to classification, if training's disabled and there's
+        a deployed classifier.
+        """
+        other_source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=self.source.last_accepted_classifier.pk,
+        )
 
-    def test_various_image_cases_new_classifier_on_events_only(self):
-        self.do_test_various_image_cases(True, False)
+        image = self.upload_image(self.user, other_source)
+        # Extract features
+        do_job('extract_features', image.pk, source_id=other_source.pk)
+        do_collect_spacer_jobs()
 
-    def test_various_image_cases_new_classifier_on_annotations_only(self):
-        self.do_test_various_image_cases(False, True)
+        self.assertIsNone(other_source.last_accepted_classifier)
+        self.source_check_and_assert_message(
+            "Scheduled 1 image classification(s)", source=other_source)
 
-    def test_various_image_cases_new_classifier_on_nothing(self):
-        self.do_test_various_image_cases(False, False)
+    def test_time_out(self):
+        for _ in range(12):
+            self.upload_image_for_classification()
 
-    def do_test_various_image_cases(
+        with override_settings(JOB_MAX_MINUTES=-1):
+            self.source_check_and_assert_message(
+                "Scheduled 10 image classification(s) (timed out)")
+
+        self.source_check_and_assert_message(
+            "Scheduled 2 image classification(s)")
+
+
+class SourceCheckImageCasesTest(BaseTaskTest, JobUtilsMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        # Accept a classifier.
+        cls.classifier_1 = cls.upload_data_and_train_classifier()
+
+        # Accept another classifier. Override settings so that 1) we
+        # don't need more images to train a new classifier, and 2) we don't
+        # need improvement to mark a new classifier as accepted.
+        with override_settings(
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
+        ):
+            cls.classifier_2 = cls.upload_data_and_train_classifier(
+                new_train_images_count=0)
+
+        cls.img1 = cls.upload_image_for_classification()
+        cls.img2 = cls.upload_image_for_classification()
+        cls.img3 = cls.upload_image_for_classification()
+
+    def classify(
         self,
+        images,
+        # Classifier to use.
+        classifier,
+        # What label the classifier will use for labeling all the points.
+        # The main factor for differing source-check behavior is whether
+        # the labels are the same or different from one classifier to the
+        # next, thus changing whether the next current classifier
+        # has attribution in the annotations.
+        label,
         # Whether Events are created upon classifying images; otherwise,
         # annotations have the only record of which classifier last visited.
         # False will simulate images processed before CoralNet 1.7,
         # which is when the Events were introduced.
         create_events: bool,
-        # Whether the new classifier changes annotations from the old
-        # classifier, thus allowing the new classifier to have attribution in
-        # the annotations.
-        new_classifier_on_annotations: bool,
     ):
+
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
+        self.source.save()
 
         def mock_classify_msg_all_a(
                 self_, runtime, scores, classes, valid_rowcol):
@@ -170,105 +215,142 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             self_.classes = classes
             self_.valid_rowcol = valid_rowcol
 
-        if new_classifier_on_annotations:
-            # Have old and new classifiers make (at least some)
-            # different classifications.
-            old_classifier_msg_mock = mock_classify_msg_all_a
-            new_classifier_msg_mock = mock_classify_msg_all_b
+        if label == 'A':
+            msg_mock = mock_classify_msg_all_a
+        elif label == 'B':
+            msg_mock = mock_classify_msg_all_b
         else:
-            # Have old and new classifiers make the same classifications.
-            old_classifier_msg_mock = mock_classify_msg_all_a
-            new_classifier_msg_mock = mock_classify_msg_all_a
-
-        # This will be classified by the old, then the new classifier.
-        img1 = self.upload_image_for_classification()
-        # This will be classified by the old classifier.
-        img2 = self.upload_image_for_classification()
-        # This will be unclassified.
-        img3 = self.upload_image_for_classification()
+            raise ValueError(f"Unsupported label: {label}")
 
         with mock.patch(
-            'spacer.messages.ClassifyReturnMsg.__init__',
-            old_classifier_msg_mock,
+            'spacer.messages.ClassifyReturnMsg.__init__', msg_mock,
         ):
-            classify(img1, create_event=create_events)
-            classify(img2, create_event=create_events)
+            for image in images:
 
-        # Accept another classifier. Override settings so that 1) we
-        # don't need more images to train a new classifier, and 2) we don't
-        # need improvement to mark a new classifier as accepted.
-        with override_settings(
-            NEW_CLASSIFIER_TRAIN_TH=0.0001,
-            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
-        ):
-            self.upload_data_and_train_classifier(new_train_images_count=0)
+                if create_events:
 
-        with mock.patch(
-            'spacer.messages.ClassifyReturnMsg.__init__',
-            new_classifier_msg_mock,
-        ):
-            classify(img1, create_event=create_events)
+                    do_job('classify_features', image.pk)
 
-        if create_events:
-            self.assertTrue(
-                ClassifyImageEvent.objects.filter(image_id=img1.pk).exists(),
-                "img1 classification event should exist (sanity check)")
-            self.assertTrue(
-                ClassifyImageEvent.objects.filter(image_id=img2.pk).exists(),
-                "img2 classification event should exist (sanity check)")
-        else:
-            self.assertFalse(
-                ClassifyImageEvent.objects.filter(
-                    image_id__in=[img1.pk, img2.pk]).exists(),
-                "img1 and img2 classification events shouldn't exist"
-                " (sanity check)")
+                    self.assertTrue(
+                        ClassifyImageEvent.objects.filter(
+                            image_id=image.pk).exists(),
+                        "Classification event should exist (sanity check)")
 
-        # Don't really need to check how many images are scheduled here,
-        # because we'll check specifically which ones were scheduled after this.
+                else:
+
+                    with mock.patch.object(ClassifyImageEvent, 'save', noop):
+                        do_job('classify_features', image.pk)
+
+                    self.assertFalse(
+                        ClassifyImageEvent.objects.filter(
+                            image_id=image.pk).exists(),
+                        "Classification event shouldn't exist (sanity check)")
+
+    def source_check_and_assert_scheduled_classifications(
+        self, classifier, images
+    ):
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = classifier
+        self.source.save()
+
         self.source_check_and_assert_message(
-            re.compile(r"Scheduled \d+ image classification\(s\)"),
-        )
+            f"Scheduled {len(images)} image classification(s)")
 
         scheduled_image_ids = Job.objects \
             .filter(job_name='classify_features', status=Job.Status.PENDING) \
             .values_list('arg_identifier', flat=True)
         scheduled_image_ids = [int(pk) for pk in scheduled_image_ids]
 
-        self.assertIn(
-            img3.pk, scheduled_image_ids,
-            msg="Unclassified image should have been scheduled")
+        for image in images:
+            self.assertIn(image.pk, scheduled_image_ids)
 
-        if not create_events and not new_classifier_on_annotations:
-            # If there's no sign of activity from the new classifier,
-            # then all unconfirmed images are scheduled for classification.
-            self.assertIn(
-                img2.pk, scheduled_image_ids,
-                msg="Image that was last classified by the previous classifier"
-                    " should have been scheduled")
-            self.assertIn(
-                img1.pk, scheduled_image_ids,
-                msg="Image that was last classified by the current classifier"
-                    " should have been scheduled")
-        else:
-            self.assertNotIn(
-                img2.pk, scheduled_image_ids,
-                msg="Image that was last classified by the previous classifier"
-                    " should not have been scheduled")
-            self.assertNotIn(
-                img1.pk, scheduled_image_ids,
-                msg="Image that was last classified by the current classifier"
-                    " should not have been scheduled")
+    def test_new_classifier_on_events_and_annotations(self):
+        self.classify(
+            [self.img1, self.img2],
+            self.classifier_1,
+            'A',
+            create_events=True,
+        )
+        self.classify(
+            [self.img1],
+            self.classifier_2,
+            'B',
+            create_events=True,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_2, [self.img3])
 
-    def test_time_out(self):
-        for _ in range(12):
-            self.upload_image_for_classification()
+    def test_new_classifier_on_events_only(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=True,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'A', create_events=True,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_2, [self.img3])
 
-        with override_settings(JOB_MAX_MINUTES=-1):
-            self.source_check_and_assert_message(
-                "Scheduled 10 image classification(s) (timed out)")
+    def test_new_classifier_on_annotations_only(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=False,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'B', create_events=False,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_2, [self.img3])
 
-        self.source_check_and_assert_message(
-            "Scheduled 2 image classification(s)")
+    def test_new_classifier_on_nothing(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=False,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'A', create_events=False,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_2, [self.img1, self.img2, self.img3])
+
+    def test_old_classifier_on_events_only(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=True,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'A', create_events=True,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_1, [self.img1, self.img2, self.img3])
+
+    def test_old_classifier_on_annotations_only(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=False,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'B', create_events=False,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_1, [self.img1, self.img2, self.img3])
+
+    def test_old_classifier_on_nothing(self):
+        self.classify(
+            [self.img1, self.img2], self.classifier_1,
+            'A', create_events=False,
+        )
+        self.classify(
+            [self.img1], self.classifier_2,
+            'A', create_events=False,
+        )
+        self.source_check_and_assert_scheduled_classifications(
+            self.classifier_1, [self.img3])
 
 
 class ClassifyImageTest(
@@ -290,7 +372,7 @@ class ClassifyImageTest(
 
     def test_classify_unannotated_image(self):
         """Classify an image where all points are unannotated."""
-        self.upload_data_and_train_classifier()
+        classifier = self.upload_data_and_train_classifier()
 
         img = self.upload_image_and_machine_classify()
 
@@ -309,7 +391,6 @@ class ClassifyImageTest(
 
         codes = self.image_label_codes(img)
         label_ids = self.image_label_ids(img)
-        classifier = self.source.get_current_classifier()
 
         event = ClassifyImageEvent.objects.get(image_id=img.pk)
         self.assertEqual(event.source_id, self.source.pk)
@@ -426,8 +507,7 @@ class ClassifyImageTest(
             for i, score in enumerate(scores):
                 self_.scores.append((score[0], score[1], scores_simple[i]))
 
-        self.upload_data_and_train_classifier()
-        clf_1 = self.source.get_current_classifier()
+        clf_1 = self.upload_data_and_train_classifier()
 
         # Upload, extract, and classify with a particular set of scores
         with mock.patch(
@@ -440,7 +520,8 @@ class ClassifyImageTest(
             NEW_CLASSIFIER_TRAIN_TH=0.0001,
             NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
         ):
-            self.upload_data_and_train_classifier(new_train_images_count=0)
+            clf_2 = self.upload_data_and_train_classifier(
+                new_train_images_count=0)
 
         # Re-classify with a different set of
         # scores so that specific points get their labels changed (and
@@ -450,7 +531,6 @@ class ClassifyImageTest(
         ):
             run_scheduled_jobs_until_empty()
 
-        clf_2 = self.source.get_current_classifier()
         all_classifiers = self.source.classifier_set.all()
         message = (
             f"clf 1 and 2 IDs: {clf_1.pk}, {clf_2.pk}"
@@ -594,7 +674,7 @@ class ClassifyImageTest(
 
         img = self.upload_image_and_machine_classify()
 
-        for point in Point.objects.filter(image__id=img.id):
+        for point in img.point_set.all():
             ann = point.annotation
             scores = Score.objects.filter(point=point)
             posteriors = [score.score for score in scores]
@@ -602,6 +682,63 @@ class ClassifyImageTest(
                 scores[int(np.argmax(posteriors))].label, ann.label,
                 "Max score label should match the annotation label."
                 " Posteriors: {}".format(posteriors))
+
+    def test_use_old_classifier_from_this_source(self):
+        clf_1 = self.upload_data_and_train_classifier()
+
+        # Accept another classifier.
+        with override_settings(
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
+        ):
+            clf_2 = self.upload_data_and_train_classifier(
+                new_train_images_count=0)
+        self.assertNotEqual(clf_1.pk, clf_2.pk)
+        self.assertEqual(clf_2.status, Classifier.ACCEPTED)
+
+        # Actually use the first classifier.
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = clf_1
+        self.source.save()
+
+        img = self.upload_image_and_machine_classify()
+
+        points = img.point_set.all()
+        self.assertEqual(points.count(), 5)
+        for point in points:
+            self.assertEqual(
+                point.annotation.robot_version_id, clf_1.pk,
+                msg="Should classify with the first classifier",
+            )
+
+    def test_use_classifier_from_different_source(self):
+        # The convenience function to train a classifier for self.source is
+        # really nice to have, so we use that and then use the classifier in
+        # other_source, instead of having the sources the other way around.
+        classifier = self.upload_data_and_train_classifier()
+
+        other_source = self.create_source(
+            self.user,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier.pk,
+        )
+
+        # Image without annotations
+        image = self.upload_image(self.user, other_source)
+        # Extract features
+        do_job('extract_features', image.pk, source_id=other_source.pk)
+        do_collect_spacer_jobs()
+        # Classify image
+        do_job('classify_features', image.pk, source_id=other_source.pk)
+        image.refresh_from_db()
+
+        points = image.point_set.all()
+        self.assertEqual(points.count(), 5)
+        for point in points:
+            self.assertEqual(
+                point.annotation.robot_version_id, classifier.pk,
+                msg="Should classify with the deployed classifier",
+            )
 
     def test_with_dupe_points(self):
         """
@@ -691,11 +828,9 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
-            f"Image {image_id} does not exist.",
-            classify_job.result_message,
-            "Job should have the expected error")
+        self.assert_job_failure_message(
+            'classify_features',
+            f"Image {image_id} does not exist.")
 
     def test_classify_without_features(self):
         """Try to classify an image without features extracted."""
@@ -708,30 +843,43 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Image {img.pk} needs to have features extracted"
-            f" before being classified.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" before being classified.")
 
-    def test_classify_without_classifier(self):
+    def test_no_classifier_at_classify_task(self):
         """Try to classify an image without a classifier for the source."""
-        self.upload_data_and_train_classifier()
+        classifier = self.upload_data_and_train_classifier()
 
         img = self.upload_image_and_schedule_classification()
         # Delete source's classifier
-        self.source.get_current_classifier().delete()
+        classifier.delete()
 
         # Try to classify
         run_scheduled_jobs()
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Image {img.pk} can't be classified;"
-            f" its source doesn't have a classifier.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" its source doesn't have a classifier.")
+
+    def test_feature_format_mismatch(self):
+        self.upload_data_and_train_classifier()
+
+        img = self.upload_image_and_schedule_classification()
+
+        # Different extractor from the source's.
+        img.features.extractor = Extractors.VGG16.value
+        img.features.save()
+
+        # Try to classify.
+        run_scheduled_jobs()
+
+        self.assert_job_failure_message(
+            'classify_features',
+            "This image's features don't match the source's feature format."
+            " Feature extraction will be redone to fix this.")
 
     def test_integrity_error_when_saving_annotations(self):
 
@@ -781,13 +929,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save annotations for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points/annotations.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points/annotations.")
 
         # Although the error occurred on point 2, nothing should have been
         # saved, including point 1.
@@ -812,13 +958,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save annotations for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points/annotations.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points/annotations.")
 
     def test_integrity_error_when_saving_scores(self):
 
@@ -840,13 +984,11 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save scores for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points.")
 
     def test_row_col_mismatch_when_saving_scores(self):
 
@@ -864,10 +1006,8 @@ class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
         ):
             do_job('classify_features', img.pk)
 
-        classify_job = Job.objects.get(job_name='classify_features')
-        self.assertEqual(
+        self.assert_job_failure_message(
+            'classify_features',
             f"Failed to save scores for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points.",
-            classify_job.result_message,
-            "Job should have the expected error")
+            f" with the image's points.")

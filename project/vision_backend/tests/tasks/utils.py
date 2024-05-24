@@ -6,6 +6,7 @@ from images.model_utils import PointGen
 from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
+from ...models import Classifier
 
 
 def do_collect_spacer_jobs():
@@ -31,6 +32,10 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
             default_point_generation_method=dict(type='simple', points=5))
         cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
         cls.create_labelset(cls.user, cls.source, cls.labels)
+
+    def setUp(self):
+        super().setUp()
+        self.source.refresh_from_db()
 
     def assertExistsInStorage(self, filepath):
         storage = get_storage_class()()
@@ -106,8 +111,11 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
             do_job('extract_features', image.pk, source_id=cls.source.pk)
         do_collect_spacer_jobs()
         # Train classifier
-        do_job('train_classifier', cls.source.pk, source_id=cls.source.pk)
+        job = do_job(
+            'train_classifier', cls.source.pk, source_id=cls.source.pk)
         do_collect_spacer_jobs()
+
+        return Classifier.objects.get(train_job_id=job.pk)
 
     @classmethod
     def upload_image_for_classification(cls):
@@ -117,6 +125,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         do_job('extract_features', image.pk, source_id=cls.source.pk)
         do_collect_spacer_jobs()
 
+        image.refresh_from_db()
         return image
 
     @classmethod
@@ -126,6 +135,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         # Classify image (assumes there's already a classifier)
         do_job('classify_features', image.pk, source_id=cls.source.pk)
 
+        image.refresh_from_db()
         return image
 
     def upload_image_with_dupe_points(self, filename, with_labels=False):

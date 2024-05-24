@@ -9,6 +9,7 @@ from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
+from ...common import Extractors
 from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
@@ -100,6 +101,9 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
 
         self.assertTrue(
             img.features.extracted, msg="Extracted boolean should be set")
+        self.assertEqual(
+            img.features.extractor, Extractors.DUMMY.value,
+            msg="Extractor field should be set")
         self.assertTrue(
             img.features.has_rowcols, msg="has_rowcols should be True")
 
@@ -174,6 +178,20 @@ class AbortCasesTest(
     Test cases where the task or collection would abort before reaching the
     end.
     """
+    def test_classification_not_configured_at_source_check(self):
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = None
+        self.source.save()
+
+        self.upload_image(self.user, self.source)
+
+        # Try to submit feature extraction.
+        run_scheduled_jobs_until_empty()
+
+        self.assert_job_result_message(
+            'check_source',
+            "Machine classification isn't configured for this source")
+
     def test_training_in_progress(self):
         """
         Try to extract features while training for the same source is in
@@ -216,6 +234,20 @@ class AbortCasesTest(
         self.assert_job_result_message(
             'extract_features',
             f"Image {image_id} does not exist.")
+
+    def test_classification_not_configured_at_extract(self):
+        image = self.upload_image(self.user, self.source)
+
+        self.source.trains_own_classifiers = False
+        self.source.deployed_classifier = None
+        self.source.save()
+
+        # Try to extract features.
+        do_job('extract_features', image.pk, source_id=self.source.pk)
+
+        self.assert_job_result_message(
+            'extract_features',
+            "No feature extractor configured for this source.")
 
     def test_image_deleted_during_extract(self):
         # Upload image.
@@ -373,3 +405,21 @@ class AbortCasesTest(
             'extract_features',
             f"Row-col data for {img} has changed"
             f" since this task was submitted.")
+
+    def test_extractor_changed_during_extract(self):
+        # Upload image.
+        self.upload_image(self.user, self.source)
+        # Submit feature extraction.
+        run_scheduled_jobs_until_empty()
+
+        # Collect feature extraction.
+        # The task extractor should be dummy (due to FORCE_DUMMY_EXTRACTOR
+        # being True outside of the below context manager) while the
+        # source extractor is EfficientNet.
+        with override_settings(FORCE_DUMMY_EXTRACTOR=False):
+            do_collect_spacer_jobs()
+
+        self.assert_job_result_message(
+            'extract_features',
+            f"Feature extractor selection has changed since this task"
+            f" was submitted.")

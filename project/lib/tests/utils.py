@@ -1,6 +1,7 @@
 # Utility classes and functions for tests.
 from abc import ABCMeta
 from contextlib import contextmanager
+import datetime
 from io import BytesIO, StringIO
 import json
 import math
@@ -39,6 +40,7 @@ from images.model_utils import PointGen
 from images.models import Image, Point
 from labels.models import LabelGroup, Label
 from sources.models import Source
+from vision_backend.common import Extractors
 from vision_backend.models import Classifier
 import vision_backend.task_helpers as backend_task_helpers
 from ..storage_backends import get_storage_manager
@@ -179,8 +181,9 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         # Simple random, 5 points
         default_point_generation_method_0=PointGen.Types.SIMPLE.value,
         default_point_generation_method_1=5,
+        trains_own_classifiers=True,
         confidence_threshold=100,
-        feature_extractor_setting='efficientnet_b0_ver1',
+        feature_extractor_setting=Extractors.EFFICIENTNET.value,
         latitude='0.0',
         longitude='0.0',
     )
@@ -397,11 +400,11 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
         cls.client.logout()
 
     @staticmethod
-    def create_robot(source):
+    def create_robot(source, set_as_deployed=True):
         """
         Add a robot to a source.
         """
-        return create_robot(source)
+        return create_robot(source, set_as_deployed=set_as_deployed)
 
     @staticmethod
     def add_robot_annotations(robot, image, annotations=None):
@@ -1296,7 +1299,7 @@ def sample_image_as_file(filename, filetype=None, image_options=None):
     return image_file
 
 
-def create_robot(source):
+def create_robot(source, set_as_deployed=True):
     """
     Add a robot (Classifier) to a source.
     NOTE: This does not use any standard task or utility function
@@ -1312,6 +1315,11 @@ def create_robot(source):
         status=Classifier.ACCEPTED,
     )
     classifier.save()
+
+    if set_as_deployed:
+        source.deployed_classifier = classifier
+        source.save()
+
     return classifier
 
 

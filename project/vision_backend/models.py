@@ -7,6 +7,7 @@ from spacer.messages import DataLocation
 from config.constants import SpacerJobSpec
 from jobs.models import Job
 from labels.models import Label, LocalLabel
+from .common import Extractors
 
 
 class Classifier(models.Model):
@@ -101,6 +102,12 @@ class Features(models.Model):
 
     # Indicates whether the features are extracted. Set when jobs are collected
     extracted = models.BooleanField(default=False)
+
+    # Which extractor was used. Typically, this matches the extractor setting
+    # of the classifier's source; but after any interim period where there's
+    # no designated classifier, the extractor used may be non-obvious.
+    extractor = models.CharField(
+        max_length=50, choices=Extractors.choices, blank=True, default='')
 
     # Total runtime for job
     runtime_total = models.IntegerField(null=True)

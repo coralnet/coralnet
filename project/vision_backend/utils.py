@@ -257,3 +257,20 @@ def get_extractor(extractor_choice: Extractors) -> FeatureExtractor:
             return DummyExtractor()
         case _:
             assert f"{extractor_choice} isn't a supported extractor"
+
+
+def extractor_to_name(extractor: FeatureExtractor) -> Extractors:
+    """
+    TODO: It'd be preferred for the FeatureExtractor class to take an optional
+     'extractor name' attribute which we can then check against, in lieu of
+     having this function at all.
+    """
+    match extractor.__class__.__name__:
+        case 'EfficientNetExtractor':
+            return Extractors.EFFICIENTNET.value
+        case 'VGG16CaffeExtractor':
+            return Extractors.VGG16.value
+        case 'DummyExtractor':
+            return Extractors.DUMMY.value
+        case _:
+            assert f"Unexpected extractor class: {extractor.__class__.__name__}"

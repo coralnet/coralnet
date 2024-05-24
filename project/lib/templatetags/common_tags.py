@@ -14,12 +14,18 @@ register = template.Library()
 @register.simple_tag
 def field_visibility_attrs(widget):
     """
-    The passed widget should have attrs defining that its visibility
+    The passed widget may have attrs defining that its visibility
     toggles when a certain field is a certain value.
     This template tag echoes those attrs so that another element can
     use the same visibility logic.
+    If neither attr is present, this just produces an empty string.
     """
-    widget_attrs = widget['attrs']
+    if hasattr(widget, 'attrs'):
+        # Standard Widget
+        widget_attrs = widget.attrs
+    else:
+        # Template context representation of a MultiWidget
+        widget_attrs = widget['attrs']
 
     return mark_safe(' '.join([
         f'{attr_name}="{widget_attrs[attr_name]}"'

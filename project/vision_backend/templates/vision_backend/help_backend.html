@@ -1,32 +1,33 @@
 <div class="article-body">
 
-<p> This dialog contain information about the CoralNet automated annotation system. For technical details refer to <a href="http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312"><i>"Towards automated annotation of benthic survey images: Variability of human experts and operational modes of automation"</i></a></p>
+<p> This dialog contains information about the CoralNet automated annotation system. For technical details refer to <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0130312"><i>"Towards automated annotation of benthic survey images: Variability of human experts and operational modes of automation"</i></a></p>
 
 <ul>
     <li><strong>Basic information</strong>
         <p> The principal goal of the CoralNet computer-vision backend is to facilitate faster and more accurate point annotations. Here are the basics: </p>
-        <p> After an initial set of images have been annotated a first classifier will be trained. This classifier will then "pre-annotate" all images uploaded to the source. The status of these images change from unannotated to unconfirmed.</p>
-        <p> When a user enters the annotation-tool for an unconfirmed image, all point annotation will have label-suggestions. These are provided along with a posterior probability estimate indicating how "confident" the classifier is that the substrate directly under the point pertains to the respective labels</p>
-        <p> New classifier are trained continuously as more images are confirmed by the users.</p>
-        <p> Source admins can set the source "confidence threshold". The default is 100%</p>
-        <p> When a user enters the annotation tool all points for which the classification confidence is higher than the source threshold will be <i>automatically confirmed</i> so that the user can focus on the other points and more rapidly work through the images.</p>
+        <p> After an initial set of images have been annotated, a first classifier will be trained, assuming the source has training enabled. This classifier will then "pre-annotate" all other images uploaded to the source. The status of these images change from unannotated to unconfirmed.</p>
+        <p> When you enter the annotation-tool for an unconfirmed image, all point annotations will have label-suggestions. These are provided along with a posterior probability estimate indicating how "confident" the classifier is that the substrate directly under the point pertains to the respective labels.</p>
+        <p> New classifiers are trained continuously as more images are confirmed by the source admins/editors.</p>
+        <p> Source admins can set the source "confidence threshold". When you enter the annotation tool, all points for which the classification confidence is higher than the source threshold will be <i>automatically confirmed</i> so that you can focus on the other points and more rapidly work through the images.</p>
+        <p> The default confidence threshold is 100%, which effectively turns off the automatic confirmation feature, since the posterior probabilities can never be 100% or more. If you want to use automatic confirmation, the diagnostics on this page can help you choose an appropriate confidence threshold to set.</p>
+        <p> Note: if you are using a classifier that was trained in another source, then this page's diagnostic info only reflects performance on the classifier's source's data, not this source's data.</p>
     </li>
 
-    <li><strong>Robot Performance Estimation</strong>
-        <p>The confirmed data is split in eight parts. A classifier is trained on 7/8'ths and evaluated on the last part, the "validation-set". This procedure is used to generate the confusion matrix and classifier analytics curve shown on the backend page.</p>
-        <p>By inspecting the curves the source admin can set the appropriate confidence threshold balancing the amount of manual work with the decrease in performance</p>
-        <p>NOTE: since the classifier is compared to a single set of annotations, and that set of taken to be the "ground truth", the performance will always seem to deteriorate as more annotations are done automatically. However, in our experiments, inter and intra operator variability is significant, and a well-trained classifier operating at a threshold where around 50% of the points are done automatically may actually <i>increase</i> the performance compared to fully manual annotations. We encourage all users to do a thorough inter- and intra- operator assessment before starting large-scale annotation projects.
+    <li><strong>Classifier Performance Estimation</strong>
+        <p>The confirmed data is split in eight parts. A classifier is trained on 7/8'ths and evaluated on the last part, the "validation-set". This procedure is used to generate the confusion matrix and classifier analytics curve shown on this page.</p>
+        <p>By inspecting the curves the source admin can set the appropriate confidence threshold balancing the amount of manual work with the decrease in performance.</p>
+        <p>NOTE: since the classifier is compared to a single set of annotations, and that set of taken to be the "ground truth", the performance will always seem to deteriorate as more annotations are done automatically. However, in our experiments, inter and intra operator variability is significant, and a well-trained classifier operating at a threshold where around 50% of the points are done automatically may actually <i>increase</i> the performance compared to fully manual annotations. We encourage all project managers to do a thorough inter- and intra- operator assessment before starting large-scale annotation projects.
     </li>
 
-    <li><strong>Source specific Robots</strong>
-        <p> All Robots are source-specific. This means that it will learn only from confirmed annotation <i>within</i> the source, and only annotate image in that same source. The reason for this is simple: machine learning across different sources is difficult, and it's not clear how to do this efficiently yet. </p>
+    <li><strong>Source specific classifiers</strong>
+        <p> All classifiers are source-specific. This means that it will learn only from confirmed annotations <i>within</i> the source. The reason for this is simple: machine learning across different sources is difficult, and it's not clear how to do this efficiently yet. </p>
     </li>
     
     <li><strong>Classifier threshold sweep</strong>
-        <p> The first plot on the backend page is created by trying hundreds of confidence thresholds on the validation-set. For each threshold all annotation for which the classifier confidence is lower then the threshold are discarded. Then accuracy is then calculated for the remaining annotations both on the level of individual levels and the functional group level. This is plotted along with the fraction of points above the threshold</p>
+        <p> The first plot on this page is created by trying hundreds of confidence thresholds on the validation-set. For each threshold all annotations for which the classifier confidence is lower then the threshold are discarded. Accuracy is then calculated for the remaining annotations both on the level of individual labels and the functional group level. This is plotted along with the fraction of points above the threshold.</p>
     </li>
     <li><strong>Confusion Matrix</strong>
-        <p> Users can investigate any point on the threshold sweep by selecting a threshold and label mode using the form provided. A confusion matrix is then displayed for the selection.</p>
+        <p> You can investigate any point on the threshold sweep by selecting a threshold and label mode using the form provided. A confusion matrix is then displayed for the selection.</p>
     </li>
 </ul>
 

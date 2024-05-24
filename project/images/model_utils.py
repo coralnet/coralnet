@@ -15,9 +15,15 @@ class PointGenerationTypes(models.TextChoices):
 
 
 class PointCreationTypes(models.TextChoices):
-    SIMPLE = PointGenerationTypes.SIMPLE
-    STRATIFIED = PointGenerationTypes.STRATIFIED
-    UNIFORM = PointGenerationTypes.UNIFORM
+    SIMPLE = (
+        PointGenerationTypes.SIMPLE.value,
+        PointGenerationTypes.SIMPLE.label)
+    STRATIFIED = (
+        PointGenerationTypes.STRATIFIED.value,
+        PointGenerationTypes.STRATIFIED.label)
+    UNIFORM = (
+        PointGenerationTypes.UNIFORM.value,
+        PointGenerationTypes.UNIFORM.label)
     IMPORTED = 'i', "Imported"
 
 

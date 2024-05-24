@@ -10,6 +10,8 @@ import urllib.parse
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
+from django.template.defaultfilters import date as date_template_filter
+from django.utils import timezone
 
 scoped_cache_context_var = ContextVar('scoped_cache', default=None)
 
@@ -127,6 +129,18 @@ class CacheableValue:
             value = self.update()
 
         return value
+
+
+def date_display(dt):
+    return date_template_filter(timezone.localtime(dt))
+
+
+def datetime_display(dt):
+    """
+    Format string reference:
+    https://docs.djangoproject.com/en/dev/ref/templates/builtins/#date
+    """
+    return date_template_filter(timezone.localtime(dt), 'N j, Y, P')
 
 
 def filesize_display(num_bytes):

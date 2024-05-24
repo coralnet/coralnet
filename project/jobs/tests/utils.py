@@ -89,8 +89,12 @@ def do_job(
 
 class JobUtilsMixin(TestCase):
 
+    @staticmethod
+    def get_latest_job_by_name(job_name):
+        return Job.objects.filter(job_name=job_name).latest('pk')
+
     def assert_job_persist_value(self, job_name, expected_value):
-        job = Job.objects.filter(job_name=job_name).latest('pk')
+        job = self.get_latest_job_by_name(job_name)
         self.assertEqual(
             job.persist, expected_value,
             "Job persist value should be as expected"
@@ -101,7 +105,25 @@ class JobUtilsMixin(TestCase):
         expected_message: Union[str, re.Pattern],
         assert_msg="Job result message should be as expected",
     ):
-        job = Job.objects.filter(job_name=job_name).latest('pk')
+        job = self.get_latest_job_by_name(job_name)
+
+        if isinstance(expected_message, re.Pattern):
+            self.assertRegex(
+                job.result_message, expected_message, msg=assert_msg,
+            )
+        else:
+            self.assertEqual(
+                job.result_message, expected_message, msg=assert_msg,
+            )
+
+    def assert_job_failure_message(
+        self, job_name,
+        expected_message: Union[str, re.Pattern],
+        assert_msg="Job result message should be as expected",
+    ):
+        job = self.get_latest_job_by_name(job_name)
+
+        self.assertEqual(job.status, Job.Status.FAILURE)
 
         if isinstance(expected_message, re.Pattern):
             self.assertRegex(
@@ -113,8 +135,10 @@ class JobUtilsMixin(TestCase):
             )
 
     def source_check_and_assert_message(
-        self, expected_message, assert_msg=None,
+        self, expected_message, assert_msg=None, source=None,
     ):
-        do_job('check_source', self.source.pk, source_id=self.source.pk)
+        source = source or self.source
+
+        do_job('check_source', source.pk, source_id=source.pk)
         self.assert_job_result_message(
             'check_source', expected_message, assert_msg=assert_msg)

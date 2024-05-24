@@ -105,7 +105,7 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
         # Train a classifier.
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
-        cls.classifier = cls.source.get_current_classifier()
+        cls.classifier = cls.source.last_accepted_classifier
 
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])
 

@@ -8,21 +8,99 @@
 
 
 /* Used for grey boxes on source main page */
-div.detail_box {
-    background-color:#d7d3cf;
-    border-style:solid;
-    border-width:1px;
+div.detail-box {
+    background-color: hsl(30, 10%, 80%);
+    border: 1px solid black;
     padding: 10px;
-    margin: 5px 0 5px 0;
+    margin: 5px;
+    /* Don't stretch the box to fill up the entire space allotted by the grid;
+       only enough to fit the box content. */
+    height: min-content;
+}
+div.detail-box.clear {
+    background-color: transparent;
+    border-color: transparent;
+}
+div.detail-box.small-text {
+    font-size: 0.9em;
+}
+div.detail-box h4 {
+    text-align: center;
+    font-size: 1.0em;
+    margin-bottom: 10px;
+    text-decoration: underline;
+}
+div.detail-box h4.left {
+    text-align: left;
+}
+div.detail-box ul {
+	list-style: none;
+}
+div.detail-box li {
+	padding: 5px;
+}
+div.detail-box div.center {
+    text-align: center;
+}
+div.detail-box hr {
+    color: hsl(0, 0%, 50%);
+    height: 1px;
+}
+div.detail-box table {
+    width: 100%;
+    margin: 5px 0;
+}
+div.detail-box table th,
+div.detail-box table td {
+    padding: 4px 5px;
+}
+div.detail-box table td.username {
+    /* Force usernames to wrap. overflow-wrap doesn't seem to do it, but
+       word-break does. */
+    word-break: break-word;
+}
+div.detail-box ul.flexible-details li span {
+    display: inline-block;
 }
 
-table.detail_box_table {
-    /* Firefox seems to make border widths inconsistent
-       if border-collapse: collapse */
-    border-collapse: separate;
+/* Grid layout for source main page:
+   AAB
+   CDB
+   A = #description-box
+   B = #right-column (Image status box, Details box)
+   C = #members-column (length can vary greatly)
+   D = #backend-column
+   https://gridbyexample.com/examples/example5/
+ */
+
+#main-grid {
+    display: grid;
+    grid-gap: 0;
+    grid-template-columns: 242px 500px 242px;
+    /* Only just enough height for row 1, and let row 2 get all the stretch.
+       This avoids a gap above the left and center columns when the center
+       column is shorter than the right column. */
+    grid-template-rows: 0fr 1fr;
+}
+#main-grid #description-box {
+    grid-column: 1 / 3;
+    grid-row: 1;
+}
+#main-grid #right-column {
+    grid-column: 3;
+    grid-row: 1 / 3;
+}
+#main-grid #members-column {
+    grid-column: 1;
+    grid-row: 2;
+}
+#main-grid #backend-column {
+    grid-column: 2;
+    grid-row: 2;
 }
 
-table.detail_box_table th,
-table.detail_box_table td {
-    padding: 5px;
+/* Classifier graph */
+#acc-overview {
+    height: 300px;
+    margin: 5px;
 }

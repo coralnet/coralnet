@@ -38,7 +38,8 @@ from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
-from .utils import get_extractor, reset_features_bulk, schedule_source_check
+from .utils import (
+    get_extractor, reset_features, reset_features_bulk, schedule_source_check)
 
 logger = getLogger(__name__)
 
@@ -74,6 +75,11 @@ def check_source(source_id):
         source = Source.objects.get(pk=source_id)
     except Source.DoesNotExist:
         raise JobError(f"Can't find source {source_id}")
+
+    if source.feature_extractor is None:
+        # None of the backend processes can happen without being able to
+        # extract features.
+        return "Machine classification isn't configured for this source"
 
     start = timezone.now()
     wrap_up_time = start + timedelta(minutes=settings.JOB_MAX_MINUTES)
@@ -163,8 +169,8 @@ def check_source(source_id):
 
     # Classifier training
 
-    need_new_robot, reason = source.need_new_robot()
-    if need_new_robot:
+    ready_to_train, reason = source.ready_to_train()
+    if ready_to_train:
         # Try to schedule training
         job, created = schedule_job(
             'train_classifier', source_id, source_id=source_id)
@@ -177,31 +183,49 @@ def check_source(source_id):
 
     # Image classification
 
-    if not source.has_robot():
+    if not source.deployed_classifier:
+        # We know that we must be in train mode here. If we were in
+        # use-existing-classifier mode, then we wouldn't have passed the
+        # source.feature_extractor check earlier.
         return f"Can't train first classifier: {reason}"
 
     classifiable_images = source.image_set.incomplete().with_features()
     unclassified_images = classifiable_images.unclassified()
 
-    # Here we detect whether the current classifier has been used for ANY
-    # classifications so far. We check this because, most of the time,
-    # the current classifier has either taken a pass on ALL classifiable
+    # Here we detect whether the deployed classifier is the latest one used
+    # for ANY classifications. We check this because, most of the time,
+    # a given classifier has either taken a pass on ALL classifiable
     # images, or it hasn't run at all yet.
     #
     # Checking the events should work for any classifications that happened
     # after such events were introduced (CoralNet 1.7). Otherwise, we look
-    # for annotations attributed to the current classifier, but that can
-    # miss cases where the current classifier agreed with the previous
-    # classifier on all points.
-    current_classifier = source.get_current_classifier()
-    current_classifier_events = ClassifyImageEvent.objects \
-        .filter(classifier_id=current_classifier.pk, source_id=source_id)
-    current_classifier_annotations = source.annotation_set \
-        .filter(robot_version=current_classifier)
-    current_classifier_used = current_classifier_events.exists() \
-        or current_classifier_annotations.exists()
+    # for annotations attributed to the deployed classifier, but that
+    # 1) can miss cases where the current classifier agreed with the previous
+    # classifier on all points, and
+    # 2) is imprecise in terms of getting the latest robot annotation activity,
+    # because we can get the last unconfirmed annotation, but the last robot
+    # activity might've been on a now-confirmed annotation.
+    deployed_classifier = source.deployed_classifier
+    try:
+        latest_event = ClassifyImageEvent.objects.filter(
+            source_id=source_id).latest('pk')
+    except ClassifyImageEvent.DoesNotExist:
+        try:
+            latest_annotation_with_robot = \
+                source.annotation_set.unconfirmed().latest('annotation_date')
+        except Annotation.DoesNotExist:
+            deployed_classifier_used = False
+        else:
+            deployed_classifier_used = (
+                latest_annotation_with_robot.robot_version.pk
+                == deployed_classifier.pk
+            )
+    else:
+        deployed_classifier_used = (
+            latest_event.classifier_id == deployed_classifier.pk
+        )
 
-    if current_classifier_used:
+    if deployed_classifier_used:
         # Has been used; so most likely the only images to look at are the
         # unclassified ones.
         images_to_classify = unclassified_images
@@ -280,6 +304,9 @@ def submit_features(image_id, job_id):
     except Image.DoesNotExist:
         raise JobError(f"Image {image_id} does not exist.")
 
+    if img.source.feature_extractor is None:
+        raise JobError(f"No feature extractor configured for this source.")
+
     # Setup the job payload.
     storage = get_storage_class()()
 
@@ -312,6 +339,9 @@ def submit_classifier(source_id, job_id):
     # and deleting the Source would've cascade-deleted the Job.
     source = Source.objects.get(pk=source_id)
 
+    if not source.trains_own_classifiers:
+        raise JobError("Training is disabled for this source")
+
     images = source.image_set.confirmed().with_features().order_by('pk')
 
     without_feature_rowcols = images.filter(features__has_rowcols=False)
@@ -321,6 +351,16 @@ def submit_classifier(source_id, job_id):
         raise JobError(
             f"This source has {count} feature vector(s) without"
             f" rows/columns, and this is no longer accepted for training."
+            f" Feature extractions will be redone to fix this.")
+
+    in_wrong_feature_format = images.exclude(
+        features__extractor=source.feature_extractor)
+    if in_wrong_feature_format.exists():
+        count = in_wrong_feature_format.count()
+        reset_features_bulk(in_wrong_feature_format)
+        raise JobError(
+            f"This source has {count} feature vector(s) which don't match"
+            f" the source's feature format."
             f" Feature extractions will be redone to fix this.")
 
     # Create new classifier
@@ -483,11 +523,17 @@ def classify_image(image_id):
             f"Image {image_id} needs to have features extracted"
             f" before being classified.")
 
-    classifier = img.source.get_current_classifier()
+    classifier = img.source.deployed_classifier
     if not classifier:
         raise JobError(
             f"Image {image_id} can't be classified;"
             f" its source doesn't have a classifier.")
+
+    if img.features.extractor != img.source.feature_extractor:
+        reset_features(img)
+        raise JobError(
+            "This image's features don't match the source's feature format."
+            " Feature extraction will be redone to fix this.")
 
     # Create task message
     storage = get_storage_class()()
@@ -587,15 +633,10 @@ def collect_spacer_jobs():
 
 
 @job_runner()
-def reset_backend_for_source(source_id):
+def reset_features_for_source(source_id):
     """
-    Removes all traces of the backend for this source, including
-    classifiers and features.
+    Clears all extracted features for this source.
     """
-    schedule_job(
-        'reset_classifiers_for_source', source_id,
-        source_id=source_id)
-
     reset_features_bulk(Image.objects.filter(source_id=source_id))
 
 

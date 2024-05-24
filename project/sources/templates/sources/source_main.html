@@ -5,172 +5,38 @@
 
 {% block title %}{{ source.name }} | CoralNet{% endblock %}
 
-{% block js-includes %}
-    {% include "javascript-includes.html" with jquery_form="yes" jquery_ui="yes" %}
-    {% include "static-local-include.html" with type="css" path="css/source.css" %}
-{% endblock %}
-
 {% block page-specific-includes %}
-    {% include "static-local-include.html" with type="js" path="js/highcharts.js" %}
-    {{ editSourceForm.media }}
-{% endblock %}
-
-    
-{% block javascript-functions %}
-<script>
-$(document).ready(function() {
-    var chart1 = new Highcharts.Chart({
-        chart: {
-            renderTo: 'acc_overview',
-            type: 'line',
-        },
-        title: {
-            text: 'Classifier overview'
-        },
-        xAxis: {
-            title: {
-                text: 'Version'
-            },
-        },
-        yAxis: {
-            title: {
-                text: 'Accuracy (%)'
-            },
-        },
-        tooltip: {
-            formatter: function () {
-                return 'Classifier nbr: ' + this.point.x + "<br>" +
-                'Accuracy: ' + this.point.y + " %<br>" +
-                'Trained on: ' + this.point.nimages + ' images<br>' +
-                'Date: ' + this.point.date + '<br>' +
-                'Traintime: ' + this.point.traintime  + '<br>' +
-                'Global id: ' + this.point.pk;
-            }
-        },
-        series: [{
-            showInLegend: false,
-            name: 'Acc (%)',
-            data: {{robot_stats.backend_plot_data | safe}},
-        }]
-    });
-});
-</script>    
+  {% include "static-local-include.html" with type="js" path="js/highcharts.js" %}
 {% endblock %}
 
 {% block content %}
 
-    {% get_obj_perms user for source as "source_perms" %}
+  {% get_obj_perms user for source as "source_perms" %}
 
-    <div id="images">
-        {% if latest_images %}
-            {% for image in latest_images %}
-                <span class="thumb_large_wrapper">
-                <a href="{% url 'image_detail' image.id %}">
-                    <img class="thumb_small"
-                         src="{% thumbnail image.original_file 300x300 %}"
-                         title="{{ image.get_image_element_title }}"/>
-                </a>
-                </span>
-            {% endfor %}
-        {% endif %}
-    </div>
-    <div class="detail_box">
-        <div>
-            <div style="float:left; width: 50%">
-            <ul>
-                <li>Source created: {{ source.create_date }}</li>
-                {% if not source.enable_robot_classifier %}
-                    <li>Machine annotator: Disabled (can enable upon <a href="{{ forum_link }}">request</a>)</li>
-                {% else %}
-                {% if robot_stats.has_robot %}
-                    <li>Last classifier saved: {{robot_stats.last_classifier_saved_date}}</li>
-                    <li>Last classifier trained: {{robot_stats.last_classifier_trained_date}}</li>
-                {% endif %}
-            {% endif %}
-            </ul>
-            </div>
-            
-            <div style="float:left; width: 50%">
-            <ul>
-                {% if source.image_annotation_area %}
-                    <li>Default image annotation area: {{ source.annotation_area_display }}</li>
-                {% endif %}
-                <li>Annotation point generation: {{ source.point_gen_method_display }}</li>
-                <li>Feature extractor: {{ source.get_feature_extractor_setting_display }}</li>
-                <li>
-                    Confidence threshold: {{ source.confidence_threshold }}% <a href="{% url 'source_edit' source.id%}">(edit)</a>
-                </li>
-            </ul>
-            </div>
-        </div>
-        <div style="clear:both">
-            <br>
-            {% if source.description %}
-                <br>
-                {{ source.description | linebreaksbr }}
-            {% endif %}
-        </div>
+  <div id="images">
+    {% if latest_images %}
+      {% for image in latest_images %}
+        <span class="thumb_large_wrapper">
+          <a href="{% url 'image_detail' image.id %}">
+            <img class="thumb_small"
+                 src="{% thumbnail image.original_file 300x300 %}"
+                 title="{{ image.get_image_element_title }}"/>
+          </a>
+        </span>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <div id="main-grid">
+
+    <div class="detail-box" id="description-box">
+      <h4 class="left">Description</h4>
+      {{ source.description | linebreaksbr }}
     </div>
 
-    <div style="float:left;">
-        {% if members %}
-            <div class="detail_box">
-                <h3 style="text-align:center">Members</h3>
-                <table class="detail_box_table">
-                    {% for member in members %}
-                        <tr>
-                            <td><a href="{% url 'profile_detail' member.pk %}">{{ member.username }}</a></td>
-                            <td><b>{{ member.role }}</b></td>
-                        </tr>
-                    {% endfor %}
-                </table>
-            </div>
-        {% endif %}
-
-        <div class="detail_box">
-            <h3 style="text-align:center">Source Details</h3>
-            <table class="detail_box_table">
-                <tr>
-                    <td>Visibility: <b>{{ source.get_visibility_display }}</b></td>
-                </tr>
-                {% if source.latitude %}
-                    <tr>
-                    <td>Latitude: <b>{{ source.latitude }}</b></td>
-                    </tr>
-                {% endif %}
-                {% if source.longitude %}
-                    <tr>
-                    <td>Longitude: <b>{{ source.longitude }}</b></td>
-                    </tr>
-                {% endif %}
-            </table>
-        </div>
-    </div>
-
-    <div style="float:left; width:55%; margin-left:20px;height:350px">
-      <h3 style="text-align:center">Automated Annotation</h3>
-
-      {% if robot_stats.has_robot %}
-        <div id="acc_overview" style="height:300px"></div>
-      {% endif %}
-
-      {% if source.enable_robot_classifier %}
-        {% if not source.has_robot %}
-          <p>This source does not have a classifier yet. Need a minimum of {{min_nbr_annotated_images}} Confirmed images to train a classifier.</p>
-        {% endif %}
-
-        {% if "source_edit" in source_perms %}
-          <p>
-            To see backend-job status,
-            <a href="{% url 'jobs:source_job_list' source.id %}">go here</a>.
-          </p>
-        {% endif %}
-      {% endif %}
-    </div>
-
-    <div style="float:right">
-      <div class="detail_box">
-        <h3 style="text-align:center">Image Status</h3>
+    <div id="right-column">
+      <div class="detail-box">
+        <h4>Image Status</h4>
 
         <table class="detail_box_table">
           <tr><td>Unclassified:
@@ -190,26 +56,152 @@ $(document).ready(function() {
               {{ image_stats.total }}</a></td></tr>
         </table>
       </div>
+
+      <div class="detail-box small-text">
+        <h4>Details</h4>
+        {% comment %}
+        The idea with the markup/styling here is that each value can be either:
+        - Entirely on the same line as the label (which saves room), or
+        - Entirely on line(s) after the label's line
+        But never on both the label's line and different line(s), since that
+        makes for poorer visual separation.
+        {% endcomment %}
+        <ul class="flexible-details">
+          <li>
+            <span>Visibility:</span>
+            <span>{{ source.get_visibility_display }}</span>
+          </li>
+          <li>
+            <span>Point generation method:</span>
+            <span>{{ source.point_gen_method_display }}</span>
+          </li>
+          <li>
+            <span>Default image annotation area:</span>
+            <span>{{ source.annotation_area_display }}</span>
+          </li>
+          {% if source.latitude and source.longitude %}
+            <li>
+              <span>Latitude & Longitude:</span>
+              <span>
+                {{ source.latitude|slice:":8" }},
+                {{ source.longitude|slice:":8" }}
+              </span>
+            </li>
+          {% endif %}
+          <li>
+            <span>Created:</span>
+            <span>{{ source.create_date|date }}</span>
+          </li>
+        </ul>
+      </div>
     </div>
 
-    {% comment %}
-    Uncomment this events section when we start using events.
+    <div class="detail-box" id="members-column">
+      <h4>Affiliation & Members</h4>
 
-    <div style="float:left; width:100%;">
-        <div class="detail_box">
-        <h3 style="text-align:center">Events</h3>
-        <table class="detail_table_scroll">
-        {% for news in news_items %}
+      <div class="center">{{ source.affiliation }}</div>
+
+      <table>
+        <tbody>
+          {% for member in members %}
             <tr>
-                <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
-                <td> {{ news.message|markdown_to_html }} </td>
+              <td class="username">
+                <a href="{% url 'profile_detail' member.pk %}">{{ member.username }}</a>
+              </td>
+              <td><strong>{{ member.role }}</strong></td>
             </tr>
-        {% endfor %}
-        </table>
-        </div>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    {% endcomment %}
 
-    <div style="clear:left"></div>
+    <div id="backend-column">
+      {% if classifier_plot_data %}
+        <div id="acc-overview"></div>
+      {% endif %}
+
+      <div class="detail-box clear">
+        {% if not classifier_plot_data %}
+          <h4 class="left">Classifier</h4>
+        {% endif %}
+
+        <ul>
+          {% for key, value in classifier_details %}
+            <li>{{ key }}: {{ value|safe }}</li>
+          {% endfor %}
+
+          {% if source.trains_own_classifiers %}
+            {% if "source_edit" in source_perms %}
+              <li>
+                To see backend-job status,
+                <a href="{% url 'jobs:source_job_list' source.id %}">go here</a>.
+              </li>
+            {% endif %}
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  {% comment %}
+  Uncomment and rework this events section when we start using events.
+
+  <div style="float:left; width:100%;">
+    <div class="detail-box">
+      <h3>Events</h3>
+      <table class="detail_table_scroll">
+        {% for news in news_items %}
+          <tr>
+            <td> <a href="{% url 'newsfeed_details' news.id %}">{{news.datetime}}</a></td>
+            <td> {{ news.message|markdown_to_html }} </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  {% endcomment %}
+
+  <script>
+    let classifierPlotData = {{classifier_plot_data | safe}};
+
+    if (classifierPlotData.length > 0) {
+
+        let chart1 = new Highcharts.Chart({
+            chart: {
+                renderTo: 'acc-overview',
+                type: 'line',
+            },
+            title: {
+                text: 'Classifier overview'
+            },
+            xAxis: {
+                title: {
+                    text: 'Version'
+                },
+            },
+            yAxis: {
+                title: {
+                    text: 'Accuracy (%)'
+                },
+            },
+            tooltip: {
+                formatter: function () {
+                    return 'Classifier nbr: ' + this.point.x + "<br>" +
+                        'Accuracy: ' + this.point.y + " %<br>" +
+                        'Trained on: ' + this.point.nimages + ' images<br>' +
+                        'Date: ' + this.point.date + '<br>' +
+                        'Traintime: ' + this.point.traintime + '<br>' +
+                        'Global id: ' + this.point.pk;
+                }
+            },
+            series: [{
+                showInLegend: false,
+                name: 'Acc (%)',
+                data: classifierPlotData,
+            }]
+        });
+    }
+  </script>
 
 {% endblock %}

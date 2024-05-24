@@ -19,9 +19,11 @@ from lib.decorators import (
     source_permission_required,
     source_visibility_required,
 )
+from lib.utils import date_display, datetime_display
 from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
-from vision_backend.models import Classifier
+from vision_backend.models import Classifier, Features
+from vision_backend.utils import schedule_source_check_on_commit
 from .forms import (
     SourceChangePermissionForm,
     SourceForm,
@@ -93,15 +95,13 @@ def source_new(request):
     # GET, we just got here.
     if request.method == 'POST':
         # Bind the form to the submitted POST data.
-        source_form = SourceForm(request.POST)
+        source_form = SourceForm(request.POST, request=request)
 
         # <form>.is_valid() calls <form>.clean() and checks field validity.
         if source_form.is_valid():
 
-            # Since source_form is a ModelForm, after calling its
-            # is_valid(), a Source is instantiated. We retrieve it here.
-            new_source = source_form.instance
-            new_source.save()
+            # Save a new Source model instance and retrieve it.
+            new_source = source_form.save()
 
             # Make the current user an admin of the new source
             new_source.assign_role(request.user, Source.PermTypes.ADMIN.code)
@@ -165,43 +165,73 @@ def source_main(request, source_id):
             ImageAnnoStatuses.UNCLASSIFIED.value),
     )
 
-    # Setup the classifier overview plot
-    clfs = source.get_accepted_robots()
-    robot_stats = dict()
-    if clfs.count() > 0:
-        backend_plot_data = []
-        for enu, clf in enumerate(clfs[::-1]):
-            backend_plot_data.append({
-                'x': enu + 1,
-                'y': round(100 * clf.accuracy),
-                'nimages': clf.nbr_train_images,
-                'traintime': str(datetime.timedelta(seconds = clf.runtime_train)),
-                'date': str(clf.train_completion_date.strftime("%Y-%m-%d")),
-                'pk': str(clf.pk),
-            })
-        robot_stats['backend_plot_data'] = backend_plot_data
-        robot_stats['has_robot'] = True
+    # Setup the classifier overview info, and plot if applicable
+    classifier_plot_data = []
+    last_accepted_classifier = source.last_accepted_classifier
 
-        robot_stats['last_classifier_saved_date'] = \
-            source.get_current_classifier().train_completion_date
+    if source.trains_own_classifiers and last_accepted_classifier:
 
         trained_classifiers = source.classifier_set.filter(
             status__in=[Classifier.ACCEPTED, Classifier.REJECTED_ACCURACY])
-        robot_stats['last_classifier_trained_date'] = \
-            trained_classifiers.latest('pk').train_completion_date
-    else:
-        robot_stats['has_robot'] = False
+        classifier_details = [
+            ("Last classifier saved",
+             datetime_display(last_accepted_classifier.train_completion_date)),
+            ("Last classifier trained",
+             datetime_display(
+                 trained_classifiers.latest('pk').train_completion_date)),
+            ("Feature extractor",
+             source.get_feature_extractor_setting_display()),
+            ("Confidence threshold",
+             f'{source.confidence_threshold}%'),
+        ]
 
-    source.latitude = source.latitude[:8]
-    source.longitude = source.longitude[:8]
+        clfs = source.get_accepted_robots()
+        for clf_index, clf in enumerate(clfs):
+            classifier_plot_data.append({
+                'x': clf_index + 1,
+                'y': round(100 * clf.accuracy),
+                'nimages': clf.nbr_train_images,
+                'traintime': str(datetime.timedelta(seconds=clf.runtime_train)),
+                'date': date_display(clf.train_completion_date),
+                'pk': str(clf.pk),
+            })
+
+    elif source.trains_own_classifiers:
+
+        classifier_details = [
+            ("Classifier status",
+             f"No classifier yet. Need a minimum of"
+             f" {settings.TRAINING_MIN_IMAGES} Confirmed images"
+             f" to train a classifier."),
+            ("Feature extractor",
+             source.get_feature_extractor_setting_display()),
+        ]
+
+    elif source.deployed_classifier:
+
+        classifier_details = [
+            ("Active classifier",
+             source.get_deployed_classifier_html()),
+            ("Confidence threshold",
+             f'{source.confidence_threshold}%'),
+        ]
+
+    else:
+
+        classifier_details = [
+            ("Active classifier",
+             source.get_deployed_classifier_html()),
+        ]
 
     return render(request, 'sources/source_main.html', {
         'source': source,
         'members': memberDicts,
         'latest_images': latest_images,
         'image_stats': image_stats,
-        'robot_stats': robot_stats,
-        'min_nbr_annotated_images': settings.TRAINING_MIN_IMAGES,
+
+        'classifier_details': classifier_details,
+        'classifier_plot_data': classifier_plot_data,
+
         'news_items': [item.render_view() for item in
                        NewsItem.objects.filter(source_id=source.id).order_by('-pk')]
     })
@@ -217,29 +247,56 @@ def source_edit(request, source_id):
     if request.method == 'POST':
 
         source_form = SourceForm(
-            request.POST, instance=source)
+            request.POST, request=request, instance=source)
 
         if source_form.is_valid():
 
-            edited_source = source_form.instance
+            # Save the edits to the Source.
+            source_form.save()
 
+            resetting_something = False
+
+            # Schedule classifier reset if needed.
             if 'feature_extractor_setting' in source_form.changed_data:
-
-                # Feature extractor setting changed. Wipe this source's
-                # features and classifiers.
-                edited_source.save()
+                # Changed the feature extractor setting for train-classifiers
+                # mode. Wipe this source's trained classifiers.
                 schedule_job(
-                    'reset_backend_for_source', source_id,
+                    'reset_classifiers_for_source', source_id,
                     source_id=source_id)
                 messages.success(
                     request,
                     "Source successfully edited."
                     " Classifier history will be cleared.")
-
+                resetting_something = True
             else:
-
-                edited_source.save()
                 messages.success(request, "Source successfully edited.")
+
+            # Schedule feature reset if needed.
+            source_features = Features.objects.filter(
+                image__source=source_form.instance, extracted=True)
+            if (
+                source_form.instance.feature_extractor is not None
+                and source_features.exclude(
+                    extractor=source_form.instance.feature_extractor).exists()
+            ):
+                # There exist features in the source that don't match
+                # the new active extractor.
+                # Going by the assumption that all extracted features in the
+                # source must use the same extractor, we reset all extracted
+                # features in the source.
+                schedule_job(
+                    'reset_features_for_source', source_id,
+                    source_id=source_id)
+                resetting_something = True
+
+            classifier_settings_changed = (
+                ('trains_own_classifiers' in source_form.changed_data)
+                or ('deployed_classifier' in source_form.changed_data)
+            )
+            if classifier_settings_changed and not resetting_something:
+                # A source check may be warranted, and may not be scheduled
+                # soon unless we do so now.
+                schedule_source_check_on_commit(source_id)
 
             return HttpResponseRedirect(
                 reverse('source_main', args=[source_id]))

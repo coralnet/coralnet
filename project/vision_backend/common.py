@@ -1,10 +1,19 @@
-from enum import Enum
+from django.db import models
 
 
-class Extractors(Enum):
-    VGG16 = 'vgg16_coralnet_ver1'
-    EFFICIENTNET = 'efficientnet_b0_ver1'
-    DUMMY = 'dummy'
+class SourceExtractorChoices(models.TextChoices):
+    EFFICIENTNET = 'efficientnet_b0_ver1', "EfficientNet (default)"
+    VGG16 = 'vgg16_coralnet_ver1', "VGG16 (legacy)"
+
+
+class Extractors(models.TextChoices):
+    EFFICIENTNET = (
+        SourceExtractorChoices.EFFICIENTNET.value,
+        SourceExtractorChoices.EFFICIENTNET.label)
+    VGG16 = (
+        SourceExtractorChoices.VGG16.value,
+        SourceExtractorChoices.VGG16.label)
+    DUMMY = 'dummy', "Dummy"
 
 
 # Hard-coded shallow learners for each deep model.

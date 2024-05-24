@@ -16,6 +16,14 @@ function changePointGenType(newValue) {
 }
 
 
+function changeTrainsBoolean(newValue) {
+    let trainsField = document.getElementById(
+        'id_trains_own_classifiers');
+    trainsField.value = newValue;
+    trainsField.dispatchEvent(new Event('change'));
+}
+
+
 function setUp() {
     let sourceForm = document.getElementById('source-form');
     MultiValueFieldHelper.setUpFieldBasedVisibility(sourceForm);
@@ -96,6 +104,41 @@ QUnit.module("Point generation method", (hooks) => {
             'id_default_point_generation_method_3').hidden);
         assert.true(document.getElementById(
             'id_default_point_generation_method_4').hidden);
+    });
+});
+
+
+/* This test could've applied to either source new or source edit. */
+QUnit.module("Classifier fields", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+        setUp();
+    });
+    hooks.afterEach(() => {
+    });
+
+    test("starting visibility", async function(assert) {
+        // The test template should start out with Train mode.
+        assert.true(document.getElementById(
+            'id_deployed_classifier').hidden);
+    });
+
+    test("train mode", async function(assert) {
+        // To differentiate this from the starting visibility test,
+        // change to the other option, then change back to train mode,
+        // and then check visibility.
+        changeTrainsBoolean('False');
+        changeTrainsBoolean('True');
+
+        assert.true(document.getElementById(
+            'id_deployed_classifier').hidden);
+    });
+
+    test("use existing mode", async function(assert) {
+        changeTrainsBoolean('False');
+
+        assert.false(document.getElementById(
+            'id_deployed_classifier').hidden);
     });
 });
 

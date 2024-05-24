@@ -14,6 +14,7 @@ from storages.backends.s3boto3 import S3Boto3Storage
 
 from labels.models import LabelGroup, Label, LabelSet, LocalLabel
 from sources.models import Source
+from vision_backend.common import Extractors
 from .tests.utils import ClientTest
 
 User = get_user_model()
@@ -147,7 +148,7 @@ class VisionBackendRegressionTest(ClientTest):
         post_dict.update(self.source_defaults)
         post_dict['name'] = self.source_name
         if self.use_vgg16:
-            post_dict['feature_extractor_setting'] = 'vgg16_coralnet_ver1'
+            post_dict['feature_extractor_setting'] = Extractors.VGG16.value
 
         self.client.force_login(self.user)
         self.client.post(reverse('source_new'), post_dict)

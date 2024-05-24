@@ -5,6 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from guardian.shortcuts import (
     assign_perm,
     get_objects_for_user,
@@ -16,6 +17,8 @@ from guardian.shortcuts import (
 from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from labels.models import LabelSet
+from lib.utils import date_display
+from vision_backend.common import SourceExtractorChoices
 from vision_backend.models import Classifier
 
 
@@ -110,21 +113,43 @@ class Source(models.Model):
         default=100,
     )
 
-    # Whether or not to train new classifiers at all.
-    enable_robot_classifier = models.BooleanField(
-        "Enable robot classifier",
+    trains_own_classifiers = models.BooleanField(
+        "Source trains its own classifiers",
         default=True,
     )
-
-    FEATURE_EXTRACTOR_CHOICES = (
-        ('efficientnet_b0_ver1', "EfficientNet (default)"),
-        ('vgg16_coralnet_ver1', "VGG16 (legacy)"),
+    # Classifier selected for classification in this source. May be from
+    # another source.
+    deployed_classifier = models.ForeignKey(
+        Classifier,
+        # This field should not place any restrictions on the other source's
+        # ability to manage its classifiers. So, for example, this shouldn't
+        # be PROTECT.
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='deploying_sources',
     )
+    # In case the selected classifier gets deleted, this is a 'backup' pointer
+    # to the source that the classifier was from.
+    # This is a BigIntegerField instead of a ForeignKey because:
+    # 1) This way, if the selected-classifier's source also gets deleted,
+    #    this field remains populated; thus we can still distinguish that
+    #    situation vs. intentionally not selecting a classifier.
+    # 2) This way we don't worry about any complexities regarding
+    #    self-referential FKs.
+    # 3) This is just a backup pointer. Generally,
+    #    `deployed_classifier__source` can be used to get the same
+    #    relationship.
+    #
+    # Since this is a redundant field, we automatically set it in save().
+    deployed_source_id = models.BigIntegerField(
+        null=True, blank=True,
+    )
+
     feature_extractor_setting = models.CharField(
         "Feature extractor",
         max_length=50,
-        choices=FEATURE_EXTRACTOR_CHOICES,
-        default='efficientnet_b0_ver1')
+        choices=SourceExtractorChoices.choices,
+        default=SourceExtractorChoices.EFFICIENTNET.value)
 
     longitude = models.CharField(max_length=20, blank=True)
     latitude = models.CharField(max_length=20, blank=True)
@@ -156,14 +181,78 @@ class Source(models.Model):
             verbose = 'View'
 
     @property
-    def feature_extractor(self) -> str:
+    def feature_extractor(self) -> str | None:
+        if not self.trains_own_classifiers and not self.deployed_classifier:
+            # We consider this source to have no feature extraction config.
+            return None
+
         if settings.FORCE_DUMMY_EXTRACTOR:
             # Use dummy extractor for tests.
             # The real extractors are relatively slow.
             return 'dummy'
 
-        # Else, read feature extractor name from DB.
-        return self.feature_extractor_setting
+        if self.trains_own_classifiers:
+            # Read feature extractor name from this source's field.
+            return self.feature_extractor_setting
+
+        # Else, using deployed_classifier.
+        # Read feature extractor name from the classifier's source's field.
+        return self.deployed_classifier.source.feature_extractor_setting
+
+    def get_deployed_classifier_html(self):
+
+        if self.deployed_classifier:
+
+            if self.deployed_classifier.source.pk == self.pk:
+                deployed_source = self
+                html = (
+                    f"{self.deployed_classifier.pk},"
+                    f" from this source")
+            else:
+                deployed_source = self.deployed_classifier.source
+                deployed_source_link = reverse(
+                    'source_main', args=[deployed_source.pk])
+
+                html = (
+                    f'{self.deployed_classifier.pk}, from'
+                    f' <a href="{deployed_source_link}" target="_blank">'
+                    f'{deployed_source.name}</a>'
+                )
+
+            date = date_display(
+                self.deployed_classifier.train_completion_date)
+            html += f", trained {date}"
+
+            last_accepted = deployed_source.last_accepted_classifier
+            if last_accepted.pk != self.deployed_classifier.pk:
+                date = date_display(last_accepted.train_completion_date)
+                html += f" (latest: {last_accepted.pk}, trained {date})"
+
+            return html
+
+        if self.deployed_source_id:
+
+            if self.deployed_source_id == self.pk:
+                return "None. Previously used a classifier from this source"
+
+            try:
+                deployed_source = Source.objects.get(
+                    pk=self.deployed_source_id)
+            except Source.DoesNotExist:
+                return (
+                    f"None. Previously used a classifier from source"
+                    f" {self.deployed_source_id} (now deleted)"
+                )
+
+            deployed_source_link = reverse(
+                'source_main', args=[deployed_source.pk])
+            return (
+                f'None. Previously used a classifier from'
+                f' <a href="{deployed_source_link}" target="_blank">'
+                f'{deployed_source.name}</a>'
+            )
+
+        return "None"
 
     ##########
     # Helper methods for sources
@@ -331,7 +420,7 @@ class Source(models.Model):
 
     @property
     def best_robot_accuracy(self):
-        robot = self.get_current_classifier()
+        robot = self.last_accepted_classifier
         if robot is None:
             return None
         else:
@@ -352,10 +441,11 @@ class Source(models.Model):
         """
         return str(AnnotationArea.from_db_value(self.image_annotation_area))
 
-    def get_current_classifier(self):
+    @property
+    def last_accepted_classifier(self):
         """
-        Returns the classifier currently used for image classification
-        in this source, or None if no such classifier is available.
+        The last classifier that was trained in this source and then
+        subsequently accepted, or None if there's no such classifier.
         """
         try:
             return self.classifier_set.filter(
@@ -369,16 +459,16 @@ class Source(models.Model):
         source
         """
         return self.classifier_set.filter(
-            status=Classifier.ACCEPTED).order_by('-pk')
+            status=Classifier.ACCEPTED).order_by('pk')
 
-    def need_new_robot(self) -> Tuple[bool, str]:
+    def ready_to_train(self) -> Tuple[bool, str]:
         """
         Returns:
-        1) True if the source needs to train a new robot, False otherwise.
-        2) The reason why it needs a new robot or not.
+        1) True if the source is ready to train a new robot, False otherwise.
+        2) The reason why it's ready or not.
         """
-        if not self.enable_robot_classifier:
-            return False, "Source has classifier disabled"
+        if not self.trains_own_classifiers:
+            return False, "Source has training disabled"
 
         nbr_confirmed_images_with_features = (
             self.image_set.confirmed().with_features().count()
@@ -412,12 +502,6 @@ class Source(models.Model):
             f"Need {threshold_for_new} annotated images for next training,"
             f" and currently have {nbr_confirmed_images_with_features}")
         return has_enough, message
-
-    def has_robot(self):
-        """
-        Returns True if source has an accepted robot.
-        """
-        return self.get_accepted_robots().count() > 0
 
     def all_image_names_are_unique(self):
         """
