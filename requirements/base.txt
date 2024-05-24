@@ -158,7 +158,7 @@ supervisor>=4.2.5,<4.3
 
 # Progress bar for CLI
 # Changelog: https://tqdm.github.io/releases/
-tqdm==4.65.0
+tqdm==4.66.3
 
 # Support for rendering markdown as HTML, with extra rendering features over
 # the Markdown package (such as tables). Also includes a fancy Markdown editor,
