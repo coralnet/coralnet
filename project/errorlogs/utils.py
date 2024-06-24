@@ -1,3 +1,5 @@
+from django.template.defaultfilters import truncatechars
+
 from .models import ErrorLog
 
 
@@ -13,10 +15,17 @@ def replace_null(s):
 
 
 def instantiate_error_log(kind, html, path, info, data):
+    """
+    Take inputs for saving an ErrorLog, and preprocess the inputs so they
+    can be saved successfully. We want to guarantee that this won't fail, so
+    we truncate and replace chars as needed.
+    """
+    path_max_length = ErrorLog._meta.get_field('path').max_length
+
     return ErrorLog(
         kind=kind,
         html=replace_null(html),
-        path=replace_null(path),
-        info=info,
+        path=replace_null(truncatechars(path, path_max_length)),
+        info=replace_null(info),
         data=replace_null(data),
     )
