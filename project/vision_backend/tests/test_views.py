@@ -248,7 +248,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
 
         self.client.force_login(self.user)
         response = self.client.post(
-            self.url + '?confidence_threshold=75',
+            self.url + '?label_mode=full&confidence_threshold=75',
             data=dict(export_cm="Export confusion matrix"))
 
         expected_lines = [
@@ -277,7 +277,7 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
 
         self.client.force_login(self.user)
         response = self.client.post(
-            self.url + '?labelmode=func',
+            self.url + '?label_mode=func&confidence_threshold=0',
             data=dict(export_cm="Export confusion matrix"))
 
         expected_lines = [
