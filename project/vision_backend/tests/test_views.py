@@ -166,94 +166,27 @@ class BackendMainTest(ClientTest):
         self.assertNotIn('30 (30)', context_cm['ylabels'])
         self.assertNotIn('31 (31)', context_cm['ylabels'])
 
+    def test_confidence_threshold_non_integer(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, data=dict(
+            confidence_threshold='abc',
+            label_mode='full',
+        ))
 
-class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
+        self.assertStatusOK(
+            response,
+            "Should at least not get a server error")
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
+    def test_label_mode_invalid(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, data=dict(
+            confidence_threshold='0',
+            label_mode='unrecognized_mode',
+        ))
 
-        cls.user = cls.create_user()
-        cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
-
-        cls.source1 = cls.create_source(cls.user)
-        cls.source2 = cls.create_source(cls.user)
-        cls.create_labelset(cls.user, cls.source1, cls.labels)
-        cls.create_labelset(cls.user, cls.source2, cls.labels)
-
-        cls.url = reverse('backend_overview')
-
-    def test(self):
-        """
-        This test is somewhat haphazard and definitely doesn't test all
-        cases/values.
-        """
-        image1a = self.upload_image(self.user, self.source1)
-        image1b = self.upload_image(self.user, self.source1)
-        image1c = self.upload_image(self.user, self.source1)
-        _image1d = self.upload_image(self.user, self.source1)
-        self.add_annotations(self.user, image1a)
-        self.add_annotations(self.user, image1b)
-        do_job('extract_features', image1c.pk, source_id=self.source1.pk)
-        do_collect_spacer_jobs()
-
-        classifier2 = self.create_robot(self.source2)
-        image2a = self.upload_image(self.user, self.source2)
-        image2b = self.upload_image(self.user, self.source2)
-        image2c = self.upload_image(self.user, self.source2)
-        image2d = self.upload_image(self.user, self.source2)
-        _image2e = self.upload_image(self.user, self.source2)
-        self.add_annotations(self.user, image2a)
-        self.add_robot_annotations(classifier2, image2b)
-        self.add_robot_annotations(classifier2, image2c)
-        do_job('extract_features', image2d.pk, source_id=self.source2.pk)
-        do_collect_spacer_jobs()
-
-        self.client.force_login(self.superuser)
-        response = self.client.get(self.url)
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-
-        image_counts_table_soup = response_soup.select(
-            'table#image-counts-table')[0]
-        self.assert_table_values(image_counts_table_soup, [
-            # 1a, 1b, 2a
-            ["Confirmed", "3", "33.3%"],
-            # 2b, 2c
-            ["Unconfirmed", "2", "22.2%"],
-            # 1d, 2e
-            ["Unclassified, need features", "2", "22.2%"],
-            # 2d
-            ["Unclassified, need classification", "1", "11.1%"],
-            # 1c
-            ["Unclassified, not ready for features/classification",
-             "1", "11.1%"],
-            ["All", "9", "100.0%"],
-        ])
-
-        sources_table_soup = response_soup.select(
-            'table#sources-table')[0]
-        self.assert_table_values(sources_table_soup, [
-            {
-                "ID": (
-                    f'<a href="'
-                    f'{reverse("source_main", args=[self.source2.pk])}">'
-                    f'{self.source2.pk}'
-                    f'</a>'
-                ),
-                "# Imgs": 5,
-                "# Conf.": 1,
-            },
-            {
-                "ID": (
-                    f'<a href="'
-                    f'{reverse("source_main", args=[self.source1.pk])}">'
-                    f'{self.source1.pk}'
-                    f'</a>'
-                ),
-                "# Imgs": 4,
-                "# Conf.": 2,
-            },
-        ])
+        self.assertStatusOK(
+            response,
+            "Should at least not get a server error")
 
 
 class BackendMainConfusionMatrixExportTest(BaseExportTest):
@@ -380,3 +313,92 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
             'C (C),0,0,0',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
+
+
+class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
+
+        cls.source1 = cls.create_source(cls.user)
+        cls.source2 = cls.create_source(cls.user)
+        cls.create_labelset(cls.user, cls.source1, cls.labels)
+        cls.create_labelset(cls.user, cls.source2, cls.labels)
+
+        cls.url = reverse('backend_overview')
+
+    def test(self):
+        """
+        This test is somewhat haphazard and definitely doesn't test all
+        cases/values.
+        """
+        image1a = self.upload_image(self.user, self.source1)
+        image1b = self.upload_image(self.user, self.source1)
+        image1c = self.upload_image(self.user, self.source1)
+        _image1d = self.upload_image(self.user, self.source1)
+        self.add_annotations(self.user, image1a)
+        self.add_annotations(self.user, image1b)
+        do_job('extract_features', image1c.pk, source_id=self.source1.pk)
+        do_collect_spacer_jobs()
+
+        classifier2 = self.create_robot(self.source2)
+        image2a = self.upload_image(self.user, self.source2)
+        image2b = self.upload_image(self.user, self.source2)
+        image2c = self.upload_image(self.user, self.source2)
+        image2d = self.upload_image(self.user, self.source2)
+        _image2e = self.upload_image(self.user, self.source2)
+        self.add_annotations(self.user, image2a)
+        self.add_robot_annotations(classifier2, image2b)
+        self.add_robot_annotations(classifier2, image2c)
+        do_job('extract_features', image2d.pk, source_id=self.source2.pk)
+        do_collect_spacer_jobs()
+
+        self.client.force_login(self.superuser)
+        response = self.client.get(self.url)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+
+        image_counts_table_soup = response_soup.select(
+            'table#image-counts-table')[0]
+        self.assert_table_values(image_counts_table_soup, [
+            # 1a, 1b, 2a
+            ["Confirmed", "3", "33.3%"],
+            # 2b, 2c
+            ["Unconfirmed", "2", "22.2%"],
+            # 1d, 2e
+            ["Unclassified, need features", "2", "22.2%"],
+            # 2d
+            ["Unclassified, need classification", "1", "11.1%"],
+            # 1c
+            ["Unclassified, not ready for features/classification",
+             "1", "11.1%"],
+            ["All", "9", "100.0%"],
+        ])
+
+        sources_table_soup = response_soup.select(
+            'table#sources-table')[0]
+        self.assert_table_values(sources_table_soup, [
+            {
+                "ID": (
+                    f'<a href="'
+                    f'{reverse("source_main", args=[self.source2.pk])}">'
+                    f'{self.source2.pk}'
+                    f'</a>'
+                ),
+                "# Imgs": 5,
+                "# Conf.": 1,
+            },
+            {
+                "ID": (
+                    f'<a href="'
+                    f'{reverse("source_main", args=[self.source1.pk])}">'
+                    f'{self.source1.pk}'
+                    f'</a>'
+                ),
+                "# Imgs": 4,
+                "# Conf.": 2,
+            },
+        ])

@@ -14,7 +14,7 @@ from lib.decorators import source_visibility_required
 from lib.utils import paginate
 from sources.models import Source
 from .confmatrix import ConfMatrix
-from .forms import TreshForm, CmTestForm
+from .forms import BackendMainForm, CmTestForm
 from .models import Classifier
 from .utils import labelset_mapper, map_labels, get_alleviate
 
@@ -154,23 +154,24 @@ def backend_overview(request):
 
 @source_visibility_required('source_id')
 def backend_main(request, source_id):
-    # Read plotting input from the request.
-    # (Using GET is OK here as this view only reads from DB).
-    confidence_threshold = int(request.GET.get('confidence_threshold', 0))
-    labelmode = request.GET.get('labelmode', 'full')
-    
-    # Initialize form
-    form = TreshForm()    
-    form.initial['confidence_threshold'] = confidence_threshold
-    form.initial['labelmode'] = labelmode
 
-    # Mapper for pretty printing.
-    labelmodestr = {
-        'full': 'full labelset',
-        'func': 'functional groups',
+    # Default form values.
+    confidence_threshold = 0
+    label_mode = 'full'
+    initial = {
+        'confidence_threshold': confidence_threshold,
+        'label_mode': label_mode,
     }
+    form = BackendMainForm(initial=initial)
 
-    # Get source
+    if request.GET:
+        # Form submission.
+        # Using GET is OK here as this view only reads from DB.
+        form = BackendMainForm(request.GET)
+        if form.is_valid():
+            confidence_threshold = form.cleaned_data['confidence_threshold']
+            label_mode = form.cleaned_data['label_mode']
+
     source = Source.objects.get(id=source_id)
 
     # Make sure that there is a classifier for this source.
@@ -195,7 +196,7 @@ def backend_main(request, source_id):
     valres: ValResults = ValResults.deserialize(request.session['valres'])
     
     # find classmap and class names for selected label-mode
-    classmap, classnames = labelset_mapper(labelmode, valres.classes, source)
+    classmap, classnames = labelset_mapper(label_mode, valres.classes, source)
 
     # Initialize confusion matrix
     cm = ConfMatrix(len(classnames), labelset=classnames)
@@ -213,14 +214,22 @@ def backend_main(request, source_id):
     if cm.nclasses > max_display_labels:
         cm.cut(max_display_labels)
 
+    if label_mode == 'full':
+        labelset_description = "full labelset"
+    else:
+        # 'func'
+        labelset_description = "functional groups"
+
     # Export for heat-map
     cm_render = dict()
     cm_render['data_'], cm_render['xlabels'], cm_render[
         'ylabels'] = cm.render_for_heatmap()
     cm_render['title_'] = json.dumps(
         'Confusion matrix for {} (acc:{}, n: {})'.format(
-            labelmodestr[labelmode], round(100 * cm.get_accuracy()[0], 1),
-            int(np.sum(np.sum(cm.cm)))))
+            labelset_description,
+            round(100 * cm.get_accuracy()[0], 1),
+            int(np.sum(np.sum(cm.cm))),
+        ))
     cm_render['css_height'] = max(500, cm.nclasses * 22 + 320)
     cm_render['css_width'] = max(600, cm.nclasses * 22 + 360)
 
@@ -247,7 +256,7 @@ def backend_main(request, source_id):
         response[
             'Content-Disposition'] = \
             'attachment;filename=confusion_matrix_{}_{}.csv'.format(
-                labelmode, confidence_threshold)
+                label_mode, confidence_threshold)
         writer = csv.writer(response)
 
         for enu, classname in enumerate(cm.labelset):
