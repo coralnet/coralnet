@@ -166,6 +166,154 @@ class BackendMainTest(ClientTest):
         self.assertNotIn('30 (30)', context_cm['ylabels'])
         self.assertNotIn('31 (31)', context_cm['ylabels'])
 
+    def test_confidence_threshold_non_integer(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, data=dict(
+            confidence_threshold='abc',
+            label_mode='full',
+        ))
+
+        self.assertStatusOK(
+            response,
+            "Should at least not get a server error")
+
+    def test_label_mode_invalid(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, data=dict(
+            confidence_threshold='0',
+            label_mode='unrecognized_mode',
+        ))
+
+        self.assertStatusOK(
+            response,
+            "Should at least not get a server error")
+
+
+class BackendMainConfusionMatrixExportTest(BaseExportTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+        cls.source = cls.create_source(cls.user)
+        cls.create_labels(cls.user, ['A', 'B'], 'Group1')
+        cls.create_labels(cls.user, ['C'], 'Group2')
+        labels = Label.objects.all()
+        cls.create_labelset(cls.user, cls.source, labels)
+        cls.valres_classes = [
+            labels.get(name=name).pk for name in ['A', 'B', 'C']]
+
+        cls.url = reverse('backend_main', args=[cls.source.pk])
+
+    def test_export_basic(self):
+        robot = self.create_robot(self.source)
+        valres = dict(
+            classes=self.valres_classes,
+            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
+            scores=[.8]*10,
+        )
+
+        # Add valres to the session so that we don't have to create it in S3.
+        session = self.client.session
+        session['valres'] = valres
+        session['classifier_id'] = robot.pk
+        session.save()
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url, data=dict(export_cm="Export confusion matrix"))
+
+        expected_lines = [
+            'A (A),2,4,0',
+            'B (B),1,3,0',
+            'C (C),0,0,0',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+    def test_export_with_confidence_threshold(self):
+        robot = self.create_robot(self.source)
+        valres = dict(
+            classes=self.valres_classes,
+            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
+            scores=[.9, .9, .9, .8, .8, .8, .8, .7, .7, .7],
+        )
+        session = self.client.session
+        session['valres'] = valres
+        session['classifier_id'] = robot.pk
+        session.save()
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url + '?label_mode=full&confidence_threshold=75',
+            data=dict(export_cm="Export confusion matrix"))
+
+        expected_lines = [
+            'A (A),2,4,0',
+            'B (B),0,1,0',
+            'C (C),0,0,0',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+    def test_export_in_functional_groups_mode(self):
+        robot = self.create_robot(self.source)
+
+        # 0 and 1 are in Group1; 2 is in Group2. Being in functional groups
+        # mode means we don't care if gt/est are 0/0, 0/1, 1/0, or 1/1. Those
+        # are all matches for Group1.
+        valres = dict(
+            classes=self.valres_classes,
+            gt=[0, 0, 0, 1, 1, 1, 2, 2, 2, 2],
+            est=[0, 1, 2, 0, 1, 2, 0, 1, 1, 2],
+            scores=[.8]*10,
+        )
+        session = self.client.session
+        session['valres'] = valres
+        session['classifier_id'] = robot.pk
+        session.save()
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url + '?label_mode=func&confidence_threshold=0',
+            data=dict(export_cm="Export confusion matrix"))
+
+        expected_lines = [
+            'Group1,4,2',
+            'Group2,3,1',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+    def test_export_with_unicode(self):
+        robot = self.create_robot(self.source)
+        valres = dict(
+            classes=self.valres_classes,
+            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
+            scores=[.8]*10,
+        )
+        session = self.client.session
+        session['valres'] = valres
+        session['classifier_id'] = robot.pk
+        session.save()
+
+        local_label_a = self.source.labelset.get_labels().get(code='A')
+        local_label_a.code = 'あ'
+        local_label_a.save()
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            self.url, data=dict(export_cm="Export confusion matrix"))
+
+        expected_lines = [
+            'A (あ),2,4,0',
+            'B (B),1,3,0',
+            'C (C),0,0,0',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
 
 class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
 
@@ -254,129 +402,3 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
                 "# Conf.": 2,
             },
         ])
-
-
-class BackendMainConfusionMatrixExportTest(BaseExportTest):
-
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-
-        cls.source = cls.create_source(cls.user)
-        cls.create_labels(cls.user, ['A', 'B'], 'Group1')
-        cls.create_labels(cls.user, ['C'], 'Group2')
-        labels = Label.objects.all()
-        cls.create_labelset(cls.user, cls.source, labels)
-        cls.valres_classes = [
-            labels.get(name=name).pk for name in ['A', 'B', 'C']]
-
-        cls.url = reverse('backend_main', args=[cls.source.pk])
-
-    def test_export_basic(self):
-        robot = self.create_robot(self.source)
-        valres = dict(
-            classes=self.valres_classes,
-            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-            scores=[.8]*10,
-        )
-
-        # Add valres to the session so that we don't have to create it in S3.
-        session = self.client.session
-        session['valres'] = valres
-        session['classifier_id'] = robot.pk
-        session.save()
-
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url, data=dict(export_cm="Export confusion matrix"))
-
-        expected_lines = [
-            'A (A),2,4,0',
-            'B (B),1,3,0',
-            'C (C),0,0,0',
-        ]
-        self.assert_csv_content_equal(response.content, expected_lines)
-
-    def test_export_with_confidence_threshold(self):
-        robot = self.create_robot(self.source)
-        valres = dict(
-            classes=self.valres_classes,
-            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-            scores=[.9, .9, .9, .8, .8, .8, .8, .7, .7, .7],
-        )
-        session = self.client.session
-        session['valres'] = valres
-        session['classifier_id'] = robot.pk
-        session.save()
-
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url + '?confidence_threshold=75',
-            data=dict(export_cm="Export confusion matrix"))
-
-        expected_lines = [
-            'A (A),2,4,0',
-            'B (B),0,1,0',
-            'C (C),0,0,0',
-        ]
-        self.assert_csv_content_equal(response.content, expected_lines)
-
-    def test_export_in_functional_groups_mode(self):
-        robot = self.create_robot(self.source)
-
-        # 0 and 1 are in Group1; 2 is in Group2. Being in functional groups
-        # mode means we don't care if gt/est are 0/0, 0/1, 1/0, or 1/1. Those
-        # are all matches for Group1.
-        valres = dict(
-            classes=self.valres_classes,
-            gt=[0, 0, 0, 1, 1, 1, 2, 2, 2, 2],
-            est=[0, 1, 2, 0, 1, 2, 0, 1, 1, 2],
-            scores=[.8]*10,
-        )
-        session = self.client.session
-        session['valres'] = valres
-        session['classifier_id'] = robot.pk
-        session.save()
-
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url + '?labelmode=func',
-            data=dict(export_cm="Export confusion matrix"))
-
-        expected_lines = [
-            'Group1,4,2',
-            'Group2,3,1',
-        ]
-        self.assert_csv_content_equal(response.content, expected_lines)
-
-    def test_export_with_unicode(self):
-        robot = self.create_robot(self.source)
-        valres = dict(
-            classes=self.valres_classes,
-            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-            scores=[.8]*10,
-        )
-        session = self.client.session
-        session['valres'] = valres
-        session['classifier_id'] = robot.pk
-        session.save()
-
-        local_label_a = self.source.labelset.get_labels().get(code='A')
-        local_label_a.code = 'あ'
-        local_label_a.save()
-
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url, data=dict(export_cm="Export confusion matrix"))
-
-        expected_lines = [
-            'A (あ),2,4,0',
-            'B (B),1,3,0',
-            'C (C),0,0,0',
-        ]
-        self.assert_csv_content_equal(response.content, expected_lines)

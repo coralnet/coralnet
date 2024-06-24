@@ -1,10 +1,12 @@
 from django import forms
 
 
-class TreshForm(forms.Form):
-    confidence_threshold = forms.IntegerField(min_value=0, max_value=100)    
-    labelmode = forms.ChoiceField(
-        choices=(('full', 'Labels'), ('func', 'Functional Groups')))
+class BackendMainForm(forms.Form):
+    confidence_threshold = forms.IntegerField(
+        min_value=0, max_value=100)
+    label_mode = forms.ChoiceField(
+        choices=(('full', 'Labels'), ('func', 'Functional Groups')),
+        initial='full')
 
 
 class CmTestForm(forms.Form):
