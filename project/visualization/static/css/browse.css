@@ -3,11 +3,14 @@ button#manage-calcify-tables-button {
     display: block;
     margin: auto;
 }
+table#table-of-calcify-tables td.name {
+    max-width: 300px;
+}
 table#table-of-calcify-tables td.description {
     max-width: 300px;
 }
 table#table-of-calcify-tables td.actions {
-    width: 150px;
+    max-width: 140px;
 }
 #new-rate-table-form textarea {
     width: 250px;

@@ -10,15 +10,23 @@
   <tbody>
     {% for rate_table in source_calcification_tables %}
       <tr>
-        <td>{{ rate_table.name }}</td>
+        <td class="name">{{ rate_table.name }}</td>
         <td class="description">{{ rate_table.description }}</td>
         <td class="actions">
-          <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
             <button>Download CSV</button>
           </form>
 
           {% if can_manage_source_data %}
-            <form action="{% url 'calcification:rate_table_delete_ajax' rate_table.pk %}" method="post" class="rate-table-delete">
+            <form
+              action="{% url 'calcification:rate_table_delete_ajax' rate_table.pk %}"
+              method="post"
+              class="no-padding rate-table-delete"
+            >
               {% csrf_token %}
               <button>Delete</button>
             </form>
@@ -29,15 +37,23 @@
 
     {% for rate_table in global_calcification_tables %}
       <tr>
-        <td>{{ rate_table.name }}</td>
+        <td class="name">{{ rate_table.name }}</td>
         <td class="description"></td>
         <td class="actions">
-          <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
             <input type="hidden" name="source_id" value="{{ source.pk }}" />
             <button>Download CSV (labelset entries only)</button>
           </form>
 
-          <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
             <button>Download CSV (full)</button>
           </form>
         </td>
