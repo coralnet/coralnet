@@ -6,7 +6,7 @@ from export.tests.utils import BaseExportTest
 from labels.models import LocalLabel
 from lib.tests.utils import BasePermissionTest, ClientTest
 from .utils import (
-    create_default_calcify_table, create_source_calcify_table,
+    create_global_calcify_table, create_source_calcify_table,
     grid_of_tables_html_to_tuples)
 
 
@@ -22,7 +22,7 @@ class PermissionTest(BasePermissionTest):
         # Make the action form available on Browse Images
         cls.upload_image(cls.user, cls.source)
 
-        cls.calcify_table = create_default_calcify_table('Atlantic', dict())
+        cls.calcify_table = create_global_calcify_table('Atlantic', dict())
 
     def test_calcify_stats_export(self):
         data = dict(
@@ -107,7 +107,7 @@ class FileTypeTest(BaseCalcifyStatsExportTest):
         cls.img3.metadata.save()
 
     def test_csv(self):
-        calcify_table = create_default_calcify_table('Atlantic', {})
+        calcify_table = create_global_calcify_table('Atlantic', {})
         response = self.export_calcify_stats(
             dict(rate_table_id=calcify_table.pk))
 
@@ -128,7 +128,7 @@ class FileTypeTest(BaseCalcifyStatsExportTest):
         # re-test that here.
 
     def test_excel(self):
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic', {}, name="Test table")
 
         data = self.default_search_params.copy()
@@ -212,7 +212,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'B', 3: 'A', 4: 'B', 5: 'A'})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -245,7 +245,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'B', 3: 'A', 4: 'B', 5: 'A'})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -275,7 +275,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'B', 3: 'C', 4: 'B', 5: 'C'})
 
-        calcify_table_1 = create_default_calcify_table(
+        calcify_table_1 = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -284,7 +284,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
                     mean=1.0, lower_bound=0.8, upper_bound=1.3),
             },
         )
-        calcify_table_2 = create_default_calcify_table(
+        calcify_table_2 = create_global_calcify_table(
             'Indo-Pacific',
             {
                 self.label_pks['B']: dict(
@@ -329,7 +329,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'B', 3: 'A', 4: 'B', 5: 'A'})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -410,7 +410,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img2, {
             1: 'A', 2: 'B', 3: 'A', 4: 'B', 5: 'A'})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -457,7 +457,7 @@ class ExportTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.label_pks['A']: dict(
@@ -537,7 +537,7 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
-        cls.calcify_table = create_default_calcify_table('Atlantic', dict())
+        cls.calcify_table = create_global_calcify_table('Atlantic', dict())
 
     def assert_csv_image_set(self, actual_csv_content, expected_images):
         # Convert from bytes to Unicode if necessary.
@@ -741,7 +741,7 @@ class LabelColumnsTest(BaseCalcifyStatsExportTest):
         local_e.code = '12'
         local_e.save()
 
-        cls.calcify_table = create_default_calcify_table('Atlantic', dict())
+        cls.calcify_table = create_global_calcify_table('Atlantic', dict())
 
     def test_order_by_group_and_code(self):
         img1 = self.upload_image(
@@ -814,7 +814,7 @@ class UnicodeTest(BaseCalcifyStatsExportTest):
         local_label.code = 'い'
         local_label.save()
 
-        cls.calcify_table = create_default_calcify_table('Atlantic', dict())
+        cls.calcify_table = create_global_calcify_table('Atlantic', dict())
 
     def test(self):
         img1 = self.upload_image(
@@ -882,14 +882,21 @@ class BrowseFormsTest(ClientTest):
     def test_rate_table_choices(self):
         """Test the dropdown of rate table choices in the export form."""
 
-        default_t1 = create_default_calcify_table('Atlantic', dict())
-        default_t2 = create_default_calcify_table('Indo-Pacific', dict())
-        # Create these out of order to test alphabetical order.
-        source_t2 = create_source_calcify_table(self.source, dict(), name="S2")
-        source_t1 = create_source_calcify_table(self.source, dict(), name="S1")
-        # Test tables from other sources.
-        source_b = self.create_source(self.user)
-        create_source_calcify_table(source_b, dict(), name="S3")
+        # These should be listed latest first, not alphabetically by name.
+        global_t3 = create_global_calcify_table('Atlantic', dict(), name="A")
+        global_t2 = create_global_calcify_table(
+            'Indo-Pacific', dict(), name="I")
+        global_t1 = create_global_calcify_table('Atlantic', dict(), name="B")
+        # These should be listed alphabetically by name, not by date.
+        source_t2 = create_source_calcify_table(
+            self.source, dict(), name="S2")
+        source_t1 = create_source_calcify_table(
+            self.source, dict(), name="S1")
+        source_t3 = create_source_calcify_table(
+            self.source, dict(), name="S3")
+        # Other sources' tables shouldn't be listed.
+        other_t = self.create_source(self.user)
+        create_source_calcify_table(other_t, dict(), name="S4")
 
         url = reverse('browse_images', args=[self.source.pk])
         self.client.force_login(self.user)
@@ -903,10 +910,13 @@ class BrowseFormsTest(ClientTest):
             '<select id="id_rate_table_id" name="rate_table_id">'
             f'  <option value="{source_t1.pk}">S1</option>'
             f'  <option value="{source_t2.pk}">S2</option>'
-            f'  <option value="{default_t1.pk}">'
-            f'    {default_t1.name}</option>'
-            f'  <option value="{default_t2.pk}">'
-            f'    {default_t2.name}</option>'
+            f'  <option value="{source_t3.pk}">S3</option>'
+            f'  <option value="{global_t1.pk}">'
+            f'    {global_t1.name}</option>'
+            f'  <option value="{global_t2.pk}">'
+            f'    {global_t2.name}</option>'
+            f'  <option value="{global_t3.pk}">'
+            f'    {global_t3.name}</option>'
             '</select>',
             msg="Should have custom tables in order, then default tables"
                 " in order, without having tables from other sources")
@@ -914,17 +924,21 @@ class BrowseFormsTest(ClientTest):
     def test_grid_of_tables_content(self):
         """Test the content of the grid of tables."""
 
-        default_a = create_default_calcify_table('Atlantic', dict(), name="A")
-        default_i = create_default_calcify_table(
+        # These should be listed latest first, not alphabetically by name.
+        global_t3 = create_global_calcify_table('Atlantic', dict(), name="A")
+        global_t2 = create_global_calcify_table(
             'Indo-Pacific', dict(), name="I")
-        # Create these out of order to test alphabetical order.
+        global_t1 = create_global_calcify_table('Atlantic', dict(), name="B")
+        # These should be listed alphabetically by name, not by date.
         source_t2 = create_source_calcify_table(
             self.source, dict(), name="S2", description="A description")
         source_t1 = create_source_calcify_table(
             self.source, dict(), name="S1", description="A description")
-        # Test tables from other sources.
-        source_b = self.create_source(self.user)
-        create_source_calcify_table(source_b, dict(), name="S3")
+        source_t3 = create_source_calcify_table(
+            self.source, dict(), name="S3", description="A description")
+        # Other sources' tables shouldn't be listed.
+        other_t = self.create_source(self.user)
+        create_source_calcify_table(other_t, dict(), name="S4")
 
         url = reverse('browse_images', args=[self.source.pk])
         self.client.force_login(self.user)
@@ -950,20 +964,33 @@ class BrowseFormsTest(ClientTest):
                  reverse(
                      'calcification:rate_table_delete_ajax',
                      args=[source_t2.pk])),
-                ("A", "",
+                ("S3", "A description",
+                 reverse(
+                     'calcification:rate_table_download', args=[source_t3.pk]),
+                 reverse(
+                     'calcification:rate_table_delete_ajax',
+                     args=[source_t3.pk])),
+                ("B", "",
                  reverse(
                      'calcification:rate_table_download',
-                     args=[default_a.pk]),
+                     args=[global_t1.pk]),
                  reverse(
                      'calcification:rate_table_download',
-                     args=[default_a.pk])),
+                     args=[global_t1.pk])),
                 ("I", "",
                  reverse(
                      'calcification:rate_table_download',
-                     args=[default_i.pk]),
+                     args=[global_t2.pk]),
                  reverse(
                      'calcification:rate_table_download',
-                     args=[default_i.pk])),
+                     args=[global_t2.pk])),
+                ("A", "",
+                 reverse(
+                     'calcification:rate_table_download',
+                     args=[global_t3.pk]),
+                 reverse(
+                     'calcification:rate_table_download',
+                     args=[global_t3.pk])),
             ],
             msg="Should have custom tables in order, then default tables"
                 " in order, without having tables from other sources",
@@ -990,7 +1017,7 @@ class PerformanceTest(BaseCalcifyStatsExportTest):
             self.add_annotations(
                 self.user, img, {p: 'A' for p in range(1, 20+1)})
 
-        calcify_table = create_default_calcify_table(
+        calcify_table = create_global_calcify_table(
             'Atlantic',
             {
                 self.labels.get(name='A').pk: dict(

@@ -3,10 +3,10 @@ from bs4 import BeautifulSoup
 from ..models import CalcifyRateTable
 
 
-def create_default_calcify_table(
+def create_global_calcify_table(
         region, rates_dict, name=None, description=None):
     if name is None:
-        name = "Table Name - {}".format(region)
+        name = f"Table Name - {region}"
     if description is None:
         description = ""
 
