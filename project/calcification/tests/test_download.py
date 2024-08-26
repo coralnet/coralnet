@@ -2,7 +2,7 @@ from django.urls import reverse
 
 from export.tests.utils import BaseExportTest
 from lib.tests.utils import BasePermissionTest
-from .utils import create_default_calcify_table, create_source_calcify_table
+from .utils import create_global_calcify_table, create_source_calcify_table
 
 
 class PermissionTest(BasePermissionTest):
@@ -15,7 +15,7 @@ class PermissionTest(BasePermissionTest):
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_default_table_download(self):
-        table = create_default_calcify_table('Atlantic', dict())
+        table = create_global_calcify_table('Atlantic', dict())
         url = reverse(
             'calcification:rate_table_download', args=[table.pk])
 
@@ -35,7 +35,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, content_type='text/csv')
 
     def test_default_table_download_with_source_param(self):
-        table = create_default_calcify_table('Atlantic', dict())
+        table = create_global_calcify_table('Atlantic', dict())
         url = self.make_url_with_params(
             reverse('calcification:rate_table_download', args=[table.pk]),
             dict(source_id=self.source.pk))
@@ -63,7 +63,7 @@ class RateTableDownloadTest(BaseExportTest):
 
     def test_default_table(self):
         """Download a default rate table."""
-        table = create_default_calcify_table(
+        table = create_global_calcify_table(
             'Atlantic',
             {
                 str(self.labels.get(name='A').pk): dict(
@@ -116,7 +116,7 @@ class RateTableDownloadTest(BaseExportTest):
         Download a default table while specifying a source's labelset to
         filter the entries on.
         """
-        table = create_default_calcify_table(
+        table = create_global_calcify_table(
             'Atlantic',
             {
                 str(self.labels.get(name='A').pk): dict(
@@ -143,7 +143,7 @@ class RateTableDownloadTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
     def test_table_name_with_non_filename_chars(self):
-        table = create_default_calcify_table(
+        table = create_global_calcify_table(
             'Atlantic', {}, name="<Table/Name?>")
 
         response = self.client.get(

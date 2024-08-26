@@ -19,7 +19,7 @@ from upload.utils import text_file_to_unicode_stream
 from .forms import CalcifyRateTableForm, ExportCalcifyStatsForm
 from .models import CalcifyRateTable
 from .utils import (
-    get_default_calcify_tables, rate_table_csv_to_json, rate_table_json_to_csv)
+    get_global_calcify_tables, rate_table_csv_to_json, rate_table_json_to_csv)
 
 
 @require_GET
@@ -251,7 +251,7 @@ def response_after_table_upload_or_delete(request, source):
         dict(
             source_calcification_tables=source.calcifyratetable_set.order_by(
                 'name'),
-            default_calcification_tables=get_default_calcify_tables(),
+            global_calcification_tables=get_global_calcify_tables(),
             can_manage_source_data=request.user.has_perm(
                 Source.PermTypes.EDIT.code, source),
         ),

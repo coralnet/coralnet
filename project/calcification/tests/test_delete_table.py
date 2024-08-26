@@ -4,7 +4,7 @@ from django.urls import reverse
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import CalcifyRateTable
 from .utils import (
-    create_default_calcify_table, create_source_calcify_table,
+    create_global_calcify_table, create_source_calcify_table,
     grid_of_tables_html_to_tuples)
 
 
@@ -20,7 +20,7 @@ class PermissionTest(BasePermissionTest):
         # Make the action form show on Browse Images
         cls.upload_image(cls.user, cls.source)
 
-        create_default_calcify_table('Atlantic', dict())
+        create_global_calcify_table('Atlantic', dict())
 
     def test_calcify_table_delete_in_private_source(self):
         deletion_urls = []
@@ -95,10 +95,10 @@ class TableDeleteTest(ClientTest):
         # Make the action form show on Browse Images
         cls.upload_image(cls.user, cls.source)
 
-        cls.default_atlantic = create_default_calcify_table(
+        cls.default_atlantic = create_global_calcify_table(
             'Atlantic', dict(),
             name="Default Atlantic rates")
-        cls.default_indo_pacific = create_default_calcify_table(
+        cls.default_indo_pacific = create_global_calcify_table(
             'Indo-Pacific', dict(),
             name="Default Indo-Pacific rates")
 
@@ -122,22 +122,15 @@ class TableDeleteTest(ClientTest):
         self.assertHTMLEqual(
             response_json['tableDropdownHtml'],
             '<select id="id_rate_table_id" name="rate_table_id">'
-            f'  <option value="{self.default_atlantic.pk}">'
-            f'    {self.default_atlantic.name}</option>'
             f'  <option value="{self.default_indo_pacific.pk}">'
             f'    {self.default_indo_pacific.name}</option>'
+            f'  <option value="{self.default_atlantic.pk}">'
+            f'    {self.default_atlantic.name}</option>'
             '</select>')
         self.assertListEqual(
             grid_of_tables_html_to_tuples(
                 response_json['gridOfTablesHtml']),
             [
-                ("Default Atlantic rates", "",
-                 reverse(
-                     'calcification:rate_table_download',
-                     args=[self.default_atlantic.pk]),
-                 reverse(
-                     'calcification:rate_table_download',
-                     args=[self.default_atlantic.pk])),
                 ("Default Indo-Pacific rates", "",
                  reverse(
                      'calcification:rate_table_download',
@@ -145,6 +138,13 @@ class TableDeleteTest(ClientTest):
                  reverse(
                      'calcification:rate_table_download',
                      args=[self.default_indo_pacific.pk])),
+                ("Default Atlantic rates", "",
+                 reverse(
+                     'calcification:rate_table_download',
+                     args=[self.default_atlantic.pk]),
+                 reverse(
+                     'calcification:rate_table_download',
+                     args=[self.default_atlantic.pk])),
             ]
         )
 

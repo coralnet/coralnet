@@ -58,20 +58,24 @@
     <dd class="calcification-rate-data">
       {% if calcification_rates %}
         <table class="detail_table">
-          <tr>
-            <th>Region</th>
-            <th>Mean</th>
-            <th>Lower bound</th>
-            <th>Upper bound</th>
-          </tr>
-          {% for region, rates in calcification_rates.items %}
+          <thead>
             <tr>
-              <td>{{ region }}</td>
-              <td>{{ rates.mean }}</td>
-              <td>{{ rates.lower_bound }}</td>
-              <td>{{ rates.upper_bound }}</td>
+              <th>Region</th>
+              <th>Mean</th>
+              <th>Lower bound</th>
+              <th>Upper bound</th>
             </tr>
-          {% endfor %}
+          </thead>
+          <tbody>
+            {% for region, rates in calcification_rates.items %}
+              <tr>
+                <td>{{ region }}</td>
+                <td>{{ rates.mean }}</td>
+                <td>{{ rates.lower_bound }}</td>
+                <td>{{ rates.upper_bound }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
         </table>
       {% else %}
         (Not available)
