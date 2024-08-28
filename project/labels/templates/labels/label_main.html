@@ -52,7 +52,9 @@
     <dt>
       Calcification rate data:
       <div class="tutorial-message">
-        {% include "calcification/help_default_rates.html" with calcification_tables=calcification_tables %}
+        <div class="article-body">
+          {% include "calcification/help_rates.html" with default_calcification_tables=default_calcification_tables %}
+        </div>
       </div>
     </dt>
     <dd class="calcification-rate-data">
