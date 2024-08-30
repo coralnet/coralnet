@@ -18,42 +18,142 @@ margin: spacing around the outside of an element.
 ................................... */
 
 :root {
-  --link-color: hsl(6, 100%, 27%);
-  --main-font: 'Droid Sans', helvetica, arial, Geneva, sans-serif;
+    --main-font: 'Droid Sans', helvetica, arial, Geneva, sans-serif;
+}
 
-  --status-color-pending: #bbe;
-  --status-color-in-progress: #eeb;
-  --status-color-done: #beb;
-  --status-color-failure: #ebb;
+/* Light/default color scheme. We use body instead of :root for this to be
+   clear about which element the dark-scheme class applies to. */
+body {
+    --text-color: hsl(0, 0%, 25%);
+    --text-shadow-color: white;
+    --outer-background-color: hsl(27, 18%, 90%);
+    --background-color: hsl(30, 18%, 95%);
+
+    --heading-color-soft: hsl(0, 0%, 45%);
+    --heading-underline-color-soft: hsl(0, 0%, 88%);
+    --heading-color-bold: hsl(0, 0%, 35%);
+    --heading-underline-color-bold: hsl(0, 0%, 70%);
+    --link-color: hsl(6, 100%, 27%);
+    --link-hover-color: hsl(6, 90%, 40%);
+    --container-shadow-color: hsl(0, 0%, 60%);
+    --content-box-color: hsl(30, 10%, 85%);
+    --faint-hr-color: hsl(0, 0%, 87%);
+
+    --field-text-color: hsl(0, 0%, 10%);
+    --field-background-color: hsl(0, 0%, 100%);
+    --field-border-color: hsl(0, 0%, 80%);
+    --field-border-focus-color: hsl(0, 0%, 20%);
+    --button-background-color: hsl(0, 0%, 90%);
+    --button-background-hover-color: hsl(0, 0%, 80%);
+    --button-background-active-color: hsl(0, 0%, 70%);
+    --button-border-color: hsl(0, 0%, 60%);
+    /* Ideally, this should not blend with the background too much, while also
+       looking OK alongside Firefox's non-overrideable <option> hover color of
+       light gray. */
+    --select-background-color: hsl(0, 0%, 93%);
+    --select-background-active-color: hsl(0, 0%, 80%);
+
+    --nav-button-text-color: hsl(0, 0%, 40%);
+    --nav-button-gradient-color-1: hsl(0, 0%, 100%, 85%);
+    --nav-button-gradient-color-2: hsl(0, 0%, 100%, 55%);
+    --nav-button-base-color: hsl(0, 0%, 70%);
+    --nav-button-base-hover-color: hsl(0, 0%, 88%);
+    --nav-button-prominent-color: hsl(0, 31%, 68%);
+    --nav-button-prominent-hover-color: hsl(0, 55%, 66%);
+    --nav-button-profile-color: hsl(60, 41%, 65%);
+    --nav-button-profile-hover-color: hsl(60, 61%, 63%);
+    --nav-button-source-color: hsl(240, 31%, 68%);
+    --nav-button-source-hover-color: hsl(240, 55%, 66%);
+    --nav-button-image-color: hsl(120, 31%, 68%);
+    --nav-button-image-hover-color: hsl(120, 55%, 66%);
+
+    /* Make dialogs faintly transparent; useful when the dialog is talking
+     about some page content that it's sitting on top of */
+    --dialog-background-color: hsl(30, 18%, 95%, 90%);
+    /* We don't need the dialog transparency for forms, though. And it makes
+     form fields look weird (at least on the Add/Remove Labels page) */
+    --dialog-form-background-color: hsl(30, 18%, 95%);
+
+    --status-color-pending: hsl(240, 60%, 83%);
+    --status-color-in-progress: hsl(60, 60%, 83%);
+    --status-color-done: hsl(120, 60%, 83%);
+    --status-color-failure: hsl(0, 60%, 83%);
+}
+/* Dark color scheme */
+body.dark-scheme {
+    --text-color: hsl(0, 0%, 75%);
+    --text-shadow-color: black;
+    --outer-background-color: hsl(27, 18%, 10%);
+    --background-color: hsl(210, 5%, 15%);
+
+    --heading-color-soft: hsl(0, 0%, 55%);
+    --heading-underline-color-soft: hsl(0, 0%, 18%);
+    --heading-color-bold: hsl(0, 0%, 65%);
+    --heading-underline-color-bold: hsl(0, 0%, 35%);
+    --link-color: hsl(200, 75%, 65%);
+    --link-hover-color: hsl(200, 85%, 55%);
+    --container-shadow-color: hsl(0, 0%, 60%);
+    --content-box-color: hsl(210, 5%, 25%);
+    --faint-hr-color: hsl(0, 0%, 25%);
+
+    --field-text-color: hsl(0, 0%, 75%);
+    --field-background-color: hsl(210, 15%, 5%);
+    --field-border-color: hsl(0, 0%, 20%);
+    --field-border-focus-color: hsl(0, 0%, 80%);
+    --button-background-color: hsl(0, 0%, 30%);
+    --button-background-hover-color: hsl(0, 0%, 40%);
+    --button-background-active-color: hsl(0, 0%, 50%);
+    --button-border-color: hsl(0, 0%, 50%);
+    --select-background-color: hsl(0, 0%, 7%);
+    --select-background-active-color: hsl(0, 0%, 20%);
+
+    --nav-button-text-color: hsl(0, 0%, 65%);
+    --nav-button-gradient-color-1: hsl(0, 0%, 100%, 25%);
+    --nav-button-gradient-color-2: hsl(0, 0%, 100%, 5%);
+    --nav-button-base-color: hsl(0, 0%, 20%);
+    --nav-button-base-hover-color: hsl(0, 0%, 25%);
+    --nav-button-prominent-color: hsl(0, 60%, 20%);
+    --nav-button-prominent-hover-color: hsl(0, 60%, 25%);
+    --nav-button-profile-color: hsl(60, 60%, 20%);
+    --nav-button-profile-hover-color: hsl(60, 60%, 25%);
+    --nav-button-source-color: hsl(240, 30%, 20%);
+    --nav-button-source-hover-color: hsl(240, 30%, 25%);
+    --nav-button-image-color: hsl(120, 30%, 20%);
+    --nav-button-image-hover-color: hsl(120, 30%, 25%);
+
+    --dialog-background-color: hsl(210, 5%, 15%, 93%);
+    --dialog-form-background-color: hsl(210, 5%, 15%);
+
+    --status-color-pending: hsl(240, 60%, 20%);
+    --status-color-in-progress: hsl(60, 60%, 20%);
+    --status-color-done: hsl(120, 60%, 20%);
+    --status-color-failure: hsl(0, 60%, 20%);
 }
 
 
 /*	Main elements
 ................................... */
 
-html, body{
-    color: #444;
+html, body {
+    color: var(--text-color);
     font-family: var(--main-font);
-    background: #eae5e1 url(../img/bg-container.png) repeat-y center top;
+    background-color: var(--outer-background-color);
+
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
 }
 
-#container{
+#container {
     width: 1008px;
     margin: 30px auto 50px;
-    -moz-border-radius: 8px;
-    -webkit-border-radius: 8px;
     border-radius: 8px;
-     -moz-box-shadow: 0 0 3px #999;
-    -webkit-box-shadow: 0 0 3px #999;
-    box-shadow: 0 0 3px #999;
-	background-color: #f6f4f2;
-	border: 1px solid #fff;
+    box-shadow: 0 0 3px var(--container-shadow-color);
+	background-color: var(--background-color);
+	border: 1px solid transparent;
 	padding: 0 10px;
 }
 
-#content-container{
+#content-container {
     padding: 12px;
     position: relative;
 }
@@ -89,7 +189,7 @@ ul.nav > li {
 
 ul.nav > li > a,
 ul.nav > li > form {
-    background-color: hsl(0, 0%, 70%);
+    background-color: var(--nav-button-base-color);
     display: block;
     /* The padding adds shadow around each button;
        it also expands the button's clickable area */
@@ -110,13 +210,13 @@ ul.nav > li > :active {
 ul.nav > li span,
 ul.nav > li button {
     display: block;
-    color: hsl(0, 0%, 41%);
+    color: var(--nav-button-text-color);
     padding: 0.5em 1.4em;
     border-radius: 7px;
     background: linear-gradient(
       to bottom,
-      hsl(0, 0%, 100%, 85%),
-      hsl(0, 0%, 100%, 55%)
+      var(--nav-button-gradient-color-1),
+      var(--nav-button-gradient-color-2)
     );
     text-decoration: none;
     font-size: .9em;
@@ -133,23 +233,23 @@ ul.nav > li > a:hover > span,
 ul.nav > li > a:active > span,
 ul.nav > li > form:hover > button,
 ul.nav > li > form:active > button {
-    background-color: hsl(0, 0%, 88%);
+    background-color: var(--nav-button-base-hover-color);
 }
 
 ul.nav li.button_prominent a {
-    background-color: hsl(0, 31%, 68%);
+    background-color: var(--nav-button-prominent-color);
 }
 ul.nav li.button_prominent a:hover span,
 ul.nav li.button_prominent a:active span {
-    background-color: hsl(0, 55%, 66%);
+    background-color: var(--nav-button-prominent-hover-color);
 }
 
 #nav_profile li a {
-    background-color: hsl(60, 41%, 65%);
+    background-color: var(--nav-button-profile-color);
 }
 #nav_profile li a:hover span,
 #nav_profile li a:active span {
-    background-color: hsl(60, 61%, 63%);
+    background-color: var(--nav-button-profile-hover-color);
 }
 
 
@@ -161,11 +261,11 @@ h1, h2, h3, h4, h5, h6, div.tool-heading {
     text-transform: uppercase;
 }
 
-p{
+p {
     font-size: 1.0em;
     line-height: 1.5em;
     margin: 0 0 0.9em 0;
-    text-shadow: #ffffff 1px 1px 0;
+    text-shadow: var(--text-shadow-color) 1px 1px 0;
 }
 
 /* This is kind of like <p> in that it stylistically functions to add
@@ -189,11 +289,11 @@ div.page-section {
 
 /* This can work similarly to h2 etc., while being more flexible. */
 div.tool-heading {
-    color: hsl(0, 0%, 50%);
+    color: var(--heading-color-soft);
     font-size: 1.4em;
     font-weight: bold;
     padding: 5px 0;
-    border-bottom: 1px solid hsl(0, 0%, 87%);
+    border-bottom: 1px solid var(--heading-underline-color-soft);
     margin-bottom: 5px;
 }
 
@@ -224,62 +324,17 @@ h6{
     font-size: 0.7em;
 }
 
-a{
+a {
     color: var(--link-color);
     text-decoration: none;
 }
-
-/* a.button: CSS previously used for "Compose Message" and "Reply" buttons for userena Messages */
-a.button{ 
-    background: #ede9e4; 
-	display: block;
-	width: 200px;
-    padding: 4px 4px 3px; 
-    text-decoration: none; 
-    outline: 0; 
-    -webkit-border-radius: 10px; 
-    -moz-border-radius: 10px; 
-    border-radius: 10px;
-    -webkit-background-clip: padding-box;
-    clear: both;
-    position: absolute;
-    right: 20px;
-    top: -55px;
-}
-
-a.button span { 
-    display: block; 
-    color: #8b0908; 
-    padding: 0.52em 1.6em 0.48em;  
-    text-shadow: rgba(255,254,255,0.45) 0 1px 0; 
-    -webkit-box-shadow: rgba(33,33,33,0.45) 0px 0px 3px; 
-    -moz-box-shadow: rgba(33,33,33,0.45) 0px 0px 3px; 
-    box-shadow: rgba(33,33,33,0.45) 0px 0px 3px;
-    -webkit-border-radius: 7px; 
-    -moz-border-radius: 7px; 
-    border-radius: 7px;
-    background: transparent -webkit-gradient(linear, left top, left bottom, from(rgba(255,255,255,0.6)), color-stop(1.0, rgba(255,255,255,0.15)), color-stop(1.0, rgba(255,255,255,0.01)), to(transparent)); 
-    background: transparent -moz-linear-gradient(top, rgba(255,255,255,0.6), rgba(255,255,255,0.15) 100%, rgba(255,255,255,0.01) 100%, transparent);
-    -webkit-background-clip: padding-box;
-    text-decoration: none;
-    font-size: .9em;
-    line-height: 1.4em;
-    font-weight: bold;
-	text-align: center;
-}
-
-a.button:active span {  
-    background-color: #e0dfda;
-    -webkit-box-shadow: rgba(33,33,33,0.45) 0px 0px 1px; 
-    -moz-box-shadow: rgba(33,33,33,0.45) 0px 0px 1px; 
-    box-shadow: rgba(33,33,33,0.45) 0px 0px 1px;
-    padding: 0.58em 1.6em 0.30em;
-    line-height: 1.5em;
+a:hover {
+    color: var(--link-hover-color);
 }
 
 
 hr.light {
-    background-color: #dddddd;
+    background-color: var(--faint-hr-color);
     border: none;
     height: 2px;
 }
@@ -372,7 +427,6 @@ form.no-padding {
 
 label {
     font-size: 1.0em;
-    color: #444;
 }
 
 label.column_form_text_field {
@@ -418,15 +472,14 @@ label.grid_checkbox {
 
 input[type=text], input[type=number], input[type=email], input[type=url],
 input[type=password], input[type=file], textarea, span.editable {
-    border: 1px solid #d7d7d7;
+    border: 1px solid var(--field-border-color);
     display: inline-block;
     padding: 3px 5px 4px;    /* top left/right bottom */
-    -moz-border-radius: 3px;
-    -webkit-border-radius: 3px;
     border-radius: 3px;
     
     font-size: 0.9em;
-    color: #000;
+    color: var(--field-text-color);
+    background-color: var(--field-background-color);
 }
 
 input[type=checkbox] {
@@ -448,12 +501,39 @@ select {
     font-size: 0.9em;
 }
 
+button,
+select {
+    color: var(--field-text-color);
+    border: 1px solid var(--button-border-color);
+    border-radius: 4px;
+    padding: 2px 5px;
+}
+button {
+    background-color: var(--button-background-color);
+}
+select {
+    background-color: var(--select-background-color);
+}
+button:hover {
+    background-color: var(--button-background-hover-color);
+}
+select:hover {
+    /* Defining a background-color here doesn't work well since it makes the
+       options look weird, so we use a border color instead. */
+    border-color: var(--field-border-focus-color);
+}
+button:active {
+    background-color: var(--button-background-active-color);
+}
+select:active {
+    background-color: var(--select-background-active-color);
+}
+
 input:focus,
 textarea:focus,
 span.editable:focus {
     outline: none;
-    background-color: #fff;
-    border: 1px solid #4c4c4c;
+    border: 1px solid var(--field-border-focus-color);
 }
 
 /* Multiline text field */
@@ -481,8 +561,6 @@ input[type=submit].red, button.submit.red {
     margin-top: 4px;
     min-width: 150px;
     background-color: #ab292a;
-    -moz-border-radius: 3px;
-    -webkit-border-radius: 3px;
     border-radius: 3px;
     border: 1px outset #ce3024;
     color: #f9f9f9;
@@ -551,8 +629,6 @@ ul.errorlist {
     color: #a3181c;
     margin: 3px 0 3px 0;    /* top right bottom left */
     display: inline-block;
-    -moz-border-radius: 4px;
-    -webkit-border-radius: 4px;
     border-radius: 4px;
 }
 ul.errorlist li {
@@ -655,8 +731,6 @@ ul.messages{
 
 ul.messages li{
     background-color: #fcf5d8;
-    -moz-border-radius: 20px;
-    -webkit-border-radius: 20px;
     border-radius: 20px;
     padding: 4px 20px;
     text-align: center;

@@ -1,7 +1,7 @@
 #nav_image li a {
-    background: hsl(120, 31%, 68%);
+    background: var(--nav-button-image-color);
 }
 #nav_image li a:hover span,
 #nav_image li a:active span {
-    background-color: hsl(120, 55%, 66%);
+    background-color: var(--nav-button-image-hover-color);
 }

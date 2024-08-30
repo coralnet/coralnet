@@ -139,3 +139,31 @@ to any value (except the empty string) to not include it.
     );
     </script>
 {% endif %}
+
+{# Dark color scheme. #}
+{# Must be included after: util.js #}
+{% if dark_colors_available %}
+    <script>
+    globalThis.addEventListener('load', () => {
+        const prefersDarkScheme = window.matchMedia(
+            '(prefers-color-scheme: dark)');
+
+        if (prefersDarkScheme.matches) {
+            document.body.classList.add('dark-scheme');
+        }
+        else {
+            document.body.classList.remove('dark-scheme');
+        }
+
+        let colorToggleButton =
+            document.getElementById('color-scheme-toggle-button');
+        colorToggleButton.addEventListener('click', () => {
+            if (document.body.classList.contains('dark-scheme')) {
+                document.body.classList.remove('dark-scheme');
+            } else {
+                document.body.classList.add('dark-scheme');
+            }
+        });
+    });
+    </script>
+{% endif %}

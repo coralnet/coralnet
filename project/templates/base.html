@@ -81,10 +81,12 @@
 
         {% block nav %}
         <div class="nav_container" id="nav_main_container">
+
           <ul class="nav nav_left" id="nav_main">
             <li><a href="{% url 'index' %}"><span>Home</span></a></li>
             <li><a href="{% url 'label_list' %}"><span>Labels</span></a></li>
           </ul>
+
           <ul class="nav nav_right" id="nav_user">
             {% if user.is_authenticated %}
 
@@ -116,7 +118,17 @@
               <li><a href="{% url 'django_registration_register' %}"><span>Register</span></a></li>
 
             {% endif %}
+
+            {% if dark_colors_available %}
+              <li>
+                {# This frivolous form is a hack for our CSS... #}
+                <form>
+                  <button type="button" id="color-scheme-toggle-button">Light/Dark</button>
+                </form>
+              </li>
+            {% endif %}
           </ul>
+
         </div>
         {% endblock %}{# /nav #}
 
