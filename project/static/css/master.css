@@ -73,6 +73,11 @@ html {
      form fields look weird (at least on the Add/Remove Labels page) */
     --dialog-form-background-color: hsl(30, 18%, 95%);
 
+    --top-message-outer-background-color: hsl(0, 0%, 7%);
+    --top-message-normal-background-color: hsl(48, 86%, 92%);
+    --top-message-maintenance-background-color: hsl(0, 100%, 90%);
+    --top-message-border: white;
+
     --status-color-pending: hsl(240, 60%, 83%);
     --status-color-in-progress: hsl(60, 60%, 83%);
     --status-color-done: hsl(120, 60%, 83%);
@@ -122,6 +127,11 @@ html.dark-scheme {
 
     --dialog-background-color: hsl(210, 5%, 15%, 93%);
     --dialog-form-background-color: hsl(210, 5%, 15%);
+
+    --top-message-outer-background-color: hsl(0, 0%, 30%);
+    --top-message-normal-background-color: hsl(48, 50%, 30%);
+    --top-message-maintenance-background-color: hsl(0, 100%, 15%);
+    --top-message-border: black;
 
     --status-color-pending: hsl(240, 60%, 20%);
     --status-color-in-progress: hsl(60, 60%, 20%);
@@ -717,8 +727,8 @@ a.prev-next-page{
 ................................... */
 
 #top{
-    background-color: #111;
-    border-bottom: 1px solid #fff;
+    background-color: var(--top-message-outer-background-color);
+    border-bottom: 1px solid var(--top-message-border);
 }
 
 ul.messages{
@@ -729,14 +739,14 @@ ul.messages{
 }
 
 ul.messages li{
-    background-color: #fcf5d8;
+    background-color: var(--top-message-normal-background-color);
     border-radius: 20px;
     padding: 4px 20px;
     text-align: center;
 }
 
 div.maintenance_message {
-    background-color: #FFCCCC;
+    background-color: var(--top-message-maintenance-background-color);
 
     width: 540px;
     margin: 0 auto;  /* vertical horizontal */
