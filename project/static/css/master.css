@@ -21,9 +21,8 @@ margin: spacing around the outside of an element.
     --main-font: 'Droid Sans', helvetica, arial, Geneva, sans-serif;
 }
 
-/* Light/default color scheme. We use body instead of :root for this to be
-   clear about which element the dark-scheme class applies to. */
-body {
+/* Light/default color scheme. */
+html {
     --text-color: hsl(0, 0%, 25%);
     --text-shadow-color: white;
     --outer-background-color: hsl(27, 18%, 90%);
@@ -79,8 +78,8 @@ body {
     --status-color-done: hsl(120, 60%, 83%);
     --status-color-failure: hsl(0, 60%, 83%);
 }
-/* Dark color scheme */
-body.dark-scheme {
+/* Dark color scheme. */
+html.dark-scheme {
     --text-color: hsl(0, 0%, 75%);
     --text-shadow-color: black;
     --outer-background-color: hsl(27, 18%, 10%);

@@ -11,6 +11,26 @@
     <meta name="author" content="UCSD CVCE" />
 
     {% comment %}
+    Dark color scheme setup, inline and as early as possible to try and avoid
+    a flash of unstyled content (FOUC).
+    {% endcomment %}
+    {% if dark_colors_available %}
+      <script>
+        const prefersDarkScheme = window.matchMedia(
+            '(prefers-color-scheme: dark)');
+
+        // Set the correct color scheme on the body element.
+        let htmlNode = document.documentElement;
+        if (prefersDarkScheme.matches) {
+            htmlNode.classList.add('dark-scheme');
+        }
+        else {
+            htmlNode.classList.remove('dark-scheme');
+        }
+      </script>
+    {% endif %}
+
+    {% comment %}
     Favicon. The order of declarations matters. Some explanation of
     how it works at: http://stackoverflow.com/questions/2268204/
 
@@ -26,11 +46,12 @@
     <link rel="shortcut icon"
           href="{% static 'img/favicon.ico' %}">
 
+    {# Main CSS files. #}
     {% include "static-local-include.html" with type="css" path="css/master.css" %}
     {% include "static-local-include.html" with type="css" path="css/forms.css" %}
 
     {% comment %}
-    Multi-purpose CSS includes (CSS used on multiple pages) can go here.
+    Other multi-purpose CSS includes (CSS used on multiple pages) can go here.
     {% endcomment %}
     {% block css-includes %}{% endblock %}
 
@@ -156,5 +177,21 @@
       </div><!-- /footer -->
     
     </div><!-- /container -->
+
+    {% if dark_colors_available %}
+      <script>
+        // Set the toggle-button handler.
+        let colorToggleButton =
+            document.getElementById('color-scheme-toggle-button');
+        colorToggleButton.addEventListener('click', () => {
+            let htmlNode = document.documentElement;
+            if (htmlNode.classList.contains('dark-scheme')) {
+                htmlNode.classList.remove('dark-scheme');
+            } else {
+                htmlNode.classList.add('dark-scheme');
+            }
+        });
+      </script>
+    {% endif %}
   </body>
 </html>
