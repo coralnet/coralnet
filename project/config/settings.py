@@ -1002,8 +1002,8 @@ TEMPLATES = [
                 'django.template.context_processors.static',
                 'django.template.context_processors.tz',
                 'django.contrib.messages.context_processors.messages',
-                # Adds CoralNet help links to the context.
-                'lib.context_processors.help_links',
+                # Adds relevant CoralNet settings to the context.
+                'lib.context_processors.coralnet_settings',
             ],
         },
     },
@@ -1188,6 +1188,20 @@ THUMBNAIL_DEFAULT_OPTIONS = {
 ACCOUNT_QUESTIONS_LINK = \
     'https://groups.google.com/forum/#!topic/coralnet-users/PsU3x-Ubrdc'
 FORUM_LINK = 'https://groups.google.com/forum/#!forum/coralnet-users'
+
+# CSS dark color scheme availability.
+# This is enabled on an env basis for now; that is, any dev who wants it
+# enables it, but it's not in production yet, because:
+#
+# 1. The dark color scheme isn't complete yet (at this time of writing).
+#    The idea is to gradually work on the rest of it.
+# 2. We'll probably want to implement browser-storage of the user choice
+#    before a public release, so that users who want to use something
+#    other than their browser's default dark-scheme setting don't have to
+#    specify that on every single page load.
+# 3. Need to fix the flash of the light theme which happens before the
+#    dark theme kicks in.
+DARK_COLORS_AVAILABLE = env.bool('DARK_COLORS_AVAILABLE', default=False)
 
 # Media filepath patterns
 IMAGE_FILE_PATTERN = 'images/{name}{extension}'

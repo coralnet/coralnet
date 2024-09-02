@@ -66,7 +66,7 @@ div.box {
     border: 1px solid black;
     border-radius: 5px;
 
-    background-color: hsl(0, 0%, 88%);
+    background-color: var(--content-box-color);
 }
 /* This wrapper goes around the field and label, keeping both on the same
    line. */
@@ -79,13 +79,13 @@ div.form-box div.field-and-label-wrapper {
 /* For sets of fields that should be grouped closely together. */
 fieldset {
     padding-bottom: 5px;
-    border-bottom: 1px solid hsl(0, 0%, 70%);
+    border-bottom: 1px solid var(--heading-underline-color-bold);
     margin-bottom: 20px;
 }
 
 /* Another level of grouping fields. */
 hr.subfieldset {
-    background-color: hsl(0, 0%, 90%);
+    background-color: var(--heading-underline-color-soft);
     border: none;
     height: 1px;
 }
@@ -103,26 +103,26 @@ general use.
 
 legend {
     padding: 5px 0 6px 0;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--heading-underline-color-soft);
     margin-bottom: 5px;
     font-size: 1.3em;
-    color: #777;
+    color: var(--heading-color-soft);
     font-weight: bold;
 	text-transform: uppercase;
 }
 h2.form,
 legend.small {
     padding-bottom: 3px;
-    border-bottom: 1px solid hsl(0, 0%, 70%);
+    border-bottom: 1px solid var(--heading-underline-color-bold);
     font-size: 1.2em;
-    color: hsl(0, 0%, 30%);
+    color: var(--heading-color-bold);
     text-transform: none;
 }
 h3.form {
     padding-bottom: 2px;
-    border-bottom: 1px solid hsl(0, 0%, 90%);
+    border-bottom: 1px solid var(--heading-underline-color-soft);
     font-size: 1.0em;
-    color: hsl(0, 0%, 40%);
+    color: var(--heading-color-soft);
     text-transform: none;
 }
 

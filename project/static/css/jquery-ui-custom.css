@@ -17,15 +17,14 @@ link elements in that order). */
     font-size: 0.9em;
 }
 
+.ui-widget-content {
+    color: var(--text-color);
+}
 .ui-dialog.ui-widget-content {
-    /* Make dialogs faintly transparent; useful when the dialog is talking
-     about some page content that it's sitting on top of */
-    background: rgba(255,255,255,0.9);
+    background: var(--dialog-background-color);
 }
 .ui-dialog.ui-dialog-form.ui-widget-content {
-    /* We don't need the dialog transparency for forms, though. And it makes
-     form fields look weird (at least on the Add/Remove Labels page) */
-    background: rgb(255,255,255);
+    background: var(--dialog-form-background-color);
 }
 .ui-dialog.ui-widget-content a {
     /* Use global link color instead of jQuery UI default (inherit doesn't
