@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.db.models import F
-from storages.backends.s3boto3 import S3Boto3Storage
+from storages.backends.s3 import S3Storage
 from tqdm import tqdm
 
 from annotations.models import Label, Annotation
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         self.log("Starting data export with args: [{}]\n{}".
                  format(args_str, '-'*70))
 
-        export_storage = S3Boto3Storage(
+        export_storage = S3Storage(
             bucket_name=options['bucket'], location='')
 
         # Start by exporting the label-set
@@ -117,7 +117,7 @@ class Command(BaseCommand):
                 source.nbr_confirmed_images))
 
             # Establish a new connection for each source.
-            export_storage = S3Boto3Storage(
+            export_storage = S3Storage(
                 bucket_name=options['bucket'], location='')
             # When we copy files from one bucket to another, we'll need to
             # access the boto interface at a lower level.

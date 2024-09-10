@@ -11,7 +11,7 @@ from spacer.messages import DataLocation
 
 from django.conf import settings
 from django.core.files.storage import DefaultStorage, FileSystemStorage
-from storages.backends.s3boto3 import S3Boto3Storage
+from storages.backends.s3 import S3Storage
 
 from .exceptions import FileStorageUsageError
 
@@ -206,16 +206,16 @@ class StorageManagerLocal(StorageManager):
         shutil.rmtree(dir_to_remove)
 
 
-class MediaStorageS3(S3Boto3Storage):
+class MediaStorageS3(S3Storage):
     """
     S3-bucket storage backend.
     Storage root defaults to the AWS_LOCATION directory.
     """
     def __init__(self, **kwargs):
-        # django-storages's S3Boto3Storage is implemented a bit differently from
+        # django-storages's S3Storage is implemented a bit differently from
         # Django's FileSystemStorage: it initializes the location attribute to
         # the appropriate setting on the class definition level, rather than in
-        # __init__(). This means S3Boto3Storage might not pick up changes to
+        # __init__(). This means S3Storage might not pick up changes to
         # settings, which might occur when unit testing for example.
         #
         # To allow S3 storage to pick up on settings changes, we'll pass a
