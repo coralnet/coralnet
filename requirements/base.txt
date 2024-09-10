@@ -99,7 +99,7 @@ boto3>=1.26.122,<1.27
 # module imports work.
 # Changelog: https://github.com/jschneier/django-storages/blob/master/CHANGELOG.rst
 # Max compat: Python 3.12, Django 5.0
-django-storages==1.14.4
+django-storages[s3]==1.14.4
 
 # REST API framework.
 # Changelog: https://www.django-rest-framework.org/community/release-notes/

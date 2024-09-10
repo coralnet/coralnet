@@ -11,7 +11,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 ## 1.14 (WIP)
 
 - Updates to required packages:
-  - django-storages 1.13.2 -> 1.14.4
+  - django-storages 1.13.2 -> django-storages\[s3\] 1.14.4
 
 ## [1.13.1](https://github.com/coralnet/coralnet/tree/1.13.1)
 
