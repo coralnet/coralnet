@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 
+import boto3.s3.transfer
 # In many cases it's dangerous to import from Django directly into a settings
 # module, but ImproperlyConfigured is fine.
 from django.core.exceptions import ImproperlyConfigured
@@ -452,14 +453,17 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
-# Added in 1.13; disables using threads for S3 requests, preventing errors
-# such as
-# `RuntimeError: cannot schedule new futures after interpreter shutdown`
-# At time of writing, not in django-storages docs, but was implemented in:
-# https://github.com/jschneier/django-storages/pull/1112
-# This very similar PR in django-s3-storage has more info:
-# https://github.com/etianen/django-s3-storage/pull/136
-AWS_S3_USE_THREADS = False
+AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
+    # Disables using threads for S3 requests, preventing errors such as
+    # `RuntimeError: cannot schedule new futures after interpreter shutdown`
+    # More info on how this relates to the error:
+    # https://github.com/jschneier/django-storages/pull/1112
+    # https://github.com/etianen/django-s3-storage/pull/136
+    #
+    # Formerly set by the django-storages setting AWS_S3_USE_THREADS
+    # (deprecated starting from django-storages 1.14).
+    use_threads=False,
+)
 
 # [PySpacer settings]
 SPACER['AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
