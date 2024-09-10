@@ -98,7 +98,7 @@ boto3>=1.26.122,<1.27
 # Even if a dev machine doesn't use S3, we still want this installed to make
 # module imports work.
 # Changelog: https://github.com/jschneier/django-storages/blob/master/CHANGELOG.rst
-# Max compat: Python 3.12, Django 5.0
+# Compat: Python 3.7-3.12, Django 4.1-5.0
 django-storages[s3]==1.14.4
 
 # REST API framework.
@@ -150,7 +150,7 @@ huey>=2.4.5,<2.5
 # Extension of huey's contrib.djhuey package that allows tasks to be
 # allocated to multiple queues.
 # Changelog: https://github.com/gaiacoop/django-huey/blob/main/CHANGELOG.md
-# Requires: django, huey
+# Compat: Python 3.8-3.12, Django 3.2-5.0, huey 2.0+
 django-huey>=1.1.2,<1.2
 
 # Process management. Doesn't run on Windows (but it can still be installed).
@@ -164,8 +164,8 @@ tqdm==4.65.0
 # Support for rendering markdown as HTML, with extra rendering features over
 # the Markdown package (such as tables). Also includes a fancy Markdown editor,
 # with live preview and drag-and-drop image uploads.
-# Requires: Markdown
 # Changelog: https://github.com/neutronX/django-markdownx/releases
+# Compat: Python 3.6-3.10, Django 3.0-4.2, Markdown unspecified
 django-markdownx>=4.0.7,<4.1
 
 # Scientific computing
