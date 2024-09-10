@@ -11,7 +11,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 ## 1.14 (WIP)
 
 - Updates to required packages:
+  - django-registration 3.3 -> 3.4
+  - djangorestframework 3.14.0 -> 3.15.1
+  - django-reversion 5.0.4 -> 5.0.12
   - django-storages 1.13.2 -> django-storages\[s3\] 1.14.4
+  - pytz can now be uninstalled, since djangorestframework no longer depends on it.
 
 ## [1.13.1](https://github.com/coralnet/coralnet/tree/1.13.1)
 
