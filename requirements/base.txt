@@ -59,7 +59,8 @@ easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@master
 # Add email activation to user registration process;
 # unlike in userena, this is implemented without additional models.
 # Changelog: https://django-registration.readthedocs.io/en/stable/upgrade.html
-django-registration==3.3
+# Compat: Python 3.7-3.11, Django 3.2-4.2
+django-registration==3.4
 
 # Versioning of database objects. Requires django.
 # Changelog: https://github.com/etianen/django-reversion/blob/master/CHANGELOG.rst
