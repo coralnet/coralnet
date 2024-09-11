@@ -8,11 +8,14 @@ Django>=4.1.9,<4.2
 # Changelog: https://django-environ.readthedocs.io/en/latest/changelog.html
 django-environ==0.10.0
 
-# Per-object permissions
+# Per-object permissions for Django.
 # e.g. "can edit this source" not just "can edit sources"
-# Requires: django
 # Changelog: https://github.com/django-guardian/django-guardian/blob/devel/CHANGES
-django-guardian==2.4.0
+# Compat: Python 3.8-3.12, Django 4.1-5.0
+#
+# Django 4.2+ support hasn't been merged yet, but the PR (816) seems done,
+# so we use a fork-branch at the tip of that PR.
+django-guardian@git+https://github.com/StephenChan/django-guardian.git@django5.0
 
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
