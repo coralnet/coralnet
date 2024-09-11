@@ -11,6 +11,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 ## 1.14 (WIP)
 
 - Updates to required packages:
+  - django-environ 0.10.0 -> `@git+https://github.com/joke2k/django-environ.git@a1113e41f134d3a5b2b6f98c81539f07da2269a7`
   - django-guardian 2.4.0 -> `@git+https://github.com/StephenChan/django-guardian.git@django5.0`
   - django-registration 3.3 -> 3.4
   - djangorestframework 3.14.0 -> 3.15.1
