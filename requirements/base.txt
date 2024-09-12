@@ -10,9 +10,9 @@ Django>=4.1.9,<4.2
 #
 # The release that added Django 4.2 made the SECRET_KEY setting unstable,
 # and a fix to that has been merged, but isn't in a release yet.
-# (See PR 500 in django-environ.) So we use a specific commit-tree instead
-# of a release number.
-django-environ@git+https://github.com/joke2k/django-environ.git@a1113e41f134d3a5b2b6f98c81539f07da2269a7
+# (See PR 500 in django-environ.)
+# So we use a fork with a version defined after that PR.
+django-environ@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet
 
 # Per-object permissions for Django.
 # e.g. "can edit this source" not just "can edit sources"
