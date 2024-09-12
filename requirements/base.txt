@@ -1,4 +1,5 @@
-# To see requirements for an installed package, use: pip show <package-name>
+# To see an installed package's dependencies and dependents, use:
+# pip show <package-name>
 
 
 Django>=4.1.9,<4.2
@@ -54,7 +55,7 @@ Markdown>=3.4.3,<3.5
 
 # Generates thumbnails, which are smaller versions of images.
 # Changelog: https://github.com/SmileyChris/easy-thumbnails/blob/master/CHANGES.rst
-# Compat: Python 3.8-3.12, Django 4.2-5.1, Pillow any version
+# Compat: Python 3.8-3.12, Django 4.2-5.0, Pillow any version
 #
 # Starting in 2.7.0, this app sets PIL.ImageFile.LOAD_TRUNCATED_IMAGES to False
 # after each image read, which would force us to set it to True before each of
