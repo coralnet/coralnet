@@ -52,18 +52,18 @@ pyexcel-xlsx==0.6.0
 # Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/change_log/index.md
 Markdown>=3.4.3,<3.5
 
-# System for generating smaller versions of images.
-# Requires: django, Pillow
+# Generates thumbnails, which are smaller versions of images.
 # Changelog: https://github.com/SmileyChris/easy-thumbnails/blob/master/CHANGES.rst
+# Compat: Python 3.8-3.12, Django 4.2-5.1, Pillow any version
 #
-# As of 2.7.0 this app sets PIL.ImageFile.LOAD_TRUNCATED_IMAGES to False after
-# each image read, which would force us to set it to True before each of our
-# image reads.
+# Starting in 2.7.0, this app sets PIL.ImageFile.LOAD_TRUNCATED_IMAGES to False
+# after each image read, which would force us to set it to True before each of
+# our image reads.
 # https://github.com/SmileyChris/easy-thumbnails/commit/2abd400c8e005045591eb1003d1dcbc0602923c5
 # So we use our own fork of easy-thumbnails, which changes the behavior to
 # restore the previous LOAD_TRUNCATED_IMAGES value after easy-thumbnails does
 # its thing.
-easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@master
+easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet
 
 # Add email activation to user registration process;
 # unlike in userena, this is implemented without additional models.
