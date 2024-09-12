@@ -20,8 +20,8 @@ django-environ@git+https://github.com/joke2k/django-environ.git@a1113e41f134d3a5
 # Compat: Python 3.8-3.12, Django 4.1-5.0
 #
 # Django 4.2+ support hasn't been merged yet, but the PR (816) seems done,
-# so we use a fork-branch at the tip of that PR.
-django-guardian@git+https://github.com/StephenChan/django-guardian.git@django5.0
+# so we use a fork with a version defined at the tip of that PR.
+django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet
 
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
