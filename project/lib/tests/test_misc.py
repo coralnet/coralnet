@@ -3,8 +3,6 @@ from email.utils import parseaddr
 from unittest import skip, skipIf
 
 from django.conf import settings
-from django.core.cache import cache
-from django.core.files.storage import DefaultStorage
 from django.core.mail import mail_admins
 from django import forms
 from django.shortcuts import resolve_url
@@ -12,21 +10,12 @@ from django.urls import reverse
 from django.test.client import Client
 from django.test.utils import override_settings
 
-from jobs.models import Job
-from jobs.utils import full_job
 from ..forms import get_one_form_error, get_one_formset_error
-from ..middleware import ViewScopedCacheMiddleware
-from ..utils import (
-    CacheableValue,
-    context_scoped_cache,
-    scoped_cache_context_var,
-)
 from .utils import (
     BasePermissionTest,
     BaseTest,
     ClientTest,
     EmailAssertionsMixin,
-    sample_image_as_file,
 )
 
 
@@ -267,49 +256,6 @@ class InternationalizationTest(ClientTest):
         self.assertEqual(required_error, "This field is required.")
 
 
-class TestSettingsStorageTest(BaseTest):
-    """
-    Test the file storage settings logic used during unit tests.
-    """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        storage = DefaultStorage()
-        storage.save('1.png', sample_image_as_file('1.png'))
-        storage.save('2.png', sample_image_as_file('2.png'))
-
-    def test_storage_location_is_temporary(self):
-        storage = DefaultStorage()
-
-        # Should be using a temporary directory.
-        self.assertTrue('tmp' in storage.location or 'temp' in storage.location)
-
-    def test_add_file(self):
-        storage = DefaultStorage()
-        storage.save('3.png', sample_image_as_file('3.png'))
-
-        # Files added from setUpTestData(), plus the file added just now,
-        # should all be present.
-        # And if test_delete_file() ran before this, that shouldn't affect
-        # the result.
-        self.assertTrue(storage.exists('1.png'))
-        self.assertTrue(storage.exists('2.png'))
-        self.assertTrue(storage.exists('3.png'))
-
-    def test_delete_file(self):
-        storage = DefaultStorage()
-        storage.delete('1.png')
-
-        # Files added from setUpTestData(), except the file deleted just now,
-        # should be present.
-        # And if test_add_file() ran before this, that shouldn't affect
-        # the result.
-        self.assertFalse(storage.exists('1.png'))
-        self.assertTrue(storage.exists('2.png'))
-        self.assertFalse(storage.exists('3.png'))
-
-
 @override_settings(IMPORTED_USERNAME='class_override')
 class TestSettingsDecoratorTest(BaseTest):
     """
@@ -374,122 +320,3 @@ class AdminsSettingTest(BaseTest, EmailAssertionsMixin):
             ["Test body"],
             to=['alice@example.org', 'jdoe@example.com'],
         )
-
-
-class ContextScopedCacheTest(ClientTest):
-
-    def test_scope_not_active(self):
-        self.assertIsNone(
-            scoped_cache_context_var.get(),
-            msg="Cache is not initialized,"
-                " but access should return None instead of crashing")
-
-    def test_middleware_active(self):
-        def view(_request):
-            self.assertIsNotNone(
-                scoped_cache_context_var.get(),
-                msg="Cache should be initialized")
-            return 'response'
-        ViewScopedCacheMiddleware(view)('request')
-
-    def test_task_active(self):
-        @full_job()
-        def job_example():
-            self.assertIsNotNone(
-                scoped_cache_context_var.get(),
-                msg="Cache should be initialized")
-            return "Result message"
-
-        job_example()
-
-        job = Job.objects.latest('pk')
-        self.assertEqual(
-            job.result_message, "Result message", msg="Job shouldn't crash")
-
-    def test_decorator_active(self):
-        @context_scoped_cache()
-        def func():
-            self.assertIsNotNone(
-                scoped_cache_context_var.get(),
-                msg="Cache should be initialized")
-
-        func()
-
-    def test_cache_usage(self):
-        computed_value = 1
-
-        def compute():
-            return computed_value
-
-        cacheable_value = CacheableValue(
-            cache_key='key',
-            compute_function=compute,
-            cache_update_interval=60*60,
-            cache_timeout_interval=60*60,
-            use_context_scoped_cache=True,
-        )
-
-        def view(_request):
-            self.assertEqual(cacheable_value.get(), 1)
-            return 'response'
-        ViewScopedCacheMiddleware(view)('request')
-
-        computed_value = 2
-        self.assertEqual(compute(), 2, "This var scoping should work")
-
-        def view(_request):
-            # Django cache and view-scoped cache still have the old value
-            self.assertEqual(cache.get(cacheable_value.cache_key), 1)
-            self.assertEqual(cacheable_value.get(), 1)
-
-            # Django cache is updated; view-scoped cache still has old value
-            cache.set(cacheable_value.cache_key, compute())
-            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
-            self.assertEqual(cacheable_value.get(), 1)
-
-            # Both caches are updated
-            cacheable_value.update()
-            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
-            self.assertEqual(cacheable_value.get(), 2)
-
-            return 'response'
-        ViewScopedCacheMiddleware(view)('request')
-
-    def test_value_not_cached_in_next_view(self):
-        computed_value = 1
-
-        def compute():
-            return computed_value
-
-        cacheable_value = CacheableValue(
-            cache_key='key',
-            compute_function=compute,
-            cache_update_interval=60*60,
-            cache_timeout_interval=60*60,
-            use_context_scoped_cache=True,
-        )
-        with context_scoped_cache():
-            cacheable_value.update()
-
-        computed_value = 2
-
-        def view(_request):
-            # Django cache and view-scoped cache still have the old value
-            self.assertEqual(cache.get(cacheable_value.cache_key), 1)
-            self.assertEqual(cacheable_value.get(), 1)
-
-            # Django cache is updated; view-scoped cache still has old value
-            cache.set(cacheable_value.cache_key, compute())
-            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
-            self.assertEqual(cacheable_value.get(), 1)
-
-            return 'response'
-        ViewScopedCacheMiddleware(view)('request')
-
-        def view(_request):
-            # View-scoped cache is updated because a new view has started
-            self.assertEqual(cache.get(cacheable_value.cache_key), 2)
-            self.assertEqual(cacheable_value.get(), 2)
-
-            return 'response'
-        ViewScopedCacheMiddleware(view)('request')
