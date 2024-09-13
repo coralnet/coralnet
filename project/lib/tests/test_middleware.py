@@ -35,7 +35,7 @@ class ViewLoggingMiddlewareTest(ClientTest):
             r"index;"
             r";GET;Guest;/"
         )
-        self.assertRegexpMatches(
+        self.assertRegex(
             cm.output[0],
             expected_start_message_regex,
             f"Should log the expected start message")
@@ -51,7 +51,7 @@ class ViewLoggingMiddlewareTest(ClientTest):
             # Status code; method; user ID or 'Guest'; request path
             r"200;GET;Guest;/"
         )
-        self.assertRegexpMatches(
+        self.assertRegex(
             cm.output[1],
             expected_end_message_regex,
             f"Should log the expected end message")
