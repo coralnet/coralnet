@@ -1,7 +1,6 @@
 # Utility classes and functions for tests.
 from abc import ABCMeta
 from contextlib import contextmanager
-import datetime
 from io import BytesIO, StringIO
 import json
 import math
@@ -50,13 +49,6 @@ User = get_user_model()
 
 # Settings to override in all of our unit tests.
 test_settings = dict()
-
-# ManifestStaticFilesStorage shouldn't be used during testing.
-# https://docs.djangoproject.com/en/dev/ref/contrib/staticfiles/#manifeststaticfilesstorage
-# And it shouldn't be needed anyway, unless browser caching is involved in
-# our automated tests somehow.
-test_settings['STATICFILES_STORAGE'] = \
-    'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 # For most tests, use a local memory cache instead of a filesystem cache,
 # because there's no reason to persist the cache after a particular test is
@@ -441,14 +433,16 @@ class CustomTestRunner(DiscoverRunner):
         post_setuptestdata_state_dir = storage_manager.create_temp_dir()
 
         # Create settings that establish the temp dirs accordingly.
-        test_storage_settings = \
-            storage_manager.create_storage_dir_settings(test_storage_dir)
-        test_storage_settings['TEST_STORAGE_DIR'] = test_storage_dir
-        test_storage_settings['POST_SETUPTESTDATA_STATE_DIR'] = \
-            post_setuptestdata_state_dir
+        test_storage_settings = {
+            'TEST_STORAGE_DIR': test_storage_dir,
+            'POST_SETUPTESTDATA_STATE_DIR': post_setuptestdata_state_dir,
+        }
 
         # Run tests with the above storage settings applied.
-        with override_settings(**test_storage_settings):
+        with (
+            override_settings(**test_storage_settings),
+            storage_manager.override_default_storage_dir(test_storage_dir)
+        ):
             return_code = super().run_tests(test_labels, **kwargs)
 
         # Clean up the temp dirs after the tests are done.

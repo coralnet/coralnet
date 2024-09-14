@@ -121,6 +121,9 @@ else:
     # False is useful sometimes, such as for testing 404 and 500 views.
     DEBUG = env.bool('DEBUG', default=True)
 
+
+_TESTING = 'test' in sys.argv
+
 # [CoralNet setting]
 # Whether the app is being served through nginx, Apache, etc.
 # Situations where it's not:
@@ -130,7 +133,7 @@ else:
 REAL_SERVER = (
     not DEBUG
     and 'runserver' not in sys.argv
-    and 'test' not in sys.argv
+    and not _TESTING
 )
 
 
@@ -481,7 +484,9 @@ REGTEST_BUCKET = 'coralnet-regtest-fixtures'
 if SETTINGS_BASE == Bases.DEV_LOCAL:
 
     # Default file storage mechanism that holds media.
-    DEFAULT_FILE_STORAGE = 'lib.storage_backends.MediaStorageLocal'
+    _STORAGES_DEFAULT = dict(
+        BACKEND='lib.storage_backends.MediaStorageLocal',
+    )
 
     # Absolute filesystem path to the directory that will hold user-uploaded
     # files.
@@ -501,9 +506,6 @@ if SETTINGS_BASE == Bases.DEV_LOCAL:
         MEDIA_URL = env('MEDIA_URL')
 
 else:
-
-    # Default file storage mechanism that holds media.
-    DEFAULT_FILE_STORAGE = 'lib.storage_backends.MediaStorageS3'
 
     # [django-storages setting]
     # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
@@ -538,13 +540,10 @@ else:
     # S3 bucket subdirectory in which to store media.
     AWS_LOCATION = AWS_S3_MEDIA_SUBDIR
 
-# [easy_thumbnails setting]
-# Default file storage for saving generated thumbnails.
-#
-# The only downside of not using the app's provided storage class is that
-# the THUMBNAIL_MEDIA_ROOT and THUMBNAIL_MEDIA_URL settings won't work
-# (we'd have to apply them manually). We aren't using these settings, though.
-THUMBNAIL_DEFAULT_STORAGE = DEFAULT_FILE_STORAGE
+    # Default file storage mechanism that holds media.
+    _STORAGES_DEFAULT = dict(
+        BACKEND='lib.storage_backends.MediaStorageS3',
+    )
 
 
 #
@@ -559,13 +558,20 @@ STATICFILES_DIRS = [
 ]
 
 # The default file storage backend used during the build process.
+#
 # ManifestStaticFilesStorage appends a content-based hash to the filename
 # to facilitate browser caching.
 # This hash appending happens as a post-processing step in collectstatic, so
 # it only applies to DEBUG False.
+# It also isn't for use during unit tests, so in that case we use the default
+# static files storage backend.
 # https://docs.djangoproject.com/en/dev/ref/contrib/staticfiles/#manifeststaticfilesstorage
-STATICFILES_STORAGE = \
-    'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+if _TESTING:
+    _STORAGES_BACKEND_STATICFILES = \
+        'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    _STORAGES_BACKEND_STATICFILES = \
+        'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
 # Absolute path to the directory which static files should be collected to.
 # Example: "/home/media/media.lawrence.com/static/"
@@ -605,6 +611,20 @@ else:
     # Otherwise, make sure your server software (e.g. nginx) serves static
     # files at this URL relative to your domain.
     STATIC_URL = '/static/'
+
+
+# Overall storages setting.
+
+STORAGES = {
+    'default': _STORAGES_DEFAULT,
+    'staticfiles': {
+        'BACKEND': _STORAGES_BACKEND_STATICFILES,
+    },
+    # easy_thumbnails does provide its own storage class, but we don't
+    # need that class's functionality because we don't use the
+    # THUMBNAIL_MEDIA_ROOT or THUMBNAIL_MEDIA_URL settings.
+    'easy_thumbnails': _STORAGES_DEFAULT,
+}
 
 
 #
@@ -1239,7 +1259,7 @@ GOOGLE_ANALYTICS_CODE = env('GOOGLE_ANALYTICS_CODE', default='')
 # Here we disable tqdm when running the test command. Note that this is better
 # than setting False here and setting True in `test_settings`, because that
 # method would not disable tqdm during pre-test migration runs.
-TQDM_DISABLE = 'test' in sys.argv
+TQDM_DISABLE = _TESTING
 
 # Browsers to run Selenium tests in.
 #

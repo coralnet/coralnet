@@ -47,7 +47,7 @@ def get_queue_class() -> Type[BaseQueue]:
         settings.SPACER_QUEUE_CHOICE ==
         'vision_backend.queues.BatchQueue'
         and
-        settings.DEFAULT_FILE_STORAGE ==
+        settings.STORAGES['default']['BACKEND'] ==
         'lib.storage_backends.MediaStorageLocal'
         and
         'test' not in sys.argv

@@ -66,7 +66,8 @@ class TestSettingsStorageTest(BaseTest):
 
 
 @skipIf(
-    not settings.DEFAULT_FILE_STORAGE == 'lib.storage_backends.MediaStorageS3',
+    not settings.STORAGES['default']['BACKEND']
+        == 'lib.storage_backends.MediaStorageS3',
     "Requires S3 storage")
 class S3UrlAccessTest(ClientTest):
     """
