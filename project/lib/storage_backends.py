@@ -8,11 +8,14 @@ import shutil
 import string
 import tempfile
 
-from spacer.messages import DataLocation
-
 from django.conf import settings
 from django.core.files.storage import DefaultStorage, FileSystemStorage
 from django.test import override_settings
+# `from easy_thumbnails.storage import <something>` seems to have potential
+# for issues with import timing/ordering, because that module calls
+# get_storage() at the global level. So we import this way instead.
+import easy_thumbnails.storage
+from spacer.messages import DataLocation
 from storages.backends.s3 import S3Storage
 
 from .exceptions import FileStorageUsageError
@@ -113,6 +116,7 @@ class StorageManagerS3(StorageManager):
     @contextmanager
     def override_default_storage_dir(self, storage_dir):
         storage = DefaultStorage()
+        thumbnail_storage = easy_thumbnails.storage.thumbnail_default_storage
 
         # DefaultStorage() returns a storage which may have already been
         # previously instantiated, in which case AWS_LOCATION won't be
@@ -120,9 +124,14 @@ class StorageManagerS3(StorageManager):
         # So instead of overriding the AWS_LOCATION setting,
         # we directly assign the passed dir to the storage's `location`
         # attribute.
-        old_location = storage.location
-        storage.location = storage.path_join(
+        new_location = storage.path_join(
             storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
+        old_location = storage.location
+        storage.location = new_location
+
+        # Similar for thumbnail storage.
+        old_thumbnail_location = thumbnail_storage.location
+        thumbnail_storage.location = new_location
 
         # If the storage's base_url attribute is set, then it's used; else,
         # MEDIA_URL is read. Not at instantiation time, but any time it's
@@ -140,6 +149,7 @@ class StorageManagerS3(StorageManager):
             yield
 
         storage.location = old_location
+        thumbnail_storage.location = old_thumbnail_location
 
     def create_temp_dir(self):
         s3_root_storage = get_s3_root_storage()

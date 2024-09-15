@@ -9,6 +9,11 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.storage import DefaultStorage
 from django.test import override_settings
+from easy_thumbnails.files import get_thumbnailer
+# `from easy_thumbnails.storage import <something>` seems to have potential
+# for issues with import timing/ordering, because that module calls
+# get_storage() at the global level. So we import this way instead.
+import easy_thumbnails.storage
 
 from jobs.models import Job
 from jobs.utils import full_job
@@ -30,39 +35,86 @@ class TestSettingsStorageTest(BaseTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
-        storage = DefaultStorage()
-        storage.save('1.png', sample_image_as_file('1.png'))
-        storage.save('2.png', sample_image_as_file('2.png'))
+        cls.storage = DefaultStorage()
+        cls.thumbnail_storage = \
+            easy_thumbnails.storage.thumbnail_default_storage
 
-    def test_storage_location_is_temporary(self):
-        storage = DefaultStorage()
+        cls.storage.save('1.png', sample_image_as_file('1.png'))
+        cls.storage.save('2.png', sample_image_as_file('2.png'))
 
+        cls.generate_thumbnail('1.png')
+        cls.generate_thumbnail('2.png')
+
+    @staticmethod
+    def generate_thumbnail(original_filepath):
+        get_thumbnailer(original_filepath).get_thumbnail(
+            dict(size=(40, 40)), generate=True)
+
+    def test_storage_locations(self):
         # Should be using a temporary directory.
-        self.assertTrue('tmp' in storage.location or 'temp' in storage.location)
+        self.assertTrue(
+            'tmp' in self.storage.location
+            or 'temp' in self.storage.location)
+
+        # Same for easy-thumbnails storage.
+        self.assertTrue(
+            'tmp' in self.thumbnail_storage.location
+            or 'temp' in self.thumbnail_storage.location)
+
+        # And they should be the same. Same location + both local or both S3.
+        self.assertEqual(
+            self.storage.location, self.thumbnail_storage.location)
+        self.assertEqual(
+            self.storage.__class__, self.thumbnail_storage.__class__)
 
     def test_add_file(self):
-        storage = DefaultStorage()
-        storage.save('3.png', sample_image_as_file('3.png'))
+        self.storage.save('3.png', sample_image_as_file('3.png'))
 
         # Files added from setUpTestData(), plus the file added just now,
         # should all be present.
         # And if test_delete_file() ran before this, that shouldn't affect
         # the result.
-        self.assertTrue(storage.exists('1.png'))
-        self.assertTrue(storage.exists('2.png'))
-        self.assertTrue(storage.exists('3.png'))
+        self.assertTrue(self.storage.exists('1.png'))
+        self.assertTrue(self.storage.exists('2.png'))
+        self.assertTrue(self.storage.exists('3.png'))
+
+    def test_add_file_check_thumbnail(self):
+        """
+        Thumbnail-storage equivalent of test_add_file().
+        """
+        self.storage.save('3.png', sample_image_as_file('3.png'))
+        self.generate_thumbnail('3.png')
+
+        self.assertTrue(
+            self.thumbnail_storage.exists('1.png.40x40_q85.jpg'))
+        self.assertTrue(
+            self.thumbnail_storage.exists('2.png.40x40_q85.jpg'))
+        self.assertTrue(
+            self.thumbnail_storage.exists('3.png.40x40_q85.jpg'))
 
     def test_delete_file(self):
-        storage = DefaultStorage()
-        storage.delete('1.png')
+        self.storage.delete('1.png')
 
         # Files added from setUpTestData(), except the file deleted just now,
         # should be present.
         # And if test_add_file() ran before this, that shouldn't affect
         # the result.
-        self.assertFalse(storage.exists('1.png'))
-        self.assertTrue(storage.exists('2.png'))
-        self.assertFalse(storage.exists('3.png'))
+        self.assertFalse(self.storage.exists('1.png'))
+        self.assertTrue(self.storage.exists('2.png'))
+        self.assertFalse(self.storage.exists('3.png'))
+
+    def test_delete_thumbnail(self):
+        """
+        Thumbnail-storage equivalent of test_delete_file().
+        """
+        self.thumbnail_storage.delete('1.png.40x40_q85.jpg')
+
+        self.assertFalse(
+            self.thumbnail_storage.exists('1.png.40x40_q85.jpg'))
+        self.assertTrue(
+            self.thumbnail_storage.exists('2.png.40x40_q85.jpg'))
+        self.assertFalse(
+            self.thumbnail_storage.exists('3.png.40x40_q85.jpg'))
 
 
 @skipIf(
