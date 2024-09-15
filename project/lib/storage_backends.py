@@ -292,6 +292,9 @@ class MediaStorageLocal(FileSystemStorage):
         """ Returns a spacer DataLocation object. """
         return DataLocation(storage_type='filesystem',
                             key=self.path(key))
+
+
+_s3_root_storage = None
  
 
 def get_s3_root_storage():
@@ -299,10 +302,15 @@ def get_s3_root_storage():
     Returns an S3 storage backend which accepts operations throughout an
     entire bucket, rather than only within a settings-specified directory.
     """
-    # S3 storage's __init__() accepts kwargs to override default attributes.
-    # `location` is the path from the bucket root which will be used as the
-    # storage root. We want to use bucket root as storage root, so we pass ''.
-    return MediaStorageS3(location='')
+    global _s3_root_storage
+
+    if _s3_root_storage is None:
+        # S3 storage's __init__() accepts kwargs to override default
+        # attributes. `location` is the path from the bucket root which will
+        # be used as the storage root. We want to use bucket root as storage
+        # root, so we pass ''.
+        _s3_root_storage = MediaStorageS3(location='')
+    return _s3_root_storage
 
 
 def get_storage_manager():
