@@ -626,6 +626,21 @@ STORAGES = {
     'easy_thumbnails': _STORAGES_DEFAULT,
 }
 
+if (
+    SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
+    and
+    STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
+    and
+    not _TESTING
+):
+    # We only raise this in non-test environments, because some tests
+    # are able to use mocks to test BatchQueue while sticking with
+    # local storage.
+    raise ImproperlyConfigured(
+        "Can not use Remote queue with local storage."
+        " Please use S3 storage."
+    )
+
 
 #
 # Authentication, security, web server

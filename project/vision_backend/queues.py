@@ -41,25 +41,6 @@ class BaseQueue(abc.ABC):
 
 
 def get_queue_class() -> Type[BaseQueue]:
-    """This function is modeled after Django's get_storage_class()."""
-
-    if (
-        settings.SPACER_QUEUE_CHOICE ==
-        'vision_backend.queues.BatchQueue'
-        and
-        settings.STORAGES['default']['BACKEND'] ==
-        'lib.storage_backends.MediaStorageLocal'
-        and
-        'test' not in sys.argv
-    ):
-        # We only raise this in non-test environments, because some tests
-        # are able to use mocks to test BatchQueue while sticking with
-        # local storage.
-        raise ImproperlyConfigured(
-            "Can not use Remote queue with local storage."
-            " Please use S3 storage."
-        )
-
     return import_string(settings.SPACER_QUEUE_CHOICE)
 
 
