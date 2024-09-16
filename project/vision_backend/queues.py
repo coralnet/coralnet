@@ -3,13 +3,11 @@ from datetime import timedelta
 from io import BytesIO
 import json
 from logging import getLogger
-import sys
 from typing import Optional, Type
 
 import boto3
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
-from django.core.files.storage import DefaultStorage
+from django.core.files.storage import default_storage
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from spacer.messages import JobMsg, JobReturnMsg
@@ -23,9 +21,6 @@ logger = getLogger(__name__)
 
 
 class BaseQueue(abc.ABC):
-
-    def __init__(self):
-        self.storage = DefaultStorage()
 
     @abc.abstractmethod
     def submit_job(self, job: JobMsg, job_id: int, spec_level: SpacerJobSpec):
@@ -69,10 +64,10 @@ class BatchQueue(BaseQueue):
             internal_job_id=internal_job_id, spec_level=spec_level.value)
         batch_job.save()
 
-        job_msg_loc = self.storage.spacer_data_loc(batch_job.job_key)
+        job_msg_loc = default_storage.spacer_data_loc(batch_job.job_key)
         job_msg.store(job_msg_loc)
 
-        job_res_loc = self.storage.spacer_data_loc(batch_job.res_key)
+        job_res_loc = default_storage.spacer_data_loc(batch_job.res_key)
 
         resp = self.batch_client.submit_job(
             jobQueue=settings.BATCH_QUEUES[spec_level],
@@ -143,7 +138,7 @@ class BatchQueue(BaseQueue):
             return None, job.status
 
         # Else: 'SUCCEEDED'
-        job_res_loc = self.storage.spacer_data_loc(job.res_key)
+        job_res_loc = default_storage.spacer_data_loc(job.res_key)
 
         try:
             return_msg = JobReturnMsg.load(job_res_loc)
@@ -170,14 +165,14 @@ class LocalQueue(BaseQueue):
         # Process the job right away.
         return_msg = process_job(job)
 
-        filepath = self.storage.path_join('backend_job_res', f'{job_id}.json')
-        self.storage.save(
+        filepath = default_storage.path_join('backend_job_res', f'{job_id}.json')
+        default_storage.save(
             filepath,
             BytesIO(json.dumps(return_msg.serialize()).encode()))
 
     def get_collectable_jobs(self):
         try:
-            dir_names, filenames = self.storage.listdir('backend_job_res')
+            dir_names, filenames = default_storage.listdir('backend_job_res')
         except FileNotFoundError:
             # Perhaps this is a test run and no results files were created
             # yet (thus, the backend_job_res directory was not created).
@@ -191,11 +186,11 @@ class LocalQueue(BaseQueue):
             self, job_filename: str) -> tuple[Optional[JobReturnMsg], str]:
 
         # Read the job result message
-        filepath = self.storage.path_join('backend_job_res', job_filename)
-        with self.storage.open(filepath) as results_file:
+        filepath = default_storage.path_join('backend_job_res', job_filename)
+        with default_storage.open(filepath) as results_file:
             return_msg = JobReturnMsg.deserialize(json.load(results_file))
         # Delete the job result file
-        self.storage.delete(filepath)
+        default_storage.delete(filepath)
 
         # Unlike BatchQueue, LocalQueue is only aware of the
         # jobs that successfully output their results.

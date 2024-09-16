@@ -7,7 +7,7 @@ import django.db.models.fields as model_fields
 from PIL import Image as PILImage
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.files.storage import DefaultStorage
+from django.core.files.storage import default_storage
 from django.db.models import Q
 
 from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
@@ -135,7 +135,7 @@ def get_patch_path(point_id):
 
 
 def get_patch_url(point_id):
-    return DefaultStorage().url(get_patch_path(point_id))
+    return default_storage.url(get_patch_path(point_id))
 
 
 def generate_patch_if_doesnt_exist(point_id):
@@ -146,12 +146,9 @@ def generate_patch_if_doesnt_exist(point_id):
     :return: None
     """
 
-    # Get the storage class, then get an instance of it.
-    storage = DefaultStorage()
-
     # Check if patch exists for the point
     patch_relative_path = get_patch_path(point_id)
-    if storage.exists(patch_relative_path):
+    if default_storage.exists(patch_relative_path):
         return
 
     # Locate the image.
@@ -165,7 +162,8 @@ def generate_patch_if_doesnt_exist(point_id):
                              * settings.LABELPATCH_SIZE_FRACTION)
 
     # Open the image file.
-    with storage.open(original_image_relative_path) as original_image_file:
+    with default_storage.open(
+            original_image_relative_path) as original_image_file:
 
         # Load the image with Pillow.
         im = PILImage.open(original_image_file)
@@ -203,4 +201,4 @@ def generate_patch_if_doesnt_exist(point_id):
     # This approach should work with both local and remote storage.
     with BytesIO() as stream:
         region.save(stream, 'JPEG')
-        storage.save(patch_relative_path, stream)
+        default_storage.save(patch_relative_path, stream)

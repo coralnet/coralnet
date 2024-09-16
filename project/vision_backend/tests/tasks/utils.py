@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.files.storage import DefaultStorage
+from django.core.files.storage import default_storage
 from django.test import override_settings
 
 from images.model_utils import PointGen
@@ -38,8 +38,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         self.source.refresh_from_db()
 
     def assertExistsInStorage(self, filepath):
-        storage = DefaultStorage()
-        self.assertTrue(storage.exists(filepath))
+        self.assertTrue(default_storage.exists(filepath))
 
     @classmethod
     def upload_image_with_annotations(

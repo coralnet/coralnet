@@ -9,7 +9,7 @@ import string
 import tempfile
 
 from django.conf import settings
-from django.core.files.storage import DefaultStorage, FileSystemStorage
+from django.core.files.storage import default_storage, FileSystemStorage
 from django.test import override_settings
 # `from easy_thumbnails.storage import <something>` seems to have potential
 # for issues with import timing/ordering, because that module calls
@@ -115,19 +115,17 @@ class StorageManagerS3(StorageManager):
 
     @contextmanager
     def override_default_storage_dir(self, storage_dir):
-        storage = DefaultStorage()
         thumbnail_storage = easy_thumbnails.storage.thumbnail_default_storage
 
-        # DefaultStorage() returns a storage which may have already been
-        # previously instantiated, in which case AWS_LOCATION won't be
-        # re-read.
+        # The LazyObject default_storage may have already been previously
+        # instantiated, in which case AWS_LOCATION won't be re-read.
         # So instead of overriding the AWS_LOCATION setting,
         # we directly assign the passed dir to the storage's `location`
         # attribute.
-        new_location = storage.path_join(
+        new_location = default_storage.path_join(
             storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
-        old_location = storage.location
-        storage.location = new_location
+        old_location = default_storage.location
+        default_storage.location = new_location
 
         # Similar for thumbnail storage.
         old_thumbnail_location = thumbnail_storage.location
@@ -148,7 +146,7 @@ class StorageManagerS3(StorageManager):
         with override_settings(MEDIA_URL=media_url):
             yield
 
-        storage.location = old_location
+        default_storage.location = old_location
         thumbnail_storage.location = old_thumbnail_location
 
     def create_temp_dir(self):
@@ -202,11 +200,9 @@ class StorageManagerLocal(StorageManager):
 
     @contextmanager
     def override_default_storage_dir(self, storage_dir):
-        storage = DefaultStorage()
-
         # For local storage, we only have to update where the media's stored,
         # not where it's served.
-        media_root = storage.path_join(storage_dir, 'media')
+        media_root = default_storage.path_join(storage_dir, 'media')
         with override_settings(MEDIA_ROOT=media_root):
             yield
 

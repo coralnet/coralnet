@@ -1,7 +1,7 @@
 from unittest import mock
 
 from django.conf import settings
-from django.core.files.storage import DefaultStorage
+from django.core.files.storage import default_storage
 from django.test import override_settings
 from spacer.data_classes import ValResults
 
@@ -99,17 +99,17 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             '[3900, 4600, 5000, 5100, 5200, 5230, 5220, 5224, 5223, 5223]')
 
         # Also check that the actual classifier is created in storage.
-        storage = DefaultStorage()
-        self.assertTrue(storage.exists(
+        self.assertTrue(default_storage.exists(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)))
 
         # And that the val results are stored.
         valresult_path = settings.ROBOT_MODEL_VALRESULT_PATTERN.format(
             pk=classifier.pk)
-        self.assertTrue(storage.exists(valresult_path))
+        self.assertTrue(default_storage.exists(valresult_path))
 
         # Check that the point-count in val_res is what it should be.
-        val_res = ValResults.load(storage.spacer_data_loc(valresult_path))
+        val_res = ValResults.load(
+            default_storage.spacer_data_loc(valresult_path))
         points_per_image = PointGen.from_db_value(
             self.source.default_point_generation_method).total_points
         self.assertEqual(
