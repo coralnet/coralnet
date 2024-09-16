@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.db import models
 from spacer.data_classes import ImageFeatures, ValResults
 from spacer.messages import DataLocation
@@ -56,7 +56,7 @@ class Classifier(models.Model):
     
     @property
     def valres(self) -> ValResults:
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         valres_loc: DataLocation = storage.spacer_data_loc(
             settings.ROBOT_MODEL_VALRESULT_PATTERN.format(pk=self.pk))
 
@@ -125,7 +125,7 @@ class Features(models.Model):
 
     @property
     def data_loc(self):
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         return storage.spacer_data_loc(
             settings.FEATURE_VECTOR_FILE_PATTERN.format(
                 full_image_path=self.image.original_file.name))

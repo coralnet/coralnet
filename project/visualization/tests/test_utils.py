@@ -6,7 +6,7 @@ from PIL import Image as PILImage
 from PIL.Image import SAVE as PIL_SAVE
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.test import override_settings
 
 from images.models import Point
@@ -50,7 +50,7 @@ class LabelPatchGenerationTest(ClientTest):
             self.fail("Error occurred during patch generation: {}".format(msg))
 
         # Then assert the patch was actually generated and that it's RGB
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         with storage.open(get_patch_path(point_id)) as fp:
             patch = PILImage.open(fp)
             self.assertEqual(patch.size[0], settings.LABELPATCH_NROWS)
@@ -145,7 +145,7 @@ class PatchCropTest(ClientTest):
         with mock.patch.object(PILImage.Image, 'save', always_save_png):
             generate_patch_if_doesnt_exist(point.pk)
 
-        storage = get_storage_class()()
+        storage = DefaultStorage()
 
         with storage.open(get_patch_path(point.pk)) as fp:
             patch = PILImage.open(fp)

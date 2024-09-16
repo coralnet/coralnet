@@ -5,7 +5,7 @@ import warnings
 
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.test import override_settings
 from django.urls import reverse
 from easy_thumbnails.files import get_thumbnailer
@@ -282,7 +282,7 @@ class ThumbnailsTest(AsyncMediaTest):
         img = self.upload_image(self.user, self.source)
 
         # Delete the original image file
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         storage.delete(img.original_file.name)
 
         batch_key, media_keys = self.load_browse_and_get_media_keys()[0]

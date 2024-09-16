@@ -5,7 +5,7 @@ from logging import getLogger
 import random
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
@@ -308,7 +308,7 @@ def submit_features(image_id, job_id):
         raise JobError(f"No feature extractor configured for this source.")
 
     # Setup the job payload.
-    storage = get_storage_class()()
+    storage = DefaultStorage()
 
     # Assemble row column information
     rowcols = [(p.row, p.column) for p in Point.objects.filter(image=img)]
@@ -424,7 +424,7 @@ def submit_classifier(source_id, job_id):
         feature_cache_dir = TrainClassifierMsg.FeatureCache.AUTO
 
     # Create TrainClassifierMsg
-    storage = get_storage_class()()
+    storage = DefaultStorage()
     task = TrainClassifierMsg(
         job_token=str(job_id),
         trainer_name='minibatch',
@@ -484,7 +484,7 @@ def deploy(api_job_id, api_unit_order, job_id):
             f" Maybe it was deleted.")
         raise JobError(error_message)
 
-    storage = get_storage_class()()
+    storage = DefaultStorage()
 
     task = ClassifyImageMsg(
         job_token=str(job_id),
@@ -536,7 +536,7 @@ def classify_image(image_id):
             " Feature extraction will be redone to fix this.")
 
     # Create task message
-    storage = get_storage_class()()
+    storage = DefaultStorage()
     msg = ClassifyFeaturesMsg(
         job_token=str(image_id),
         feature_loc=img.features.data_loc,

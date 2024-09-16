@@ -1,7 +1,7 @@
 from unittest import mock
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.test import override_settings
 from spacer.data_classes import ValResults
 
@@ -99,7 +99,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             '[3900, 4600, 5000, 5100, 5200, 5230, 5220, 5224, 5223, 5223]')
 
         # Also check that the actual classifier is created in storage.
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         self.assertTrue(storage.exists(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)))
 

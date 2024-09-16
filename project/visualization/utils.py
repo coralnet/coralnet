@@ -7,7 +7,7 @@ import django.db.models.fields as model_fields
 from PIL import Image as PILImage
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.db.models import Q
 
 from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
@@ -135,7 +135,7 @@ def get_patch_path(point_id):
 
 
 def get_patch_url(point_id):
-    return get_storage_class()().url(get_patch_path(point_id))
+    return DefaultStorage().url(get_patch_path(point_id))
 
 
 def generate_patch_if_doesnt_exist(point_id):
@@ -147,7 +147,7 @@ def generate_patch_if_doesnt_exist(point_id):
     """
 
     # Get the storage class, then get an instance of it.
-    storage = get_storage_class()()
+    storage = DefaultStorage()
 
     # Check if patch exists for the point
     patch_relative_path = get_patch_path(point_id)

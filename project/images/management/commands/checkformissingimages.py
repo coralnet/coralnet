@@ -3,7 +3,7 @@ from io import open
 import os
 import posixpath
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.core.management.base import BaseCommand
 from images.models import Image
 
@@ -14,7 +14,7 @@ class Command(BaseCommand):
             " nonexistent image filepaths")
 
     def handle(self, *args, **options):
-        storage = get_storage_class()()
+        storage = DefaultStorage()
 
         images_relative_dir = posixpath.split(settings.IMAGE_FILE_PATTERN)[0]
 

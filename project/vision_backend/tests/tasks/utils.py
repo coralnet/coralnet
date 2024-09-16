@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.test import override_settings
 
 from images.model_utils import PointGen
@@ -38,7 +38,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
         self.source.refresh_from_db()
 
     def assertExistsInStorage(self, filepath):
-        storage = get_storage_class()()
+        storage = DefaultStorage()
         self.assertTrue(storage.exists(filepath))
 
     @classmethod

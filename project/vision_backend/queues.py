@@ -9,7 +9,7 @@ from typing import Optional, Type
 import boto3
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.utils import timezone
 from django.utils.module_loading import import_string
 from spacer.messages import JobMsg, JobReturnMsg
@@ -25,7 +25,7 @@ logger = getLogger(__name__)
 class BaseQueue(abc.ABC):
 
     def __init__(self):
-        self.storage = get_storage_class()()
+        self.storage = DefaultStorage()
 
     @abc.abstractmethod
     def submit_job(self, job: JobMsg, job_id: int, spec_level: SpacerJobSpec):

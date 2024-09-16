@@ -1,7 +1,7 @@
 from collections import defaultdict
 import json
 
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import DefaultStorage
 from django.core.management.base import BaseCommand
 
 from images.models import Image
@@ -17,7 +17,7 @@ class Command(BaseCommand):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.errors = defaultdict(list)
-        self.storage = get_storage_class()()
+        self.storage = DefaultStorage()
 
     def add_arguments(self, parser):
         parser.add_argument(
