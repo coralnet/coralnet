@@ -6,6 +6,7 @@ from logging import getLogger
 from typing import Optional, Type
 
 import boto3
+from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.utils import timezone
@@ -142,7 +143,8 @@ class BatchQueue(BaseQueue):
 
         try:
             return_msg = JobReturnMsg.load(job_res_loc)
-        except IOError as e:
+        except (ClientError, IOError) as e:
+            # IOError for local storage, ClientError for S3 storage
             self.handle_job_failure(
                 job,
                 f"Batch job [{job}] succeeded,"
