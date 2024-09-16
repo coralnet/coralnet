@@ -408,12 +408,7 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
 
 class CustomTestRunner(DiscoverRunner):
 
-    def run_tests(self, test_labels, extra_tests=None, **kwargs):
-        """
-        extra_tests can be removed from the signature of this method
-        once PyCharm stops using it:
-        https://youtrack.jetbrains.com/issue/PY-53355/Warning-when-running-Django-tests-RemovedInDjango50Warning-The-extratests-argument-is-deprecated
-        """
+    def run_tests(self, test_labels, **kwargs):
         # Make tasks run synchronously. This is needed since the
         # huey consumer would run in a separate process, meaning it
         # wouldn't see the state of the current test's open DB-transaction.
