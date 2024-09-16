@@ -47,34 +47,6 @@ from ..storage_backends import get_storage_manager
 User = get_user_model()
 
 
-# Settings to override in all of our unit tests.
-test_settings = dict()
-
-# For most tests, use a local memory cache instead of a filesystem cache,
-# because there's no reason to persist the cache after a particular test is
-# over. And having to clean up those files after each test is slower +
-# more issue-prone than just using memory.
-#
-# Note that the Django docs have a warning on overriding the CACHES setting.
-# For example, tests that use cached sessions may need some extra care.
-# https://docs.djangoproject.com/en/dev/topics/testing/tools/#overriding-settings
-test_settings['CACHES'] = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'test',
-    }
-}
-
-# Force spacer jobs to use the dummy extractor.
-# Otherwise tests will run slow.
-test_settings['FORCE_DUMMY_EXTRACTOR'] = True
-# Speed up training setup by requiring as few images as possible.
-test_settings['TRAINING_MIN_IMAGES'] = 3
-# Validation sets vs. training sets should be completely predictable in
-# unit tests.
-test_settings['VALSET_SELECTION_METHOD'] = 'name'
-
-
 # Abstract class
 class ClientUtilsMixin(object, metaclass=ABCMeta):
     """
@@ -446,7 +418,6 @@ class CustomTestRunner(DiscoverRunner):
         return return_code
 
 
-@override_settings(**test_settings)
 class BaseTest(TestCase):
     """
     Base automated-test class.

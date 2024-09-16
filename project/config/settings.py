@@ -335,7 +335,11 @@ NEW_CLASSIFIER_IMPROVEMENT_TH = 1.01
 # This many images must be annotated before a first classifier is trained.
 # Can't set this lower than 3, since at least 1 train, 1 ref, and 1 val image
 # are needed for training.
-TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
+if _TESTING:
+    # Speed up tests' training setup by requiring as few images as possible.
+    TRAINING_MIN_IMAGES = 3
+else:
+    TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
 
 # Naming schemes
 FEATURE_VECTOR_FILE_PATTERN = '{full_image_path}.featurevector'
@@ -351,7 +355,11 @@ BATCH_RES_PATTERN = 'batch_jobs/{pk}_job_res.json'
 # Method of selecting images for the validation set vs. the training set.
 # See Image.valset() definition for the possible choices and how they're
 # implemented.
-VALSET_SELECTION_METHOD = 'id'
+if _TESTING:
+    # Selection should be completely predictable in unit tests.
+    VALSET_SELECTION_METHOD = 'name'
+else:
+    VALSET_SELECTION_METHOD = 'id'
 
 # This indicates the max number of scores we store per point.
 NBR_SCORES_PER_ANNOTATION = 5
@@ -392,8 +400,12 @@ SPACER = {
     'TRAINING_BATCH_LABEL_COUNT': TRAINING_BATCH_LABEL_COUNT,
 }
 
-# If True, feature extraction just returns dummy results to speed up testing.
-FORCE_DUMMY_EXTRACTOR = env.bool('FORCE_DUMMY_EXTRACTOR', default=DEBUG)
+# If True, feature extraction just returns dummy results. This helps by
+# speeding up testing.
+if _TESTING:
+    FORCE_DUMMY_EXTRACTOR = True
+else:
+    FORCE_DUMMY_EXTRACTOR = env.bool('FORCE_DUMMY_EXTRACTOR', default=DEBUG)
 
 if not FORCE_DUMMY_EXTRACTOR:
     # [CoralNet setting]
@@ -978,43 +990,55 @@ MIDDLEWARE = [
     'reversion.middleware.RevisionMiddleware',
 ]
 
-CACHES = {
-    'default': {
-        # File-based cache:
-        # https://grantjenks.com/docs/diskcache/tutorial.html#djangocache
-        #
-        # We don't use Django's stock FileBasedCache because it culls entries
-        # randomly. We want some control over culling priority, like with
-        # expiration dates (see cull_limit comments below).
-        #
-        # We don't use Django's stock local-memory cache because it saves
-        # entries per-process, with no possibility of passing between
-        # multiple gunicorn worker processes.
-        #
-        # Other than that, file-based seems a bit easier to manage/debug than
-        # memory-based, and seems good enough speed-wise for our use case.
-        'BACKEND': 'diskcache.DjangoCache',
-        'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
-        # DiskCache: Horizontal partitioning of cache entries. 8 is the
-        # default, but we're setting it explicitly to emphasize that culling
-        # and the cull_limit (see below) only applies within a particular
-        # shard.
-        'SHARDS': 8,
-        # DiskCache: How many seconds to allow to access the DiskCache SQLite
-        # database which lives in LOCATION. Default 0.010.
-        'DATABASE_TIMEOUT': 0.5,
-        'OPTIONS': {
-            # DiskCache: Maximum number of expired keys to cull when adding a
-            # new item. 10 is the default, but we're setting it explicitly to
-            # emphasize that this behavior of actively culling expired keys is
-            # important to us.
-            # We'll make one-time-use async media keys expire quickly,
-            # and make performance keys (e.g. label_details) expire
-            # very rarely.
-            'cull_limit': 10,
-        },
+if _TESTING:
+    # For most tests, use a local memory cache instead of a filesystem cache,
+    # because there's no reason to persist the cache after a particular test is
+    # over. And having to clean up those files after each test is slower +
+    # more issue-prone than just using memory.
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test',
+        }
     }
-}
+else:
+    # File-based cache:
+    # https://grantjenks.com/docs/diskcache/tutorial.html#djangocache
+    #
+    # We don't use Django's stock FileBasedCache because it culls entries
+    # randomly. We want some control over culling priority, like with
+    # expiration dates (see cull_limit comments below).
+    #
+    # We don't use Django's stock local-memory cache because it saves
+    # entries per-process, with no possibility of passing between
+    # multiple gunicorn worker processes.
+    #
+    # Other than that, file-based seems a bit easier to manage/debug than
+    # memory-based, and seems good enough speed-wise for our use case.
+    CACHES = {
+        'default': {
+            'BACKEND': 'diskcache.DjangoCache',
+            'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
+            # DiskCache: Horizontal partitioning of cache entries. 8 is the
+            # default, but we're setting it explicitly to emphasize that
+            # culling and the cull_limit (see below) only applies within a
+            # particular shard.
+            'SHARDS': 8,
+            # DiskCache: How many seconds to allow to access the DiskCache
+            # SQLite database which lives in LOCATION. Default 0.010.
+            'DATABASE_TIMEOUT': 0.5,
+            'OPTIONS': {
+                # DiskCache: Maximum number of expired keys to cull when adding
+                # a new item. 10 is the default, but we're setting it
+                # explicitly to emphasize that this behavior of actively
+                # culling expired keys is important to us.
+                # We'll make one-time-use async media keys expire quickly,
+                # and make performance keys (e.g. label_details) expire
+                # very rarely.
+                'cull_limit': 10,
+            },
+        }
+    }
 
 ROOT_URLCONF = 'config.urls'
 
@@ -1270,10 +1294,6 @@ GOOGLE_ANALYTICS_CODE = env('GOOGLE_ANALYTICS_CODE', default='')
 # Whether to disable tqdm output and processing or not. tqdm might be used
 # during management commands, data migrations, etc.
 # How to use: `for obj in tqdm(objs, disable=TQDM_DISABLE):`
-#
-# Here we disable tqdm when running the test command. Note that this is better
-# than setting False here and setting True in `test_settings`, because that
-# method would not disable tqdm during pre-test migration runs.
 TQDM_DISABLE = _TESTING
 
 # Browsers to run Selenium tests in.
