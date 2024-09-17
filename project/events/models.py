@@ -41,8 +41,14 @@ class Event(models.Model):
     required_id_fields: list[str] = []
 
     def save(self, *args, **kwargs):
-        if self.type_for_subclass:
+        if self.type_for_subclass and self.type != self.type_for_subclass:
             self.type = self.type_for_subclass
+
+            # Custom save() methods which update field values should add those
+            # field names to the update_fields kwarg.
+            # https://docs.djangoproject.com/en/4.2/topics/db/models/#overriding-predefined-model-methods
+            if (update_fields := kwargs.get('update_fields')) is not None:
+                kwargs['update_fields'] = {'type'}.union(update_fields)
 
         for field_name in self.required_id_fields:
             if not getattr(self, field_name):
