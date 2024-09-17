@@ -8,7 +8,8 @@ import posixpath
 import random
 from unittest import mock
 import urllib.parse
-from urllib.parse import quote as url_quote
+from urllib.parse import (
+    parse_qsl, quote as url_quote, urlencode, urlsplit, urlunsplit)
 from typing import Any, Callable
 
 import bs4
@@ -1439,3 +1440,21 @@ def scrambled_run(
         return_values[run_number] = f(run_number)
 
     return run_order, return_values
+
+
+def make_media_url_comparable(url):
+    """
+    A media URL will have URL query args if using S3 storage. Signature and
+    Expires args can change each time we get a URL for the same S3
+    file, making equality assertions problematic. So we replace those
+    with predictable values, effectively just checking that they are
+    present.
+    This should be a no-op for local-storage media URLs.
+    """
+    query_args = parse_qsl(urlsplit(url).query)
+    comparable_query_args = {
+        k: (k if k in ['Signature', 'Expires'] else v)
+        for k, v in query_args}
+    comparable_url = urlunsplit(
+        urlsplit(url)._replace(query=urlencode(comparable_query_args)))
+    return comparable_url
