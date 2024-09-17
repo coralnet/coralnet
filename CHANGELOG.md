@@ -15,10 +15,12 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
   - django-environ 0.10.0 -> `@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet`
   - django-guardian 2.4.0 -> `@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet`
   - django-registration 3.3 -> 3.4
-  - djangorestframework 3.14.0 -> 3.15.1
-  - django-reversion 5.0.4 -> 5.0.12
+  - djangorestframework 3.14.0 -> 3.15.2
+  - django-reversion 5.0.4 -> 5.1.0
   - django-storages 1.13.2 -> django-storages\[s3\] 1.14.4
   - easy-thumbnails `@git+https://github.com/StephenChan/easy-thumbnails.git@master` -> `@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet`
+  - tqdm 4.65.0 -> 4.66.5
+  - gunicorn `>=20.1.0,<20.2` -> 23.0.0 (for production)
   - pytz can now be uninstalled, since djangorestframework no longer depends on it.
 
 ## [1.13.1](https://github.com/coralnet/coralnet/tree/1.13.1)
