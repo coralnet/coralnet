@@ -100,7 +100,7 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             "Job has been failing repeatedly: name / arg, attempt 5",
             ["Error info:\n\nAn error"],
         )
-        self.assertAlmostEquals(
+        self.assertAlmostEqual(
             datetime.now(timezone.utc) + timedelta(days=3),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
@@ -128,7 +128,7 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             "Job has been failing repeatedly: name / arg, attempt 5",
             ["Error info:\n\nAn error"],
         )
-        self.assertAlmostEquals(
+        self.assertAlmostEqual(
             datetime.now(timezone.utc) + timedelta(days=5),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
@@ -145,7 +145,7 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             # Call again with shorter delay
             schedule_job('name', 'arg', delay=timedelta(days=2))
             job.refresh_from_db()
-            self.assertAlmostEquals(
+            self.assertAlmostEqual(
                 datetime.now(timezone.utc) + timedelta(days=2),
                 job.scheduled_start_date,
                 delta=timedelta(minutes=10),
@@ -161,7 +161,7 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
         # Call again with shorter delay
         schedule_job('name', 'arg', delay=timedelta(days=2))
         job.refresh_from_db()
-        self.assertAlmostEquals(
+        self.assertAlmostEqual(
             datetime.now(timezone.utc) + timedelta(days=5),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
@@ -361,7 +361,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             # Task args
             r";;;\('some_arg',\)"
         )
-        self.assertRegexpMatches(
+        self.assertRegex(
             cm.output[0],
             expected_start_message_regex,
             f"Should log the expected start message")
@@ -376,7 +376,7 @@ class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
             r"full_job_example;"
             r";;;\('some_arg',\)"
         )
-        self.assertRegexpMatches(
+        self.assertRegex(
             cm.output[1],
             expected_end_message_regex,
             f"Should log the expected end message")
