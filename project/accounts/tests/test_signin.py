@@ -1,9 +1,9 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.hashers import (
-    make_password, SHA1PasswordHasher)
+from django.contrib.auth.hashers import make_password
 from django.urls import reverse
 
 from lib.tests.utils import BasePermissionTest, BrowserTest, ClientTest
+from ..hashers import SHA1PasswordHasher
 from .utils import BaseAccountsTest
 
 User = get_user_model()
