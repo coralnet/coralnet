@@ -115,25 +115,15 @@ class StorageManagerS3(StorageManager):
 
     @contextmanager
     def override_default_storage_dir(self, storage_dir):
-        thumbnail_storage = easy_thumbnails.storage.thumbnail_default_storage
-
-        # The LazyObject default_storage may have already been previously
-        # instantiated, in which case AWS_LOCATION won't be re-read.
-        # So instead of overriding the AWS_LOCATION setting,
-        # we directly assign the passed dir to the storage's `location`
-        # attribute.
-        new_location = default_storage.path_join(
+        # We have an aws_location_changed() signal receiver which ensures that,
+        # when overriding the AWS_LOCATION setting, the relevant storages get
+        # their location attributes updated for the duration of the test.
+        aws_location = default_storage.path_join(
             storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
-        old_location = default_storage.location
-        default_storage.location = new_location
-
-        # Similar for thumbnail storage.
-        old_thumbnail_location = thumbnail_storage.location
-        thumbnail_storage.location = new_location
 
         # If the storage's base_url attribute is set, then it's used; else,
         # MEDIA_URL is read. Not at instantiation time, but any time it's
-        # relevant.
+        # relevant. So might as well do the easier change: MEDIA_URL.
         # Also, it's good to keep MEDIA_URL synced up with the storage dir,
         # since MEDIA_URL is used unconditionally in places like
         # LiveServerThread.
@@ -143,11 +133,9 @@ class StorageManagerS3(StorageManager):
             storage_dir=storage_dir.strip('/'),
             subdir=settings.AWS_S3_MEDIA_SUBDIR,
         )
-        with override_settings(MEDIA_URL=media_url):
-            yield
 
-        default_storage.location = old_location
-        thumbnail_storage.location = old_thumbnail_location
+        with override_settings(AWS_LOCATION=aws_location, MEDIA_URL=media_url):
+            yield
 
     def create_temp_dir(self):
         s3_root_storage = get_s3_root_storage()
