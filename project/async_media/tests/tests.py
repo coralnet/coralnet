@@ -5,14 +5,15 @@ import warnings
 
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import default_storage
 from django.test import override_settings
 from django.urls import reverse
 from easy_thumbnails.files import get_thumbnailer
 
 from images.models import Point
 from jobs.models import Job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import (
+    BasePermissionTest, ClientTest, make_media_url_comparable)
 from visualization.utils import generate_patch_if_doesnt_exist, get_patch_url
 
 
@@ -62,7 +63,8 @@ class AsyncMediaTest(ClientTest):
 
 @skipIf(
     os.name == 'nt'
-    and settings.DEFAULT_FILE_STORAGE == 'lib.storage_backends.MediaStorageS3',
+    and settings.STORAGES['default']['BACKEND']
+        == 'lib.storage_backends.MediaStorageS3',
     "Fetching existing thumbnails doesn't work with Windows + S3, because"
     " easy-thumbnails uses os.path for storage path separators")
 class ThumbnailsTest(AsyncMediaTest):
@@ -281,8 +283,7 @@ class ThumbnailsTest(AsyncMediaTest):
         img = self.upload_image(self.user, self.source)
 
         # Delete the original image file
-        storage = get_storage_class()()
-        storage.delete(img.original_file.name)
+        default_storage.delete(img.original_file.name)
 
         batch_key, media_keys = self.load_browse_and_get_media_keys()[0]
 
@@ -501,17 +502,21 @@ class PatchesTest(AsyncMediaTest):
         response = self.client.get(
             reverse('async_media:media_poll_ajax'), data=data)
 
+        comparable_actual_results = {
+            key: make_media_url_comparable(url)
+            for key, url in response.json()['mediaResults'].items()}
+
         # Determine expected JSON response
-        media_results = dict()
+        comparable_expected_results = dict()
         for media_key, point_number in expected_media:
             # This assumes there is only one annotated image in the test
             point = Point.objects.get(point_number=point_number)
-            media_results[media_key] = get_patch_url(point.pk)
-        expected_json = dict(mediaResults=media_results)
+            comparable_expected_results[media_key] = make_media_url_comparable(
+                get_patch_url(point.pk))
 
         self.assertDictEqual(
-            response.json(),
-            expected_json,
+            comparable_actual_results,
+            comparable_expected_results,
             msg="Expected poll results should have been retrieved")
 
     def test_load_existing_patch(self):
@@ -526,7 +531,8 @@ class PatchesTest(AsyncMediaTest):
         patch_image = self.load_browse_and_get_media()[0]
 
         self.assertEqual(
-            patch_url, patch_image.attrs.get('src'),
+            make_media_url_comparable(patch_url),
+            make_media_url_comparable(patch_image.attrs.get('src')),
             msg="Existing patch should be loaded on the browse page")
         self.assertEqual(
             '',

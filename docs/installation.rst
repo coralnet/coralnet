@@ -115,7 +115,6 @@ Certain file-creation parts of the project code may trigger an error such as ``N
 
 - ``<SITE_DIR>/log``
 - ``<SITE_DIR>/tmp``
-- ``<MEDIA_ROOT>/unittests`` (local-machine storage only)
 
 
 Running the unit tests

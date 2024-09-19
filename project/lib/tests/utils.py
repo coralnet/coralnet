@@ -1,7 +1,6 @@
 # Utility classes and functions for tests.
 from abc import ABCMeta
 from contextlib import contextmanager
-import datetime
 from io import BytesIO, StringIO
 import json
 import math
@@ -9,7 +8,8 @@ import posixpath
 import random
 from unittest import mock
 import urllib.parse
-from urllib.parse import quote as url_quote
+from urllib.parse import (
+    parse_qsl, quote as url_quote, urlencode, urlsplit, urlunsplit)
 from typing import Any, Callable
 
 import bs4
@@ -46,41 +46,6 @@ import vision_backend.task_helpers as backend_task_helpers
 from ..storage_backends import get_storage_manager
 
 User = get_user_model()
-
-
-# Settings to override in all of our unit tests.
-test_settings = dict()
-
-# ManifestStaticFilesStorage shouldn't be used during testing.
-# https://docs.djangoproject.com/en/dev/ref/contrib/staticfiles/#manifeststaticfilesstorage
-# And it shouldn't be needed anyway, unless browser caching is involved in
-# our automated tests somehow.
-test_settings['STATICFILES_STORAGE'] = \
-    'django.contrib.staticfiles.storage.StaticFilesStorage'
-
-# For most tests, use a local memory cache instead of a filesystem cache,
-# because there's no reason to persist the cache after a particular test is
-# over. And having to clean up those files after each test is slower +
-# more issue-prone than just using memory.
-#
-# Note that the Django docs have a warning on overriding the CACHES setting.
-# For example, tests that use cached sessions may need some extra care.
-# https://docs.djangoproject.com/en/dev/topics/testing/tools/#overriding-settings
-test_settings['CACHES'] = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'test',
-    }
-}
-
-# Force spacer jobs to use the dummy extractor.
-# Otherwise tests will run slow.
-test_settings['FORCE_DUMMY_EXTRACTOR'] = True
-# Speed up training setup by requiring as few images as possible.
-test_settings['TRAINING_MIN_IMAGES'] = 3
-# Validation sets vs. training sets should be completely predictable in
-# unit tests.
-test_settings['VALSET_SELECTION_METHOD'] = 'name'
 
 
 # Abstract class
@@ -416,12 +381,7 @@ class ClientUtilsMixin(object, metaclass=ABCMeta):
 
 class CustomTestRunner(DiscoverRunner):
 
-    def run_tests(self, test_labels, extra_tests=None, **kwargs):
-        """
-        extra_tests can be removed from the signature of this method
-        once PyCharm stops using it:
-        https://youtrack.jetbrains.com/issue/PY-53355/Warning-when-running-Django-tests-RemovedInDjango50Warning-The-extratests-argument-is-deprecated
-        """
+    def run_tests(self, test_labels, **kwargs):
         # Make tasks run synchronously. This is needed since the
         # huey consumer would run in a separate process, meaning it
         # wouldn't see the state of the current test's open DB-transaction.
@@ -441,14 +401,16 @@ class CustomTestRunner(DiscoverRunner):
         post_setuptestdata_state_dir = storage_manager.create_temp_dir()
 
         # Create settings that establish the temp dirs accordingly.
-        test_storage_settings = \
-            storage_manager.create_storage_dir_settings(test_storage_dir)
-        test_storage_settings['TEST_STORAGE_DIR'] = test_storage_dir
-        test_storage_settings['POST_SETUPTESTDATA_STATE_DIR'] = \
-            post_setuptestdata_state_dir
+        test_storage_settings = {
+            'TEST_STORAGE_DIR': test_storage_dir,
+            'POST_SETUPTESTDATA_STATE_DIR': post_setuptestdata_state_dir,
+        }
 
         # Run tests with the above storage settings applied.
-        with override_settings(**test_storage_settings):
+        with (
+            override_settings(**test_storage_settings),
+            storage_manager.override_default_storage_dir(test_storage_dir)
+        ):
             return_code = super().run_tests(test_labels, **kwargs)
 
         # Clean up the temp dirs after the tests are done.
@@ -457,7 +419,6 @@ class CustomTestRunner(DiscoverRunner):
         return return_code
 
 
-@override_settings(**test_settings)
 class BaseTest(TestCase):
     """
     Base automated-test class.
@@ -1479,3 +1440,21 @@ def scrambled_run(
         return_values[run_number] = f(run_number)
 
     return run_order, return_values
+
+
+def make_media_url_comparable(url):
+    """
+    A media URL will have URL query args if using S3 storage. Signature and
+    Expires args can change each time we get a URL for the same S3
+    file, making equality assertions problematic. So we replace those
+    with predictable values, effectively just checking that they are
+    present.
+    This should be a no-op for local-storage media URLs.
+    """
+    query_args = parse_qsl(urlsplit(url).query)
+    comparable_query_args = {
+        k: (k if k in ['Signature', 'Expires'] else v)
+        for k, v in query_args}
+    comparable_url = urlunsplit(
+        urlsplit(url)._replace(query=urlencode(comparable_query_args)))
+    return comparable_url

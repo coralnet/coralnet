@@ -3,7 +3,7 @@ from io import open
 import os
 import posixpath
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
 from images.models import Image
 
@@ -14,14 +14,12 @@ class Command(BaseCommand):
             " nonexistent image filepaths")
 
     def handle(self, *args, **options):
-        storage = get_storage_class()()
-
         images_relative_dir = posixpath.split(settings.IMAGE_FILE_PATTERN)[0]
 
         self.stdout.write(
             "Reading the image files directory: {dir}. This could take"
             " a while...".format(dir=images_relative_dir))
-        dirnames, filenames = storage.listdir(images_relative_dir)
+        dirnames, filenames = default_storage.listdir(images_relative_dir)
         filenames = set(filenames)
 
         self.stdout.write(

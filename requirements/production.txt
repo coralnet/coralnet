@@ -5,4 +5,5 @@
 # WSGI HTTP server - The layer above Django, and below the overall web
 # server (e.g. nginx)
 # Changelog: http://docs.gunicorn.org/en/stable/news.html
-gunicorn>=20.1.0,<20.2
+# Compat: Python 3.7-3.12
+gunicorn==23.0.0

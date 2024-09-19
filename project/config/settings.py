@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 
+import boto3.s3.transfer
 # In many cases it's dangerous to import from Django directly into a settings
 # module, but ImproperlyConfigured is fine.
 from django.core.exceptions import ImproperlyConfigured
@@ -120,6 +121,9 @@ else:
     # False is useful sometimes, such as for testing 404 and 500 views.
     DEBUG = env.bool('DEBUG', default=True)
 
+
+_TESTING = 'test' in sys.argv
+
 # [CoralNet setting]
 # Whether the app is being served through nginx, Apache, etc.
 # Situations where it's not:
@@ -129,7 +133,7 @@ else:
 REAL_SERVER = (
     not DEBUG
     and 'runserver' not in sys.argv
-    and 'test' not in sys.argv
+    and not _TESTING
 )
 
 
@@ -331,7 +335,11 @@ NEW_CLASSIFIER_IMPROVEMENT_TH = 1.01
 # This many images must be annotated before a first classifier is trained.
 # Can't set this lower than 3, since at least 1 train, 1 ref, and 1 val image
 # are needed for training.
-TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
+if _TESTING:
+    # Speed up tests' training setup by requiring as few images as possible.
+    TRAINING_MIN_IMAGES = 3
+else:
+    TRAINING_MIN_IMAGES = env.int('TRAINING_MIN_IMAGES', default=20)
 
 # Naming schemes
 FEATURE_VECTOR_FILE_PATTERN = '{full_image_path}.featurevector'
@@ -347,7 +355,11 @@ BATCH_RES_PATTERN = 'batch_jobs/{pk}_job_res.json'
 # Method of selecting images for the validation set vs. the training set.
 # See Image.valset() definition for the possible choices and how they're
 # implemented.
-VALSET_SELECTION_METHOD = 'id'
+if _TESTING:
+    # Selection should be completely predictable in unit tests.
+    VALSET_SELECTION_METHOD = 'name'
+else:
+    VALSET_SELECTION_METHOD = 'id'
 
 # This indicates the max number of scores we store per point.
 NBR_SCORES_PER_ANNOTATION = 5
@@ -388,8 +400,12 @@ SPACER = {
     'TRAINING_BATCH_LABEL_COUNT': TRAINING_BATCH_LABEL_COUNT,
 }
 
-# If True, feature extraction just returns dummy results to speed up testing.
-FORCE_DUMMY_EXTRACTOR = env.bool('FORCE_DUMMY_EXTRACTOR', default=DEBUG)
+# If True, feature extraction just returns dummy results. This helps by
+# speeding up testing.
+if _TESTING:
+    FORCE_DUMMY_EXTRACTOR = True
+else:
+    FORCE_DUMMY_EXTRACTOR = env.bool('FORCE_DUMMY_EXTRACTOR', default=DEBUG)
 
 if not FORCE_DUMMY_EXTRACTOR:
     # [CoralNet setting]
@@ -452,14 +468,17 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
-# Added in 1.13; disables using threads for S3 requests, preventing errors
-# such as
-# `RuntimeError: cannot schedule new futures after interpreter shutdown`
-# At time of writing, not in django-storages docs, but was implemented in:
-# https://github.com/jschneier/django-storages/pull/1112
-# This very similar PR in django-s3-storage has more info:
-# https://github.com/etianen/django-s3-storage/pull/136
-AWS_S3_USE_THREADS = False
+AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
+    # Disables using threads for S3 requests, preventing errors such as
+    # `RuntimeError: cannot schedule new futures after interpreter shutdown`
+    # More info on how this relates to the error:
+    # https://github.com/jschneier/django-storages/pull/1112
+    # https://github.com/etianen/django-s3-storage/pull/136
+    #
+    # Formerly set by the django-storages setting AWS_S3_USE_THREADS
+    # (deprecated starting from django-storages 1.14).
+    use_threads=False,
+)
 
 # [PySpacer settings]
 SPACER['AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
@@ -477,7 +496,9 @@ REGTEST_BUCKET = 'coralnet-regtest-fixtures'
 if SETTINGS_BASE == Bases.DEV_LOCAL:
 
     # Default file storage mechanism that holds media.
-    DEFAULT_FILE_STORAGE = 'lib.storage_backends.MediaStorageLocal'
+    _STORAGES_DEFAULT = dict(
+        BACKEND='lib.storage_backends.MediaStorageLocal',
+    )
 
     # Absolute filesystem path to the directory that will hold user-uploaded
     # files.
@@ -497,9 +518,6 @@ if SETTINGS_BASE == Bases.DEV_LOCAL:
         MEDIA_URL = env('MEDIA_URL')
 
 else:
-
-    # Default file storage mechanism that holds media.
-    DEFAULT_FILE_STORAGE = 'lib.storage_backends.MediaStorageS3'
 
     # [django-storages setting]
     # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
@@ -534,13 +552,10 @@ else:
     # S3 bucket subdirectory in which to store media.
     AWS_LOCATION = AWS_S3_MEDIA_SUBDIR
 
-# [easy_thumbnails setting]
-# Default file storage for saving generated thumbnails.
-#
-# The only downside of not using the app's provided storage class is that
-# the THUMBNAIL_MEDIA_ROOT and THUMBNAIL_MEDIA_URL settings won't work
-# (we'd have to apply them manually). We aren't using these settings, though.
-THUMBNAIL_DEFAULT_STORAGE = DEFAULT_FILE_STORAGE
+    # Default file storage mechanism that holds media.
+    _STORAGES_DEFAULT = dict(
+        BACKEND='lib.storage_backends.MediaStorageS3',
+    )
 
 
 #
@@ -555,13 +570,20 @@ STATICFILES_DIRS = [
 ]
 
 # The default file storage backend used during the build process.
+#
 # ManifestStaticFilesStorage appends a content-based hash to the filename
 # to facilitate browser caching.
 # This hash appending happens as a post-processing step in collectstatic, so
 # it only applies to DEBUG False.
+# It also isn't for use during unit tests, so in that case we use the default
+# static files storage backend.
 # https://docs.djangoproject.com/en/dev/ref/contrib/staticfiles/#manifeststaticfilesstorage
-STATICFILES_STORAGE = \
-    'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+if _TESTING:
+    _STORAGES_BACKEND_STATICFILES = \
+        'django.contrib.staticfiles.storage.StaticFilesStorage'
+else:
+    _STORAGES_BACKEND_STATICFILES = \
+        'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
 
 # Absolute path to the directory which static files should be collected to.
 # Example: "/home/media/media.lawrence.com/static/"
@@ -601,6 +623,35 @@ else:
     # Otherwise, make sure your server software (e.g. nginx) serves static
     # files at this URL relative to your domain.
     STATIC_URL = '/static/'
+
+
+# Overall storages setting.
+
+STORAGES = {
+    'default': _STORAGES_DEFAULT,
+    'staticfiles': {
+        'BACKEND': _STORAGES_BACKEND_STATICFILES,
+    },
+    # easy_thumbnails does provide its own storage class, but we don't
+    # need that class's functionality because we don't use the
+    # THUMBNAIL_MEDIA_ROOT or THUMBNAIL_MEDIA_URL settings.
+    'easy_thumbnails': _STORAGES_DEFAULT,
+}
+
+if (
+    SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
+    and
+    STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
+    and
+    not _TESTING
+):
+    # We only raise this in non-test environments, because some tests
+    # are able to use mocks to test BatchQueue while sticking with
+    # local storage.
+    raise ImproperlyConfigured(
+        "Can not use Remote queue with local storage."
+        " Please use S3 storage."
+    )
 
 
 #
@@ -939,43 +990,55 @@ MIDDLEWARE = [
     'reversion.middleware.RevisionMiddleware',
 ]
 
-CACHES = {
-    'default': {
-        # File-based cache:
-        # https://grantjenks.com/docs/diskcache/tutorial.html#djangocache
-        #
-        # We don't use Django's stock FileBasedCache because it culls entries
-        # randomly. We want some control over culling priority, like with
-        # expiration dates (see cull_limit comments below).
-        #
-        # We don't use Django's stock local-memory cache because it saves
-        # entries per-process, with no possibility of passing between
-        # multiple gunicorn worker processes.
-        #
-        # Other than that, file-based seems a bit easier to manage/debug than
-        # memory-based, and seems good enough speed-wise for our use case.
-        'BACKEND': 'diskcache.DjangoCache',
-        'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
-        # DiskCache: Horizontal partitioning of cache entries. 8 is the
-        # default, but we're setting it explicitly to emphasize that culling
-        # and the cull_limit (see below) only applies within a particular
-        # shard.
-        'SHARDS': 8,
-        # DiskCache: How many seconds to allow to access the DiskCache SQLite
-        # database which lives in LOCATION. Default 0.010.
-        'DATABASE_TIMEOUT': 0.5,
-        'OPTIONS': {
-            # DiskCache: Maximum number of expired keys to cull when adding a
-            # new item. 10 is the default, but we're setting it explicitly to
-            # emphasize that this behavior of actively culling expired keys is
-            # important to us.
-            # We'll make one-time-use async media keys expire quickly,
-            # and make performance keys (e.g. label_details) expire
-            # very rarely.
-            'cull_limit': 10,
-        },
+if _TESTING:
+    # For most tests, use a local memory cache instead of a filesystem cache,
+    # because there's no reason to persist the cache after a particular test is
+    # over. And having to clean up those files after each test is slower +
+    # more issue-prone than just using memory.
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test',
+        }
     }
-}
+else:
+    # File-based cache:
+    # https://grantjenks.com/docs/diskcache/tutorial.html#djangocache
+    #
+    # We don't use Django's stock FileBasedCache because it culls entries
+    # randomly. We want some control over culling priority, like with
+    # expiration dates (see cull_limit comments below).
+    #
+    # We don't use Django's stock local-memory cache because it saves
+    # entries per-process, with no possibility of passing between
+    # multiple gunicorn worker processes.
+    #
+    # Other than that, file-based seems a bit easier to manage/debug than
+    # memory-based, and seems good enough speed-wise for our use case.
+    CACHES = {
+        'default': {
+            'BACKEND': 'diskcache.DjangoCache',
+            'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
+            # DiskCache: Horizontal partitioning of cache entries. 8 is the
+            # default, but we're setting it explicitly to emphasize that
+            # culling and the cull_limit (see below) only applies within a
+            # particular shard.
+            'SHARDS': 8,
+            # DiskCache: How many seconds to allow to access the DiskCache
+            # SQLite database which lives in LOCATION. Default 0.010.
+            'DATABASE_TIMEOUT': 0.5,
+            'OPTIONS': {
+                # DiskCache: Maximum number of expired keys to cull when adding
+                # a new item. 10 is the default, but we're setting it
+                # explicitly to emphasize that this behavior of actively
+                # culling expired keys is important to us.
+                # We'll make one-time-use async media keys expire quickly,
+                # and make performance keys (e.g. label_details) expire
+                # very rarely.
+                'cull_limit': 10,
+            },
+        }
+    }
 
 ROOT_URLCONF = 'config.urls'
 
@@ -1231,11 +1294,7 @@ GOOGLE_ANALYTICS_CODE = env('GOOGLE_ANALYTICS_CODE', default='')
 # Whether to disable tqdm output and processing or not. tqdm might be used
 # during management commands, data migrations, etc.
 # How to use: `for obj in tqdm(objs, disable=TQDM_DISABLE):`
-#
-# Here we disable tqdm when running the test command. Note that this is better
-# than setting False here and setting True in `test_settings`, because that
-# method would not disable tqdm during pre-test migration runs.
-TQDM_DISABLE = 'test' in sys.argv
+TQDM_DISABLE = _TESTING
 
 # Browsers to run Selenium tests in.
 #

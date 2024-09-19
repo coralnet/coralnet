@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import posixpath
@@ -7,11 +8,15 @@ import shutil
 import string
 import tempfile
 
-from spacer.messages import DataLocation
-
 from django.conf import settings
-from django.core.files.storage import DefaultStorage, FileSystemStorage
-from storages.backends.s3boto3 import S3Boto3Storage
+from django.core.files.storage import default_storage, FileSystemStorage
+from django.test import override_settings
+# `from easy_thumbnails.storage import <something>` seems to have potential
+# for issues with import timing/ordering, because that module calls
+# get_storage() at the global level. So we import this way instead.
+import easy_thumbnails.storage
+from spacer.messages import DataLocation
+from storages.backends.s3 import S3Storage
 
 from .exceptions import FileStorageUsageError
 
@@ -26,11 +31,12 @@ class StorageManager(object, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def create_storage_dir_settings(self, storage_dir):
+    @contextmanager
+    def override_default_storage_dir(self, storage_dir):
         """
-        Create a Django settings dict which establishes storage_dir (an
-        absolute path / path from bucket root) as the storage root. Can be
-        used in an override_settings decorator or similar.
+        Context manager which establishes storage_dir (an absolute
+        path / path from bucket root) as the default-storage root for the
+        context's duration.
         """
         raise NotImplementedError
 
@@ -107,21 +113,29 @@ class StorageManagerS3(StorageManager):
                 s3_root_storage.path_join(src, subdir),
                 s3_root_storage.path_join(dst, subdir))
 
-    def create_storage_dir_settings(self, storage_dir):
-        storage_settings = dict()
-        storage = DefaultStorage()
+    @contextmanager
+    def override_default_storage_dir(self, storage_dir):
+        # We have an aws_location_changed() signal receiver which ensures that,
+        # when overriding the AWS_LOCATION setting, the relevant storages get
+        # their location attributes updated for the duration of the test.
+        aws_location = default_storage.path_join(
+            storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
 
-        storage_settings['AWS_LOCATION'] = \
-            storage.path_join(storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
+        # If the storage's base_url attribute is set, then it's used; else,
+        # MEDIA_URL is read. Not at instantiation time, but any time it's
+        # relevant. So might as well do the easier change: MEDIA_URL.
+        # Also, it's good to keep MEDIA_URL synced up with the storage dir,
+        # since MEDIA_URL is used unconditionally in places like
+        # LiveServerThread.
+        # So we favor overriding MEDIA_URL instead of base_url.
+        media_url = 'https://{domain}/{storage_dir}/{subdir}/'.format(
+            domain=settings.AWS_S3_DOMAIN,
+            storage_dir=storage_dir.strip('/'),
+            subdir=settings.AWS_S3_MEDIA_SUBDIR,
+        )
 
-        # MEDIA_URL must end in a slash.
-        storage_settings['MEDIA_URL'] = \
-            'https://{domain}/{storage_dir}/{subdir}/'.format(
-                domain=settings.AWS_S3_DOMAIN,
-                storage_dir=storage_dir.strip('/'),
-                subdir=settings.AWS_S3_MEDIA_SUBDIR)
-
-        return storage_settings
+        with override_settings(AWS_LOCATION=aws_location, MEDIA_URL=media_url):
+            yield
 
     def create_temp_dir(self):
         s3_root_storage = get_s3_root_storage()
@@ -172,14 +186,13 @@ class StorageManagerLocal(StorageManager):
     def copy_dir(self, src, dst):
         shutil.copytree(src, dst, dirs_exist_ok=True)
 
-    def create_storage_dir_settings(self, storage_dir):
-        storage_settings = dict()
-        storage = DefaultStorage()
-
-        storage_settings['MEDIA_ROOT'] = \
-            storage.path_join(storage_dir, 'media')
-
-        return storage_settings
+    @contextmanager
+    def override_default_storage_dir(self, storage_dir):
+        # For local storage, we only have to update where the media's stored,
+        # not where it's served.
+        media_root = default_storage.path_join(storage_dir, 'media')
+        with override_settings(MEDIA_ROOT=media_root):
+            yield
 
     def create_temp_dir(self):
         # We'll use an OS-designated temp dir.
@@ -206,24 +219,11 @@ class StorageManagerLocal(StorageManager):
         shutil.rmtree(dir_to_remove)
 
 
-class MediaStorageS3(S3Boto3Storage):
+class MediaStorageS3(S3Storage):
     """
     S3-bucket storage backend.
     Storage root defaults to the AWS_LOCATION directory.
     """
-    def __init__(self, **kwargs):
-        # django-storages's S3Boto3Storage is implemented a bit differently from
-        # Django's FileSystemStorage: it initializes the location attribute to
-        # the appropriate setting on the class definition level, rather than in
-        # __init__(). This means S3Boto3Storage might not pick up changes to
-        # settings, which might occur when unit testing for example.
-        #
-        # To allow S3 storage to pick up on settings changes, we'll pass a
-        # default `location` kwarg equal to the appropriate setting.
-        if 'location' not in kwargs:
-            kwargs['location'] = settings.AWS_LOCATION
-        super().__init__(**kwargs)
-
     def exists(self, name):
         # Check for existing file. This doesn't work on dirs.
         if super().exists(name):
@@ -276,6 +276,9 @@ class MediaStorageLocal(FileSystemStorage):
         """ Returns a spacer DataLocation object. """
         return DataLocation(storage_type='filesystem',
                             key=self.path(key))
+
+
+_s3_root_storage = None
  
 
 def get_s3_root_storage():
@@ -283,20 +286,25 @@ def get_s3_root_storage():
     Returns an S3 storage backend which accepts operations throughout an
     entire bucket, rather than only within a settings-specified directory.
     """
-    # S3 storage's __init__() accepts kwargs to override default attributes.
-    # `location` is the path from the bucket root which will be used as the
-    # storage root. We want to use bucket root as storage root, so we pass ''.
-    return MediaStorageS3(location='')
+    global _s3_root_storage
+
+    if _s3_root_storage is None:
+        # S3 storage's __init__() accepts kwargs to override default
+        # attributes. `location` is the path from the bucket root which will
+        # be used as the storage root. We want to use bucket root as storage
+        # root, so we pass ''.
+        _s3_root_storage = MediaStorageS3(location='')
+    return _s3_root_storage
 
 
 def get_storage_manager():
     """
-    Returns the StorageManager applicable to the currently selected storage.
+    Returns the StorageManager applicable to the default storage backend.
     """
-    if settings.DEFAULT_FILE_STORAGE == 'lib.storage_backends.MediaStorageS3':
-        return StorageManagerS3()
-    elif settings.DEFAULT_FILE_STORAGE \
-            == 'lib.storage_backends.MediaStorageLocal':
-        return StorageManagerLocal()
-    else:
-        raise FileStorageUsageError("Unrecognized storage class.")
+    match settings.STORAGES['default']['BACKEND']:
+        case 'lib.storage_backends.MediaStorageS3':
+            return StorageManagerS3()
+        case 'lib.storage_backends.MediaStorageLocal':
+            return StorageManagerLocal()
+        case _:
+            raise FileStorageUsageError("Unrecognized storage backend.")

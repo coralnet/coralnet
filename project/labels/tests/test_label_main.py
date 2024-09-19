@@ -1,4 +1,5 @@
 from pathlib import Path
+import urllib.parse
 
 from bs4 import BeautifulSoup
 from django.test import override_settings
@@ -8,7 +9,11 @@ from django.utils.html import escape as html_escape
 from calcification.tests.utils import create_default_calcify_table
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, sample_image_as_file)
+    BasePermissionTest,
+    ClientTest,
+    make_media_url_comparable,
+    sample_image_as_file,
+)
 from lib.utils import context_scoped_cache
 from sources.models import Source
 from visualization.utils import get_patch_path
@@ -385,8 +390,9 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         response = self.get_example_patches()
         patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
         img_soups = patches_soup.find_all('img')
-        thumbnail_urls = set(
-            [img_soup.attrs.get('src') for img_soup in img_soups])
+        thumbnail_urls = set([
+            make_media_url_comparable(img_soup.attrs.get('src'))
+            for img_soup in img_soups])
 
         # ...then get page 1 patches again, and it should
         # have the same thumbnail URLs, not necessarily in
@@ -396,7 +402,11 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         img_soups = patches_soup.find_all('img')
         self.assertSetEqual(
             thumbnail_urls,
-            set([img_soup.attrs.get('src') for img_soup in img_soups]))
+            set([
+                make_media_url_comparable(img_soup.attrs.get('src'))
+                for img_soup in img_soups
+            ]),
+        )
 
         # A couple more checks to see that the cache entry's presence
         # doesn't break other cases.
@@ -436,7 +446,8 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
         img_soups = patches_soup.find_all('img')
         actual_thumbnail_filenames = set([
-            Path(img_soup.attrs.get('src')).name
+            # src is a URL; get just the filename part.
+            Path(urllib.parse.urlsplit(img_soup.attrs.get('src')).path).name
             for img_soup in img_soups])
         self.assertEqual(
             len(actual_thumbnail_filenames), 3,

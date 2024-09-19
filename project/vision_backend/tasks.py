@@ -5,7 +5,7 @@ from logging import getLogger
 import random
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import default_storage
 from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
@@ -307,9 +307,6 @@ def submit_features(image_id, job_id):
     if img.source.feature_extractor is None:
         raise JobError(f"No feature extractor configured for this source.")
 
-    # Setup the job payload.
-    storage = get_storage_class()()
-
     # Assemble row column information
     rowcols = [(p.row, p.column) for p in Point.objects.filter(image=img)]
 
@@ -318,7 +315,7 @@ def submit_features(image_id, job_id):
         job_token=str(job_id),
         extractor=get_extractor(img.source.feature_extractor),
         rowcols=rowcols,
-        image_loc=storage.spacer_data_loc(img.original_file.name),
+        image_loc=default_storage.spacer_data_loc(img.original_file.name),
         feature_loc=img.features.data_loc,
     )
 
@@ -424,20 +421,19 @@ def submit_classifier(source_id, job_id):
         feature_cache_dir = TrainClassifierMsg.FeatureCache.AUTO
 
     # Create TrainClassifierMsg
-    storage = get_storage_class()()
     task = TrainClassifierMsg(
         job_token=str(job_id),
         trainer_name='minibatch',
         nbr_epochs=settings.NBR_TRAINING_EPOCHS,
         clf_type=CLASSIFIER_MAPPINGS[source.feature_extractor],
         labels=labels,
-        features_loc=storage.spacer_data_loc(''),
-        previous_model_locs=[storage.spacer_data_loc(
+        features_loc=default_storage.spacer_data_loc(''),
+        previous_model_locs=[default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=pc.pk))
             for pc in prev_classifiers],
-        model_loc=storage.spacer_data_loc(
+        model_loc=default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)),
-        valresult_loc=storage.spacer_data_loc(
+        valresult_loc=default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_VALRESULT_PATTERN.format(pk=classifier.pk)),
         feature_cache_dir=feature_cache_dir,
     )
@@ -484,8 +480,6 @@ def deploy(api_job_id, api_unit_order, job_id):
             f" Maybe it was deleted.")
         raise JobError(error_message)
 
-    storage = get_storage_class()()
-
     task = ClassifyImageMsg(
         job_token=str(job_id),
         image_loc=DataLocation(
@@ -495,7 +489,7 @@ def deploy(api_job_id, api_unit_order, job_id):
         extractor=get_extractor(classifier.source.feature_extractor),
         rowcols=[(point['row'], point['column']) for point in
                  api_job_unit.request_json['points']],
-        classifier_loc=storage.spacer_data_loc(
+        classifier_loc=default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk))
     )
     # Note the 'deploy' is called 'classify_image' in spacer.
@@ -536,11 +530,10 @@ def classify_image(image_id):
             " Feature extraction will be redone to fix this.")
 
     # Create task message
-    storage = get_storage_class()()
     msg = ClassifyFeaturesMsg(
         job_token=str(image_id),
         feature_loc=img.features.data_loc,
-        classifier_loc=storage.spacer_data_loc(
+        classifier_loc=default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=classifier.pk)
         )
     )

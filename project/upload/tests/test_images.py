@@ -5,7 +5,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.core.files.storage import DefaultStorage
+from django.core.files.storage import default_storage
 from django.core import mail
 from django.test import override_settings
 from django.urls import reverse
@@ -225,8 +225,7 @@ class UploadImageTest(ClientTest):
         image_id = response_json['image_id']
         img = Image.objects.get(pk=image_id)
 
-        storage = DefaultStorage()
-        self.assertTrue(storage.exists(img.original_file.name))
+        self.assertTrue(default_storage.exists(img.original_file.name))
 
 
 class UploadImageFormatTest(ClientTest):

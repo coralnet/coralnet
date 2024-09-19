@@ -2,7 +2,7 @@ import abc
 import uuid
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.core.files.storage import default_storage
 from django.templatetags.static import static as to_static_path
 from easy_thumbnails.files import get_thumbnailer
 
@@ -121,11 +121,9 @@ class AsyncPatch(AsyncMediaItem):
         return (self.point_id,)
 
     def get_url(self):
-        # Get the storage class, then get an instance of it.
-        storage = get_storage_class()()
         # Check if patch exists for the point.
         patch_relative_path = get_patch_path(self.point_id)
-        if storage.exists(patch_relative_path):
+        if default_storage.exists(patch_relative_path):
             return get_patch_url(self.point_id)
         else:
             return None

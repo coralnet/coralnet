@@ -56,8 +56,20 @@ class BlogPost(models.Model):
         # Time to publish?
         if not self.published_timestamp and self.is_published:
             self.published_timestamp = timezone.now()
-        elif not self.is_published:
+            updating_timestamp = True
+        elif self.published_timestamp and not self.is_published:
             self.published_timestamp = None
+            updating_timestamp = True
+        else:
+            updating_timestamp = False
+
+        if updating_timestamp:
+            # Custom save() methods which update field values should add those
+            # field names to the update_fields kwarg.
+            # https://docs.djangoproject.com/en/4.2/topics/db/models/#overriding-predefined-model-methods
+            if (update_fields := kwargs.get('update_fields')) is not None:
+                kwargs['update_fields'] = (
+                    {'published_timestamp'}.union(update_fields))
 
         super().save(*args, **kwargs)
 
