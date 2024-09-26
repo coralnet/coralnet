@@ -727,10 +727,11 @@ class CalcificationRatesTest(BaseLabelMainTest, HtmlAssertionsMixin):
             str(help_dialog_tag),
             msg="Atlantic table 1 download link should be absent")
         self.assertInHTML(
-            f'<a href="{atlantic_2_download_url}">Atlantic</a>',
+            f'<a href="{atlantic_2_download_url}">Table Name - Atlantic</a>',
             str(help_dialog_tag),
             msg_prefix="Atlantic table 2 download link should be present")
         self.assertInHTML(
-            f'<a href="{indo_pacific_download_url}">Indo-Pacific</a>',
+            f'<a href="{indo_pacific_download_url}">'
+            f'Table Name - Indo-Pacific</a>',
             str(help_dialog_tag),
             msg_prefix="Indo-Pacific table download link should be present")
