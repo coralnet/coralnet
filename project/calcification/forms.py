@@ -6,7 +6,7 @@ from django.forms.widgets import CheckboxSelectMultiple, Textarea
 from export.forms import ExportImageStatsForm
 from upload.forms import CsvFileField
 from .models import CalcifyRateTable
-from .utils import get_default_calcify_tables
+from .utils import get_global_calcify_tables
 
 
 def get_calcify_table_choices(source):
@@ -17,7 +17,7 @@ def get_calcify_table_choices(source):
     ]
 
     # Default tables
-    default_tables = get_default_calcify_tables()
+    default_tables = get_global_calcify_tables()
     choices.extend([
         (table.pk, table.name)
         for table in default_tables

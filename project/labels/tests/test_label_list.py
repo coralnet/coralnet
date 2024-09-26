@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 from django.contrib.auth.models import Group
 from django.urls import reverse
 
-from calcification.tests.utils import create_default_calcify_table
+from calcification.tests.utils import create_global_calcify_table
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import LabelGroup, Label
@@ -108,10 +108,18 @@ class LabelListTest(ClientTest):
         label_b = self.labels.get(name='B')
         label_c = self.labels.get(name='C')
 
-        create_default_calcify_table(
+        # Old Atlantic table; shouldn't be considered at all despite having
+        # an entry that's not in the current Atlantic table
+        create_global_calcify_table(
+            'Atlantic', {
+                label_a.pk: dict(mean=5, lower_bound=4, upper_bound=6),
+                label_c.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
+        # Current Atlantic table
+        create_global_calcify_table(
             'Atlantic', {
                 label_c.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
-        create_default_calcify_table(
+        # Current Indo-Pacific table
+        create_global_calcify_table(
             'Indo-Pacific', {
                 label_b.pk: dict(mean=5, lower_bound=4, upper_bound=6),
                 label_c.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
