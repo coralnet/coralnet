@@ -3,6 +3,12 @@ button#manage-calcify-tables-button {
     display: block;
     margin: auto;
 }
+table#table-of-calcify-tables td {
+    /* Vertically center table cell contents.
+       Might consider applying this to more tables across CoralNet (or
+       removing the `baseline` value from reset.css). */
+    vertical-align: middle;
+}
 table#table-of-calcify-tables td.name {
     max-width: 300px;
 }
