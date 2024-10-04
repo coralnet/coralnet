@@ -69,7 +69,13 @@
           <td>
             {% if job_entry.status == 'pending' %}
 
-              {% if job_entry.scheduled_start_date %}
+              {% if not job_entry.scheduled_start_date %}
+
+                <span title="Created: {{ job_entry.create_date }}">
+                  Created {{ job_entry.create_date|timesince }} ago
+                </span>
+
+              {% elif now < job_entry.scheduled_start_date %}
 
                 <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
                   {{ job_entry.scheduled_start_date|timeuntil }} until scheduled start
@@ -77,8 +83,8 @@
 
               {% else %}
 
-                <span title="Created: {{ job_entry.create_date }}">
-                  Created {{ job_entry.create_date|timesince }} ago
+                <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
+                  Been waiting for {{ job_entry.scheduled_start_date|timesince }} to start
                 </span>
 
               {% endif %}

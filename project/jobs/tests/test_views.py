@@ -674,7 +674,8 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
         # Be generous about time delays/inconsistencies during the test.
         acceptable_cells_for_each_job = [
-            ["0\xa0minutes until scheduled start"],
+            ["Been waiting for " + str(num) + "\xa0minutes to start"
+             for num in [8, 9, 10, 11, 12]],
             [str(num) + "\xa0minutes until scheduled start"
              for num in [8, 9, 10, 11, 12]],
             ["Created " + str(num) + "\xa0minutes ago"

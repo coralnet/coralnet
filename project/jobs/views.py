@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import permission_required
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.views import View
 
 from lib.decorators import source_permission_required
@@ -110,6 +111,7 @@ class JobListView(View, ABC):
             job_table=job_table,
             job_max_days=settings.JOB_MAX_DAYS,
             job_counts=job_counts,
+            now=timezone.now(),
         )
 
 
