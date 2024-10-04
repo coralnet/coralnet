@@ -24,7 +24,13 @@ logger = getLogger(__name__)
 
 
 def get_scheduled_jobs():
-    jobs = Job.objects.filter(status=Job.Status.PENDING).order_by('pk')
+    jobs = (
+        Job.objects.filter(status=Job.Status.PENDING)
+        # Ensure that jobs scheduled to start first get processed first.
+        # For jobs with no scheduled start date, tiebreak by pk for
+        # consistency. (TODO: Test)
+        .order_by('scheduled_start_date', 'pk')
+    )
     # We'll run any pending jobs immediately if django-huey's default queue
     # is configured to act similarly.
     if not django_huey.get_queue(settings.DJANGO_HUEY['default']).immediate:
