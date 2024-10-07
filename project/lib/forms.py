@@ -20,6 +20,10 @@ class BoxFormRenderer(TemplatesSetting):
     form_template_name = 'lib/forms/box.html'
 
 
+class InlineFormRenderer(TemplatesSetting):
+    form_template_name = 'lib/forms/inline.html'
+
+
 class FieldsetsFormComponent:
     """
     Allows grouping form fields into fieldsets, which can be recognized

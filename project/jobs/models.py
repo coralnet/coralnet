@@ -7,6 +7,9 @@ from django.db.models import Q
 
 class JobQuerySet(models.QuerySet):
 
+    def pending(self):
+        return self.filter(status=Job.Status.PENDING)
+
     def incomplete(self):
         return self.filter(
             status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS])

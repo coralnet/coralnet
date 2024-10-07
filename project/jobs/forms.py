@@ -10,7 +10,7 @@ from django.db.models.lookups import LessThan
 from django.db.models.expressions import Case, F, Value, When
 from django.utils import timezone
 
-from lib.forms import BoxFormRenderer
+from lib.forms import BoxFormRenderer, InlineFormRenderer
 from sources.models import Source
 from .models import Job
 
@@ -257,3 +257,20 @@ class JobSummaryForm(BaseJobForm):
         # in recently-updated-first order.
 
         return source_entries, non_source_job_counts
+
+
+class BackgroundJobStatusForm(forms.Form):
+    recency_threshold = forms.ChoiceField(
+        label="Look at jobs from the past",
+        choices=[
+            ('1', "hour"),
+            ('4', "4 hours"),
+            ('24', "day"),
+            ('72', "3 days"),
+            ('168', "week"),
+            ('720', "30 days"),
+        ],
+        initial='72',
+    )
+
+    default_renderer = InlineFormRenderer

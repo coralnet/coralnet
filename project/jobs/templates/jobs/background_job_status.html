@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load timedelta_display from common_tags %}
+
+{% block title %}Status of Background Jobs | CoralNet{% endblock %}
+
+
+{% block css-includes %}
+  {% include "static-local-include.html" with type="css" path="css/jobs.css" %}
+{% endblock %}
+
+
+{% block content %}
+
+<div class="tool-heading">
+  <span>Status of Background Jobs</span>
+</div>
+
+<form action="" method="get" class="no-padding">
+  {{ form }}
+  <input type="submit" value="Update" class="red">
+</form>
+  
+<hr>
+
+<ul class="detail_list">
+  <li>Jobs in the past {{ recency_threshold_str }} - 10th to 90th percentile times:</li>
+  
+  <li>
+    <ul>
+      <li class="tooltip" title="Duration from scheduled start time to actual start time">
+        Time waited before starting: {{ recent_wait_time_interval.0|timedelta_display }} ~ {{ recent_wait_time_interval.1|timedelta_display }}
+      </li>
+      <li class="tooltip" title="Duration from scheduled start time to finish time">
+        Total time: {{ recent_total_time_interval.0|timedelta_display }} ~ {{ recent_total_time_interval.1|timedelta_display }}
+      </li>
+    </ul>
+  </li>
+</ul>
+  
+{% if request.user.is_superuser %}
+  <hr>
+  
+  <div class="tooltip" title="Among currently pending jobs, highest duration from scheduled start time to now">
+    Current highest pending wait time: {{ max_pending_wait_time|timedelta_display }}
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+import datetime
 
 from django.conf import settings
-from django.contrib.auth.decorators import permission_required
+from django.contrib.auth.decorators import (
+    login_required, permission_required)
+from django.db.models import Aggregate, DurationField, F
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.utils import timezone
@@ -10,7 +13,7 @@ from django.views import View
 from lib.decorators import source_permission_required
 from lib.utils import paginate
 from sources.models import Source
-from .forms import JobSearchForm, JobSummaryForm
+from .forms import BackgroundJobStatusForm, JobSearchForm, JobSummaryForm
 from .models import Job
 
 
@@ -18,9 +21,28 @@ def tag_to_readable(tag):
     return tag.capitalize().replace('_', ' ')
 
 
+class Percentile10(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile10'
+    output_field = DurationField()
+    template = '%(function)s(0.1) WITHIN GROUP (ORDER BY %(expressions)s)'
+
+
+class Percentile90(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile90'
+    output_field = DurationField()
+    template = '%(function)s(0.9) WITHIN GROUP (ORDER BY %(expressions)s)'
+
+
 class JobListView(View, ABC):
     template_name: str
     form: JobSearchForm = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.now = timezone.now()
+        self._jobs = None
 
     def get(self, request, **kwargs):
         context = dict()
@@ -41,6 +63,12 @@ class JobListView(View, ABC):
     def get_form(self, data=None):
         raise NotImplementedError
 
+    @property
+    def jobs(self):
+        if self._jobs is None:
+            self._jobs = self.form.get_jobs()
+        return self._jobs
+
     @abstractmethod
     def get_context(self, request):
         raise NotImplementedError
@@ -50,9 +78,9 @@ class JobListView(View, ABC):
     def has_source_column(self):
         raise NotImplementedError
 
-    def get_job_list_context(self, request, jobs, job_counts):
+    def get_job_list_context(self, request):
         page_jobs, query_string = paginate(
-            results=jobs,
+            results=self.jobs,
             items_per_page=settings.JOBS_PER_PAGE,
             request_args=request.GET,
         )
@@ -110,8 +138,8 @@ class JobListView(View, ABC):
             query_string=query_string,
             job_table=job_table,
             job_max_days=settings.JOB_MAX_DAYS,
-            job_counts=job_counts,
-            now=timezone.now(),
+            job_counts=self.form.get_job_counts(),
+            now=self.now,
         )
 
 
@@ -126,9 +154,7 @@ class AllJobsListView(JobListView):
         return JobSearchForm(data=data, source_id='all')
 
     def get_context(self, request):
-        return self.get_job_list_context(
-            request, self.form.get_jobs(), self.form.get_job_counts()
-        )
+        return self.get_job_list_context(request)
 
     @property
     def has_source_column(self):
@@ -174,9 +200,7 @@ class SourceJobListView(JobListView):
             latest_check=latest_check,
             check_in_progress=check_in_progress,
         )
-        context |= self.get_job_list_context(
-            request, self.form.get_jobs(), self.form.get_job_counts()
-        )
+        context |= self.get_job_list_context(request)
         return context
 
     @property
@@ -197,9 +221,7 @@ class NonSourceJobListView(JobListView):
         return JobSearchForm(data=data, source_id=None)
 
     def get_context(self, request):
-        return self.get_job_list_context(
-            request, self.form.get_jobs(), self.form.get_job_counts()
-        )
+        return self.get_job_list_context(request)
 
     @property
     def has_source_column(self):
@@ -263,3 +285,78 @@ class JobSummaryView(View):
         )
 
         return render(request, self.template_name, context)
+
+
+@login_required
+def background_job_status(request):
+    context = dict()
+
+    # TODO: Be able to get the realtime / background distinction in a
+    #  DRY way; like from a Job DB field, or from the job function
+    #  definitions
+    background_jobs = Job.objects.all().exclude(
+        job_name__in=['generate_thumbnail', 'generate_patch'])
+
+    field = BackgroundJobStatusForm.declared_fields['recency_threshold']
+    threshold_hours = field.initial
+    if request.GET:
+        form = BackgroundJobStatusForm(request.GET)
+        if form.is_valid():
+            threshold_hours = form.cleaned_data['recency_threshold']
+    else:
+        form = BackgroundJobStatusForm()
+    context['form'] = form
+    recency_threshold = datetime.timedelta(hours=int(threshold_hours))
+    context['recency_threshold_str'] = dict(field.choices)[threshold_hours]
+
+    now = timezone.now()
+
+    recent_wait_time_jobs = (
+        background_jobs
+        .filter(start_date__gt=now-recency_threshold,
+                scheduled_start_date__isnull=False)
+        .annotate(wait_time=F('start_date')-F('scheduled_start_date'))
+        .order_by('wait_time')
+    )
+    interval = [
+        recent_wait_time_jobs.aggregate(Percentile10('wait_time'))
+        ['wait_time__percentile10'],
+        recent_wait_time_jobs.aggregate(Percentile90('wait_time'))
+        ['wait_time__percentile90'],
+    ]
+    if interval[0] is None:
+        interval = [datetime.timedelta(0), datetime.timedelta(0)]
+    context['recent_wait_time_interval'] = interval
+
+    recent_total_time_jobs = (
+        background_jobs.completed()
+        .filter(modify_date__gt=now-recency_threshold,
+                scheduled_start_date__isnull=False)
+        .annotate(total_time=F('modify_date')-F('scheduled_start_date'))
+        .order_by('total_time')
+    )
+    interval = [
+        recent_total_time_jobs.aggregate(Percentile10('total_time'))
+        ['total_time__percentile10'],
+        recent_total_time_jobs.aggregate(Percentile90('total_time'))
+        ['total_time__percentile90'],
+    ]
+    if interval[0] is None:
+        interval = [datetime.timedelta(0), datetime.timedelta(0)]
+    context['recent_total_time_interval'] = interval
+
+    if request.user.is_superuser:
+        earliest_scheduled_pending_job = (
+            background_jobs.pending()
+            .order_by('scheduled_start_date')
+            .first()
+        )
+        if earliest_scheduled_pending_job is None:
+            max_wait = datetime.timedelta(0)
+        else:
+            max_wait = now - earliest_scheduled_pending_job.scheduled_start_date
+            if max_wait < datetime.timedelta(0):
+                max_wait = datetime.timedelta(0)
+        context['max_pending_wait_time'] = max_wait
+
+    return render(request, 'jobs/background_job_status.html', context)

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Callable
 
 from bs4 import BeautifulSoup
@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
-from django.utils.timezone import get_current_timezone
+from django.utils import timezone
 
 from api_core.models import ApiJob, ApiJobUnit
 from lib.tests.utils import (
@@ -20,7 +20,7 @@ from .utils import fabricate_job
 
 def date_display(date):
     return date_template_filter(
-        date.astimezone(get_current_timezone()), 'N j, Y, P')
+        date.astimezone(timezone.get_current_timezone()), 'N j, Y, P')
 
 
 class PermissionTest(BasePermissionTest):
@@ -64,6 +64,14 @@ class PermissionTest(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
+    def test_background_job_status(self):
+        url = reverse('jobs:status')
+        template = 'jobs/background_job_status.html'
+
+        self.assertPermissionLevel(
+            url, self.SIGNED_IN, template=template,
+            deny_type=self.REQUIRE_LOGIN)
+
 
 class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
@@ -93,6 +101,8 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         source: int | None = None,
         job_name: str = None,
         modified_time_ago: timedelta = None,
+        started_time_ago: timedelta = None,
+        scheduled_time_ago: timedelta = None,
         **kwargs
     ):
         """
@@ -110,8 +120,11 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
         if modified_time_ago:
             # This may also be negative to indicate time in future.
-            updated_kwargs['modify_date'] = \
-                datetime.now(timezone.utc) - modified_time_ago
+            updated_kwargs['modify_date'] = timezone.now() - modified_time_ago
+        if started_time_ago:
+            updated_kwargs['start_date'] = timezone.now() - started_time_ago
+        if scheduled_time_ago:
+            updated_kwargs['delay'] = -scheduled_time_ago
         job = fabricate_job(job_name, **updated_kwargs)
 
         return job
@@ -406,7 +419,7 @@ class JobSummaryTest(JobViewTestMixin, ClientTest):
     def test_exclude_source_checks(self):
         # Not a source check, and older
         one_day = timedelta(days=1)
-        one_day_ago = datetime.now(timezone.utc) - one_day
+        one_day_ago = timezone.now() - one_day
         self.job(Job.Status.SUCCESS, source=1, modified_time_ago=one_day)
         # Source check
         self.job(Job.Status.SUCCESS, source=1, job_name='check_source')
@@ -633,7 +646,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
 
     def test_time_column(self):
-        now = datetime.now(timezone.utc)
+        now = timezone.now()
         jobs = [
             self.job(
                 Job.Status.PENDING,
@@ -1044,3 +1057,354 @@ class NonSourceJobListTest(JobListTestsMixin, ClientTest):
                 {"Job ID": job.pk},
             ]
         )
+
+
+class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+    def get_response(self, user=None, data=None):
+        if user is None:
+            user = self.user
+        self.client.force_login(user)
+        url = reverse('jobs:status')
+        return self.client.get(url, data=data)
+
+    def get_content_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('#content-container')[0]
+
+    def get_detail_list_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('ul.detail_list')[0]
+
+    def test_wait_time(self):
+        def f_20m(_num):
+            # Wait time: 20 minutes
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(days=2, minutes=50),
+                started_time_ago=timedelta(days=2, minutes=30),
+            )
+        def f_2h(_num):
+            # Wait time: 2 hours
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(hours=7),
+                started_time_ago=timedelta(hours=5),
+            )
+        def f_1d(_num):
+            # Wait time: 1 day
+            self.job(
+                status=Job.Status.IN_PROGRESS,
+                scheduled_time_ago=timedelta(days=2, hours=3),
+                started_time_ago=timedelta(days=1, hours=3),
+            )
+        def f_1d10h(_num):
+            # Wait time: 1 day 10 hours
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(days=2, hours=22),
+                started_time_ago=timedelta(days=1, hours=12),
+            )
+        def f_1d20h(_num):
+            # Wait time: 1 day 20 hours
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(days=1, hours=23),
+                started_time_ago=timedelta(hours=3),
+            )
+
+        # 20 jobs total;
+        # The 10th percentile should be calculated as being between 2nd
+        # and 3rd, and 9x closer to the 3rd. So (20m + 2h*9) / 10 = 110m.
+        # The 90th percentile should be calculated as being between 18th
+        # and 19th, and 9x closer to the 18th. So (1d*9 + 1d10h) / 10 = 1d1h.
+        scrambled_run([f_20m]*2 + [f_2h] + [f_1d]*15 + [f_1d10h, f_1d20h])
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Time waited before starting: 1\xa0hour, 50\xa0minutes ~ 1\xa0day, 1\xa0hour",
+            str(detail_list_soup))
+
+    def test_wait_time_no_jobs(self):
+        # Jobs that don't have both a scheduled start time and a start time
+        # don't count.
+        self.job(
+            status=Job.Status.PENDING,
+            scheduled_time_ago=timedelta(days=2, minutes=50),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            started_time_ago=timedelta(days=2, minutes=30),
+        )
+        # Jobs not started within the recency threshold don't count.
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(days=3, hours=2),
+            started_time_ago=timedelta(days=3, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Time waited before starting: 0\xa0minutes ~ 0\xa0minutes",
+            str(detail_list_soup))
+
+    def test_total_time(self):
+        def f_0m(_num):
+            # Total time: 0
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(minutes=5),
+                modified_time_ago=timedelta(minutes=5),
+            )
+        def f_10m(_num):
+            # Total time: 10 minutes
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(minutes=15),
+                modified_time_ago=timedelta(minutes=5),
+            )
+        def f_20m(_num):
+            # Total time: 20 minutes
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(minutes=25),
+                modified_time_ago=timedelta(minutes=5),
+            )
+
+        # 20 jobs total;
+        # The 10th percentile should be calculated as being between 2nd
+        # and 3rd, and 9x closer to the 3rd. So (0m + 10m*9) / 10 = 9m.
+        # The 90th percentile should be calculated as being between 18th
+        # and 19th, and 9x closer to the 18th. So (10m*9 + 20m) / 10 = 11m.
+        scrambled_run([f_0m]*2 + [f_10m]*16 + [f_20m]*2)
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Total time: 9\xa0minutes ~ 11\xa0minutes",
+            str(detail_list_soup))
+
+    def test_total_time_no_jobs(self):
+        # Jobs that don't have a scheduled start time don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            modified_time_ago=timedelta(days=1),
+        )
+        # Jobs not modified within the recency threshold don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=5),
+            modified_time_ago=timedelta(days=4),
+        )
+        # Incomplete jobs don't count.
+        self.job(
+            status=Job.Status.PENDING,
+            scheduled_time_ago=timedelta(minutes=30),
+            modified_time_ago=timedelta(minutes=20),
+        )
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(minutes=30),
+            modified_time_ago=timedelta(minutes=20),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Total time: 0\xa0minutes ~ 0\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_default(self):
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, minutes=3),
+            started_time_ago=timedelta(days=2, hours=23, minutes=50),
+            modified_time_ago=timedelta(days=3, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, minutes=29),
+            modified_time_ago=timedelta(days=2, hours=23, minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, hours=5),
+            started_time_ago=timedelta(days=3, hours=2),
+            modified_time_ago=timedelta(days=3, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Jobs in the past 3 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_hour(self):
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=3),
+            started_time_ago=timedelta(minutes=50),
+            modified_time_ago=timedelta(hours=1, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=29),
+            modified_time_ago=timedelta(minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=5),
+            started_time_ago=timedelta(hours=1, minutes=2),
+            modified_time_ago=timedelta(hours=1, minutes=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='1'))
+        self.assertInHTML(
+            "Jobs in the past hour - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_30_days(self):
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, minutes=3),
+            started_time_ago=timedelta(days=29, hours=23, minutes=50),
+            modified_time_ago=timedelta(days=30, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, minutes=29),
+            modified_time_ago=timedelta(days=29, hours=23, minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, hours=5),
+            started_time_ago=timedelta(days=30, hours=2),
+            modified_time_ago=timedelta(days=30, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='720'))
+        self.assertInHTML(
+            "Jobs in the past 30 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_invalid(self):
+        # Should use the default threshold.
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='some_unrecognized_value'))
+        self.assertInHTML(
+            "Jobs in the past 3 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+
+    def test_exclude_realtime_jobs(self):
+        # Expect realtime jobs to be recognized by job name.
+        # These two are realtime.
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='generate_thumbnail',
+            scheduled_time_ago=timedelta(minutes=11),
+            started_time_ago=timedelta(minutes=10),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='generate_patch',
+            scheduled_time_ago=timedelta(minutes=11),
+            started_time_ago=timedelta(minutes=10),
+        )
+        # This isn't realtime. This should be the only job accounted for
+        # in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='update_label_details',
+            scheduled_time_ago=timedelta(minutes=15),
+            started_time_ago=timedelta(minutes=10),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Time waited before starting: 5\xa0minutes ~ 5\xa0minutes",
+            str(detail_list_soup))
+
+    def test_pending_wait_time(self):
+        def f1(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(minutes=5),
+            )
+        def f2(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(hours=5, minutes=15),
+            )
+        def f3(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(hours=5, minutes=20),
+            )
+
+        scrambled_run([f1, f2, f3])
+
+        detail_list_soup = self.get_content_soup(user=self.superuser)
+        self.assertInHTML(
+            "Current highest pending wait time: 5\xa0hours, 20\xa0minutes",
+            str(detail_list_soup))
+
+    def test_pending_wait_time_no_jobs(self):
+        # Non-pending jobs aren't considered here.
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(days=2),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=2),
+        )
+        self.job(
+            status=Job.Status.FAILURE,
+            scheduled_time_ago=timedelta(days=2),
+        )
+
+        content_soup = self.get_content_soup(user=self.superuser)
+        self.assertInHTML(
+            "Current highest pending wait time: 0\xa0minutes",
+            str(content_soup))
+
+    def test_pending_wait_time_not_admin(self):
+        response = self.get_response(user=self.superuser)
+        self.assertContains(response, "Current highest pending wait time")
+
+        response = self.get_response()
+        self.assertNotContains(response, "Current highest pending wait time")

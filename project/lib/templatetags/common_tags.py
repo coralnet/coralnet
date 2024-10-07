@@ -7,6 +7,7 @@ from django import template
 from django.conf import settings
 from django.utils import timezone
 from django.utils.safestring import mark_safe
+from django.utils.timesince import timesince
 
 register = template.Library()
 
@@ -72,6 +73,18 @@ def get_maintenance_time():
 @register.filter
 def time_is_past(datetime_obj):
     return datetime_obj < timezone.now()
+
+
+@register.filter
+def timedelta_display(delta: datetime.timedelta):
+    """
+    Display a timedelta using the same logic as the built-in timesince
+    and timeuntil filters.
+    Unfortunately that logic isn't isolated in a function, so we copy from
+    the Django code.
+    """
+    arbitrary_date = datetime.datetime(2000, 1, 1, 0, 0, 0)
+    return timesince(arbitrary_date, now=arbitrary_date+delta)
 
 
 @register.filter
