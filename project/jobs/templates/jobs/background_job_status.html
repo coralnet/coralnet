@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load timedelta_display from common_tags %}
 
-{% block title %}Status of Background Jobs | CoralNet{% endblock %}
+{% block title %}Sitewide job-processing status | CoralNet{% endblock %}
 
 
 {% block css-includes %}
@@ -11,9 +11,7 @@
 
 {% block content %}
 
-<div class="tool-heading">
-  <span>Status of Background Jobs</span>
-</div>
+<h2>Sitewide job-processing status</h2>
 
 <form action="" method="get" class="no-padding">
   {{ form }}

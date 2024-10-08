@@ -8,11 +8,18 @@
   {% include "static-local-include.html" with type="css" path="css/jobs.css" %}
 {% endblock %}
 
+{% block js-includes %}
+  {% include "javascript-includes.html" with jquery_ui="yes" %}
+{% endblock %}
+
 
 {% block content %}
 
 <div class="tool-heading">
   <span>Jobs</span>
+  <div class="tutorial-message">
+    {% include 'jobs/help_source_job_list.html' %}
+  </div>
 </div>
 
 <div class="line" id="source-check-status">
