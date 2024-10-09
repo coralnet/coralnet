@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import timedelta
 from typing import Callable
+from unittest import mock
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
@@ -103,6 +104,7 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         modified_time_ago: timedelta = None,
         started_time_ago: timedelta = None,
         scheduled_time_ago: timedelta = None,
+        created_time_ago: timedelta = None,
         **kwargs
     ):
         """
@@ -118,11 +120,15 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         if source:
             updated_kwargs['source_id'] = self.sources[source - 1].pk
 
-        if modified_time_ago:
-            # This may also be negative to indicate time in future.
-            updated_kwargs['modify_date'] = timezone.now() - modified_time_ago
-        if started_time_ago:
-            updated_kwargs['start_date'] = timezone.now() - started_time_ago
+        if modified_time_ago or started_time_ago or created_time_ago:
+            now = timezone.now()
+            if modified_time_ago:
+                # This may also be negative to indicate time in future.
+                updated_kwargs['modify_date'] = now - modified_time_ago
+            if started_time_ago:
+                updated_kwargs['start_date'] = now - started_time_ago
+            if created_time_ago:
+                updated_kwargs['create_date'] = now - created_time_ago
         if scheduled_time_ago:
             updated_kwargs['delay'] = -scheduled_time_ago
         job = fabricate_job(job_name, **updated_kwargs)
@@ -1218,6 +1224,210 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         detail_list_soup = self.get_detail_list_soup()
         self.assertInHTML(
             "Total time: 0\xa0minutes ~ 0\xa0minutes",
+            str(detail_list_soup))
+
+    def test_incomplete_count(self):
+
+        now = timezone.now()
+
+        def get_time_ago(**kwargs):
+            return now - timedelta(**kwargs)
+
+        expected_graph_data = []
+
+        # 3 jobs exist before the 3-day timeline
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=3, hours=6)
+            job1 = self.job(status=Job.Status.PENDING)
+            job2 = self.job(status=Job.Status.PENDING)
+            job3 = self.job(status=Job.Status.IN_PROGRESS)
+        expected_graph_data.insert(0, dict(
+            x=0, y=3,
+            tooltip=(
+                "3\xa0days ago"
+                "<br><strong>3</strong> incomplete jobs"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=1, y=3,
+            tooltip=(
+                "2\xa0days, 12\xa0hours ago"
+                "<br><strong>3</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+
+        # One 12-hour interval creates and completes jobs
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=2, hours=6)
+            job1.status = Job.Status.SUCCESS
+            job1.save()
+            job4 = self.job(status=Job.Status.PENDING)
+            _job5 = self.job(status=Job.Status.IN_PROGRESS)
+        expected_graph_data.insert(0, dict(
+            x=2, y=4,
+            tooltip=(
+                "2\xa0days ago"
+                "<br><strong>4</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 1 completed, 2 created"
+            )
+        ))
+
+        # One 12-hour interval completes jobs
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=1, hours=18)
+            job2.status = Job.Status.FAILURE
+            job2.save()
+            job4.status = Job.Status.SUCCESS
+            job4.save()
+        expected_graph_data.insert(0, dict(
+            x=3, y=2,
+            tooltip=(
+                "1\xa0day, 12\xa0hours ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 2 completed, 0 created"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=4, y=2,
+            tooltip=(
+                "1\xa0day ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=5, y=2,
+            tooltip=(
+                "12\xa0hours ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+
+        # One 12-hour interval creates jobs (and drives the average up)
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(hours=6)
+            for _ in range(15):
+                self.job(status=Job.Status.PENDING)
+        expected_graph_data.insert(0, dict(
+            x=6, y=17,
+            tooltip=(
+                "Now"
+                "<br><strong>17</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 15 created"
+            )
+        ))
+
+        response = self.get_response()
+        graph_data = response.context['incomplete_count_graph_data']
+        for i in range(6+1):
+            self.assertDictEqual(
+                graph_data[i],
+                expected_graph_data[i],
+            )
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        detail_list_soup = response_soup.select('ul.detail_list')[0]
+        self.assertInHTML(
+            "Now: 17",
+            str(detail_list_soup))
+        self.assertInHTML(
+            # (3+3+4+2+2+2+17) / 7 = 4.71; round to nearest
+            "Rough average over the past 3 days: 5",
+            str(detail_list_soup))
+
+    def test_incomplete_count_no_jobs(self):
+        # Jobs completed before the timeline don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            created_time_ago=timedelta(days=3, hours=4),
+            modified_time_ago=timedelta(days=3, hours=2),
+        )
+        self.job(
+            status=Job.Status.FAILURE,
+            created_time_ago=timedelta(days=3, hours=4),
+            modified_time_ago=timedelta(days=3, hours=2),
+        )
+        # Jobs started and completed within the same interval don't contribute
+        # to any incomplete job counts, but they do count toward the created
+        # and completed counts in the tooltip.
+        self.job(status=Job.Status.SUCCESS)
+        self.job(status=Job.Status.FAILURE)
+
+        expected_graph_data = [
+            dict(
+                x=6, y=0,
+                tooltip=(
+                    "Now"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 2 completed, 2 created"
+                )
+            ),
+            dict(
+                x=5, y=0,
+                tooltip=(
+                    "12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=4, y=0,
+                tooltip=(
+                    "1\xa0day ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=3, y=0,
+                tooltip=(
+                    "1\xa0day, 12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=2, y=0,
+                tooltip=(
+                    "2\xa0days ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=1, y=0,
+                tooltip=(
+                    "2\xa0days, 12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=0, y=0,
+                tooltip=(
+                    "3\xa0days ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                )
+            ),
+        ]
+
+        response = self.get_response()
+        graph_data = response.context['incomplete_count_graph_data']
+        for i in range(6+1):
+            self.assertDictEqual(
+                graph_data[i],
+                expected_graph_data[i],
+            )
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        detail_list_soup = response_soup.select('ul.detail_list')[0]
+        self.assertInHTML(
+            "Now: 0",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Rough average over the past 3 days: 0",
             str(detail_list_soup))
 
     def test_recency_threshold_default(self):

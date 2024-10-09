@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.views import View
 
+from lib.templatetags.common_tags import timedelta_display
 from lib.decorators import source_permission_required
 from lib.utils import paginate
 from sources.models import Source
@@ -344,6 +345,62 @@ def background_job_status(request):
     if interval[0] is None:
         interval = [datetime.timedelta(0), datetime.timedelta(0)]
     context['recent_total_time_interval'] = interval
+
+    incomplete_count = background_jobs.incomplete().count()
+    context['incomplete_count'] = incomplete_count
+
+    # Graph of number of incomplete jobs over time
+    now = timezone.now()
+    num_intervals = 6
+    interval_length = recency_threshold / num_intervals
+    completed_jobs = background_jobs.completed()
+    graph_data = [dict(
+        x=num_intervals,
+        y=incomplete_count,
+    )]
+    interval_start_timestamp = now
+    interval_start_time_ago = datetime.timedelta(0)
+    # Since we start at now and want to go backwards, we're building the graph
+    # from right to left (with time on x axis).
+    for i in reversed(range(num_intervals)):
+        interval_end_timestamp = interval_start_timestamp
+        interval_end_time_ago = interval_start_time_ago
+        interval_start_time_ago = interval_end_time_ago + interval_length
+        interval_start_timestamp = now - interval_start_time_ago
+        created_this_interval_count = background_jobs.filter(
+            create_date__gt=interval_start_timestamp,
+            create_date__lt=interval_end_timestamp).count()
+        completed_this_interval_count = completed_jobs.filter(
+            modify_date__gt=interval_start_timestamp,
+            modify_date__lt=interval_end_timestamp).count()
+        if interval_end_time_ago == datetime.timedelta(0):
+            time_ago_display = "Now"
+        else:
+            time_ago_display = f"{timedelta_display(interval_end_time_ago)} ago"
+        graph_data[-1]['tooltip'] = (
+            time_ago_display +
+            f"<br><strong>{incomplete_count}</strong> incomplete jobs"
+            f"<br>Last {timedelta_display(interval_length)}:"
+            f" {completed_this_interval_count} completed,"
+            f" {created_this_interval_count} created"
+        )
+        incomplete_count = (
+            incomplete_count
+            - created_this_interval_count
+            + completed_this_interval_count)
+        graph_data.append(dict(
+            x=i,
+            y=incomplete_count,
+        ))
+        if i == 0:
+            graph_data[-1]['tooltip'] = (
+                f"{timedelta_display(interval_start_time_ago)} ago" +
+                f"<br><strong>{incomplete_count}</strong> incomplete jobs"
+            )
+
+    context['incomplete_count_average'] = round(
+        sum([d['y'] for d in graph_data]) / len(graph_data))
+    context['incomplete_count_graph_data'] = graph_data
 
     if request.user.is_superuser:
         earliest_scheduled_pending_job = (

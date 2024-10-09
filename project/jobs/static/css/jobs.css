@@ -36,3 +36,8 @@
 #job-summary tr#all-jobs-summary td:not(.summary-name) {
   font-weight: bold;
 }
+
+#incomplete-count-graph {
+  width: 600px;
+  height: 250px;
+}

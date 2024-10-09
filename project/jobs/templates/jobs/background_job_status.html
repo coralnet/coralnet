@@ -6,6 +6,7 @@
 
 {% block css-includes %}
   {% include "static-local-include.html" with type="css" path="css/jobs.css" %}
+  {% include "static-local-include.html" with type="js" path="js/highcharts.js" %}
 {% endblock %}
 
 
@@ -37,6 +38,17 @@
       </li>
     </ul>
   </li>
+
+  <li>Number of incomplete jobs:</li>
+  <li>
+    <ul>
+      <li>Now: {{ incomplete_count }}</li>
+      <li>Rough average over the past {{ recency_threshold_str }}: {{ incomplete_count_average }}</li>
+    </ul>
+  </li>
+  <li>
+    <div id="incomplete-count-graph"></div>
+  </li>
 </ul>
   
 {% if request.user.is_superuser %}
@@ -46,5 +58,45 @@
     Current highest pending wait time: {{ max_pending_wait_time|timedelta_display }}
   </div>
 {% endif %}
+  
+
+<script>
+    let graphData = {{ incomplete_count_graph_data|safe }};
+  
+    let chart1 = new Highcharts.Chart({
+        chart: {
+            renderTo: 'incomplete-count-graph',
+            type: 'line',
+        },
+        title: {
+            text: 'Incomplete jobs'
+        },
+        xAxis: {
+            title: {
+                text: 'Time'
+            },
+            labels: {
+                // No x labels; too much effort to get those dates/times
+                // formatted and temporally aligned
+                formatter: function() {return '';}
+            },
+        },
+        yAxis: {
+            title: {
+                text: 'Jobs'
+            },
+        },
+        tooltip: {
+            formatter: function () {
+                return this.point.tooltip;
+            }
+        },
+        series: [{
+            showInLegend: false,
+            name: 'Jobs',
+            data: graphData,
+        }]
+    });
+</script>
 
 {% endblock %}
