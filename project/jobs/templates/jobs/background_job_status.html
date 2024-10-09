@@ -25,11 +25,15 @@
   
   <li>
     <ul>
-      <li class="tooltip" title="Duration from scheduled start time to actual start time">
-        Time waited before starting: {{ recent_wait_time_interval.0|timedelta_display }} ~ {{ recent_wait_time_interval.1|timedelta_display }}
+      <li>
+        <span class="tooltip" title="Duration from scheduled start time to actual start time">
+          Time waited before starting: {{ recent_wait_time_interval.0|timedelta_display }} ~ {{ recent_wait_time_interval.1|timedelta_display }}
+        </span>
       </li>
-      <li class="tooltip" title="Duration from scheduled start time to finish time">
-        Total time: {{ recent_total_time_interval.0|timedelta_display }} ~ {{ recent_total_time_interval.1|timedelta_display }}
+      <li>
+        <span class="tooltip" title="Duration from scheduled start time to finish time">
+          Total time: {{ recent_total_time_interval.0|timedelta_display }} ~ {{ recent_total_time_interval.1|timedelta_display }}
+        </span>
       </li>
     </ul>
   </li>
