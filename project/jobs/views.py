@@ -22,20 +22,6 @@ def tag_to_readable(tag):
     return tag.capitalize().replace('_', ' ')
 
 
-class Percentile10(Aggregate):
-    function = 'PERCENTILE_CONT'
-    name = 'percentile10'
-    output_field = DurationField()
-    template = '%(function)s(0.1) WITHIN GROUP (ORDER BY %(expressions)s)'
-
-
-class Percentile90(Aggregate):
-    function = 'PERCENTILE_CONT'
-    name = 'percentile90'
-    output_field = DurationField()
-    template = '%(function)s(0.9) WITHIN GROUP (ORDER BY %(expressions)s)'
-
-
 class JobListView(View, ABC):
     template_name: str
     form: JobSearchForm = None
@@ -288,6 +274,20 @@ class JobSummaryView(View):
         return render(request, self.template_name, context)
 
 
+class Time10Percentile(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile10'
+    output_field = DurationField()
+    template = '%(function)s(0.1) WITHIN GROUP (ORDER BY %(expressions)s)'
+
+
+class Time90Percentile(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile90'
+    output_field = DurationField()
+    template = '%(function)s(0.9) WITHIN GROUP (ORDER BY %(expressions)s)'
+
+
 @login_required
 def background_job_status(request):
     context = dict()
@@ -320,9 +320,9 @@ def background_job_status(request):
         .order_by('wait_time')
     )
     interval = [
-        recent_wait_time_jobs.aggregate(Percentile10('wait_time'))
+        recent_wait_time_jobs.aggregate(Time10Percentile('wait_time'))
         ['wait_time__percentile10'],
-        recent_wait_time_jobs.aggregate(Percentile90('wait_time'))
+        recent_wait_time_jobs.aggregate(Time90Percentile('wait_time'))
         ['wait_time__percentile90'],
     ]
     if interval[0] is None:
@@ -337,9 +337,9 @@ def background_job_status(request):
         .order_by('total_time')
     )
     interval = [
-        recent_total_time_jobs.aggregate(Percentile10('total_time'))
+        recent_total_time_jobs.aggregate(Time10Percentile('total_time'))
         ['total_time__percentile10'],
-        recent_total_time_jobs.aggregate(Percentile90('total_time'))
+        recent_total_time_jobs.aggregate(Time90Percentile('total_time'))
         ['total_time__percentile90'],
     ]
     if interval[0] is None:
