@@ -1163,25 +1163,29 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             str(detail_list_soup))
 
     def test_total_time(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
         def f_0m(_num):
             # Total time: 0
             self.job(
                 status=Job.Status.SUCCESS,
-                scheduled_time_ago=timedelta(minutes=5),
+                scheduled_time_ago=timedelta(minutes=5, seconds=30),
                 modified_time_ago=timedelta(minutes=5),
             )
         def f_10m(_num):
             # Total time: 10 minutes
             self.job(
                 status=Job.Status.FAILURE,
-                scheduled_time_ago=timedelta(minutes=15),
+                scheduled_time_ago=timedelta(minutes=15, seconds=30),
                 modified_time_ago=timedelta(minutes=5),
             )
         def f_20m(_num):
             # Total time: 20 minutes
             self.job(
                 status=Job.Status.SUCCESS,
-                scheduled_time_ago=timedelta(minutes=25),
+                scheduled_time_ago=timedelta(minutes=25, seconds=30),
                 modified_time_ago=timedelta(minutes=5),
             )
 
@@ -1431,17 +1435,21 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             str(detail_list_soup))
 
     def test_recency_threshold_default(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
         # This should be the only job accounted for in wait times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(days=3, minutes=3),
+            scheduled_time_ago=timedelta(days=3, minutes=3, seconds=30),
             started_time_ago=timedelta(days=2, hours=23, minutes=50),
             modified_time_ago=timedelta(days=3, minutes=3),
         )
         # This should be the only job accounted for in total times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(days=3, minutes=29),
+            scheduled_time_ago=timedelta(days=3, minutes=29, seconds=30),
             modified_time_ago=timedelta(days=2, hours=23, minutes=50),
         )
         # This should be in neither.
