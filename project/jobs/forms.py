@@ -122,7 +122,6 @@ class JobSearchForm(BaseJobForm):
     )
 
     default_renderer = BoxFormRenderer
-    field_order = ['status', 'type', 'sort']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -131,6 +130,7 @@ class JobSearchForm(BaseJobForm):
             choices=self.get_type_choices,
             required=False, initial='',
         )
+        self.order_fields(['status', 'type', 'sort'])
 
     def _filter_jobs(self, jobs):
         jobs = super()._filter_jobs(jobs)
