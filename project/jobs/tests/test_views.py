@@ -422,28 +422,6 @@ class JobSummaryTest(JobViewTestMixin, ClientTest):
         self.assertNotContains(page_response(30), message)
         self.assertContains(page_response(31), message)
 
-    def test_exclude_source_checks(self):
-        # Not a source check, and older
-        one_day = timedelta(days=1)
-        one_day_ago = timezone.now() - one_day
-        self.job(Job.Status.SUCCESS, source=1, modified_time_ago=one_day)
-        # Source check
-        self.job(Job.Status.SUCCESS, source=1, job_name='check_source')
-        # Source check for another source; this source doesn't have other
-        # jobs, and therefore the source shouldn't show on the summary
-        self.job(Job.Status.SUCCESS, source=2, job_name='check_source')
-
-        # Should only show 1 finished, and should show last activity date
-        # from only the non source check
-        self.assert_summary_table_values(
-            [
-                [self.all_jobs_first_cell, 0, 0, 1, date_display(one_day_ago)],
-                {},
-                [self.source_cell(1), 0, 0, 1, date_display(one_day_ago)],
-            ],
-            data=dict(completed_count_day_limit=13)
-        )
-
 
 class JobListTestsMixin(JobViewTestMixin, ABC):
     """
@@ -877,39 +855,6 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 [{"Job ID": job.pk} for job in jobs[4:]])),
             data=dict(status='completed')
         )
-
-    def test_source_check_inclusion_option(self):
-        self.job(job_name='check_source')
-        self.job(job_name='classify_features')
-
-        if self.view_shows_source_jobs:
-
-            response = self.get_response()
-            self.assertContains(
-                response, "Show source-check jobs",
-                msg_prefix="Option should be on the page")
-
-            # Should only show the classify_features job
-            self.assert_job_table_values(
-                [
-                    {"Type": "Classify"},
-                ]
-            )
-            # Should show both jobs
-            self.assert_job_table_values(
-                [
-                    {"Type": "Classify"},
-                    {"Type": "Check source"},
-                ],
-                data=dict(show_source_check_jobs=True)
-            )
-
-        else:
-
-            response = self.get_response()
-            self.assertNotContains(
-                response, "Show source-check jobs",
-                msg_prefix="Option should not be on the page")
 
     def test_invalid_search_message(self):
         message = "Search parameters were invalid."

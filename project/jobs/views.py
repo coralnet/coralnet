@@ -249,8 +249,7 @@ class JobSummaryView(View):
 
         # Last-activity info
         last_active_job_per_source = (
-            Job.objects.exclude(job_name='check_source')
-            .order_by('source', '-modify_date')
+            Job.objects.order_by('source', '-modify_date')
             .distinct('source')
         )
         last_activity_per_source = {

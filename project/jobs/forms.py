@@ -122,6 +122,7 @@ class JobSearchForm(BaseJobForm):
     )
 
     default_renderer = BoxFormRenderer
+    field_order = ['status', 'type', 'sort']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -176,23 +177,12 @@ class JobSearchForm(BaseJobForm):
 
 
 class SourceJobSearchForm(JobSearchForm):
-    # check_source jobs often clutter the job list more than they provide
-    # useful info. So they're hidden by default, but there's an option
-    # to show them.
-    show_source_check_jobs = forms.BooleanField(
-        label="Show source-check jobs",
-        required=False, initial=False,
-    )
-
     def __init__(self, *args, **kwargs):
         self.source_id: int = kwargs.pop('source_id')
         super().__init__(*args, **kwargs)
 
     def _filter_jobs(self, jobs):
         jobs = jobs.filter(source_id=self.source_id)
-
-        if not self.get_field_value('show_source_check_jobs'):
-            jobs = jobs.exclude(job_name='check_source')
 
         return super()._filter_jobs(jobs)
 
@@ -202,16 +192,6 @@ class SourceJobSearchForm(JobSearchForm):
 
 
 class AllJobSearchForm(JobSearchForm):
-
-    show_source_check_jobs = forms.BooleanField(
-        label="Show source-check jobs",
-        required=False, initial=False,
-    )
-
-    def _filter_jobs(self, jobs):
-        if not self.get_field_value('show_source_check_jobs'):
-            jobs = jobs.exclude(job_name='check_source')
-        return super()._filter_jobs(jobs)
 
     @staticmethod
     def get_types():
@@ -267,10 +247,6 @@ class JobSummaryForm(BaseJobForm):
     @property
     def completed_day_limit(self):
         return self.get_field_value('completed_count_day_limit')
-
-    def _filter_jobs(self, jobs):
-        jobs = jobs.exclude(job_name='check_source')
-        return jobs
 
     def get_job_counts_by_source(self):
         jobs_by_status = self.get_jobs_by_status()
