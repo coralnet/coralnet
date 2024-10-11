@@ -587,7 +587,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
         if self.view_shows_non_source_jobs:
 
-            schedule_job('Some job', '1', '2')
+            schedule_job('update_label_details', '1', '2')
 
             job, _ = schedule_job('classify_image', '3', '4')
             api_job = ApiJob(type='deploy', user=self.user)
@@ -601,11 +601,11 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
             # Should only fill the API job unit cell for deploy
             expected_rows = [
-                {"Type": "Classify image",
+                {"Type": "Deploy",
                  "Other ID":
                      f'<a href="{api_job_url}">'
                      f'API unit {api_job_unit.pk}</a>'},
-                {"Type": "Some job",
+                {"Type": "Update label details",
                  "Other ID": ''},
             ] + expected_rows
 
@@ -693,7 +693,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
         # Be generous about time delays/inconsistencies during the test.
         acceptable_cells_for_each_job = [
-            ["Been waiting for " + str(num) + "\xa0minutes to start"
+            ["Waited for " + str(num) + "\xa0minutes so far"
              for num in [8, 9, 10, 11, 12]],
             [str(num) + "\xa0minutes until scheduled start"
              for num in [8, 9, 10, 11, 12]],
@@ -1475,14 +1475,14 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         # This should be the only job accounted for in wait times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(hours=1, minutes=3),
+            scheduled_time_ago=timedelta(hours=1, minutes=3, seconds=30),
             started_time_ago=timedelta(minutes=50),
             modified_time_ago=timedelta(hours=1, minutes=3),
         )
         # This should be the only job accounted for in total times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(hours=1, minutes=29),
+            scheduled_time_ago=timedelta(hours=1, minutes=29, seconds=30),
             modified_time_ago=timedelta(minutes=50),
         )
         # This should be in neither.
@@ -1509,14 +1509,14 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         # This should be the only job accounted for in wait times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(days=30, minutes=3),
+            scheduled_time_ago=timedelta(days=30, minutes=3, seconds=30),
             started_time_ago=timedelta(days=29, hours=23, minutes=50),
             modified_time_ago=timedelta(days=30, minutes=3),
         )
         # This should be the only job accounted for in total times.
         self.job(
             status=Job.Status.SUCCESS,
-            scheduled_time_ago=timedelta(days=30, minutes=29),
+            scheduled_time_ago=timedelta(days=30, minutes=29, seconds=30),
             modified_time_ago=timedelta(days=29, hours=23, minutes=50),
         )
         # This should be in neither.
@@ -1567,7 +1567,7 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         self.job(
             status=Job.Status.SUCCESS,
             job_name='update_label_details',
-            scheduled_time_ago=timedelta(minutes=15),
+            scheduled_time_ago=timedelta(minutes=15, seconds=30),
             started_time_ago=timedelta(minutes=10),
         )
 

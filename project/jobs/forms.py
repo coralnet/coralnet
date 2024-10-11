@@ -1,7 +1,6 @@
 from collections import Counter, defaultdict
 from datetime import timedelta
 import operator
-from typing import Literal
 
 from django import forms
 from django.conf import settings
@@ -13,18 +12,15 @@ from django.utils import timezone
 from lib.forms import BoxFormRenderer, InlineFormRenderer
 from sources.models import Source
 from .models import Job
+from .utils import (
+    get_job_details,
+    get_job_names_by_task_queue,
+    get_non_source_job_names,
+    get_source_job_names,
+)
 
 
 class BaseJobForm(forms.Form):
-    source_id: int | None | Literal['all']
-
-    @property
-    def show_source_check_jobs(self):
-        raise NotImplementedError
-
-    @property
-    def status_filter(self):
-        raise NotImplementedError
 
     @property
     def job_sort_method(self):
@@ -50,27 +46,15 @@ class BaseJobForm(forms.Form):
 
         jobs = Job.objects.all()
 
-        if self.source_id is None:
-            # Non-source jobs only.
-            jobs = jobs.filter(source__isnull=True)
-        elif self.source_id != 'all':
-            # One source only.
-            jobs = jobs.filter(source_id=self.source_id)
-        # Else, all sources.
+        jobs = self._filter_jobs(jobs)
+        jobs = self._sort_jobs(jobs)
 
-        if not self.show_source_check_jobs:
-            jobs = jobs.exclude(job_name='check_source')
+        return jobs
 
-        status_filter = self.status_filter
-        if status_filter == 'completed':
-            status_kwargs = dict(
-                status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
-        elif status_filter:
-            status_kwargs = dict(status=status_filter)
-        else:
-            status_kwargs = dict()
-        jobs = jobs.filter(**status_kwargs)
+    def _filter_jobs(self, jobs):
+        return jobs
 
+    def _sort_jobs(self, jobs):
         sort_method = self.job_sort_method
         if sort_method == 'status':
             # In-progress jobs first, then pending + due,
@@ -136,37 +120,51 @@ class JobSearchForm(BaseJobForm):
         ],
         required=False, initial='status',
     )
-    # show_source_check_jobs: See __init__()
 
     default_renderer = BoxFormRenderer
 
     def __init__(self, *args, **kwargs):
-        self.source_id: int | None | Literal['all'] = kwargs.pop('source_id')
         super().__init__(*args, **kwargs)
 
-        # check_source jobs often clutter the job list more than they provide
-        # useful info. So they're hidden by default, but there's an option
-        # to show them.
-        if self.source_id is None:
-            # Non-source jobs only, so source check jobs cannot be included.
-            # Don't need to display the show source check jobs field.
-            self.fields['show_source_check_jobs'] = forms.BooleanField(
-                widget=forms.HiddenInput(),
-                required=False, initial=False,
-            )
+        self.fields['type'] = forms.ChoiceField(
+            choices=self.get_type_choices,
+            required=False, initial='',
+        )
+
+    def _filter_jobs(self, jobs):
+        jobs = super()._filter_jobs(jobs)
+
+        status_filter = self.get_field_value('status')
+        if status_filter == 'completed':
+            status_kwargs = dict(
+                status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
+        elif status_filter:
+            status_kwargs = dict(status=status_filter)
         else:
-            self.fields['show_source_check_jobs'] = forms.BooleanField(
-                label="Show source-check jobs",
-                required=False, initial=False,
-            )
+            status_kwargs = dict()
+        jobs = jobs.filter(**status_kwargs)
 
-    @property
-    def show_source_check_jobs(self):
-        return self.get_field_value('show_source_check_jobs')
+        type_filter = self.get_field_value('type')
+        if type_filter.endswith('_queue_types'):
+            queue_name = type_filter[:-len('_queue_types')]
+            job_names = get_job_names_by_task_queue()[queue_name]
+            jobs = jobs.filter(job_name__in=job_names)
+        elif type_filter:
+            jobs = jobs.filter(job_name=type_filter)
 
-    @property
-    def status_filter(self):
-        return self.get_field_value('status')
+        return jobs
+
+    @staticmethod
+    def get_types():
+        raise NotImplementedError
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
 
     @property
     def job_sort_method(self):
@@ -175,6 +173,71 @@ class JobSearchForm(BaseJobForm):
     @property
     def completed_day_limit(self):
         return settings.JOB_MAX_DAYS
+
+
+class SourceJobSearchForm(JobSearchForm):
+    # check_source jobs often clutter the job list more than they provide
+    # useful info. So they're hidden by default, but there's an option
+    # to show them.
+    show_source_check_jobs = forms.BooleanField(
+        label="Show source-check jobs",
+        required=False, initial=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.source_id: int = kwargs.pop('source_id')
+        super().__init__(*args, **kwargs)
+
+    def _filter_jobs(self, jobs):
+        jobs = jobs.filter(source_id=self.source_id)
+
+        if not self.get_field_value('show_source_check_jobs'):
+            jobs = jobs.exclude(job_name='check_source')
+
+        return super()._filter_jobs(jobs)
+
+    @staticmethod
+    def get_types():
+        return get_source_job_names()
+
+
+class AllJobSearchForm(JobSearchForm):
+
+    show_source_check_jobs = forms.BooleanField(
+        label="Show source-check jobs",
+        required=False, initial=False,
+    )
+
+    def _filter_jobs(self, jobs):
+        if not self.get_field_value('show_source_check_jobs'):
+            jobs = jobs.exclude(job_name='check_source')
+        return super()._filter_jobs(jobs)
+
+    @staticmethod
+    def get_types():
+        return get_source_job_names() + get_non_source_job_names()
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        for queue_name in settings.DJANGO_HUEY['queues'].keys():
+            choices.append(
+                (f'{queue_name}_queue_types', f"Any {queue_name} job"))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
+
+
+class NonSourceJobSearchForm(JobSearchForm):
+
+    def _filter_jobs(self, jobs):
+        jobs = jobs.filter(source__isnull=True)
+        return super()._filter_jobs(jobs)
+
+    @staticmethod
+    def get_types():
+        return get_non_source_job_names()
 
 
 class JobSummaryForm(BaseJobForm):
@@ -193,24 +256,21 @@ class JobSummaryForm(BaseJobForm):
         required=False, initial='job_count',
     )
 
-    source_id = 'all'
     default_renderer = BoxFormRenderer
 
     @property
-    def show_source_check_jobs(self):
-        return False
-
-    @property
-    def status_filter(self):
-        return ''
-
-    @property
     def job_sort_method(self):
+        # This actually has a purpose near the end of
+        # get_job_counts_by_source().
         return 'recently_updated'
 
     @property
     def completed_day_limit(self):
         return self.get_field_value('completed_count_day_limit')
+
+    def _filter_jobs(self, jobs):
+        jobs = jobs.exclude(job_name='check_source')
+        return jobs
 
     def get_job_counts_by_source(self):
         jobs_by_status = self.get_jobs_by_status()

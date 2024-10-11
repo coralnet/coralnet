@@ -14,12 +14,17 @@ from lib.templatetags.common_tags import timedelta_display
 from lib.decorators import source_permission_required
 from lib.utils import paginate
 from sources.models import Source
-from .forms import BackgroundJobStatusForm, JobSearchForm, JobSummaryForm
+from .exceptions import UnrecognizedJobNameError
+from .forms import (
+    AllJobSearchForm,
+    BackgroundJobStatusForm,
+    JobSearchForm,
+    JobSummaryForm,
+    NonSourceJobSearchForm,
+    SourceJobSearchForm,
+)
 from .models import Job
-
-
-def tag_to_readable(tag):
-    return tag.capitalize().replace('_', ' ')
+from .utils import get_job_details, get_job_names_by_task_queue
 
 
 class JobListView(View, ABC):
@@ -103,12 +108,14 @@ class JobListView(View, ABC):
                 job_entry['source_id'] = values['source']
                 job_entry['source_name'] = values['source__name']
 
-            if values['job_name'] == 'classify_image':
-                job_entry['job_type'] = "Deploy"
-            if values['job_name'] == 'classify_features':
-                job_entry['job_type'] = "Classify"
-            else:
-                job_entry['job_type'] = tag_to_readable(values['job_name'])
+            try:
+                job_entry['job_type'] = get_job_details(
+                    values['job_name'])['display_name']
+            except UnrecognizedJobNameError:
+                # This may be an obsolete job type which has yet to be
+                # cleaned up. No big deal, just displaying the raw job name
+                # should be reasonable enough in this case.
+                job_entry['job_type'] = values['job_name']
 
             if values['job_name'] == 'classify_image':
                 job_entry['api_job_unit_id'] = values['apijobunit']
@@ -138,7 +145,7 @@ class AllJobsListView(JobListView):
     template_name = 'jobs/all_jobs_list.html'
 
     def get_form(self, data=None):
-        return JobSearchForm(data=data, source_id='all')
+        return AllJobSearchForm(data=data)
 
     def get_context(self, request):
         return self.get_job_list_context(request)
@@ -163,7 +170,7 @@ class SourceJobListView(JobListView):
         return super().dispatch(*args, **kwargs)
 
     def get_form(self, data=None):
-        return JobSearchForm(data=data, source_id=self.source_id)
+        return SourceJobSearchForm(data=data, source_id=self.source_id)
 
     def get_context(self, request):
         source = get_object_or_404(Source, id=self.source_id)
@@ -205,7 +212,7 @@ class NonSourceJobListView(JobListView):
     template_name = 'jobs/non_source_job_list.html'
 
     def get_form(self, data=None):
-        return JobSearchForm(data=data, source_id=None)
+        return NonSourceJobSearchForm(data=data)
 
     def get_context(self, request):
         return self.get_job_list_context(request)
@@ -292,11 +299,8 @@ class Time90Percentile(Aggregate):
 def background_job_status(request):
     context = dict()
 
-    # TODO: Be able to get the realtime / background distinction in a
-    #  DRY way; like from a Job DB field, or from the job function
-    #  definitions
-    background_jobs = Job.objects.all().exclude(
-        job_name__in=['generate_thumbnail', 'generate_patch'])
+    background_jobs = Job.objects.filter(
+        job_name__in=get_job_names_by_task_queue()['background'])
 
     field = BackgroundJobStatusForm.declared_fields['recency_threshold']
     threshold_hours = field.initial

@@ -5,8 +5,9 @@ from unittest.case import TestCase
 
 from django.contrib.auth.models import User
 
+from ..exceptions import UnrecognizedJobNameError
 from ..models import Job
-from ..utils import get_or_create_job, start_job
+from ..utils import get_job_details, get_or_create_job, job_runner, start_job
 
 
 def fabricate_job(
@@ -20,9 +21,18 @@ def fabricate_job(
     **kwargs
 ) -> Job:
     """
-    Similar to the job-creation case of get_or_create_job(), except this allows
-    specifying a modify date and initial status.
+    Similar to the job-creation case of get_or_create_job(), except:
+    - This allows specifying dates and initial status.
+    - This allows specifying an arbitrary job name.
     """
+
+    # Ensure that any made-up test job names are registered.
+    try:
+        get_job_details(name)
+    except UnrecognizedJobNameError:
+        @job_runner(job_name=name)
+        def task_func():
+            return ""
 
     job_kwargs = {
         key: value for key, value in kwargs.items()

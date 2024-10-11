@@ -1,5 +1,7 @@
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 import functools
+import inspect
 from logging import getLogger
 import math
 import random
@@ -163,7 +165,7 @@ def start_job(job: Job) -> None:
     The Job's JobDecorator (part of the 'run function') will
     presumably take care of updating the Job's status/fields.
     """
-    starter_task = get_job_run_function(job.job_name)
+    starter_task = get_job_details(job.job_name)['run_function']
     starter_task(*Job.identifier_to_args(job.arg_identifier))
 
 
@@ -200,7 +202,7 @@ def finish_job(
 
 class JobDecorator:
     def __init__(
-        self, job_name: str = None,
+        self, job_name: str = None, job_display_name: str = None,
         interval: timedelta = None, offset: datetime = None,
         huey_interval_minutes: int = None,
         task_queue_name: str = None,
@@ -209,9 +211,15 @@ class JobDecorator:
         # job name.
         self.job_name = job_name
 
-        # This can be left unspecified if the default django-huey queue
-        # works for this job.
-        self.task_queue_name = task_queue_name
+        # This can be left unspecified if the task name in its 'readable'
+        # form works as the job display name.
+        self.job_display_name = job_display_name
+
+        # Default to the django-huey default queue setting.
+        # Although django-huey itself can apply the default when the task is
+        # queued, we apply it here anyway for our bookkeeping.
+        self.task_queue_name = (
+            task_queue_name or settings.DJANGO_HUEY['default'])
 
         # This should be present if the job is to be run periodically
         # through run_scheduled_jobs().
@@ -241,6 +249,9 @@ class JobDecorator:
     def __call__(self, task_func):
         if not self.job_name:
             self.job_name = task_func.__name__
+        if not self.job_display_name:
+            self.job_display_name = (
+                self.job_name.capitalize().replace('_', ' '))
 
         if self.huey_interval_minutes:
             huey_decorator = db_periodic_task(
@@ -255,7 +266,7 @@ class JobDecorator:
             )
         else:
             if self.interval:
-                set_periodic_job_schedule(
+                _set_periodic_job_schedule(
                     self.job_name, self.interval, self.offset)
             huey_decorator = db_task(
                 name=self.job_name,
@@ -299,7 +310,14 @@ class JobDecorator:
                 task_args,
             ])
 
-        set_job_run_function(self.job_name, task_wrapper)
+        is_source_job = 'source_id' in inspect.signature(task_func).parameters
+        _register_job(
+            self.job_name,
+            display_name=self.job_display_name,
+            run_function=task_wrapper,
+            is_source_job=is_source_job,
+            task_queue_name=self.task_queue_name,
+        )
 
         return task_wrapper
 
@@ -499,12 +517,15 @@ class JobStarterDecorator(JobDecorator):
 job_starter = JobStarterDecorator
 
 
-# Dict of functions which start each defined job.
-_job_run_functions = dict()
+_registered_jobs: dict[str, dict] = dict()
 
 
-def get_job_run_function(job_name):
-    if job_name not in _job_run_functions:
+_ran_autodiscover = False
+
+
+def autodiscover_jobs_if_needed():
+    global _ran_autodiscover
+    if not _ran_autodiscover:
         # Auto-discover.
         # 'Running' the tasks modules should populate the dict.
         #
@@ -512,33 +533,66 @@ def get_job_run_function(job_name):
         # that autodiscovery only applies to the huey thread; the results
         # are not available to the web server threads.
         autodiscover_modules('tasks')
+        _ran_autodiscover = True
 
-    if job_name not in _job_run_functions:
+
+def get_job_details(job_name):
+    autodiscover_jobs_if_needed()
+    if job_name not in _registered_jobs:
         raise UnrecognizedJobNameError
-    return _job_run_functions[job_name]
+    return _registered_jobs[job_name]
 
 
-def set_job_run_function(name, task):
-    _job_run_functions[name] = task
+def _register_job(
+    name, display_name, run_function, is_source_job, task_queue_name
+):
+    _registered_jobs[name] = dict(
+        display_name=display_name,
+        run_function=run_function,
+        is_source_job=is_source_job,
+        task_queue_name=task_queue_name,
+    )
 
 
-_periodic_job_schedules = dict()
+def get_source_job_names():
+    autodiscover_jobs_if_needed()
+    return [
+        job_name
+        for job_name, job_details in _registered_jobs.items()
+        if job_details['is_source_job']
+    ]
+
+
+def get_non_source_job_names():
+    autodiscover_jobs_if_needed()
+    return [
+        job_name
+        for job_name, job_details in _registered_jobs.items()
+        if not job_details['is_source_job']
+    ]
+
+
+def get_job_names_by_task_queue():
+    autodiscover_jobs_if_needed()
+    d = defaultdict(list)
+    for job_name, job_details in _registered_jobs.items():
+        d[job_details['task_queue_name']].append(job_name)
+    return d
+
+
+_periodic_job_schedules: dict[str, tuple[float, float]] = dict()
 
 
 def get_periodic_job_schedules():
-    if len(_periodic_job_schedules) == 0:
-        # Auto-discover.
-        # 'Running' the tasks modules should populate the dict.
-        autodiscover_modules('tasks')
-
+    autodiscover_jobs_if_needed()
     return _periodic_job_schedules
 
 
-def set_periodic_job_schedule(name, interval, offset):
+def _set_periodic_job_schedule(name, interval: float, offset: float):
     _periodic_job_schedules[name] = (interval, offset)
 
 
-def next_run_delay(interval: int, offset: int = 0) -> timedelta:
+def next_run_delay(interval: float, offset: float = 0) -> timedelta:
     """
     Given a periodic job with a periodic interval of `interval` and a period
     offset of `offset`, find the time until the job is scheduled to run next.

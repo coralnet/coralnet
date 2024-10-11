@@ -17,7 +17,7 @@ from ..tasks import (
     report_stuck_jobs,
     run_scheduled_jobs,
 )
-from ..utils import job_runner
+from ..utils import job_runner, schedule_job
 from .utils import fabricate_job
 
 
@@ -101,8 +101,10 @@ class RunScheduledJobsTest(BaseTest):
             "Should not have accepted the second run")
 
     def test_unrecognized_job_name(self):
-        job = fabricate_job('return_arg_test', 1)
-        job_2 = fabricate_job('test_2', 1)
+        # Schedule instead of fabricate, so that an unrecognized job doesn't
+        # get a task automatically defined for it.
+        job, _ = schedule_job('return_arg_test', 1)
+        job_2, _ = schedule_job('test_2', 1)
 
         result_message = self.run_scheduled_jobs_and_get_result()
         self.assertRegex(

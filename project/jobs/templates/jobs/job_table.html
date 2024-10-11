@@ -84,7 +84,7 @@
               {% else %}
 
                 <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
-                  Been waiting for {{ job_entry.scheduled_start_date|timesince }} to start
+                  Waited for {{ job_entry.scheduled_start_date|timesince }} so far
                 </span>
 
               {% endif %}

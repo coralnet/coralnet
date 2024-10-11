@@ -461,7 +461,7 @@ def submit_classifier(source_id, job_id):
     return msg
 
 
-@job_starter(job_name='classify_image')
+@job_starter(job_name='classify_image', job_display_name="Deploy")
 def deploy(api_job_id, api_unit_order, job_id):
     """Begin classifying an image submitted through the deploy-API."""
     try:
@@ -504,7 +504,7 @@ def deploy(api_job_id, api_unit_order, job_id):
     return msg
 
 
-@job_runner(job_name='classify_features')
+@job_runner(job_name='classify_features', job_display_name="Classify")
 def classify_image(image_id):
     """Classify a source's image."""
     try:
