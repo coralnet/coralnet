@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from datetime import timedelta
+import operator
 from typing import Callable
-from unittest import mock
+from unittest import mock, skip
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
@@ -15,7 +16,6 @@ from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run
 )
 from ..models import Job
-from ..utils import schedule_job
 from .utils import fabricate_job
 
 
@@ -482,7 +482,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.assertContains(
             response,
             "Most job records are cleaned up after approximately 30 days,"
-            " except for jobs with * in Last updated.")
+            " except for jobs with * in Timing info.")
 
     def test_job_id_column(self):
         jobs = [
@@ -500,16 +500,78 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
 
     def test_job_type_column(self):
-        self.job(job_name='A')
-        self.job(job_name='B')
-        self.job(job_name='C')
+        self.job(job_name='extract_features')
+        self.job(job_name='train_classifier')
+        self.job(job_name='classify_features')
+        self.job(job_name='update_label_details')
+        self.job(job_name='classify_image')
 
         self.assert_job_table_values(
             list(reversed([
-                {"Type": "A"},
-                {"Type": "B"},
-                {"Type": "C"},
+                {"Type": "Extract features"},
+                {"Type": "Train classifier"},
+                # Special case
+                {"Type": "Classify"},
+                {"Type": "Update label details"},
+                # Special case
+                {"Type": "Deploy"},
             ]))
+        )
+
+    @skip(
+        "This test interacts badly with tests that register made-up jobs."
+        " Not sure how to solve that in a clean way yet.")
+    def test_type_choices(self):
+        response = self.get_response()
+        form = response.context['job_search_form']
+
+        source_types = [
+            ('check_source', "Check source"),
+            ('classify_features', "Classify"),
+            ('extract_features', "Extract features"),
+            ('reset_classifiers_for_source',
+             "Reset classifiers for source"),
+            ('reset_features_for_source', "Reset features for source"),
+            ('train_classifier', "Train classifier"),
+        ]
+        non_source_types = [
+            ('check_all_sources', "Check all sources"),
+            ('classify_image', "Deploy"),
+            ('clean_up_old_api_jobs', "Clean up old api jobs"),
+            ('clean_up_old_jobs', "Clean up old jobs"),
+            ('collect_spacer_jobs', "Collect spacer jobs"),
+            ('generate_patch', "Generate patch"),
+            ('generate_thumbnail', "Generate thumbnail"),
+            ('report_stuck_jobs', "Report stuck jobs"),
+            ('run_scheduled_jobs', "Run scheduled jobs"),
+            ('schedule_periodic_jobs', "Schedule periodic jobs"),
+            ('update_label_details', "Update label details"),
+            ('update_map_sources', "Update map sources"),
+            ('update_sitewide_annotation_count',
+             "Update sitewide annotation count"),
+        ]
+
+        if self.view_shows_source_jobs and self.view_shows_non_source_jobs:
+            expected_choices = [
+                ('', "Any"),
+                ('background_queue_types', "Any background job"),
+                ('realtime_queue_types', "Any realtime job"),
+            ] + source_types + non_source_types
+            expected_choices.sort(key=operator.itemgetter(1))
+        elif self.view_shows_source_jobs:
+            expected_choices = [
+                ('', "Any"),
+            ] + source_types
+        else:
+            expected_choices = [
+                ('', "Any"),
+                ('background_queue_types', "Any background job"),
+                ('realtime_queue_types', "Any realtime job"),
+            ] + non_source_types
+
+        self.assertListEqual(
+            list(form.fields['type'].choices),
+            expected_choices,
         )
 
     def test_status_row_classes(self):
@@ -518,7 +580,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.job(Job.Status.SUCCESS)
         self.job(Job.Status.FAILURE)
 
-        table = self.table_soup(data=dict(sort='recently_created'))
+        table = self.table_soup(data=dict(sort='latest_scheduled'))
         rows = table.select('tbody > tr')
         self.assertEqual(rows[0].attrs['class'], ['failure'])
         self.assertEqual(rows[1].attrs['class'], ['success'])
@@ -538,56 +600,55 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 {"Status": "In Progress"},
                 {"Status": "Pending"},
             ],
-            data=dict(sort='recently_created')
+            data=dict(sort='latest_scheduled')
         )
 
     def test_other_id_column(self):
-        expected_rows = []
 
         if self.view_shows_source_jobs:
 
-            schedule_job('extract_features', '1', source_id=self.sources[0].pk)
-            schedule_job('train_classifier', '2', source_id=self.sources[0].pk)
-            schedule_job('classify_features', '3', source_id=self.sources[0].pk)
-
-            image_3_url = reverse('image_detail', args=['3'])
+            job = fabricate_job(
+                'extract_features', '1', source_id=self.sources[0].pk)
             image_1_url = reverse('image_detail', args=['1'])
+            self.assert_job_table_values([
+                {"Other ID": f'<a href="{image_1_url}">Image 1</a>'}])
+            job.delete()
 
-            # Should only fill the other ID cell for specific job names
-            expected_rows = [
-                {"Type": "Classify",
-                 "Other ID": f'<a href="{image_3_url}">Image 3</a>'},
-                {"Type": "Train classifier",
-                 "Other ID": ''},
-                {"Type": "Extract features",
-                 "Other ID": f'<a href="{image_1_url}">Image 1</a>'},
-            ] + expected_rows
+            job = fabricate_job(
+                'train_classifier', '2', source_id=self.sources[0].pk)
+            self.assert_job_table_values([
+                {"Other ID": ''}])
+            job.delete()
+
+            job = fabricate_job(
+                'classify_features', '3', source_id=self.sources[0].pk)
+            image_3_url = reverse('image_detail', args=['3'])
+            self.assert_job_table_values([
+                {"Other ID": f'<a href="{image_3_url}">Image 3</a>'}])
+            job.delete()
 
         if self.view_shows_non_source_jobs:
 
-            schedule_job('update_label_details', '1', '2')
+            job = fabricate_job('update_label_details', '1', '2')
+            self.assert_job_table_values([
+                {"Other ID": ''}])
+            job.delete()
 
-            job, _ = schedule_job('classify_image', '3', '4')
+            job = fabricate_job('classify_image', '3', '4')
             api_job = ApiJob(type='deploy', user=self.user)
             api_job.save()
             api_job_unit = ApiJobUnit(
                 parent=api_job, order_in_parent=1, internal_job=job,
                 request_json={})
             api_job_unit.save()
-
-            api_job_url = reverse('api_management:job_detail', args=[api_job.pk])
-
-            # Should only fill the API job unit cell for deploy
-            expected_rows = [
-                {"Type": "Deploy",
-                 "Other ID":
+            api_job_url = reverse(
+                'api_management:job_detail', args=[api_job.pk])
+            self.assert_job_table_values([
+                {"Other ID":
                      f'<a href="{api_job_url}">'
-                     f'API unit {api_job_unit.pk}</a>'},
-                {"Type": "Update label details",
-                 "Other ID": ''},
-            ] + expected_rows
-
-        self.assert_job_table_values(expected_rows)
+                     f'API unit {api_job_unit.pk}</a>'}])
+            api_job_unit.delete()
+            job.delete()
 
     def test_result_message_column(self):
         self.job(Job.Status.SUCCESS)
@@ -608,122 +669,95 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             ]
         )
 
-    def test_last_updated_column(self):
-        jobs = [
-            self.job(),
-            self.job(),
-            self.job(),
-        ]
+    def test_scheduled_column(self):
+        # Just keep changing the same job so we don't have to worry about
+        # ordering.
+        job = self.job(delay=timedelta(minutes=10))
+        self.assert_job_table_values([
+            {"Scheduled start date": date_display(job.scheduled_start_date)}])
 
-        job_2 = jobs[1]
-        # Use QuerySet.update() instead of Model.save() so that the modify
-        # date doesn't get auto-updated to the current date.
-        Job.objects.filter(pk=job_2.pk).update(
-            persist=True, modify_date=job_2.modify_date)
+        job.start_date = job.scheduled_start_date - timedelta(minutes=10)
+        job.scheduled_start_date = None
+        job.save()
+        self.assert_job_table_values([
+            {"Scheduled start date": date_display(job.start_date)}])
 
-        self.assert_job_table_values(
-            list(reversed([
-                {"Last updated": date_display(jobs[0].modify_date)},
-                {"Last updated": date_display(jobs[1].modify_date) + " *"},
-                {"Last updated": date_display(jobs[2].modify_date)},
-            ]))
+        job.start_date = None
+        job.save()
+        self.assert_job_table_values([
+            {"Scheduled start date": "-"}])
+
+    def assert_cell_and_title(self, column_name, expected_cell, expected_title):
+        if expected_title:
+            cell_html = (
+                f'<span class="tooltip" title="{expected_title}">'
+                f'{expected_cell}</span>')
+        else:
+            cell_html = f'<span>{expected_cell}</span>'
+        self.assert_job_table_values([{column_name: cell_html}])
+
+    def test_timing_column(self):
+        job = self.job(
+            Job.Status.PENDING,
+            delay=-timedelta(minutes=10, seconds=30),
+        )
+        self.assert_cell_and_title(
+            "Timing info", "Waited for 10\xa0minutes so far",
+            None,
         )
 
-    def test_time_column(self):
-        now = timezone.now()
-        jobs = [
-            self.job(
-                Job.Status.PENDING,
-                delay=-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.PENDING,
-                delay=timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.PENDING,
-                create_date=now-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.IN_PROGRESS,
-                start_date=now-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.SUCCESS,
-                modified_time_ago=timedelta(minutes=5),
-                start_date=now-timedelta(minutes=15),
-            ),
-            self.job(
-                Job.Status.FAILURE,
-                modified_time_ago=timedelta(minutes=10),
-                start_date=now-timedelta(days=2, hours=18, minutes=20),
-            ),
-            self.job(
-                Job.Status.FAILURE,
-                modified_time_ago=timedelta(minutes=10),
-                create_date=now-timedelta(days=2, hours=18, minutes=20),
-            ),
-        ]
+        job.scheduled_start_date = (
+            timezone.now() + timedelta(minutes=11, seconds=30))
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "11\xa0minutes until scheduled start",
+            None,
+        )
 
-        response = self.get_response(data=dict(sort='recently_created'))
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        table_soup = response_soup.select('table#job-table')[0]
+        job.scheduled_start_date = None
+        job.create_date = timezone.now() - timedelta(minutes=12, seconds=30)
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "Created 12\xa0minutes ago",
+            f"Created: {date_display(job.create_date)}",
+        )
 
-        # Be generous about time delays/inconsistencies during the test.
-        acceptable_cells_for_each_job = [
-            ["Waited for " + str(num) + "\xa0minutes so far"
-             for num in [8, 9, 10, 11, 12]],
-            [str(num) + "\xa0minutes until scheduled start"
-             for num in [8, 9, 10, 11, 12]],
-            ["Created " + str(num) + "\xa0minutes ago"
-             for num in [8, 9, 10, 11, 12]],
-            ["Started " + str(num) + "\xa0minutes ago"
-             for num in [8, 9, 10, 11, 12]],
-            ["Completed in " + str(num) + "\xa0minutes"
-             for num in [8, 9, 10, 11, 12]],
-            ["Completed in 2\xa0days, 18\xa0hours"],
-            ["Completed 2\xa0days, 18\xa0hours after creation"],
-        ]
+        job.status = Job.Status.IN_PROGRESS
+        job.start_date = timezone.now() - timedelta(minutes=13, seconds=30)
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "Started 13\xa0minutes ago",
+            f"Started: {date_display(job.start_date)}",
+        )
 
-        titles_for_each_job = [
-            f"Scheduled to start: {date_display(jobs[0].scheduled_start_date)}",
-            f"Scheduled to start: {date_display(jobs[1].scheduled_start_date)}",
-            f"Created: {date_display(jobs[2].create_date)}",
-            f"Started: {date_display(jobs[3].start_date)}",
-            f"Started: {date_display(jobs[4].start_date)}",
-            f"Started: {date_display(jobs[5].start_date)}",
-            f"Created: {date_display(jobs[6].create_date)}",
-        ]
+        job.status = Job.Status.SUCCESS
+        job.scheduled_start_date = timezone.now() - timedelta(minutes=30)
+        job.save()
+        # Use QuerySet.update() instead of Model.save() so that the modify
+        # date doesn't get auto-updated to the current date.
+        Job.objects.filter(pk=job.pk).update(
+            modify_date=timezone.now() - timedelta(minutes=14, seconds=30))
+        job.refresh_from_db()
+        self.assert_cell_and_title(
+            "Timing info", "Completed 14\xa0minutes ago",
+            f"Completed {date_display(job.modify_date)},"
+            f" 15\xa0minutes after scheduled start",
+        )
 
-        for row_number, job, acceptable_cells, title in zip(
-            range(1, 1+len(jobs)),
-            reversed(jobs),
-            reversed(acceptable_cells_for_each_job),
-            reversed(titles_for_each_job),
-        ):
-            found_match = False
-            error = None
-
-            for cell in acceptable_cells:
-                try:
-                    time_html = (
-                        f'<span title="{title}">{cell}</span>')
-                    self.assert_table_row_values(
-                        table_soup,
-                        {"Time": time_html},
-                        row_number,
-                    )
-                except AssertionError as e:
-                    # Try the next acceptable values
-                    error = str(e)
-                else:
-                    found_match = True
-                    break
-
-            if not found_match:
-                raise AssertionError(
-                    f"None of the acceptable values worked for"
-                    f" row {row_number}. Last attempt's error: {error}")
+        # Test 1) no scheduled start date, but start date; and 2) persist flag
+        job.status = Job.Status.FAILURE
+        job.scheduled_start_date = None
+        job.start_date = timezone.now() - timedelta(minutes=34)
+        job.persist = True
+        job.save()
+        Job.objects.filter(pk=job.pk).update(
+            modify_date=timezone.now() - timedelta(minutes=16, seconds=30))
+        job.refresh_from_db()
+        self.assert_cell_and_title(
+            "Timing info", "Completed 16\xa0minutes ago *",
+            f"Completed {date_display(job.modify_date)},"
+            f" 17\xa0minutes after scheduled start",
+        )
 
     @override_settings(JOBS_PER_PAGE=2)
     def test_multiple_pages(self):
@@ -739,35 +773,34 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
     def test_sort_by_status(self):
         def f1(_num):
-            # 1st: in progress, modified later
+            # 1st: incomplete, scheduled 1st
             return self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=-1))
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=2))
         def f2(_num):
-            # 2nd: in progress
-            return self.job(Job.Status.IN_PROGRESS)
-
+            # 2nd: incomplete, scheduled 2nd
+            # (pending/incomplete doesn't matter)
+            return self.job(
+                Job.Status.IN_PROGRESS, scheduled_time_ago=timedelta(hours=1))
         def f3(_num):
-            # 3rd: pending, modified later
+            # 3rd: incomplete, scheduled 3rd
             return self.job(
-                Job.Status.PENDING, modified_time_ago=timedelta(days=-1))
-        def f4(_num):
-            # 4th: pending
-            return self.job(Job.Status.PENDING)
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=-2))
 
-        def f5(_num):
-            # 5th: completed, modified latest
+        def f4(_num):
+            # 4th: completed, modified latest
             return self.job(
-                Job.Status.SUCCESS, modified_time_ago=timedelta(days=-2))
-        def f6(_num):
-            # 6th: completed, modified 2nd latest
+                Job.Status.SUCCESS, modified_time_ago=timedelta(minutes=1))
+        def f5(_num):
+            # 5th: completed, modified 2nd latest
             # (success/failure doesn't matter)
             return self.job(
-                Job.Status.FAILURE, modified_time_ago=timedelta(days=-1))
-        def f7(_num):
-            # 7th: completed
-            return self.job(Job.Status.SUCCESS)
+                Job.Status.FAILURE, modified_time_ago=timedelta(hours=1))
+        def f6(_num):
+            # 6th: completed, modified 3rd latest
+            return self.job(
+                Job.Status.SUCCESS, modified_time_ago=timedelta(hours=3))
 
-        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4, f5, f6, f7])
+        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4, f5, f6])
 
         expected_rows = []
         for run_number in run_order:
@@ -783,11 +816,11 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         def f2(_num):
             # 2nd; different status to demonstrate it doesn't affect order
             return self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=1))
+                Job.Status.SUCCESS, modified_time_ago=timedelta(days=1))
         def f3(_num):
             # 3rd
             return self.job(
-                Job.Status.PENDING, modified_time_ago=timedelta(days=2))
+                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=2))
 
         run_order, returned_jobs = scrambled_run([f1, f2, f3])
 
@@ -799,24 +832,36 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.assert_job_table_values(
             expected_rows, data=dict(sort='recently_updated'))
 
-    def test_sort_by_recently_created(self):
-        jobs = [
+    def test_sort_by_latest_scheduled(self):
+        def f1(_num):
             # 1st
-            self.job(Job.Status.PENDING),
-            # 2nd; different status and modified time to demonstrate they
-            # don't affect order
-            self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=1)),
+            return self.job(
+                Job.Status.IN_PROGRESS, scheduled_time_ago=timedelta(hours=-1))
+        def f2(_num):
+            # 2nd; no scheduled date, but has start date, which is sorted with
+            # the scheduled start dates of other jobs
+            return self.job(
+                Job.Status.SUCCESS,
+                scheduled_time_ago=None, started_time_ago=timedelta(hours=1))
+        def f3(_num):
             # 3rd
-            self.job(Job.Status.PENDING),
-        ]
+            return self.job(
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=2))
+        def f4(_num):
+            # 4th; no scheduled start date or start date
+            return self.job(
+                Job.Status.PENDING,
+                scheduled_time_ago=None, started_time_ago=None)
+
+        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4])
+
+        expected_rows = []
+        for run_number in run_order:
+            job = returned_jobs[run_number]
+            expected_rows.append({"Job ID": job.pk, "Type": job.job_name})
 
         self.assert_job_table_values(
-            # Most recent first, instead of most recent last
-            list(reversed(
-                [{"Job ID": job.pk, "Type": job.job_name} for job in jobs])),
-            data=dict(sort='recently_created')
-        )
+            expected_rows, data=dict(sort='latest_scheduled'))
 
     def test_filter_by_status(self):
         jobs = [
@@ -855,6 +900,77 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 [{"Job ID": job.pk} for job in jobs[4:]])),
             data=dict(status='completed')
         )
+
+    def test_filter_by_type(self):
+        source_id = self.sources[0].pk
+        jobs = [
+            fabricate_job('extract_features', '1', source_id=source_id),
+            fabricate_job('extract_features', '2', source_id=source_id),
+            fabricate_job('check_source', source_id=source_id),
+            fabricate_job('update_label_details'),
+            fabricate_job('deploy', '1'),
+            fabricate_job('deploy', '2'),
+            fabricate_job('generate_thumbnail', '1'),
+            fabricate_job('generate_thumbnail', '2'),
+            fabricate_job('generate_patch', '1'),
+            fabricate_job('generate_patch', '2'),
+        ]
+
+        if self.view_shows_source_jobs:
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[:2]])),
+                data=dict(type='extract_features')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[2:3]])),
+                data=dict(type='check_source')
+            )
+
+        if self.view_shows_non_source_jobs:
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[3:4]])),
+                data=dict(type='update_label_details')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[4:6]])),
+                data=dict(type='deploy')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[6:8]])),
+                data=dict(type='generate_thumbnail')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[8:]])),
+                data=dict(type='generate_patch')
+            )
+
+            if self.view_shows_source_jobs:
+                expected_jobs = jobs[:6]
+            else:
+                expected_jobs = jobs[3:6]
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in expected_jobs])),
+                data=dict(type='background_queue_types')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[6:]])),
+                data=dict(type='realtime_queue_types')
+            )
 
     def test_invalid_search_message(self):
         message = "Search parameters were invalid."

@@ -310,7 +310,10 @@ class JobDecorator:
                 task_args,
             ])
 
-        is_source_job = 'source_id' in inspect.signature(task_func).parameters
+        task_parameters = inspect.signature(task_func).parameters
+        is_source_job = (
+            'source_id' in task_parameters
+            or 'image_id' in task_parameters)
         _register_job(
             self.job_name,
             display_name=self.job_display_name,

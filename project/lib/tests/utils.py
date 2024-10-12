@@ -997,6 +997,9 @@ class HtmlAssertionsMixin:
             actual_values = dict(zip(column_names, cell_contents))
 
             for key, expected_value in expected_row.items():
+                actual_value = actual_values.get(key)
+                if actual_value is None and key not in column_names:
+                    raise AssertionError(f"'{key}' isn't a table column")
                 self.assertHTMLEqual(
                     actual_values.get(key),
                     # Tolerate integers as expected content

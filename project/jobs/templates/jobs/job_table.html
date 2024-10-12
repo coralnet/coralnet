@@ -23,16 +23,16 @@
   <table class="generic" id="job-table">
     <thead>
       <tr>
-        <th title="Job ID">Job ID</th>
-        <th title="Job type">Type</th>
+        <th>Job ID</th>
+        <th>Type</th>
         {% if has_source_column %}
-          <th title="Source the job applies to">Source</th>
+          <th class="tooltip" title="Source the job applies to">Source</th>
         {% endif %}
-        <th title="Image ID or anything else relevant to this job">Other ID</th>
-        <th title="Progress status">Status</th>
-        <th title="Notes about the result, or error message if the job failed">Detail</th>
-        <th title="Time the job's status was last updated; * means the record will stay after {{ job_max_days }} days">Last updated</th>
-        <th title="Info on the job's duration or start time">Time</th>
+        <th class="tooltip" title="Image ID or anything else relevant to this job">Other ID</th>
+        <th>Status</th>
+        <th class="tooltip" title="Notes about the result, or error message if the job failed">Detail</th>
+        <th>Scheduled start date</th>
+        <th class="tooltip" title="Time until start, time since completion, etc.; * means the record will stay after {{ job_max_days }} days">Timing info</th>
       </tr>
     </thead>
     <tbody>
@@ -63,56 +63,58 @@
           <td>{{ job_entry.status_display }}</td>
           <td class="detail">{{ job_entry.result_message|linebreaksbr }}</td>
           <td>
-            {{ job_entry.modify_date }}
-            {% if job_entry.persist %} * {% endif %}
+            {% if job_entry.scheduled_start_or_start_date %}
+              {{ job_entry.scheduled_start_or_start_date }}
+            {% else %}
+              -
+            {% endif %}
           </td>
           <td>
             {% if job_entry.status == 'pending' %}
 
               {% if not job_entry.scheduled_start_date %}
 
-                <span title="Created: {{ job_entry.create_date }}">
-                  Created {{ job_entry.create_date|timesince }} ago
+                <span
+                  class="tooltip"  
+                  title="Created: {{ job_entry.create_date }}"
+                >
+                  Created {{ job_entry.create_date|timesince:now }} ago
                 </span>
 
               {% elif now < job_entry.scheduled_start_date %}
 
-                <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
-                  {{ job_entry.scheduled_start_date|timeuntil }} until scheduled start
+                <span>
+                  {{ job_entry.scheduled_start_date|timeuntil:now }} until scheduled start
                 </span>
 
               {% else %}
 
-                <span title="Scheduled to start: {{ job_entry.scheduled_start_date }}">
-                  Waited for {{ job_entry.scheduled_start_date|timesince }} so far
+                <span>
+                  Waited for {{ job_entry.scheduled_start_date|timesince:now }} so far
                 </span>
 
               {% endif %}
 
             {% elif job_entry.status == 'in_progress' %}
 
-              <span title="Started: {{ job_entry.start_date }}">
-                Started {{ job_entry.start_date|timesince }} ago
+              <span
+                class="tooltip"
+                title="Started: {{ job_entry.start_date }}"
+              >
+                Started {{ job_entry.start_date|timesince:now }} ago
               </span>
 
             {% else %}
 
               {# 'completed' #}
 
-              {% if job_entry.start_date %}
-
-                <span title="Started: {{ job_entry.start_date }}">
-                  Completed in {{ job_entry.start_date|timesince:job_entry.modify_date }}
-                </span>
-
-              {% else %}
-
-                {# This case is for jobs that went from pending to aborted. #}
-                <span title="Created: {{ job_entry.create_date }}">
-                  Completed {{ job_entry.create_date|timesince:job_entry.modify_date }} after creation
-                </span>
-
-              {% endif %}
+              <span 
+                class="tooltip" 
+                title="Completed {{ job_entry.modify_date }}, {{ job_entry.scheduled_start_or_start_date|timesince:job_entry.modify_date }} after scheduled start"
+              >
+                Completed {{ job_entry.modify_date|timesince:now }} ago
+                {% if job_entry.persist %} * {% endif %}
+              </span>
 
             {% endif %}
           </td>
@@ -123,7 +125,7 @@
 
   {% include 'pagination_links.html' with page_results=page_results query_string=query_string %}
 
-  <div class="line">Most job records are cleaned up after approximately {{ job_max_days }} days, except for jobs with * in Last updated.</div>
+  <div class="line">Most job records are cleaned up after approximately {{ job_max_days }} days, except for jobs with * in Timing info.</div>
 
 {% else %}
 

@@ -1,12 +1,12 @@
 from collections import Counter, defaultdict
+import datetime
 from datetime import timedelta
 import operator
 
 from django import forms
 from django.conf import settings
 from django.db import models
-from django.db.models.lookups import LessThan
-from django.db.models.expressions import Case, F, Value, When
+from django.db.models.expressions import Case, F, When
 from django.utils import timezone
 
 from lib.forms import BoxFormRenderer, InlineFormRenderer
@@ -57,26 +57,62 @@ class BaseJobForm(forms.Form):
     def _sort_jobs(self, jobs):
         sort_method = self.job_sort_method
         if sort_method == 'status':
-            # In-progress jobs first, then pending + due,
-            # then pending + scheduled for later, then completed.
-            # Tiebreak by last updated, then by ID (last created).
+            # Incomplete jobs by scheduled start date first.
+            # Then completed jobs by last modified.
+            # Tiebreak by ID (last created).
             jobs = jobs.annotate(
-                due=LessThan(F('scheduled_start_date'), timezone.now()),
-                status_score=Case(
-                    When(status=Job.Status.IN_PROGRESS, then=Value(1)),
-                    When(status=Job.Status.PENDING, due=True, then=Value(2)),
-                    When(status=Job.Status.PENDING, due=False, then=Value(3)),
-                    When(status=Job.Status.PENDING, due=None, then=Value(4)),
-                    default=Value(5),
-                    output_field=models.fields.IntegerField(),
-                )
+                incomplete_scheduled_date=Case(
+                    # For incomplete jobs with a scheduled start time.
+                    When(
+                        status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
+                        scheduled_start_date__isnull=False,
+                        then=F('scheduled_start_date'),
+                    ),
+                    # For incomplete jobs without a scheduled start time.
+                    # Basically this'll always be a later value than any
+                    # scheduled start date, and always earlier than the
+                    # completed-jobs case.
+                    When(
+                        status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
+                        then=datetime.datetime(
+                            year=datetime.MAXYEAR, month=12, day=30,
+                            tzinfo=datetime.timezone.utc),
+                    ),
+                    # For completed jobs.
+                    default=datetime.datetime(
+                        year=datetime.MAXYEAR, month=12, day=31,
+                        tzinfo=datetime.timezone.utc),
+                    output_field=models.fields.DateTimeField(),
+                ),
             )
-            jobs = jobs.order_by('status_score', '-modify_date', '-id')
+            jobs = jobs.order_by(
+                'incomplete_scheduled_date',
+                # This is the ordering for completed jobs (and also the
+                # tiebreaker for incomplete jobs).
+                '-modify_date', '-id')
         elif sort_method == 'recently_updated':
             jobs = jobs.order_by('-modify_date', '-id')
         else:
-            # 'recently_created'
-            jobs = jobs.order_by('-id')
+            # 'latest_scheduled'
+            # If there's no scheduled date, we'll use start date.
+            # If neither, we use an impossibly early date.
+            jobs = jobs.annotate(
+                scheduled_start_or_start_date=Case(
+                    When(
+                        scheduled_start_date__isnull=False,
+                        then=F('scheduled_start_date'),
+                    ),
+                    When(
+                        start_date__isnull=False,
+                        then=F('start_date'),
+                    ),
+                    default=datetime.datetime(
+                        year=datetime.MINYEAR, month=1, day=1,
+                        tzinfo=datetime.timezone.utc),
+                    output_field=models.fields.DateTimeField(),
+                ),
+            )
+            jobs = jobs.order_by('-scheduled_start_or_start_date', '-id')
 
         return jobs
 
@@ -116,7 +152,7 @@ class JobSearchForm(BaseJobForm):
         choices=[
             ('status', "Status (non-completed first)"),
             ('recently_updated', "Recently updated"),
-            ('recently_created', "Recently created"),
+            ('latest_scheduled', "Latest scheduled"),
         ],
         required=False, initial='status',
     )
@@ -218,6 +254,17 @@ class NonSourceJobSearchForm(JobSearchForm):
     @staticmethod
     def get_types():
         return get_non_source_job_names()
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        for queue_name in settings.DJANGO_HUEY['queues'].keys():
+            choices.append(
+                (f'{queue_name}_queue_types', f"Any {queue_name} job"))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
 
 
 class JobSummaryForm(BaseJobForm):

@@ -102,6 +102,10 @@ class JobListView(View, ABC):
                 modify_date=values['modify_date'],
                 scheduled_start_date=values['scheduled_start_date'],
                 start_date=values['start_date'],
+                scheduled_start_or_start_date=
+                    values['scheduled_start_date']
+                    if values['scheduled_start_date']
+                    else values['start_date'],
             )
 
             if self.has_source_column:
