@@ -1,8 +1,6 @@
 from collections import Counter
-import datetime
 from datetime import timedelta
 from logging import getLogger
-import random
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -42,27 +40,6 @@ from .utils import (
     get_extractor, reset_features, reset_features_bulk, schedule_source_check)
 
 logger = getLogger(__name__)
-
-
-# Run daily, and not at prime times of biggest users (e.g. US East, Hawaii,
-# Australia).
-@job_runner(
-    interval=timedelta(days=1),
-    offset=datetime.datetime(
-        year=2023, month=1, day=1, hour=7, minute=0,
-        tzinfo=datetime.timezone.utc,
-    ),
-)
-def check_all_sources():
-    scheduled = 0
-    for source in Source.objects.all():
-        # Schedule a check of this source at a random time in the next 4 hours.
-        delay_in_seconds = random.randrange(1, 60*60*4)
-        job, created = schedule_source_check(
-            source.pk, delay=timedelta(seconds=delay_in_seconds))
-        if created:
-            scheduled += 1
-    return f"Scheduled checks for {scheduled} source(s)"
 
 
 @job_runner()

@@ -535,7 +535,6 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             ('train_classifier', "Train classifier"),
         ]
         non_source_types = [
-            ('check_all_sources', "Check all sources"),
             ('classify_image', "Deploy"),
             ('clean_up_old_api_jobs', "Clean up old api jobs"),
             ('clean_up_old_jobs', "Clean up old jobs"),
