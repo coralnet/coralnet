@@ -37,7 +37,12 @@ from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import (
-    get_extractor, reset_features, reset_features_bulk, schedule_source_check)
+    get_extractor,
+    reset_features,
+    reset_features_bulk,
+    schedule_source_check,
+    source_is_finished_with_core_jobs,
+)
 
 logger = getLogger(__name__)
 
@@ -548,13 +553,17 @@ def classify_image(image_id):
             f" with the image's points."
         )
 
-    current_classifier_events = ClassifyImageEvent.objects \
-        .filter(classifier_id=classifier.pk, source_id=img.source_id)
-    incomplete_images = img.source.image_set.incomplete()
-    if current_classifier_events.count() >= incomplete_images.count():
+    this_job = Job.objects.get(
+        job_name='classify_features',
+        arg_identifier=image_id,
+        status=Job.Status.IN_PROGRESS,
+    )
+    if source_is_finished_with_core_jobs(
+        img.source_id, job_id_about_to_finish=this_job.pk,
+    ):
         # Classification for this source may be done.
-        # Confirm whether the source is all caught up. That's useful to know
-        # when looking at job/backend dashboards.
+        # Confirm whether the source is all caught up. It's useful to see that
+        # confirmation message when looking at job/backend dashboards.
         schedule_source_check(img.source_id)
 
     return f"Used classifier {classifier.pk}"

@@ -18,7 +18,8 @@ from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
 from ...models import Classifier, Score
 from ...utils import clear_features
-from .utils import BaseTaskTest, do_collect_spacer_jobs
+from .utils import (
+    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
 def noop(*args, **kwargs):
@@ -63,13 +64,6 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             assert_msg="Should not redo the original 2 classifications",
         )
 
-    def check_is_pending(self):
-        return Job.objects.filter(
-            job_name='check_source',
-            arg_identifier=self.source.pk,
-            status=Job.Status.PENDING,
-        ).exists()
-
     def test_schedule_check_after_last_classification(self):
         """
         After the current classifier seems to have gone over all
@@ -84,12 +78,12 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
 
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should not schedule a check after classifying just 1 image",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should schedule a check after classifying both images",
         )
 
@@ -105,14 +99,14 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
 
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should not schedule a check after classifying just 1 image,"
                 " even if the other image was handled by the previous"
                 " classifier",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should schedule a check after classifying both images",
         )
 

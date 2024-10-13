@@ -10,7 +10,8 @@ from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import get_or_create_job, start_job
 from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
-from .utils import BaseTaskTest, do_collect_spacer_jobs
+from .utils import (
+    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
 class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
@@ -119,6 +120,36 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         self.assertTrue(img1.features.extracted)
         self.assertTrue(img2.features.extracted)
         self.assertTrue(img3.features.extracted)
+
+    def test_source_check_after_finishing(self):
+        img1 = self.upload_image(self.user, self.source)
+        img2 = self.upload_image(self.user, self.source)
+        img3 = self.upload_image(self.user, self.source)
+
+        do_job('check_source', self.source.pk)
+        do_job('extract_features', img1.pk)
+        do_collect_spacer_jobs()
+        self.assertTrue(img1.features.extracted)
+        self.assertFalse(
+            source_check_is_scheduled(self.source.pk),
+            msg="Source check shouldn't be scheduled since there are"
+                " still incomplete extract jobs")
+
+        do_job('extract_features', img2.pk)
+        do_collect_spacer_jobs()
+        self.assertTrue(img2.features.extracted)
+        self.assertFalse(
+            source_check_is_scheduled(self.source.pk),
+            msg="Source check shouldn't be scheduled since there are"
+                " still incomplete extract jobs")
+
+        do_job('extract_features', img3.pk)
+        do_collect_spacer_jobs()
+        self.assertTrue(img3.features.extracted)
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Source check should be scheduled since this is the"
+                " last extract job")
 
     def test_with_dupe_points(self):
         """

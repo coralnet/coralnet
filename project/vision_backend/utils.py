@@ -9,6 +9,7 @@ from spacer.extract_features import (
 from spacer.messages import DataLocation
 
 from images.models import Point
+from jobs.models import Job
 from jobs.utils import schedule_job, schedule_job_on_commit
 from labels.models import Label, LocalLabel
 from .common import Extractors
@@ -209,6 +210,30 @@ def schedule_source_check_on_commit(source_id, delay=None):
         source_id=source_id,
         delay=delay,
     )
+
+
+def source_is_finished_with_core_jobs(
+    source_id: int,
+    job_id_about_to_finish: int = None,
+) -> bool:
+    """
+    Is the source still running any 'core' vision-backend jobs?
+    This quick confirmation can be useful when deciding whether to run
+    another source check.
+
+    If this is called from a core job which is about to finish (and thus we
+    don't want to count that job), that job's ID can be passed as
+    job_id_about_to_finish.
+    """
+    core_source_job_names = [
+        'extract_features', 'train_classifier', 'classify_features']
+    incomplete_core_jobs = (
+        Job.objects
+        .filter(source_id=source_id, job_name__in=core_source_job_names)
+        .exclude(pk=job_id_about_to_finish)
+        .incomplete()
+    )
+    return not incomplete_core_jobs.exists()
 
 
 def get_extractor(extractor_choice: Extractors) -> FeatureExtractor:

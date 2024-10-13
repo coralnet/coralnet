@@ -16,7 +16,8 @@ from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
-from .utils import BaseTaskTest, do_collect_spacer_jobs
+from .utils import (
+    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
 def mock_training_results(
@@ -222,6 +223,23 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         self.assertEqual(
             pending_classifier.nbr_train_images, 3,
             msg="Classification should be submitted with only 3 images")
+
+    def test_source_check_after_finishing(self):
+        # Provide enough data for training. Extract features.
+        self.upload_images_for_training()
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+        # Submit classifier.
+        run_scheduled_jobs_until_empty()
+
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+        # Collect classifier.
+        do_collect_spacer_jobs()
+
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Source check should be scheduled after collecting training")
 
     def test_with_dupe_points(self):
         """

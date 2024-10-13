@@ -3,6 +3,7 @@ from django.core.files.storage import default_storage
 from django.test import override_settings
 
 from images.model_utils import PointGen
+from jobs.models import Job
 from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
@@ -11,6 +12,18 @@ from ...models import Classifier
 
 def do_collect_spacer_jobs():
     do_job('collect_spacer_jobs')
+
+
+def source_check_is_scheduled(source_id):
+    try:
+        Job.objects.get(
+            job_name='check_source',
+            source_id=source_id,
+            status=Job.Status.PENDING,
+        )
+    except Job.DoesNotExist:
+        return False
+    return True
 
 
 @override_settings(

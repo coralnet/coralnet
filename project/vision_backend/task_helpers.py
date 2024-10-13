@@ -30,7 +30,11 @@ from jobs.utils import finish_job
 from labels.models import Label, LabelSet
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
-from .utils import extractor_to_name, schedule_source_check
+from .utils import (
+    extractor_to_name,
+    schedule_source_check,
+    source_is_finished_with_core_jobs,
+)
 
 logger = getLogger(__name__)
 
@@ -248,9 +252,9 @@ class SpacerResultHandler(ABC):
             job = Job.objects.get(pk=internal_job_id)
             finish_job(job, success=success, result_message=result_message)
 
-            if job.source:
-                # If this is a source's job, chances are there might
-                # be another job to do for the source.
+            if job.source and source_is_finished_with_core_jobs(job.source_id):
+                # This is a source's job, and all other 'core' jobs for this
+                # source are completed. Check if the source has any next steps.
                 schedule_source_check(job.source_id)
 
     @classmethod
