@@ -2,4 +2,32 @@
 
   <p>To see how CoralNet is doing overall with processing jobs, check out the <a href="{% url 'jobs:status' %}">sitewide status page</a>. (There is also a link to this page on the site's footer.)</p>
 
+  <p>Types of jobs:</p>
+  
+  <ul>
+    <li>
+      <strong>Extract features:</strong> A pre-processing step that must be run for every image, before that image can be classified or used for training a classifier.
+    </li>
+    <li>
+      <strong>Train classifier:</strong> Trains a new classifier for the source, using all the confirmed and feature-extracted images in the source up to that point. The new classifier may or may not be saved, depending on how the evaluation results compare to the source's previous classifier.
+    </li>
+    <li>
+      <strong>Classify:</strong> Classifies an image, using the source's selected classifier.
+    </li>
+    <li>
+      <strong>Check source:</strong> Checks whether it's time to schedule more feature-extract, training, or classification jobs for the source. The general strategy this job uses is:
+      <ul>
+        <li>First extract features for all images.</li>
+        <li>Then check if the criteria are met for a new training job.</li>
+        <li>Then make sure all non-confirmed images are classified with the selected classifier.</li>
+      </ul>
+    </li>
+    <li>
+      <strong>Reset classifiers for source:</strong> Clear all previous saved classifiers for the source. Certain changes, such as changing the source's labelset, will result in this job being scheduled.
+    </li>
+    <li>
+      <strong>Reset features for source:</strong> Clear all previous saved extracted features for the source. Changing the source's feature-extractor setting results in this job being scheduled (unless no feature extractions have been done yet).
+    </li>
+  </ul>
+
 </div>
