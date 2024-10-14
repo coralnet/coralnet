@@ -47,7 +47,17 @@ from .utils import (
 logger = getLogger(__name__)
 
 
-@job_runner()
+def after_check(job_id):
+    job = Job.objects.get(pk=job_id)
+
+    # On job lists, showing all source checks can be a lot. Hide the ones
+    # that don't actually schedule anything.
+    if not job.result_message.startswith("Scheduled"):
+        job.hidden = True
+        job.save()
+
+
+@job_runner(after_finishing_job=after_check)
 def check_source(source_id):
     """
     Check a source for appropriate vision-backend tasks to run,
@@ -569,7 +579,14 @@ def classify_image(image_id):
     return f"Used classifier {classifier.pk}"
 
 
-@job_runner(interval=timedelta(minutes=1))
+def after_collect(job_id):
+    job = Job.objects.get(pk=job_id)
+    if job.result_message == "Jobs checked/collected: 0":
+        job.hidden = True
+        job.save()
+
+
+@job_runner(interval=timedelta(minutes=1), after_finishing_job=after_collect)
 def collect_spacer_jobs():
     """
     Collects and handles spacer job results until A) the result queue is empty
@@ -619,7 +636,14 @@ def reset_features_for_source(source_id):
     reset_features_bulk(Image.objects.filter(source_id=source_id))
 
 
-@job_runner()
+def after_reset_classifiers(job_id):
+    # Successful jobs related to classifier history should persist in the DB.
+    job = Job.objects.get(pk=job_id)
+    job.persist = True
+    job.save()
+
+
+@job_runner(after_finishing_job=after_reset_classifiers)
 def reset_classifiers_for_source(source_id):
     """
     Removes all traces of the classifiers for this source.

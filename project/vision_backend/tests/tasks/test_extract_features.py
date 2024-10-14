@@ -6,61 +6,47 @@ from spacer.exceptions import RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import do_job, JobUtilsMixin
-from jobs.utils import get_or_create_job, start_job
+from jobs.tests.utils import do_job
 from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
 from .utils import (
     BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
-class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
+class ExtractFeaturesTest(BaseTaskTest):
 
     def test_source_check(self):
         self.upload_image(self.user, self.source)
         self.upload_image(self.user, self.source)
 
-        job, created = get_or_create_job('check_source', self.source.pk)
-        self.assertFalse(
-            created, "Should have scheduled a source check after uploading")
-        start_job(job)
-        self.assert_job_result_message(
-            'check_source',
-            "Scheduled 2 feature extraction(s)")
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            "Should have scheduled a source check after uploading")
+        self.source_check_and_assert(
+            "Scheduled 2 feature extraction(s)", expected_hidden=False)
 
         self.upload_image(self.user, self.source)
 
-        job, created = get_or_create_job('check_source', self.source.pk)
-        self.assertFalse(
-            created, "Should have scheduled a source check after uploading")
-        start_job(job)
-        self.assert_job_result_message(
-            'check_source',
-            "Scheduled 1 feature extraction(s)",
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            "Should have scheduled a source check after uploading")
+        self.source_check_and_assert(
+            "Scheduled 1 feature extraction(s)", expected_hidden=False,
             assert_msg="Should not redo the other extractions")
 
-        do_job(
-            'check_source', self.source.pk,
-            source_id=self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
-            "Waiting for feature extraction(s) to finish")
+        self.source_check_and_assert(
+            "Waiting for feature extraction(s) to finish",
+            expected_hidden=True)
 
     @override_settings(JOB_MAX_MINUTES=-1)
     def test_source_check_time_out(self):
         for _ in range(12):
             self.upload_image(self.user, self.source)
 
-        do_job('check_source', self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             "Scheduled 10 feature extraction(s) (timed out)")
 
-        do_job(
-            'check_source', self.source.pk,
-            source_id=self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             "Scheduled 2 feature extraction(s)")
 
     def test_source_check_unprocessable_image(self):
@@ -68,20 +54,18 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
         image1.unprocessable_reason = "Exceeds point limit"
         image1.save()
 
-        do_job('check_source', self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             "Can't train first classifier: Not enough annotated images for"
             " initial training",
+            expected_hidden=True,
             assert_msg="Shouldn't schedule extraction for the"
                        " unprocessable image",
         )
 
         self.upload_image(self.user, self.source)
-        do_job('check_source', self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             "Scheduled 1 feature extraction(s)",
+            expected_hidden=False,
             assert_msg="Should still schedule extraction for other images",
         )
 
@@ -194,16 +178,17 @@ class ExtractFeaturesTest(BaseTaskTest, JobUtilsMixin):
 
         img2.features.refresh_from_db()
         self.assertFalse(img2.features.extracted)
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             "At least one image has too large of a resolution to extract"
             f" features (example: image ID {img2.pk})."
             f" Otherwise, the source seems to be all caught up."
-            f" Not enough annotated images for initial training")
+            f" Not enough annotated images for initial training",
+            expected_hidden=True,
+        )
 
 
 class AbortCasesTest(
-    BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin, JobUtilsMixin,
+    BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin,
 ):
     """
     Test cases where the task or collection would abort before reaching the
@@ -219,9 +204,10 @@ class AbortCasesTest(
         # Try to submit feature extraction.
         run_scheduled_jobs_until_empty()
 
-        self.assert_job_result_message(
-            'check_source',
-            "Machine classification isn't configured for this source")
+        self.source_check_and_assert(
+            "Machine classification isn't configured for this source",
+            expected_hidden=True,
+        )
 
     def test_training_in_progress(self):
         """
@@ -242,10 +228,11 @@ class AbortCasesTest(
         # Try to submit feature extraction.
         run_scheduled_jobs_until_empty()
 
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             f"Feature extraction(s) ready, but not"
-            f" submitted due to training in progress")
+            f" submitted due to training in progress",
+            expected_hidden=True,
+        )
 
     def test_nonexistent_image(self):
         """Try to extract features for a nonexistent image ID."""

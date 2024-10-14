@@ -482,7 +482,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.assertContains(
             response,
             "Most job records are cleaned up after approximately 30 days,"
-            " except for jobs with * in Timing info.")
+            " except for jobs with * in the Type column.")
 
     def test_job_id_column(self):
         jobs = [
@@ -503,8 +503,8 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.job(job_name='extract_features')
         self.job(job_name='train_classifier')
         self.job(job_name='classify_features')
-        self.job(job_name='update_label_details')
-        self.job(job_name='classify_image')
+        self.job(job_name='update_label_details', persist=True)
+        self.job(job_name='classify_image', hidden=True)
 
         self.assert_job_table_values(
             list(reversed([
@@ -512,10 +512,11 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 {"Type": "Train classifier"},
                 # Special case
                 {"Type": "Classify"},
-                {"Type": "Update label details"},
+                {"Type": "Update label details *"},
                 # Special case
-                {"Type": "Deploy"},
-            ]))
+                {"Type": "Deploy ^"},
+            ])),
+            data=dict(show_hidden=True),
         )
 
     @skip(
@@ -743,17 +744,16 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             f" 15\xa0minutes after scheduled start",
         )
 
-        # Test 1) no scheduled start date, but start date; and 2) persist flag
+        # No scheduled start date, but start date.
         job.status = Job.Status.FAILURE
         job.scheduled_start_date = None
         job.start_date = timezone.now() - timedelta(minutes=34)
-        job.persist = True
         job.save()
         Job.objects.filter(pk=job.pk).update(
             modify_date=timezone.now() - timedelta(minutes=16, seconds=30))
         job.refresh_from_db()
         self.assert_cell_and_title(
-            "Timing info", "Completed 16\xa0minutes ago *",
+            "Timing info", "Completed 16\xa0minutes ago",
             f"Completed {date_display(job.modify_date)},"
             f" 17\xa0minutes after scheduled start",
         )
@@ -970,6 +970,23 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                     [{"Job ID": job.pk} for job in jobs[6:]])),
                 data=dict(type='realtime_queue_types')
             )
+
+    def test_show_hidden_option(self):
+        jobs = [
+            self.job(Job.Status.SUCCESS),
+            self.job(Job.Status.SUCCESS, hidden=True),
+        ]
+
+        self.assert_job_table_values(
+            list(reversed(
+                [{"Job ID": job.pk} for job in jobs[:]])),
+            data=dict(show_hidden=True)
+        )
+        self.assert_job_table_values(
+            list(reversed(
+                [{"Job ID": job.pk} for job in jobs[:1]])),
+            data=dict(show_hidden=False)
+        )
 
     def test_invalid_search_message(self):
         message = "Search parameters were invalid."

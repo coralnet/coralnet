@@ -34,55 +34,59 @@ def return_arg_test(arg):
 class RunScheduledJobsTest(BaseTest):
 
     @staticmethod
-    def run_scheduled_jobs_and_get_result():
+    def do_run_job():
         run_scheduled_jobs()
+        return Job.objects.filter(job_name='run_scheduled_jobs').latest('pk')
 
-        job = Job.objects.filter(job_name='run_scheduled_jobs').latest('pk')
-        return job.result_message
-
-    def test_result_message(self):
-        self.assertEqual(
-            self.run_scheduled_jobs_and_get_result(),
-            "Ran 0 jobs")
+    def test_result(self):
+        run_job = self.do_run_job()
+        self.assertEqual(run_job.result_message, "Ran 0 jobs")
+        self.assertTrue(run_job.hidden)
 
         name = 'return_arg_test'
 
         job_1 = fabricate_job(name, 1)
+        run_job = self.do_run_job()
         self.assertEqual(
-            self.run_scheduled_jobs_and_get_result(),
-            f"Ran 1 job(s):\n{job_1.pk}: {name} / 1")
+            run_job.result_message, f"Ran 1 job(s):\n{job_1.pk}: {name} / 1")
+        self.assertFalse(run_job.hidden)
 
         job_2 = fabricate_job(name, 2)
         job_3 = fabricate_job(name, 3)
         job_4 = fabricate_job(name, 4)
+        run_job = self.do_run_job()
         self.assertEqual(
-            self.run_scheduled_jobs_and_get_result(),
+            run_job.result_message,
             f"Ran 3 job(s):\n{job_2.pk}: {name} / 2"
             f"\n{job_3.pk}: {name} / 3"
             f"\n{job_4.pk}: {name} / 4")
+        self.assertFalse(run_job.hidden)
 
         job_5 = fabricate_job(name, 5)
         job_6 = fabricate_job(name, 6)
         job_7 = fabricate_job(name, 7)
         fabricate_job(name, 8)
+        run_job = self.do_run_job()
         self.assertEqual(
-            self.run_scheduled_jobs_and_get_result(),
+            run_job.result_message,
             f"Ran 4 jobs, including:\n{job_5.pk}: {name} / 5"
             f"\n{job_6.pk}: {name} / 6"
             f"\n{job_7.pk}: {name} / 7")
+        self.assertFalse(run_job.hidden)
 
     @override_settings(JOB_MAX_MINUTES=-1)
     def test_time_out(self):
         for i in range(12):
             fabricate_job('return_arg_test', i)
 
-        result_message = self.run_scheduled_jobs_and_get_result()
+        job = self.do_run_job()
         self.assertTrue(
-            result_message.startswith("Ran 10 jobs (timed out), including:"))
+            job.result_message.startswith(
+                "Ran 10 jobs (timed out), including:"))
 
-        result_message = self.run_scheduled_jobs_and_get_result()
+        job = self.do_run_job()
         self.assertTrue(
-            result_message.startswith("Ran 2 job(s):"))
+            job.result_message.startswith("Ran 2 job(s):"))
 
     def test_no_multiple_runs(self):
         """
@@ -106,9 +110,10 @@ class RunScheduledJobsTest(BaseTest):
         job, _ = schedule_job('return_arg_test', 1)
         job_2, _ = schedule_job('test_2', 1)
 
-        result_message = self.run_scheduled_jobs_and_get_result()
+        run_job = self.do_run_job()
         self.assertRegex(
-            result_message, r"Ran 1 job\(s\):\n\d+: return_arg_test / 1")
+            run_job.result_message,
+            r"Ran 1 job\(s\):\n\d+: return_arg_test / 1")
 
         job.refresh_from_db()
         self.assertEqual(job.status, Job.Status.SUCCESS)
@@ -384,11 +389,10 @@ class SchedulePeriodicJobsTest(BaseTest):
     Test the schedule_periodic_jobs task.
     """
     @staticmethod
-    def run_and_get_result():
+    def do_schedule_job():
         schedule_periodic_jobs()
-        job = Job.objects.filter(
+        return Job.objects.filter(
             job_name='schedule_periodic_jobs').latest('pk')
-        return job.result_message
 
     def test_zero_jobs_message(self):
         """
@@ -397,9 +401,11 @@ class SchedulePeriodicJobsTest(BaseTest):
         # Schedule everything first
         schedule_periodic_jobs()
         # Then scheduling again should do nothing
+        job = self.do_schedule_job()
         self.assertEqual(
-            self.run_and_get_result(),
+            job.result_message,
             "All periodic jobs are already scheduled")
+        self.assertTrue(job.hidden)
 
     def test_schedule_all_periodic_jobs(self):
 
@@ -417,8 +423,10 @@ class SchedulePeriodicJobsTest(BaseTest):
         with mock.patch(
             'jobs.tasks.get_periodic_job_schedules', test_periodics
         ):
+            job = self.do_schedule_job()
             self.assertEqual(
-                self.run_and_get_result(), "Scheduled 3 periodic job(s)")
+                job.result_message, "Scheduled 3 periodic job(s)")
+            self.assertFalse(job.hidden)
 
         # If these lines don't get errors, then the expected
         # scheduled jobs exist

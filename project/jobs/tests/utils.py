@@ -37,7 +37,8 @@ def fabricate_job(
     job_kwargs = {
         key: value for key, value in kwargs.items()
         if key in [
-            'source', 'source_id', 'user', 'attempt_number', 'persist',
+            'source', 'source_id', 'user', 'attempt_number',
+            'persist', 'hidden',
         ]
     }
     job = Job(
@@ -73,6 +74,7 @@ def do_job(
     """
     Here we just want to run a particular job and don't really care about
     how we get there (creating or starting).
+    Note: this doesn't generally work for jobs decorated with @full_job.
     """
 
     job, created = get_or_create_job(
@@ -143,12 +145,3 @@ class JobUtilsMixin(TestCase):
             self.assertEqual(
                 job.result_message, expected_message, msg=assert_msg,
             )
-
-    def source_check_and_assert_message(
-        self, expected_message, assert_msg=None, source=None,
-    ):
-        source = source or self.source
-
-        do_job('check_source', source.pk, source_id=source.pk)
-        self.assert_job_result_message(
-            'check_source', expected_message, assert_msg=assert_msg)

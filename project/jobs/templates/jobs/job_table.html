@@ -26,7 +26,7 @@
     <thead>
       <tr>
         <th>Job ID</th>
-        <th>Type</th>
+        <th class="tooltip" title="* means the job record will stay after {{ job_max_days }} days. ^ means the job is normally hidden from view.">Type</th>
         {% if has_source_column %}
           <th class="tooltip" title="Source the job applies to">Source</th>
         {% endif %}
@@ -34,14 +34,18 @@
         <th>Status</th>
         <th class="tooltip" title="Notes about the result, or error message if the job failed">Detail</th>
         <th>Scheduled start date</th>
-        <th class="tooltip" title="Time until start, time since completion, etc.; * means the record will stay after {{ job_max_days }} days">Timing info</th>
+        <th class="tooltip" title="Time until start, time since completion, etc.">Timing info</th>
       </tr>
     </thead>
     <tbody>
       {% for job_entry in job_table %}
         <tr class="{{ job_entry.status }}">
           <td>{{ job_entry.id }}</td>
-          <td>{{ job_entry.job_type }}</td>
+          <td>
+            {{ job_entry.job_type }}
+            {% if job_entry.persist %} * {% endif %}
+            {% if job_entry.hidden %} ^ {% endif %}
+          </td>
           {% if has_source_column %}
             <td class="source">
               {% if job_entry.source_id %}
@@ -115,7 +119,6 @@
                 title="Completed {{ job_entry.modify_date }}, {{ job_entry.scheduled_start_or_start_date|timesince:job_entry.modify_date }} after scheduled start"
               >
                 Completed {{ job_entry.modify_date|timesince:now }} ago
-                {% if job_entry.persist %} * {% endif %}
               </span>
 
             {% endif %}
@@ -127,7 +130,7 @@
 
   {% include 'pagination_links.html' with page_results=page_results query_string=query_string %}
 
-  <div class="line">Most job records are cleaned up after approximately {{ job_max_days }} days, except for jobs with * in Timing info.</div>
+  <div class="line">Most job records are cleaned up after approximately {{ job_max_days }} days, except for jobs with * in the Type column.</div>
 
 {% else %}
 

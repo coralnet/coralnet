@@ -38,7 +38,14 @@ def get_scheduled_jobs():
     return jobs
 
 
-@full_job(huey_interval_minutes=2)
+def after_run_scheduled(job_id):
+    job = Job.objects.get(pk=job_id)
+    if job.result_message == "Ran 0 jobs":
+        job.hidden = True
+        job.save()
+
+
+@full_job(huey_interval_minutes=2, after_finishing_job=after_run_scheduled)
 def run_scheduled_jobs():
     """
     Add scheduled jobs to the huey queue.
@@ -188,7 +195,14 @@ def report_stuck_jobs():
     return subject
 
 
-@full_job(huey_interval_minutes=5)
+def after_schedule(job_id):
+    job = Job.objects.get(pk=job_id)
+    if job.result_message == "All periodic jobs are already scheduled":
+        job.hidden = True
+        job.save()
+
+
+@full_job(huey_interval_minutes=10, after_finishing_job=after_schedule)
 def schedule_periodic_jobs():
     """
     Schedule periodic jobs as needed. This ensures that every defined periodic

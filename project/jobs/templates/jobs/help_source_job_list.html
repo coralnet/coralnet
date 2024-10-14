@@ -29,5 +29,16 @@
       <strong>Reset features for source:</strong> Clear all previous saved extracted features for the source. Changing the source's feature-extractor setting results in this job being scheduled (unless no feature extractions have been done yet).
     </li>
   </ul>
+  
+  <p>Some jobs will have * or ^ next to the job type.</p>
+  
+  <ul>
+    <li>
+      * indicates that the job record will persist beyond 30 days. For example, this is used for successful training jobs, because those job records can be useful for the source's longer-term bookkeeping.
+    </li>
+    <li>
+      ^ indicates that the job record is hidden when using the default filter settings. Check the "Show hidden jobs" checkbox to show these jobs. This usually applies to source-check jobs which did not result in any progress made, since source checks can occur frequently enough that they significantly clutter up the job list. Occasionally, ^ may also be used for older jobs when a server update changes how some of the jobs work. 
+    </li>
+  </ul>
 
 </div>

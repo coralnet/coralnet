@@ -7,6 +7,7 @@ import math
 import random
 import sys
 import traceback
+from typing import Callable
 import uuid
 
 from django.conf import settings
@@ -181,16 +182,9 @@ def finish_job(
     # This field doesn't take None; no message is set as an empty string.
     job.result_message = result_message or ""
     job.status = Job.Status.SUCCESS if success else Job.Status.FAILURE
-
-    # Successful jobs related to classifier history should persist in the DB.
-    name = job.job_name
-    if success and name in [
-        'train_classifier',
-        'reset_classifiers_for_source',
-    ]:
-        job.persist = True
-
     job.save()
+
+    name = job.job_name
 
     if settings.ENABLE_PERIODIC_JOBS:
         # If it's a periodic job, schedule another run of it
@@ -206,6 +200,7 @@ class JobDecorator:
         interval: timedelta = None, offset: datetime = None,
         huey_interval_minutes: int = None,
         task_queue_name: str = None,
+        after_finishing_job: Callable[[int], None] = None,
     ):
         # This can be left unspecified if the task name works as the
         # job name.
@@ -240,6 +235,10 @@ class JobDecorator:
         # task.
         # Only minute-intervals are supported for simplicity.
         self.huey_interval_minutes = huey_interval_minutes
+
+        # Optional callable that's called after finish_job() (if applicable to
+        # the task decorator) and takes the Job ID as an argument.
+        self.after_finishing_job = after_finishing_job
 
     @staticmethod
     def log_debug(tokens):
@@ -453,6 +452,9 @@ class FullJobDecorator(JobDecorator):
             # Regardless of error or not, mark job as done
             finish_job(job, success=success, result_message=result_message)
 
+            if self.after_finishing_job:
+                self.after_finishing_job(job.pk)
+
 
 full_job = FullJobDecorator
 
@@ -485,6 +487,9 @@ class JobRunnerDecorator(JobDecorator):
         finally:
             # Regardless of error or not, mark job as done
             finish_job(job, success=success, result_message=result_message)
+
+            if self.after_finishing_job:
+                self.after_finishing_job(job.pk)
 
 
 job_runner = JobRunnerDecorator

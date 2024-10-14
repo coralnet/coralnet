@@ -156,6 +156,10 @@ class JobSearchForm(BaseJobForm):
         ],
         required=False, initial='status',
     )
+    show_hidden = forms.BooleanField(
+        label="Show hidden jobs",
+        required=False, initial=False,
+    )
 
     default_renderer = BoxFormRenderer
 
@@ -166,7 +170,7 @@ class JobSearchForm(BaseJobForm):
             choices=self.get_type_choices,
             required=False, initial='',
         )
-        self.order_fields(['status', 'type', 'sort'])
+        self.order_fields(['status', 'type', 'sort', 'show_hidden'])
 
     def _filter_jobs(self, jobs):
         jobs = super()._filter_jobs(jobs)
@@ -188,6 +192,10 @@ class JobSearchForm(BaseJobForm):
             jobs = jobs.filter(job_name__in=job_names)
         elif type_filter:
             jobs = jobs.filter(job_name=type_filter)
+
+        show_hidden = self.get_field_value('show_hidden')
+        if not show_hidden:
+            jobs = jobs.filter(hidden=False)
 
         return jobs
 
