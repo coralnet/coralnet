@@ -8,7 +8,9 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.14 (WIP)
+## [1.14](https://github.com/coralnet/coralnet/tree/1.14)
+
+Production: 2024-10-15
 
 - Updates to required packages:
   - Django `>=4.1.9,<4.2` -> `>=4.2.16,<5.0`
@@ -22,7 +24,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
   - tqdm 4.65.0 -> 4.66.5
   - gunicorn `>=20.1.0,<20.2` -> 23.0.0 (for production)
   - pytz can now be uninstalled, since djangorestframework no longer depends on it.
-- New migrations to run for `jobs`.
+- New migrations to run for: `authtoken` (from djangorestframework), `jobs`. Runtime was 2 minutes in production.
 
 ## [1.13.1](https://github.com/coralnet/coralnet/tree/1.13.1)
 
