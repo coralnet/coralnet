@@ -1206,15 +1206,15 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         url = reverse('jobs:status')
         return self.client.get(url, data=data)
 
-    def get_content_soup(self, user=None, data=None):
-        response = self.get_response(user=user, data=data)
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        return response_soup.select('#content-container')[0]
-
     def get_detail_list_soup(self, user=None, data=None):
         response = self.get_response(user=user, data=data)
         response_soup = BeautifulSoup(response.content, 'html.parser')
         return response_soup.select('ul.detail_list')[0]
+
+    def get_longest_incomplete_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('#longest-incomplete-line')[0]
 
     def test_wait_time(self):
         # The 30-second adjustments below provide some leeway for the time
@@ -1706,36 +1706,42 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             "Time waited before starting: 5\xa0minutes ~ 5\xa0minutes",
             str(detail_list_soup))
 
-    def test_pending_wait_time(self):
+    def test_longest_incomplete_time(self):
         def f1(_num):
             self.job(
                 status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(minutes=5),
+                scheduled_time_ago=timedelta(minutes=5, seconds=30),
             )
         def f2(_num):
             self.job(
-                status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(hours=5, minutes=15),
+                status=Job.Status.IN_PROGRESS,
+                scheduled_time_ago=timedelta(hours=5, minutes=15, seconds=30),
             )
         def f3(_num):
             self.job(
                 status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(hours=5, minutes=20),
+                scheduled_time_ago=timedelta(hours=5, minutes=20, seconds=30),
             )
 
         scrambled_run([f1, f2, f3])
 
-        detail_list_soup = self.get_content_soup(user=self.superuser)
-        self.assertInHTML(
-            "Current highest pending wait time: 5\xa0hours, 20\xa0minutes",
-            str(detail_list_soup))
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 5\xa0hours, 20\xa0minutes",
+            soup.text)
 
-    def test_pending_wait_time_no_jobs(self):
-        # Non-pending jobs aren't considered here.
+        # In-progress should also be eligible
         self.job(
             status=Job.Status.IN_PROGRESS,
-            scheduled_time_ago=timedelta(days=2),
+            scheduled_time_ago=timedelta(hours=5, minutes=30, seconds=30),
         )
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 5\xa0hours, 30\xa0minutes",
+            soup.text)
+
+    def test_longest_incomplete_time_no_jobs(self):
+        # Completed jobs aren't considered here.
         self.job(
             status=Job.Status.SUCCESS,
             scheduled_time_ago=timedelta(days=2),
@@ -1745,14 +1751,14 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             scheduled_time_ago=timedelta(days=2),
         )
 
-        content_soup = self.get_content_soup(user=self.superuser)
-        self.assertInHTML(
-            "Current highest pending wait time: 0\xa0minutes",
-            str(content_soup))
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 0 minutes",
+            soup.text)
 
-    def test_pending_wait_time_not_admin(self):
+    def test_longest_incomplete_time_not_admin(self):
         response = self.get_response(user=self.superuser)
-        self.assertContains(response, "Current highest pending wait time")
+        self.assertContains(response, "Current longest incomplete job")
 
         response = self.get_response()
-        self.assertNotContains(response, "Current highest pending wait time")
+        self.assertNotContains(response, "Current longest incomplete job")

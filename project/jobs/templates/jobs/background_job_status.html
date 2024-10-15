@@ -54,8 +54,16 @@
 {% if request.user.is_superuser %}
   <hr>
   
-  <div class="tooltip" title="Among currently pending jobs, highest duration from scheduled start time to now">
-    Current highest pending wait time: {{ max_pending_wait_time|timedelta_display }}
+  <div class="line tooltip" title="Among currently pending/running jobs, highest duration from scheduled start time to now" id="longest-incomplete-line">
+    Current longest incomplete job:
+    
+    <a href="{% url 'jobs:all_jobs_list' %}">
+      {% if earliest_incomplete_scheduled_date %}
+        {{ earliest_incomplete_scheduled_date|timesince }}
+      {% else %}
+        0 minutes
+      {% endif %}
+    </a>
   </div>
 {% endif %}
   
