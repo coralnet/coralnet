@@ -8,9 +8,9 @@ from export.tests.utils import BaseExportTest
 from jobs.models import Job
 from jobs.tests.utils import do_job, fabricate_job, JobUtilsMixin
 from labels.models import Label
-from lib.tests.utils import BasePermissionTest, ClientTest, HtmlAssertionsMixin
-from .tasks.utils import do_collect_spacer_jobs
-from .tasks.utils import source_check_is_scheduled
+from lib.tests.utils import (
+    BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run)
+from .tasks.utils import do_collect_spacer_jobs, source_check_is_scheduled
 
 
 class PermissionTest(BasePermissionTest):
@@ -445,11 +445,6 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         cls.user = cls.create_user()
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
 
-        cls.source1 = cls.create_source(cls.user)
-        cls.source2 = cls.create_source(cls.user)
-        cls.create_labelset(cls.user, cls.source1, cls.labels)
-        cls.create_labelset(cls.user, cls.source2, cls.labels)
-
         cls.url = reverse('backend_overview')
 
     def test(self):
@@ -457,25 +452,30 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         This test is somewhat haphazard and definitely doesn't test all
         cases/values.
         """
-        image1a = self.upload_image(self.user, self.source1)
-        image1b = self.upload_image(self.user, self.source1)
-        image1c = self.upload_image(self.user, self.source1)
-        _image1d = self.upload_image(self.user, self.source1)
+        source1 = self.create_source(self.user)
+        source2 = self.create_source(self.user)
+        self.create_labelset(self.user, source1, self.labels)
+        self.create_labelset(self.user, source2, self.labels)
+
+        image1a = self.upload_image(self.user, source1)
+        image1b = self.upload_image(self.user, source1)
+        image1c = self.upload_image(self.user, source1)
+        _image1d = self.upload_image(self.user, source1)
         self.add_annotations(self.user, image1a)
         self.add_annotations(self.user, image1b)
-        do_job('extract_features', image1c.pk, source_id=self.source1.pk)
+        do_job('extract_features', image1c.pk, source_id=source1.pk)
         do_collect_spacer_jobs()
 
-        classifier2 = self.create_robot(self.source2)
-        image2a = self.upload_image(self.user, self.source2)
-        image2b = self.upload_image(self.user, self.source2)
-        image2c = self.upload_image(self.user, self.source2)
-        image2d = self.upload_image(self.user, self.source2)
-        _image2e = self.upload_image(self.user, self.source2)
+        classifier2 = self.create_robot(source2)
+        image2a = self.upload_image(self.user, source2)
+        image2b = self.upload_image(self.user, source2)
+        image2c = self.upload_image(self.user, source2)
+        image2d = self.upload_image(self.user, source2)
+        _image2e = self.upload_image(self.user, source2)
         self.add_annotations(self.user, image2a)
         self.add_robot_annotations(classifier2, image2b)
         self.add_robot_annotations(classifier2, image2c)
-        do_job('extract_features', image2d.pk, source_id=self.source2.pk)
+        do_job('extract_features', image2d.pk, source_id=source2.pk)
         do_collect_spacer_jobs()
 
         self.client.force_login(self.superuser)
@@ -505,8 +505,8 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
             {
                 "ID": (
                     f'<a href="'
-                    f'{reverse("source_main", args=[self.source2.pk])}">'
-                    f'{self.source2.pk}'
+                    f'{reverse("source_main", args=[source2.pk])}">'
+                    f'{source2.pk}'
                     f'</a>'
                 ),
                 "# Imgs": 5,
@@ -515,11 +515,50 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
             {
                 "ID": (
                     f'<a href="'
-                    f'{reverse("source_main", args=[self.source1.pk])}">'
-                    f'{self.source1.pk}'
+                    f'{reverse("source_main", args=[source1.pk])}">'
+                    f'{source1.pk}'
                     f'</a>'
                 ),
                 "# Imgs": 4,
                 "# Conf.": 2,
             },
         ])
+
+    def test_source_order(self):
+        def f1(_num):
+            source_ = self.create_source(self.user)
+            self.upload_image(self.user, source_)
+            # This check will confirm there is stuff to do (extract features).
+            # Being the only such source, this should be ordered first in
+            # the view.
+            do_job('check_source', source_.pk, source_id=source_.pk)
+            return source_
+
+        def f2(_num):
+            source_ = self.create_source(self.user)
+            # This check will confirm there is nothing to do. Ordered second.
+            do_job('check_source', source_.pk, source_id=source_.pk)
+            return source_
+
+        def f3(_num):
+            return self.create_source(self.user)
+            # No check. Ordered third.
+
+        run_order, returned_sources = scrambled_run([f1, f2, f3])
+
+        expected_rows = []
+        for run_number in run_order:
+            source = returned_sources[run_number]
+            expected_rows.append({"ID": (
+                f'<a href="'
+                f'{reverse("source_main", args=[source.pk])}">'
+                f'{source.pk}'
+                f'</a>'
+            )})
+
+        self.client.force_login(self.superuser)
+        response = self.client.get(self.url)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        sources_table_soup = response_soup.select(
+            'table#sources-table')[0]
+        self.assert_table_values(sources_table_soup, expected_rows)
