@@ -100,8 +100,10 @@ class BatchQueue(BaseQueue):
 
     def get_collectable_jobs(self):
         # Not-yet-collected BatchJobs.
-        return BatchJob.objects.exclude(
-            status__in=['SUCCEEDED', 'FAILED']
+        return (
+            BatchJob.objects
+            .exclude(status__in=['SUCCEEDED', 'FAILED'])
+            .order_by('pk')
         )
 
     def collect_job(self, job: BatchJob) -> tuple[Optional[JobReturnMsg], str]:
