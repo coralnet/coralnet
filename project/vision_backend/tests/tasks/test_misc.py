@@ -7,9 +7,7 @@ from annotations.models import Annotation
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
-from lib.tests.utils import ClientTest
 from ...models import Score, Classifier
-from ...tasks import check_all_sources
 from .utils import BaseTaskTest, do_collect_spacer_jobs
 
 
@@ -149,17 +147,6 @@ def schedule_collect_spacer_jobs():
 @override_settings(ENABLE_PERIODIC_JOBS=False)
 class CollectSpacerJobsTest(BaseTaskTest):
 
-    @staticmethod
-    def run_and_get_result():
-        # Note that this may or may not schedule a new job instance; perhaps
-        # the periodic job was already scheduled at the end of the previous
-        # job's run.
-        do_collect_spacer_jobs()
-        job = Job.objects.filter(
-            job_name='collect_spacer_jobs',
-            status=Job.Status.SUCCESS).latest('pk')
-        return job.result_message
-
     def test_success(self):
         # Run 2 extract-features jobs.
         self.upload_image(self.user, self.source)
@@ -170,12 +157,16 @@ class CollectSpacerJobsTest(BaseTaskTest):
         # The effects of the actual spacer-job collections (e.g. features
         # marked as extracted) don't need to be tested here. That belongs in
         # e.g. feature-extraction tests.
+        job = do_collect_spacer_jobs()
         self.assertEqual(
-            self.run_and_get_result(), "Jobs checked/collected: 2 SUCCEEDED")
+            job.result_message, "Jobs checked/collected: 2 SUCCEEDED")
+        self.assertFalse(job.hidden)
 
         # Should be no more to collect.
+        job = do_collect_spacer_jobs()
         self.assertEqual(
-            self.run_and_get_result(), "Jobs checked/collected: 0")
+            job.result_message, "Jobs checked/collected: 0")
+        self.assertTrue(job.hidden)
 
     @override_settings(JOB_MAX_MINUTES=-1)
     def test_time_out(self):
@@ -187,19 +178,20 @@ class CollectSpacerJobsTest(BaseTaskTest):
         # Collect jobs; this should time out after collecting 1st job and
         # before collecting 2nd job (as that's when the 1st time-check is done)
         self.assertEqual(
-            self.run_and_get_result(),
+            do_collect_spacer_jobs().result_message,
             "Jobs checked/collected: 1 SUCCEEDED (timed out)")
 
         # Running again should collect the other job. It'll still say
         # timed out because it didn't get a chance to check if there were
         # more jobs before timing out.
         self.assertEqual(
-            self.run_and_get_result(),
+            do_collect_spacer_jobs().result_message,
             "Jobs checked/collected: 1 SUCCEEDED (timed out)")
 
         # Should be no more to collect.
         self.assertEqual(
-            self.run_and_get_result(), "Jobs checked/collected: 0")
+            do_collect_spacer_jobs().result_message,
+            "Jobs checked/collected: 0")
 
     def test_no_multiple_runs(self):
         """
@@ -216,39 +208,3 @@ class CollectSpacerJobsTest(BaseTaskTest):
         self.assertEqual(
             Job.objects.filter(job_name='collect_spacer_jobs').count(), 1,
             "Should not have accepted the second run")
-
-
-class CheckAllSourcesTest(ClientTest):
-
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user)
-        cls.source2 = cls.create_source(cls.user)
-
-    @staticmethod
-    def run_and_get_result():
-        # Note that this may or may not schedule a new job instance; perhaps
-        # the periodic job was already scheduled at the end of the previous
-        # job's run.
-        schedule_job('check_all_sources')
-        check_all_sources()
-        job = Job.objects.filter(
-            job_name='check_all_sources',
-            status=Job.Status.SUCCESS).latest('pk')
-        return job.result_message
-
-    def test(self):
-        self.assertEqual(
-            self.run_and_get_result(),
-            "Scheduled checks for 2 source(s)")
-
-        # If these lines don't get errors, then the expected
-        # scheduled jobs exist
-        Job.objects.get(
-            job_name='check_source', arg_identifier=self.source.pk,
-            status=Job.Status.PENDING)
-        Job.objects.get(
-            job_name='check_source', arg_identifier=self.source2.pk,
-            status=Job.Status.PENDING)

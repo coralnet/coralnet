@@ -7,6 +7,9 @@ from django.db.models import Q
 
 class JobQuerySet(models.QuerySet):
 
+    def pending(self):
+        return self.filter(status=Job.Status.PENDING)
+
     def incomplete(self):
         return self.filter(
             status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS])
@@ -57,6 +60,11 @@ class Job(models.Model):
     # Set this flag to prevent the Job from being purged from the DB
     # when it gets old enough.
     persist = models.BooleanField(default=False)
+
+    # Set this flag to prevent the Job from being listed on job-list views by
+    # default. Use this for jobs that might clutter the list too much, without
+    # offering that much useful info.
+    hidden = models.BooleanField(default=False)
 
     # Date/time the Job was scheduled (pending).
     create_date = models.DateTimeField("Date created", auto_now_add=True)

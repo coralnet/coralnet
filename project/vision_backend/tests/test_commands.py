@@ -8,6 +8,7 @@ from spacer.data_classes import ImageFeatures
 
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
+from jobs.utils import schedule_job
 from lib.storage_backends import get_storage_manager
 from lib.tests.utils import ManagementCommandTest
 from ..models import Features
@@ -83,6 +84,41 @@ class CheckSourceTest(ManagementCommandTest):
             },
             "Should schedule the appropriate jobs",
         )
+
+
+class CheckAllSourcesTest(ManagementCommandTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.source2 = cls.create_source(cls.user)
+        cls.source3 = cls.create_source(cls.user)
+
+    def test(self):
+        schedule_job('check_source', self.source2.pk,
+            source_id=self.source2.pk)
+
+        # This should schedule sources 1 and 3
+        stdout_text, _ = self.call_command_and_get_output(
+            'vision_backend', 'vb_check_all_sources')
+        self.assertEqual(
+            stdout_text,
+            f"Source checks have been scheduled for 2 source(s)."
+            f" (The other sources already had checks scheduled.)")
+
+        # If these lines don't get errors, then the expected
+        # scheduled jobs exist
+        Job.objects.get(
+            job_name='check_source', arg_identifier=self.source.pk,
+            status=Job.Status.PENDING)
+        Job.objects.get(
+            job_name='check_source', arg_identifier=self.source2.pk,
+            status=Job.Status.PENDING)
+        Job.objects.get(
+            job_name='check_source', arg_identifier=self.source3.pk,
+            status=Job.Status.PENDING)
 
 
 @override_settings(ENABLE_PERIODIC_JOBS=False)

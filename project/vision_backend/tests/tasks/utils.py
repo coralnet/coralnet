@@ -3,14 +3,27 @@ from django.core.files.storage import default_storage
 from django.test import override_settings
 
 from images.model_utils import PointGen
-from jobs.tests.utils import do_job
+from jobs.models import Job
+from jobs.tests.utils import do_job, JobUtilsMixin
 from lib.tests.utils import ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
 from ...models import Classifier
 
 
 def do_collect_spacer_jobs():
-    do_job('collect_spacer_jobs')
+    return do_job('collect_spacer_jobs')
+
+
+def source_check_is_scheduled(source_id):
+    try:
+        Job.objects.get(
+            job_name='check_source',
+            source_id=source_id,
+            status=Job.Status.PENDING,
+        )
+    except Job.DoesNotExist:
+        return False
+    return True
 
 
 @override_settings(
@@ -19,7 +32,7 @@ def do_collect_spacer_jobs():
     # collect_spacer_jobs) only when we explicitly want to.
     ENABLE_PERIODIC_JOBS=False,
 )
-class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
+class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
     """Base test class for testing the backend's 'main' tasks."""
 
     @classmethod
@@ -39,6 +52,25 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin):
 
     def assertExistsInStorage(self, filepath):
         self.assertTrue(default_storage.exists(filepath))
+
+    def source_check_and_assert(
+        self,
+        expected_message,
+        expected_hidden: bool = None,
+        assert_msg="Job result message should be as expected",
+        source=None,
+    ):
+        source = source or self.source
+
+        do_job('check_source', source.pk, source_id=source.pk)
+        self.assert_job_result_message(
+            'check_source', expected_message, assert_msg=assert_msg)
+
+        if expected_hidden is not None:
+            job = self.get_latest_job_by_name('check_source')
+            self.assertEqual(
+                job.hidden, expected_hidden,
+                msg=f"Hidden value should be {expected_hidden}")
 
     @classmethod
     def upload_image_with_annotations(

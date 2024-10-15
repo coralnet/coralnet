@@ -1,8 +1,11 @@
 <div class="pagination">
-  <div class="line"><span>
-    Showing {{ page_results.start_index }}-{{ page_results.end_index }}
-    of {{ page_results.paginator.count }}
-  </span></div>
+
+  {% if not no_result_count_line %}
+    <div class="line"><span>
+      Showing {{ page_results.start_index }}-{{ page_results.end_index }}
+      of {{ page_results.paginator.count }}
+    </span></div>
+  {% endif %}
 
   <div class="pagination-links">
 

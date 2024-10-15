@@ -1,22 +1,29 @@
 import csv
+import datetime
 import json
 
 import numpy as np
 
+from django.contrib import messages
 from django.contrib.auth.decorators import permission_required
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 from spacer.data_classes import ValResults
 
 from images.models import Image
 from jobs.models import Job
-from lib.decorators import source_visibility_required
+from lib.decorators import (
+    source_permission_required, source_visibility_required)
 from lib.utils import paginate
 from sources.models import Source
 from .confmatrix import ConfMatrix
 from .forms import BackendMainForm, CmTestForm
 from .models import Classifier
-from .utils import labelset_mapper, map_labels, get_alleviate
+from .utils import (
+    labelset_mapper, map_labels, get_alleviate, schedule_source_check)
 
 
 @permission_required('is_superuser')
@@ -278,6 +285,32 @@ def backend_main(request, source_id):
 def myfmt(r):
     """Helper function to format numpy outputs"""
     return "%.0f" % (r,)
+
+
+@require_POST
+@source_permission_required('source_id', perm=Source.PermTypes.EDIT.code)
+def request_source_check(request, source_id):
+    source_jobs = Job.objects.filter(source_id=source_id)
+    is_doing_any_job = source_jobs.incomplete().exists()
+
+    if is_doing_any_job:
+        messages.error(request, "There are still active jobs to wait for.")
+    else:
+        try:
+            latest_check = source_jobs.completed().filter(
+                job_name='check_source').latest('pk')
+        except Job.DoesNotExist:
+            delay = datetime.timedelta(0)
+        else:
+            # Wait 30 minutes since the last check, as needed.
+            base_delay = datetime.timedelta(minutes=30)
+            time_since_check = timezone.now() - latest_check.modify_date
+            delay = max(base_delay - time_since_check, datetime.timedelta(0))
+
+        schedule_source_check(source_id, delay=delay)
+        messages.success(request, "Source check scheduled.")
+
+    return HttpResponseRedirect(reverse('jobs:source_job_list', args=[source_id]))
 
 
 @permission_required('is_superuser')

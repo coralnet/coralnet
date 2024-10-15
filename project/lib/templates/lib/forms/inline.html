@@ -1,0 +1,17 @@
+{# This layout is very compact, laying out all fields on a single line, and even allowing adjacent elements like a submit button to be on the same line. No errors or help texts are shown. #}
+
+{% for field, _errors in fields %}
+  {% with widget=field.field.widget %}
+
+    <label for="{{ field.id_for_label }}">
+      {{ field.label }}:
+    </label>
+
+    {{ field }}
+
+  {% endwith %}
+{% endfor %}
+
+{% for field in hidden_fields %}
+  {{ field }}
+{% endfor %}

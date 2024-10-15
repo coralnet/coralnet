@@ -5,8 +5,9 @@ from unittest.case import TestCase
 
 from django.contrib.auth.models import User
 
+from ..exceptions import UnrecognizedJobNameError
 from ..models import Job
-from ..utils import get_or_create_job, start_job
+from ..utils import get_job_details, get_or_create_job, job_runner, start_job
 
 
 def fabricate_job(
@@ -20,14 +21,24 @@ def fabricate_job(
     **kwargs
 ) -> Job:
     """
-    Similar to the job-creation case of get_or_create_job(), except this allows
-    specifying a modify date and initial status.
+    Similar to the job-creation case of get_or_create_job(), except:
+    - This allows specifying dates and initial status.
+    - This allows specifying an arbitrary job name.
     """
+
+    # Ensure that any made-up test job names are registered.
+    try:
+        get_job_details(name)
+    except UnrecognizedJobNameError:
+        @job_runner(job_name=name)
+        def task_func():
+            return ""
 
     job_kwargs = {
         key: value for key, value in kwargs.items()
         if key in [
-            'source', 'source_id', 'user', 'attempt_number', 'persist',
+            'source', 'source_id', 'user', 'attempt_number',
+            'persist', 'hidden',
         ]
     }
     job = Job(
@@ -63,6 +74,7 @@ def do_job(
     """
     Here we just want to run a particular job and don't really care about
     how we get there (creating or starting).
+    Note: this doesn't generally work for jobs decorated with @full_job.
     """
 
     job, created = get_or_create_job(
@@ -133,12 +145,3 @@ class JobUtilsMixin(TestCase):
             self.assertEqual(
                 job.result_message, expected_message, msg=assert_msg,
             )
-
-    def source_check_and_assert_message(
-        self, expected_message, assert_msg=None, source=None,
-    ):
-        source = source or self.source
-
-        do_job('check_source', source.pk, source_id=source.pk)
-        self.assert_job_result_message(
-            'check_source', expected_message, assert_msg=assert_msg)

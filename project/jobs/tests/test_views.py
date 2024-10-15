@@ -1,26 +1,27 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
-from typing import Callable
+from datetime import timedelta
+import operator
+from typing import Callable, Literal
+from unittest import mock, skip
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
-from django.utils.timezone import get_current_timezone
+from django.utils import timezone
 
 from api_core.models import ApiJob, ApiJobUnit
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run
 )
 from ..models import Job
-from ..utils import schedule_job
 from .utils import fabricate_job
 
 
 def date_display(date):
     return date_template_filter(
-        date.astimezone(get_current_timezone()), 'N j, Y, P')
+        date.astimezone(timezone.get_current_timezone()), 'N j, Y, P')
 
 
 class PermissionTest(BasePermissionTest):
@@ -64,6 +65,14 @@ class PermissionTest(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
+    def test_background_job_status(self):
+        url = reverse('jobs:status')
+        template = 'jobs/background_job_status.html'
+
+        self.assertPermissionLevel(
+            url, self.SIGNED_IN, template=template,
+            deny_type=self.REQUIRE_LOGIN)
+
 
 class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
@@ -93,6 +102,9 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         source: int | None = None,
         job_name: str = None,
         modified_time_ago: timedelta = None,
+        started_time_ago: timedelta = None,
+        scheduled_time_ago: timedelta = None,
+        created_time_ago: timedelta = None,
         **kwargs
     ):
         """
@@ -108,10 +120,17 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         if source:
             updated_kwargs['source_id'] = self.sources[source - 1].pk
 
-        if modified_time_ago:
-            # This may also be negative to indicate time in future.
-            updated_kwargs['modify_date'] = \
-                datetime.now(timezone.utc) - modified_time_ago
+        if modified_time_ago or started_time_ago or created_time_ago:
+            now = timezone.now()
+            if modified_time_ago:
+                # This may also be negative to indicate time in future.
+                updated_kwargs['modify_date'] = now - modified_time_ago
+            if started_time_ago:
+                updated_kwargs['start_date'] = now - started_time_ago
+            if created_time_ago:
+                updated_kwargs['create_date'] = now - created_time_ago
+        if scheduled_time_ago:
+            updated_kwargs['delay'] = -scheduled_time_ago
         job = fabricate_job(job_name, **updated_kwargs)
 
         return job
@@ -403,28 +422,6 @@ class JobSummaryTest(JobViewTestMixin, ClientTest):
         self.assertNotContains(page_response(30), message)
         self.assertContains(page_response(31), message)
 
-    def test_exclude_source_checks(self):
-        # Not a source check, and older
-        one_day = timedelta(days=1)
-        one_day_ago = datetime.now(timezone.utc) - one_day
-        self.job(Job.Status.SUCCESS, source=1, modified_time_ago=one_day)
-        # Source check
-        self.job(Job.Status.SUCCESS, source=1, job_name='check_source')
-        # Source check for another source; this source doesn't have other
-        # jobs, and therefore the source shouldn't show on the summary
-        self.job(Job.Status.SUCCESS, source=2, job_name='check_source')
-
-        # Should only show 1 finished, and should show last activity date
-        # from only the non source check
-        self.assert_summary_table_values(
-            [
-                [self.all_jobs_first_cell, 0, 0, 1, date_display(one_day_ago)],
-                {},
-                [self.source_cell(1), 0, 0, 1, date_display(one_day_ago)],
-            ],
-            data=dict(completed_count_day_limit=13)
-        )
-
 
 class JobListTestsMixin(JobViewTestMixin, ABC):
     """
@@ -485,7 +482,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.assertContains(
             response,
             "Most job records are cleaned up after approximately 30 days,"
-            " except for jobs with * in Last updated.")
+            " except for jobs with * in the Type column.")
 
     def test_job_id_column(self):
         jobs = [
@@ -503,16 +500,78 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
 
     def test_job_type_column(self):
-        self.job(job_name='A')
-        self.job(job_name='B')
-        self.job(job_name='C')
+        self.job(job_name='extract_features')
+        self.job(job_name='train_classifier')
+        self.job(job_name='classify_features')
+        self.job(job_name='update_label_details', persist=True)
+        self.job(job_name='classify_image', hidden=True)
 
         self.assert_job_table_values(
             list(reversed([
-                {"Type": "A"},
-                {"Type": "B"},
-                {"Type": "C"},
-            ]))
+                {"Type": "Extract features"},
+                {"Type": "Train classifier"},
+                # Special case
+                {"Type": "Classify"},
+                {"Type": "Update label details *"},
+                # Special case
+                {"Type": "Deploy ^"},
+            ])),
+            data=dict(show_hidden=True),
+        )
+
+    @skip(
+        "This test interacts badly with tests that register made-up jobs."
+        " Not sure how to solve that in a clean way yet.")
+    def test_type_choices(self):
+        response = self.get_response()
+        form = response.context['job_search_form']
+
+        source_types = [
+            ('check_source', "Check source"),
+            ('classify_features', "Classify"),
+            ('extract_features', "Extract features"),
+            ('reset_classifiers_for_source',
+             "Reset classifiers for source"),
+            ('reset_features_for_source', "Reset features for source"),
+            ('train_classifier', "Train classifier"),
+        ]
+        non_source_types = [
+            ('classify_image', "Deploy"),
+            ('clean_up_old_api_jobs', "Clean up old api jobs"),
+            ('clean_up_old_jobs', "Clean up old jobs"),
+            ('collect_spacer_jobs', "Collect spacer jobs"),
+            ('generate_patch', "Generate patch"),
+            ('generate_thumbnail', "Generate thumbnail"),
+            ('report_stuck_jobs', "Report stuck jobs"),
+            ('run_scheduled_jobs', "Run scheduled jobs"),
+            ('schedule_periodic_jobs', "Schedule periodic jobs"),
+            ('update_label_details', "Update label details"),
+            ('update_map_sources', "Update map sources"),
+            ('update_sitewide_annotation_count',
+             "Update sitewide annotation count"),
+        ]
+
+        if self.view_shows_source_jobs and self.view_shows_non_source_jobs:
+            expected_choices = [
+                ('', "Any"),
+                ('background_queue_types', "Any background job"),
+                ('realtime_queue_types', "Any realtime job"),
+            ] + source_types + non_source_types
+            expected_choices.sort(key=operator.itemgetter(1))
+        elif self.view_shows_source_jobs:
+            expected_choices = [
+                ('', "Any"),
+            ] + source_types
+        else:
+            expected_choices = [
+                ('', "Any"),
+                ('background_queue_types', "Any background job"),
+                ('realtime_queue_types', "Any realtime job"),
+            ] + non_source_types
+
+        self.assertListEqual(
+            list(form.fields['type'].choices),
+            expected_choices,
         )
 
     def test_status_row_classes(self):
@@ -521,7 +580,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.job(Job.Status.SUCCESS)
         self.job(Job.Status.FAILURE)
 
-        table = self.table_soup(data=dict(sort='recently_created'))
+        table = self.table_soup(data=dict(sort='latest_scheduled'))
         rows = table.select('tbody > tr')
         self.assertEqual(rows[0].attrs['class'], ['failure'])
         self.assertEqual(rows[1].attrs['class'], ['success'])
@@ -541,56 +600,55 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 {"Status": "In Progress"},
                 {"Status": "Pending"},
             ],
-            data=dict(sort='recently_created')
+            data=dict(sort='latest_scheduled')
         )
 
     def test_other_id_column(self):
-        expected_rows = []
 
         if self.view_shows_source_jobs:
 
-            schedule_job('extract_features', '1', source_id=self.sources[0].pk)
-            schedule_job('train_classifier', '2', source_id=self.sources[0].pk)
-            schedule_job('classify_features', '3', source_id=self.sources[0].pk)
-
-            image_3_url = reverse('image_detail', args=['3'])
+            job = fabricate_job(
+                'extract_features', '1', source_id=self.sources[0].pk)
             image_1_url = reverse('image_detail', args=['1'])
+            self.assert_job_table_values([
+                {"Other ID": f'<a href="{image_1_url}">Image 1</a>'}])
+            job.delete()
 
-            # Should only fill the other ID cell for specific job names
-            expected_rows = [
-                {"Type": "Classify",
-                 "Other ID": f'<a href="{image_3_url}">Image 3</a>'},
-                {"Type": "Train classifier",
-                 "Other ID": ''},
-                {"Type": "Extract features",
-                 "Other ID": f'<a href="{image_1_url}">Image 1</a>'},
-            ] + expected_rows
+            job = fabricate_job(
+                'train_classifier', '2', source_id=self.sources[0].pk)
+            self.assert_job_table_values([
+                {"Other ID": ''}])
+            job.delete()
+
+            job = fabricate_job(
+                'classify_features', '3', source_id=self.sources[0].pk)
+            image_3_url = reverse('image_detail', args=['3'])
+            self.assert_job_table_values([
+                {"Other ID": f'<a href="{image_3_url}">Image 3</a>'}])
+            job.delete()
 
         if self.view_shows_non_source_jobs:
 
-            schedule_job('Some job', '1', '2')
+            job = fabricate_job('update_label_details', '1', '2')
+            self.assert_job_table_values([
+                {"Other ID": ''}])
+            job.delete()
 
-            job, _ = schedule_job('classify_image', '3', '4')
+            job = fabricate_job('classify_image', '3', '4')
             api_job = ApiJob(type='deploy', user=self.user)
             api_job.save()
             api_job_unit = ApiJobUnit(
                 parent=api_job, order_in_parent=1, internal_job=job,
                 request_json={})
             api_job_unit.save()
-
-            api_job_url = reverse('api_management:job_detail', args=[api_job.pk])
-
-            # Should only fill the API job unit cell for deploy
-            expected_rows = [
-                {"Type": "Classify image",
-                 "Other ID":
+            api_job_url = reverse(
+                'api_management:job_detail', args=[api_job.pk])
+            self.assert_job_table_values([
+                {"Other ID":
                      f'<a href="{api_job_url}">'
-                     f'API unit {api_job_unit.pk}</a>'},
-                {"Type": "Some job",
-                 "Other ID": ''},
-            ] + expected_rows
-
-        self.assert_job_table_values(expected_rows)
+                     f'API unit {api_job_unit.pk}</a>'}])
+            api_job_unit.delete()
+            job.delete()
 
     def test_result_message_column(self):
         self.job(Job.Status.SUCCESS)
@@ -611,121 +669,94 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             ]
         )
 
-    def test_last_updated_column(self):
-        jobs = [
-            self.job(),
-            self.job(),
-            self.job(),
-        ]
+    def test_scheduled_column(self):
+        # Just keep changing the same job so we don't have to worry about
+        # ordering.
+        job = self.job(delay=timedelta(minutes=10))
+        self.assert_job_table_values([
+            {"Scheduled start date": date_display(job.scheduled_start_date)}])
 
-        job_2 = jobs[1]
-        # Use QuerySet.update() instead of Model.save() so that the modify
-        # date doesn't get auto-updated to the current date.
-        Job.objects.filter(pk=job_2.pk).update(
-            persist=True, modify_date=job_2.modify_date)
+        job.start_date = job.scheduled_start_date - timedelta(minutes=10)
+        job.scheduled_start_date = None
+        job.save()
+        self.assert_job_table_values([
+            {"Scheduled start date": date_display(job.start_date)}])
 
-        self.assert_job_table_values(
-            list(reversed([
-                {"Last updated": date_display(jobs[0].modify_date)},
-                {"Last updated": date_display(jobs[1].modify_date) + " *"},
-                {"Last updated": date_display(jobs[2].modify_date)},
-            ]))
+        job.start_date = None
+        job.save()
+        self.assert_job_table_values([
+            {"Scheduled start date": "-"}])
+
+    def assert_cell_and_title(self, column_name, expected_cell, expected_title):
+        if expected_title:
+            cell_html = (
+                f'<span class="tooltip" title="{expected_title}">'
+                f'{expected_cell}</span>')
+        else:
+            cell_html = f'<span>{expected_cell}</span>'
+        self.assert_job_table_values([{column_name: cell_html}])
+
+    def test_timing_column(self):
+        job = self.job(
+            Job.Status.PENDING,
+            delay=-timedelta(minutes=10, seconds=30),
+        )
+        self.assert_cell_and_title(
+            "Timing info", "Waited for 10\xa0minutes so far",
+            None,
         )
 
-    def test_time_column(self):
-        now = datetime.now(timezone.utc)
-        jobs = [
-            self.job(
-                Job.Status.PENDING,
-                delay=-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.PENDING,
-                delay=timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.PENDING,
-                create_date=now-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.IN_PROGRESS,
-                start_date=now-timedelta(minutes=10),
-            ),
-            self.job(
-                Job.Status.SUCCESS,
-                modified_time_ago=timedelta(minutes=5),
-                start_date=now-timedelta(minutes=15),
-            ),
-            self.job(
-                Job.Status.FAILURE,
-                modified_time_ago=timedelta(minutes=10),
-                start_date=now-timedelta(days=2, hours=18, minutes=20),
-            ),
-            self.job(
-                Job.Status.FAILURE,
-                modified_time_ago=timedelta(minutes=10),
-                create_date=now-timedelta(days=2, hours=18, minutes=20),
-            ),
-        ]
+        job.scheduled_start_date = (
+            timezone.now() + timedelta(minutes=11, seconds=30))
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "11\xa0minutes until scheduled start",
+            None,
+        )
 
-        response = self.get_response(data=dict(sort='recently_created'))
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        table_soup = response_soup.select('table#job-table')[0]
+        job.scheduled_start_date = None
+        job.create_date = timezone.now() - timedelta(minutes=12, seconds=30)
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "Created 12\xa0minutes ago",
+            f"Created: {date_display(job.create_date)}",
+        )
 
-        # Be generous about time delays/inconsistencies during the test.
-        acceptable_cells_for_each_job = [
-            ["0\xa0minutes until scheduled start"],
-            [str(num) + "\xa0minutes until scheduled start"
-             for num in [8, 9, 10, 11, 12]],
-            ["Created " + str(num) + "\xa0minutes ago"
-             for num in [8, 9, 10, 11, 12]],
-            ["Started " + str(num) + "\xa0minutes ago"
-             for num in [8, 9, 10, 11, 12]],
-            ["Completed in " + str(num) + "\xa0minutes"
-             for num in [8, 9, 10, 11, 12]],
-            ["Completed in 2\xa0days, 18\xa0hours"],
-            ["Completed 2\xa0days, 18\xa0hours after creation"],
-        ]
+        job.status = Job.Status.IN_PROGRESS
+        job.start_date = timezone.now() - timedelta(minutes=13, seconds=30)
+        job.save()
+        self.assert_cell_and_title(
+            "Timing info", "Started 13\xa0minutes ago",
+            f"Started: {date_display(job.start_date)}",
+        )
 
-        titles_for_each_job = [
-            f"Scheduled to start: {date_display(jobs[0].scheduled_start_date)}",
-            f"Scheduled to start: {date_display(jobs[1].scheduled_start_date)}",
-            f"Created: {date_display(jobs[2].create_date)}",
-            f"Started: {date_display(jobs[3].start_date)}",
-            f"Started: {date_display(jobs[4].start_date)}",
-            f"Started: {date_display(jobs[5].start_date)}",
-            f"Created: {date_display(jobs[6].create_date)}",
-        ]
+        job.status = Job.Status.SUCCESS
+        job.scheduled_start_date = timezone.now() - timedelta(minutes=30)
+        job.save()
+        # Use QuerySet.update() instead of Model.save() so that the modify
+        # date doesn't get auto-updated to the current date.
+        Job.objects.filter(pk=job.pk).update(
+            modify_date=timezone.now() - timedelta(minutes=14, seconds=30))
+        job.refresh_from_db()
+        self.assert_cell_and_title(
+            "Timing info", "Completed 14\xa0minutes ago",
+            f"Completed {date_display(job.modify_date)},"
+            f" 15\xa0minutes after scheduled start",
+        )
 
-        for row_number, job, acceptable_cells, title in zip(
-            range(1, 1+len(jobs)),
-            reversed(jobs),
-            reversed(acceptable_cells_for_each_job),
-            reversed(titles_for_each_job),
-        ):
-            found_match = False
-            error = None
-
-            for cell in acceptable_cells:
-                try:
-                    time_html = (
-                        f'<span title="{title}">{cell}</span>')
-                    self.assert_table_row_values(
-                        table_soup,
-                        {"Time": time_html},
-                        row_number,
-                    )
-                except AssertionError as e:
-                    # Try the next acceptable values
-                    error = str(e)
-                else:
-                    found_match = True
-                    break
-
-            if not found_match:
-                raise AssertionError(
-                    f"None of the acceptable values worked for"
-                    f" row {row_number}. Last attempt's error: {error}")
+        # No scheduled start date, but start date.
+        job.status = Job.Status.FAILURE
+        job.scheduled_start_date = None
+        job.start_date = timezone.now() - timedelta(minutes=34)
+        job.save()
+        Job.objects.filter(pk=job.pk).update(
+            modify_date=timezone.now() - timedelta(minutes=16, seconds=30))
+        job.refresh_from_db()
+        self.assert_cell_and_title(
+            "Timing info", "Completed 16\xa0minutes ago",
+            f"Completed {date_display(job.modify_date)},"
+            f" 17\xa0minutes after scheduled start",
+        )
 
     @override_settings(JOBS_PER_PAGE=2)
     def test_multiple_pages(self):
@@ -741,35 +772,34 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
 
     def test_sort_by_status(self):
         def f1(_num):
-            # 1st: in progress, modified later
+            # 1st: incomplete, scheduled 1st
             return self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=-1))
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=2))
         def f2(_num):
-            # 2nd: in progress
-            return self.job(Job.Status.IN_PROGRESS)
-
+            # 2nd: incomplete, scheduled 2nd
+            # (pending/incomplete doesn't matter)
+            return self.job(
+                Job.Status.IN_PROGRESS, scheduled_time_ago=timedelta(hours=1))
         def f3(_num):
-            # 3rd: pending, modified later
+            # 3rd: incomplete, scheduled 3rd
             return self.job(
-                Job.Status.PENDING, modified_time_ago=timedelta(days=-1))
-        def f4(_num):
-            # 4th: pending
-            return self.job(Job.Status.PENDING)
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=-2))
 
-        def f5(_num):
-            # 5th: completed, modified latest
+        def f4(_num):
+            # 4th: completed, modified latest
             return self.job(
-                Job.Status.SUCCESS, modified_time_ago=timedelta(days=-2))
-        def f6(_num):
-            # 6th: completed, modified 2nd latest
+                Job.Status.SUCCESS, modified_time_ago=timedelta(minutes=1))
+        def f5(_num):
+            # 5th: completed, modified 2nd latest
             # (success/failure doesn't matter)
             return self.job(
-                Job.Status.FAILURE, modified_time_ago=timedelta(days=-1))
-        def f7(_num):
-            # 7th: completed
-            return self.job(Job.Status.SUCCESS)
+                Job.Status.FAILURE, modified_time_ago=timedelta(hours=1))
+        def f6(_num):
+            # 6th: completed, modified 3rd latest
+            return self.job(
+                Job.Status.SUCCESS, modified_time_ago=timedelta(hours=3))
 
-        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4, f5, f6, f7])
+        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4, f5, f6])
 
         expected_rows = []
         for run_number in run_order:
@@ -785,11 +815,11 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         def f2(_num):
             # 2nd; different status to demonstrate it doesn't affect order
             return self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=1))
+                Job.Status.SUCCESS, modified_time_ago=timedelta(days=1))
         def f3(_num):
             # 3rd
             return self.job(
-                Job.Status.PENDING, modified_time_ago=timedelta(days=2))
+                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=2))
 
         run_order, returned_jobs = scrambled_run([f1, f2, f3])
 
@@ -801,24 +831,36 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         self.assert_job_table_values(
             expected_rows, data=dict(sort='recently_updated'))
 
-    def test_sort_by_recently_created(self):
-        jobs = [
+    def test_sort_by_latest_scheduled(self):
+        def f1(_num):
             # 1st
-            self.job(Job.Status.PENDING),
-            # 2nd; different status and modified time to demonstrate they
-            # don't affect order
-            self.job(
-                Job.Status.IN_PROGRESS, modified_time_ago=timedelta(days=1)),
+            return self.job(
+                Job.Status.IN_PROGRESS, scheduled_time_ago=timedelta(hours=-1))
+        def f2(_num):
+            # 2nd; no scheduled date, but has start date, which is sorted with
+            # the scheduled start dates of other jobs
+            return self.job(
+                Job.Status.SUCCESS,
+                scheduled_time_ago=None, started_time_ago=timedelta(hours=1))
+        def f3(_num):
             # 3rd
-            self.job(Job.Status.PENDING),
-        ]
+            return self.job(
+                Job.Status.PENDING, scheduled_time_ago=timedelta(hours=2))
+        def f4(_num):
+            # 4th; no scheduled start date or start date
+            return self.job(
+                Job.Status.PENDING,
+                scheduled_time_ago=None, started_time_ago=None)
+
+        run_order, returned_jobs = scrambled_run([f1, f2, f3, f4])
+
+        expected_rows = []
+        for run_number in run_order:
+            job = returned_jobs[run_number]
+            expected_rows.append({"Job ID": job.pk, "Type": job.job_name})
 
         self.assert_job_table_values(
-            # Most recent first, instead of most recent last
-            list(reversed(
-                [{"Job ID": job.pk, "Type": job.job_name} for job in jobs])),
-            data=dict(sort='recently_created')
-        )
+            expected_rows, data=dict(sort='latest_scheduled'))
 
     def test_filter_by_status(self):
         jobs = [
@@ -858,38 +900,93 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             data=dict(status='completed')
         )
 
-    def test_source_check_inclusion_option(self):
-        self.job(job_name='check_source')
-        self.job(job_name='classify_features')
+    def test_filter_by_type(self):
+        source_id = self.sources[0].pk
+        jobs = [
+            fabricate_job('extract_features', '1', source_id=source_id),
+            fabricate_job('extract_features', '2', source_id=source_id),
+            fabricate_job('check_source', source_id=source_id),
+            fabricate_job('update_label_details'),
+            fabricate_job('deploy', '1'),
+            fabricate_job('deploy', '2'),
+            fabricate_job('generate_thumbnail', '1'),
+            fabricate_job('generate_thumbnail', '2'),
+            fabricate_job('generate_patch', '1'),
+            fabricate_job('generate_patch', '2'),
+        ]
 
         if self.view_shows_source_jobs:
 
-            response = self.get_response()
-            self.assertContains(
-                response, "Show source-check jobs",
-                msg_prefix="Option should be on the page")
-
-            # Should only show the classify_features job
             self.assert_job_table_values(
-                [
-                    {"Type": "Classify"},
-                ]
-            )
-            # Should show both jobs
-            self.assert_job_table_values(
-                [
-                    {"Type": "Classify"},
-                    {"Type": "Check source"},
-                ],
-                data=dict(show_source_check_jobs=True)
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[:2]])),
+                data=dict(type='extract_features')
             )
 
-        else:
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[2:3]])),
+                data=dict(type='check_source')
+            )
 
-            response = self.get_response()
-            self.assertNotContains(
-                response, "Show source-check jobs",
-                msg_prefix="Option should not be on the page")
+        if self.view_shows_non_source_jobs:
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[3:4]])),
+                data=dict(type='update_label_details')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[4:6]])),
+                data=dict(type='deploy')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[6:8]])),
+                data=dict(type='generate_thumbnail')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[8:]])),
+                data=dict(type='generate_patch')
+            )
+
+            if self.view_shows_source_jobs:
+                expected_jobs = jobs[:6]
+            else:
+                expected_jobs = jobs[3:6]
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in expected_jobs])),
+                data=dict(type='background_queue_types')
+            )
+
+            self.assert_job_table_values(
+                list(reversed(
+                    [{"Job ID": job.pk} for job in jobs[6:]])),
+                data=dict(type='realtime_queue_types')
+            )
+
+    def test_show_hidden_option(self):
+        jobs = [
+            self.job(Job.Status.SUCCESS),
+            self.job(Job.Status.SUCCESS, hidden=True),
+        ]
+
+        self.assert_job_table_values(
+            list(reversed(
+                [{"Job ID": job.pk} for job in jobs[:]])),
+            data=dict(show_hidden=True)
+        )
+        self.assert_job_table_values(
+            list(reversed(
+                [{"Job ID": job.pk} for job in jobs[:1]])),
+            data=dict(show_hidden=False)
+        )
 
     def test_invalid_search_message(self):
         message = "Search parameters were invalid."
@@ -944,16 +1041,40 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
             'jobs:source_job_list', args=[self.sources[0].pk])
         return self.client.get(url, data=data)
 
-    def assert_source_check_status_equal(self, expected_content):
+    def assert_check_related_contents(
+        self,
+        expected_latest_check_line: str,
+        expected_incomplete_check_content: str | Literal['button'],
+    ):
         response = self.get_response()
         response_soup = BeautifulSoup(response.content, 'html.parser')
-        status_soup = response_soup.select('#source-check-status')[0]
-        actual_content=''.join(
-            [str(item) for item in status_soup.contents])
+
+        latest_soup = response_soup.select('#latest-check-status')[0]
+        actual_latest_line = ''.join(
+            [str(item) for item in latest_soup.contents])
         self.assertHTMLEqual(
-            actual_content, expected_content,
-            msg="Source-check status line should be as expected"
+            actual_latest_line, expected_latest_check_line,
+            msg="Latest-check status line should be as expected"
         )
+
+        incomplete_soup = response_soup.select('#incomplete-check-status')[0]
+        if expected_incomplete_check_content == 'button':
+            self.assertIn(
+                "There are no active jobs.", str(incomplete_soup),
+                msg="Incomplete-check line should be as expected")
+            button_soup = incomplete_soup.select('button')[0]
+            self.assertHTMLEqual(
+                str(button_soup), '<button>Run a source check</button>',
+                msg="Button should be present")
+        else:
+            self.assertEqual(
+                incomplete_soup.text.strip(),
+                expected_incomplete_check_content,
+                msg="Incomplete-check line should be as expected"
+            )
+            self.assertEqual(
+                len(incomplete_soup.select('button')), 0,
+                msg="Button shouldn't be present")
 
     @property
     def view_shows_source_jobs(self):
@@ -988,18 +1109,41 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
             ]
         )
 
-    def test_check_source_message(self):
-        # No recent source check
-        self.assert_source_check_status_equal(
-            "This source hasn't been status-checked recently.")
+    def test_check_related_contents(self):
+        # No recent source check + no active jobs
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            'button',
+        )
 
-        # In progress
+        # An active job other than a source check
+        job = fabricate_job(
+            'train_classifier', self.sources[0].pk,
+            source_id=self.sources[0].pk,
+            status=Job.Status.PENDING)
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "",
+        )
+        job.delete()
+
+        # Pending
         job = fabricate_job(
             'check_source', self.sources[0].pk,
             source_id=self.sources[0].pk,
-            status=Job.Status.IN_PROGRESS)
-        self.assert_source_check_status_equal(
-            "This source is currently being checked for jobs to schedule.")
+            status=Job.Status.PENDING)
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "There is a source check scheduled to run soon.",
+        )
+
+        # In progress
+        job.status = Job.Status.IN_PROGRESS
+        job.save()
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "There is a source check running right now.",
+        )
 
         # Completed checks
         job.status = Job.Status.SUCCESS
@@ -1013,9 +1157,11 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
         job.save()
         # Should show the most recent completed source check
         date = date_display(job.modify_date)
-        self.assert_source_check_status_equal(
+        self.assert_check_related_contents(
             f'<strong>Latest source check result:</strong>'
-            f' Message 2 ({date})')
+            f' Message 2 ({date})',
+            'button',
+        )
 
 
 class NonSourceJobListTest(JobListTestsMixin, ClientTest):
@@ -1043,3 +1189,570 @@ class NonSourceJobListTest(JobListTestsMixin, ClientTest):
                 {"Job ID": job.pk},
             ]
         )
+
+
+class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+    def get_response(self, user=None, data=None):
+        if user is None:
+            user = self.user
+        self.client.force_login(user)
+        url = reverse('jobs:status')
+        return self.client.get(url, data=data)
+
+    def get_content_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('#content-container')[0]
+
+    def get_detail_list_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('ul.detail_list')[0]
+
+    def test_wait_time(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
+        def f_20m(_num):
+            # Wait time: 20 minutes
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(days=2, minutes=50, seconds=30),
+                started_time_ago=timedelta(days=2, minutes=30),
+            )
+        def f_2h(_num):
+            # Wait time: 2 hours
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(hours=7, seconds=30),
+                started_time_ago=timedelta(hours=5),
+            )
+        def f_1d(_num):
+            # Wait time: 1 day
+            self.job(
+                status=Job.Status.IN_PROGRESS,
+                scheduled_time_ago=timedelta(days=2, hours=3, seconds=30),
+                started_time_ago=timedelta(days=1, hours=3),
+            )
+        def f_1d10h(_num):
+            # Wait time: 1 day 10 hours
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(days=2, hours=22, seconds=30),
+                started_time_ago=timedelta(days=1, hours=12),
+            )
+        def f_1d20h(_num):
+            # Wait time: 1 day 20 hours
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(days=1, hours=23, seconds=30),
+                started_time_ago=timedelta(hours=3),
+            )
+
+        # 20 jobs total;
+        # The 10th percentile should be calculated as being between 2nd
+        # and 3rd, and 9x closer to the 3rd. So (20m + 2h*9) / 10 = 110m.
+        # The 90th percentile should be calculated as being between 18th
+        # and 19th, and 9x closer to the 18th. So (1d*9 + 1d10h) / 10 = 1d1h.
+        scrambled_run([f_20m]*2 + [f_2h] + [f_1d]*15 + [f_1d10h, f_1d20h])
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertHTMLEqual(
+            "Time waited before starting: 1\xa0hour, 50\xa0minutes ~ 1\xa0day, 1\xa0hour",
+            detail_list_soup.select('#time-waited-line')[0].text)
+
+    def test_wait_time_no_jobs(self):
+        # Jobs that don't have both a scheduled start time and a start time
+        # don't count.
+        self.job(
+            status=Job.Status.PENDING,
+            scheduled_time_ago=timedelta(days=2, minutes=50),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            started_time_ago=timedelta(days=2, minutes=30),
+        )
+        # Jobs not started within the recency threshold don't count.
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(days=3, hours=2),
+            started_time_ago=timedelta(days=3, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertHTMLEqual(
+            "Time waited before starting: 0\xa0minutes ~ 0\xa0minutes",
+            detail_list_soup.select('#time-waited-line')[0].text)
+
+    def test_total_time(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
+        def f_0m(_num):
+            # Total time: 0
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(minutes=5, seconds=30),
+                modified_time_ago=timedelta(minutes=5),
+            )
+        def f_10m(_num):
+            # Total time: 10 minutes
+            self.job(
+                status=Job.Status.FAILURE,
+                scheduled_time_ago=timedelta(minutes=15, seconds=30),
+                modified_time_ago=timedelta(minutes=5),
+            )
+        def f_20m(_num):
+            # Total time: 20 minutes
+            self.job(
+                status=Job.Status.SUCCESS,
+                scheduled_time_ago=timedelta(minutes=25, seconds=30),
+                modified_time_ago=timedelta(minutes=5),
+            )
+
+        # 20 jobs total;
+        # The 10th percentile should be calculated as being between 2nd
+        # and 3rd, and 9x closer to the 3rd. So (0m + 10m*9) / 10 = 9m.
+        # The 90th percentile should be calculated as being between 18th
+        # and 19th, and 9x closer to the 18th. So (10m*9 + 20m) / 10 = 11m.
+        scrambled_run([f_0m]*2 + [f_10m]*16 + [f_20m]*2)
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertHTMLEqual(
+            "Total time: 9\xa0minutes ~ 11\xa0minutes",
+            detail_list_soup.select('#total-time-line')[0].text)
+
+    def test_total_time_no_jobs(self):
+        # Jobs that don't have a scheduled start time don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            modified_time_ago=timedelta(days=1),
+        )
+        # Jobs not modified within the recency threshold don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=5),
+            modified_time_ago=timedelta(days=4),
+        )
+        # Incomplete jobs don't count.
+        self.job(
+            status=Job.Status.PENDING,
+            scheduled_time_ago=timedelta(minutes=30),
+            modified_time_ago=timedelta(minutes=20),
+        )
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(minutes=30),
+            modified_time_ago=timedelta(minutes=20),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertHTMLEqual(
+            "Total time: 0\xa0minutes ~ 0\xa0minutes",
+            detail_list_soup.select('#total-time-line')[0].text)
+
+    def test_incomplete_count(self):
+
+        now = timezone.now()
+
+        def get_time_ago(**kwargs):
+            return now - timedelta(**kwargs)
+
+        expected_graph_data = []
+
+        # 3 jobs exist before the 3-day timeline
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=3, hours=6)
+            job1 = self.job(status=Job.Status.PENDING)
+            job2 = self.job(status=Job.Status.PENDING)
+            job3 = self.job(status=Job.Status.IN_PROGRESS)
+        expected_graph_data.insert(0, dict(
+            x=0, y=3,
+            tooltip=(
+                "3\xa0days ago"
+                "<br><strong>3</strong> incomplete jobs"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=1, y=3,
+            tooltip=(
+                "2\xa0days, 12\xa0hours ago"
+                "<br><strong>3</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+
+        # One 12-hour interval creates and completes jobs
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=2, hours=6)
+            job1.status = Job.Status.SUCCESS
+            job1.save()
+            job4 = self.job(status=Job.Status.PENDING)
+            _job5 = self.job(status=Job.Status.IN_PROGRESS)
+        expected_graph_data.insert(0, dict(
+            x=2, y=4,
+            tooltip=(
+                "2\xa0days ago"
+                "<br><strong>4</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 1 completed, 2 created"
+            )
+        ))
+
+        # One 12-hour interval completes jobs
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(days=1, hours=18)
+            job2.status = Job.Status.FAILURE
+            job2.save()
+            job4.status = Job.Status.SUCCESS
+            job4.save()
+        expected_graph_data.insert(0, dict(
+            x=3, y=2,
+            tooltip=(
+                "1\xa0day, 12\xa0hours ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 2 completed, 0 created"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=4, y=2,
+            tooltip=(
+                "1\xa0day ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+        expected_graph_data.insert(0, dict(
+            x=5, y=2,
+            tooltip=(
+                "12\xa0hours ago"
+                "<br><strong>2</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 0 created"
+            )
+        ))
+
+        # One 12-hour interval creates jobs (and drives the average up)
+        with mock.patch('django.utils.timezone.now') as mock_now:
+            mock_now.return_value = get_time_ago(hours=6)
+            for _ in range(15):
+                self.job(status=Job.Status.PENDING)
+        expected_graph_data.insert(0, dict(
+            x=6, y=17,
+            tooltip=(
+                "Now"
+                "<br><strong>17</strong> incomplete jobs"
+                "<br>Last 12\xa0hours: 0 completed, 15 created"
+            )
+        ))
+
+        response = self.get_response()
+        graph_data = response.context['incomplete_count_graph_data']
+        for i in range(6+1):
+            self.assertDictEqual(
+                graph_data[i],
+                expected_graph_data[i],
+            )
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        detail_list_soup = response_soup.select('ul.detail_list')[0]
+        self.assertInHTML(
+            "Now: 17",
+            str(detail_list_soup))
+        self.assertInHTML(
+            # (3+3+4+2+2+2+17) / 7 = 4.71; round to nearest
+            "Rough average over the past 3 days: 5",
+            str(detail_list_soup))
+
+    def test_incomplete_count_no_jobs(self):
+        # Jobs completed before the timeline don't count.
+        self.job(
+            status=Job.Status.SUCCESS,
+            created_time_ago=timedelta(days=3, hours=4),
+            modified_time_ago=timedelta(days=3, hours=2),
+        )
+        self.job(
+            status=Job.Status.FAILURE,
+            created_time_ago=timedelta(days=3, hours=4),
+            modified_time_ago=timedelta(days=3, hours=2),
+        )
+        # Jobs started and completed within the same interval don't contribute
+        # to any incomplete job counts, but they do count toward the created
+        # and completed counts in the tooltip.
+        self.job(status=Job.Status.SUCCESS)
+        self.job(status=Job.Status.FAILURE)
+
+        expected_graph_data = [
+            dict(
+                x=6, y=0,
+                tooltip=(
+                    "Now"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 2 completed, 2 created"
+                )
+            ),
+            dict(
+                x=5, y=0,
+                tooltip=(
+                    "12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=4, y=0,
+                tooltip=(
+                    "1\xa0day ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=3, y=0,
+                tooltip=(
+                    "1\xa0day, 12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=2, y=0,
+                tooltip=(
+                    "2\xa0days ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=1, y=0,
+                tooltip=(
+                    "2\xa0days, 12\xa0hours ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                    "<br>Last 12\xa0hours: 0 completed, 0 created"
+                )
+            ),
+            dict(
+                x=0, y=0,
+                tooltip=(
+                    "3\xa0days ago"
+                    "<br><strong>0</strong> incomplete jobs"
+                )
+            ),
+        ]
+
+        response = self.get_response()
+        graph_data = response.context['incomplete_count_graph_data']
+        for i in range(6+1):
+            self.assertDictEqual(
+                graph_data[i],
+                expected_graph_data[i],
+            )
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        detail_list_soup = response_soup.select('ul.detail_list')[0]
+        self.assertInHTML(
+            "Now: 0",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Rough average over the past 3 days: 0",
+            str(detail_list_soup))
+
+    def test_recency_threshold_default(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, minutes=3, seconds=30),
+            started_time_ago=timedelta(days=2, hours=23, minutes=50),
+            modified_time_ago=timedelta(days=3, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, minutes=29, seconds=30),
+            modified_time_ago=timedelta(days=2, hours=23, minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=3, hours=5),
+            started_time_ago=timedelta(days=3, hours=2),
+            modified_time_ago=timedelta(days=3, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Jobs in the past 3 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_hour(self):
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=3, seconds=30),
+            started_time_ago=timedelta(minutes=50),
+            modified_time_ago=timedelta(hours=1, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=29, seconds=30),
+            modified_time_ago=timedelta(minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(hours=1, minutes=5),
+            started_time_ago=timedelta(hours=1, minutes=2),
+            modified_time_ago=timedelta(hours=1, minutes=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='1'))
+        self.assertInHTML(
+            "Jobs in the past hour - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_30_days(self):
+        # This should be the only job accounted for in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, minutes=3, seconds=30),
+            started_time_ago=timedelta(days=29, hours=23, minutes=50),
+            modified_time_ago=timedelta(days=30, minutes=3),
+        )
+        # This should be the only job accounted for in total times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, minutes=29, seconds=30),
+            modified_time_ago=timedelta(days=29, hours=23, minutes=50),
+        )
+        # This should be in neither.
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=30, hours=5),
+            started_time_ago=timedelta(days=30, hours=2),
+            modified_time_ago=timedelta(days=30, hours=1),
+        )
+
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='720'))
+        self.assertInHTML(
+            "Jobs in the past 30 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Time waited before starting: 13\xa0minutes ~ 13\xa0minutes",
+            str(detail_list_soup))
+        self.assertInHTML(
+            "Total time: 39\xa0minutes ~ 39\xa0minutes",
+            str(detail_list_soup))
+
+    def test_recency_threshold_invalid(self):
+        # Should use the default threshold.
+        detail_list_soup = self.get_detail_list_soup(
+            data=dict(recency_threshold='some_unrecognized_value'))
+        self.assertInHTML(
+            "Jobs in the past 3 days - 10th to 90th percentile times:",
+            str(detail_list_soup))
+
+    def test_exclude_realtime_jobs(self):
+        # Expect realtime jobs to be recognized by job name.
+        # These two are realtime.
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='generate_thumbnail',
+            scheduled_time_ago=timedelta(minutes=11),
+            started_time_ago=timedelta(minutes=10),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='generate_patch',
+            scheduled_time_ago=timedelta(minutes=11),
+            started_time_ago=timedelta(minutes=10),
+        )
+        # This isn't realtime. This should be the only job accounted for
+        # in wait times.
+        self.job(
+            status=Job.Status.SUCCESS,
+            job_name='update_label_details',
+            scheduled_time_ago=timedelta(minutes=15, seconds=30),
+            started_time_ago=timedelta(minutes=10),
+        )
+
+        detail_list_soup = self.get_detail_list_soup()
+        self.assertInHTML(
+            "Time waited before starting: 5\xa0minutes ~ 5\xa0minutes",
+            str(detail_list_soup))
+
+    def test_pending_wait_time(self):
+        def f1(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(minutes=5),
+            )
+        def f2(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(hours=5, minutes=15),
+            )
+        def f3(_num):
+            self.job(
+                status=Job.Status.PENDING,
+                scheduled_time_ago=timedelta(hours=5, minutes=20),
+            )
+
+        scrambled_run([f1, f2, f3])
+
+        detail_list_soup = self.get_content_soup(user=self.superuser)
+        self.assertInHTML(
+            "Current highest pending wait time: 5\xa0hours, 20\xa0minutes",
+            str(detail_list_soup))
+
+    def test_pending_wait_time_no_jobs(self):
+        # Non-pending jobs aren't considered here.
+        self.job(
+            status=Job.Status.IN_PROGRESS,
+            scheduled_time_ago=timedelta(days=2),
+        )
+        self.job(
+            status=Job.Status.SUCCESS,
+            scheduled_time_ago=timedelta(days=2),
+        )
+        self.job(
+            status=Job.Status.FAILURE,
+            scheduled_time_ago=timedelta(days=2),
+        )
+
+        content_soup = self.get_content_soup(user=self.superuser)
+        self.assertInHTML(
+            "Current highest pending wait time: 0\xa0minutes",
+            str(content_soup))
+
+    def test_pending_wait_time_not_admin(self):
+        response = self.get_response(user=self.superuser)
+        self.assertContains(response, "Current highest pending wait time")
+
+        response = self.get_response()
+        self.assertNotContains(response, "Current highest pending wait time")

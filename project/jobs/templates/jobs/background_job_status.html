@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% load timedelta_display from common_tags %}
+
+{% block title %}Sitewide job-processing status | CoralNet{% endblock %}
+
+
+{% block css-includes %}
+  {% include "static-local-include.html" with type="css" path="css/jobs.css" %}
+  {% include "static-local-include.html" with type="js" path="js/highcharts.js" %}
+{% endblock %}
+
+
+{% block content %}
+
+<h2>Sitewide job-processing status</h2>
+
+<form action="" method="get" class="no-padding">
+  {{ form }}
+  <input type="submit" value="Update" class="red">
+</form>
+  
+<hr>
+
+<ul class="detail_list">
+  <li>Jobs in the past {{ recency_threshold_str }} - 10th to 90th percentile times:</li>
+  
+  <li>
+    <ul>
+      <li>
+        <span class="tooltip" title="Duration from scheduled start time to actual start time" id="time-waited-line">
+          Time waited before starting: {{ recent_wait_time_interval.0|timedelta_display }} ~ {{ recent_wait_time_interval.1|timedelta_display }}
+        </span>
+      </li>
+      <li>
+        <span class="tooltip" title="Duration from scheduled start time to finish time" id="total-time-line">
+          Total time: {{ recent_total_time_interval.0|timedelta_display }} ~ {{ recent_total_time_interval.1|timedelta_display }}
+        </span>
+      </li>
+    </ul>
+  </li>
+
+  <li>Number of incomplete jobs:</li>
+  <li>
+    <ul>
+      <li>Now: {{ incomplete_count }}</li>
+      <li>Rough average over the past {{ recency_threshold_str }}: {{ incomplete_count_average }}</li>
+    </ul>
+  </li>
+  <li>
+    <div id="incomplete-count-graph"></div>
+  </li>
+</ul>
+  
+{% if request.user.is_superuser %}
+  <hr>
+  
+  <div class="tooltip" title="Among currently pending jobs, highest duration from scheduled start time to now">
+    Current highest pending wait time: {{ max_pending_wait_time|timedelta_display }}
+  </div>
+{% endif %}
+  
+
+<script>
+    let graphData = {{ incomplete_count_graph_data|safe }};
+  
+    let chart1 = new Highcharts.Chart({
+        chart: {
+            renderTo: 'incomplete-count-graph',
+            type: 'line',
+        },
+        title: {
+            text: 'Incomplete jobs'
+        },
+        xAxis: {
+            title: {
+                text: 'Time'
+            },
+            labels: {
+                // No x labels; too much effort to get those dates/times
+                // formatted and temporally aligned
+                formatter: function() {return '';}
+            },
+        },
+        yAxis: {
+            title: {
+                text: 'Jobs'
+            },
+        },
+        tooltip: {
+            formatter: function () {
+                return this.point.tooltip;
+            }
+        },
+        series: [{
+            showInLegend: false,
+            name: 'Jobs',
+            data: graphData,
+        }]
+    });
+</script>
+
+{% endblock %}

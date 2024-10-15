@@ -22,6 +22,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
   - tqdm 4.65.0 -> 4.66.5
   - gunicorn `>=20.1.0,<20.2` -> 23.0.0 (for production)
   - pytz can now be uninstalled, since djangorestframework no longer depends on it.
+- New migrations to run for `jobs`.
 
 ## [1.13.1](https://github.com/coralnet/coralnet/tree/1.13.1)
 

@@ -116,7 +116,7 @@ def mock_boto_client(response_type='succeeded'):
         'vision_backend.queues.get_batch_client', get_mock_client)
 
 
-class QueueBasicTest(BaseTaskTest, JobUtilsMixin):
+class QueueBasicTest(BaseTaskTest):
     """
     We subclass this for each queue type. Maybe there's a better way
     to 'parameterize' these tests.
@@ -354,7 +354,7 @@ class BatchQueueClassificationTest(QueueClassificationTest):
 
 
 @batch_queue_decorator
-class BatchQueueSpecificsTest(BaseTaskTest, JobUtilsMixin):
+class BatchQueueSpecificsTest(BaseTaskTest):
 
     def extract_and_assert_collect_count(self, expected_counts_str):
         # Submit feature extraction

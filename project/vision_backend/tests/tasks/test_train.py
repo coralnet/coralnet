@@ -9,14 +9,14 @@ from errorlogs.tests.utils import ErrorReportTestMixin
 from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
-from jobs.tests.utils import do_job, JobUtilsMixin
-from jobs.utils import get_or_create_job, start_job
+from jobs.tests.utils import do_job
 from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
-from .utils import BaseTaskTest, do_collect_spacer_jobs
+from .utils import (
+    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
 def mock_training_results(
@@ -32,7 +32,7 @@ def mock_training_results(
         'spacer.messages.TrainClassifierReturnMsg.__init__', mock_return_msg)
 
 
-class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
+class TrainClassifierTest(BaseTaskTest):
 
     def test_source_check(self):
         # Provide enough data for training. Extract features.
@@ -40,19 +40,14 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
 
-        job, created = get_or_create_job('check_source', self.source.pk)
-        self.assertFalse(created, "Should have scheduled a source check")
-        start_job(job)
-        self.assert_job_result_message(
-            'check_source',
-            "Scheduled training")
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Should have scheduled a source check")
+        self.source_check_and_assert(
+            "Scheduled training", expected_hidden=False)
 
-        do_job(
-            'check_source', self.source.pk,
-            source_id=self.source.pk)
-        self.assert_job_result_message(
-            'check_source',
-            "Waiting for training to finish")
+        self.source_check_and_assert(
+            "Waiting for training to finish", expected_hidden=True)
 
     def test_success(self):
         # Provide enough data for training. Extract features.
@@ -223,6 +218,23 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
             pending_classifier.nbr_train_images, 3,
             msg="Classification should be submitted with only 3 images")
 
+    def test_source_check_after_finishing(self):
+        # Provide enough data for training. Extract features.
+        self.upload_images_for_training()
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+        # Submit classifier.
+        run_scheduled_jobs_until_empty()
+
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+        # Collect classifier.
+        do_collect_spacer_jobs()
+
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Source check should be scheduled after collecting training")
+
     def test_with_dupe_points(self):
         """
         Training data has two points with the same row/column.
@@ -289,7 +301,7 @@ class TrainClassifierTest(BaseTaskTest, JobUtilsMixin):
     NEW_CLASSIFIER_TRAIN_TH=1.3,
     NEW_CLASSIFIER_IMPROVEMENT_TH=1.01,
 )
-class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
+class RetrainLogicTest(BaseTaskTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -419,9 +431,7 @@ class RetrainLogicTest(BaseTaskTest, JobUtilsMixin):
         )
 
 
-class AbortCasesTest(
-    BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin, JobUtilsMixin,
-):
+class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
     """
     Test cases (besides retrain logic) where the train task or collection would
     abort before reaching the end.
@@ -446,13 +456,10 @@ class AbortCasesTest(
         self.source.deployed_classifier = classifier
         self.source.save()
 
-        # Check source
-        run_scheduled_jobs_until_empty()
-
-        self.assert_job_result_message(
-            'check_source',
+        self.source_check_and_assert(
             f"Source seems to be all caught up."
-            f" Source has training disabled"
+            f" Source has training disabled",
+            expected_hidden=True,
         )
 
     def test_below_minimum_images(self):
@@ -469,14 +476,11 @@ class AbortCasesTest(
         min_images = self.source.image_set.count() + 1
 
         with override_settings(TRAINING_MIN_IMAGES=min_images):
-            # Check source
-            run_scheduled_jobs_until_empty()
-
-        self.assert_job_result_message(
-            'check_source',
-            f"Can't train first classifier:"
-            f" Not enough annotated images for initial training"
-        )
+            self.source_check_and_assert(
+                f"Can't train first classifier:"
+                f" Not enough annotated images for initial training",
+                expected_hidden=True,
+            )
 
     def test_training_disabled_at_train_task(self):
         """

@@ -30,7 +30,11 @@ from jobs.utils import finish_job
 from labels.models import Label, LabelSet
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
-from .utils import extractor_to_name, schedule_source_check
+from .utils import (
+    extractor_to_name,
+    schedule_source_check,
+    source_is_finished_with_core_jobs,
+)
 
 logger = getLogger(__name__)
 
@@ -248,10 +252,11 @@ class SpacerResultHandler(ABC):
             job = Job.objects.get(pk=internal_job_id)
             finish_job(job, success=success, result_message=result_message)
 
-            if job.source:
-                # If this is a source's job, chances are there might
-                # be another job to do for the source.
-                schedule_source_check(job.source_id)
+            cls.after_finishing_job(job.pk)
+
+    @classmethod
+    def after_finishing_job(cls, job_id):
+        pass
 
     @classmethod
     def get_internal_job(cls, task):
@@ -327,6 +332,14 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
         img.features.extracted_date = now()
         img.features.has_rowcols = True
         img.features.save()
+
+    @classmethod
+    def after_finishing_job(cls, job_id):
+        job = Job.objects.get(pk=job_id)
+        if source_is_finished_with_core_jobs(job.source_id):
+            # If not waiting for other 'core' jobs,
+            # check if the source has any next steps.
+            schedule_source_check(job.source_id)
 
 
 class SpacerTrainResultHandler(SpacerResultHandler):
@@ -434,6 +447,21 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             source.save()
 
         return f"New classifier accepted: {classifier.pk}"
+
+    @classmethod
+    def after_finishing_job(cls, job_id):
+        job = Job.objects.get(pk=job_id)
+
+        # Successful jobs related to classifier history should persist
+        # in the DB.
+        if job.status == Job.Status.SUCCESS:
+            job.persist = True
+            job.save()
+
+        if source_is_finished_with_core_jobs(job.source_id):
+            # If not waiting for other 'core' jobs,
+            # check if the source has any next steps.
+            schedule_source_check(job.source_id)
 
 
 class SpacerClassifyResultHandler(SpacerResultHandler):

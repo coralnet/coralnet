@@ -1,30 +1,26 @@
 from collections import Counter, defaultdict
+import datetime
 from datetime import timedelta
 import operator
-from typing import Literal
 
 from django import forms
 from django.conf import settings
 from django.db import models
-from django.db.models.lookups import LessThan
-from django.db.models.expressions import Case, F, Value, When
+from django.db.models.expressions import Case, F, When
 from django.utils import timezone
 
-from lib.forms import BoxFormRenderer
+from lib.forms import BoxFormRenderer, InlineFormRenderer
 from sources.models import Source
 from .models import Job
+from .utils import (
+    get_job_details,
+    get_job_names_by_task_queue,
+    get_non_source_job_names,
+    get_source_job_names,
+)
 
 
 class BaseJobForm(forms.Form):
-    source_id: int | None | Literal['all']
-
-    @property
-    def show_source_check_jobs(self):
-        raise NotImplementedError
-
-    @property
-    def status_filter(self):
-        raise NotImplementedError
 
     @property
     def job_sort_method(self):
@@ -50,49 +46,73 @@ class BaseJobForm(forms.Form):
 
         jobs = Job.objects.all()
 
-        if self.source_id is None:
-            # Non-source jobs only.
-            jobs = jobs.filter(source__isnull=True)
-        elif self.source_id != 'all':
-            # One source only.
-            jobs = jobs.filter(source_id=self.source_id)
-        # Else, all sources.
+        jobs = self._filter_jobs(jobs)
+        jobs = self._sort_jobs(jobs)
 
-        if not self.show_source_check_jobs:
-            jobs = jobs.exclude(job_name='check_source')
+        return jobs
 
-        status_filter = self.status_filter
-        if status_filter == 'completed':
-            status_kwargs = dict(
-                status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
-        elif status_filter:
-            status_kwargs = dict(status=status_filter)
-        else:
-            status_kwargs = dict()
-        jobs = jobs.filter(**status_kwargs)
+    def _filter_jobs(self, jobs):
+        return jobs
 
+    def _sort_jobs(self, jobs):
         sort_method = self.job_sort_method
         if sort_method == 'status':
-            # In-progress jobs first, then pending + due,
-            # then pending + scheduled for later, then completed.
-            # Tiebreak by last updated, then by ID (last created).
+            # Incomplete jobs by scheduled start date first.
+            # Then completed jobs by last modified.
+            # Tiebreak by ID (last created).
             jobs = jobs.annotate(
-                due=LessThan(F('scheduled_start_date'), timezone.now()),
-                status_score=Case(
-                    When(status=Job.Status.IN_PROGRESS, then=Value(1)),
-                    When(status=Job.Status.PENDING, due=True, then=Value(2)),
-                    When(status=Job.Status.PENDING, due=False, then=Value(3)),
-                    When(status=Job.Status.PENDING, due=None, then=Value(4)),
-                    default=Value(5),
-                    output_field=models.fields.IntegerField(),
-                )
+                incomplete_scheduled_date=Case(
+                    # For incomplete jobs with a scheduled start time.
+                    When(
+                        status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
+                        scheduled_start_date__isnull=False,
+                        then=F('scheduled_start_date'),
+                    ),
+                    # For incomplete jobs without a scheduled start time.
+                    # Basically this'll always be a later value than any
+                    # scheduled start date, and always earlier than the
+                    # completed-jobs case.
+                    When(
+                        status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
+                        then=datetime.datetime(
+                            year=datetime.MAXYEAR, month=12, day=30,
+                            tzinfo=datetime.timezone.utc),
+                    ),
+                    # For completed jobs.
+                    default=datetime.datetime(
+                        year=datetime.MAXYEAR, month=12, day=31,
+                        tzinfo=datetime.timezone.utc),
+                    output_field=models.fields.DateTimeField(),
+                ),
             )
-            jobs = jobs.order_by('status_score', '-modify_date', '-id')
+            jobs = jobs.order_by(
+                'incomplete_scheduled_date',
+                # This is the ordering for completed jobs (and also the
+                # tiebreaker for incomplete jobs).
+                '-modify_date', '-id')
         elif sort_method == 'recently_updated':
             jobs = jobs.order_by('-modify_date', '-id')
         else:
-            # 'recently_created'
-            jobs = jobs.order_by('-id')
+            # 'latest_scheduled'
+            # If there's no scheduled date, we'll use start date.
+            # If neither, we use an impossibly early date.
+            jobs = jobs.annotate(
+                scheduled_start_or_start_date=Case(
+                    When(
+                        scheduled_start_date__isnull=False,
+                        then=F('scheduled_start_date'),
+                    ),
+                    When(
+                        start_date__isnull=False,
+                        then=F('start_date'),
+                    ),
+                    default=datetime.datetime(
+                        year=datetime.MINYEAR, month=1, day=1,
+                        tzinfo=datetime.timezone.utc),
+                    output_field=models.fields.DateTimeField(),
+                ),
+            )
+            jobs = jobs.order_by('-scheduled_start_or_start_date', '-id')
 
         return jobs
 
@@ -132,41 +152,64 @@ class JobSearchForm(BaseJobForm):
         choices=[
             ('status', "Status (non-completed first)"),
             ('recently_updated', "Recently updated"),
-            ('recently_created', "Recently created"),
+            ('latest_scheduled', "Latest scheduled"),
         ],
         required=False, initial='status',
     )
-    # show_source_check_jobs: See __init__()
+    show_hidden = forms.BooleanField(
+        label="Show hidden jobs",
+        required=False, initial=False,
+    )
 
     default_renderer = BoxFormRenderer
 
     def __init__(self, *args, **kwargs):
-        self.source_id: int | None | Literal['all'] = kwargs.pop('source_id')
         super().__init__(*args, **kwargs)
 
-        # check_source jobs often clutter the job list more than they provide
-        # useful info. So they're hidden by default, but there's an option
-        # to show them.
-        if self.source_id is None:
-            # Non-source jobs only, so source check jobs cannot be included.
-            # Don't need to display the show source check jobs field.
-            self.fields['show_source_check_jobs'] = forms.BooleanField(
-                widget=forms.HiddenInput(),
-                required=False, initial=False,
-            )
+        self.fields['type'] = forms.ChoiceField(
+            choices=self.get_type_choices,
+            required=False, initial='',
+        )
+        self.order_fields(['status', 'type', 'sort', 'show_hidden'])
+
+    def _filter_jobs(self, jobs):
+        jobs = super()._filter_jobs(jobs)
+
+        status_filter = self.get_field_value('status')
+        if status_filter == 'completed':
+            status_kwargs = dict(
+                status__in=[Job.Status.SUCCESS, Job.Status.FAILURE])
+        elif status_filter:
+            status_kwargs = dict(status=status_filter)
         else:
-            self.fields['show_source_check_jobs'] = forms.BooleanField(
-                label="Show source-check jobs",
-                required=False, initial=False,
-            )
+            status_kwargs = dict()
+        jobs = jobs.filter(**status_kwargs)
 
-    @property
-    def show_source_check_jobs(self):
-        return self.get_field_value('show_source_check_jobs')
+        type_filter = self.get_field_value('type')
+        if type_filter.endswith('_queue_types'):
+            queue_name = type_filter[:-len('_queue_types')]
+            job_names = get_job_names_by_task_queue()[queue_name]
+            jobs = jobs.filter(job_name__in=job_names)
+        elif type_filter:
+            jobs = jobs.filter(job_name=type_filter)
 
-    @property
-    def status_filter(self):
-        return self.get_field_value('status')
+        show_hidden = self.get_field_value('show_hidden')
+        if not show_hidden:
+            jobs = jobs.filter(hidden=False)
+
+        return jobs
+
+    @staticmethod
+    def get_types():
+        raise NotImplementedError
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
 
     @property
     def job_sort_method(self):
@@ -175,6 +218,61 @@ class JobSearchForm(BaseJobForm):
     @property
     def completed_day_limit(self):
         return settings.JOB_MAX_DAYS
+
+
+class SourceJobSearchForm(JobSearchForm):
+    def __init__(self, *args, **kwargs):
+        self.source_id: int = kwargs.pop('source_id')
+        super().__init__(*args, **kwargs)
+
+    def _filter_jobs(self, jobs):
+        jobs = jobs.filter(source_id=self.source_id)
+
+        return super()._filter_jobs(jobs)
+
+    @staticmethod
+    def get_types():
+        return get_source_job_names()
+
+
+class AllJobSearchForm(JobSearchForm):
+
+    @staticmethod
+    def get_types():
+        return get_source_job_names() + get_non_source_job_names()
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        for queue_name in settings.DJANGO_HUEY['queues'].keys():
+            choices.append(
+                (f'{queue_name}_queue_types', f"Any {queue_name} job"))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
+
+
+class NonSourceJobSearchForm(JobSearchForm):
+
+    def _filter_jobs(self, jobs):
+        jobs = jobs.filter(source__isnull=True)
+        return super()._filter_jobs(jobs)
+
+    @staticmethod
+    def get_types():
+        return get_non_source_job_names()
+
+    def get_type_choices(self):
+        choices = [('', "Any")]
+        for name in self.get_types():
+            display_name = get_job_details(name)['display_name']
+            choices.append((name, display_name))
+        for queue_name in settings.DJANGO_HUEY['queues'].keys():
+            choices.append(
+                (f'{queue_name}_queue_types', f"Any {queue_name} job"))
+        choices.sort(key=operator.itemgetter(1))
+        return choices
 
 
 class JobSummaryForm(BaseJobForm):
@@ -193,19 +291,12 @@ class JobSummaryForm(BaseJobForm):
         required=False, initial='job_count',
     )
 
-    source_id = 'all'
     default_renderer = BoxFormRenderer
 
     @property
-    def show_source_check_jobs(self):
-        return False
-
-    @property
-    def status_filter(self):
-        return ''
-
-    @property
     def job_sort_method(self):
+        # This actually has a purpose near the end of
+        # get_job_counts_by_source().
         return 'recently_updated'
 
     @property
@@ -257,3 +348,20 @@ class JobSummaryForm(BaseJobForm):
         # in recently-updated-first order.
 
         return source_entries, non_source_job_counts
+
+
+class BackgroundJobStatusForm(forms.Form):
+    recency_threshold = forms.ChoiceField(
+        label="Look at jobs from the past",
+        choices=[
+            ('1', "hour"),
+            ('4', "4 hours"),
+            ('24', "day"),
+            ('72', "3 days"),
+            ('168', "week"),
+            ('720', "30 days"),
+        ],
+        initial='72',
+    )
+
+    default_renderer = InlineFormRenderer

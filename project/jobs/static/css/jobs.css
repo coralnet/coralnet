@@ -1,8 +1,3 @@
-#job-table th {
-  /* Give indication that there are tooltips */
-  cursor: help;
-}
-
 #job-summary td.pending,
 #job-table tr.pending {
   background-color: var(--status-color-pending);
@@ -35,4 +30,9 @@
 }
 #job-summary tr#all-jobs-summary td:not(.summary-name) {
   font-weight: bold;
+}
+
+#incomplete-count-graph {
+  width: 600px;
+  height: 250px;
 }

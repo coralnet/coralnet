@@ -1,8 +1,6 @@
 from collections import Counter
-import datetime
 from datetime import timedelta
 from logging import getLogger
-import random
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -39,33 +37,27 @@ from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import (
-    get_extractor, reset_features, reset_features_bulk, schedule_source_check)
+    get_extractor,
+    reset_features,
+    reset_features_bulk,
+    schedule_source_check,
+    source_is_finished_with_core_jobs,
+)
 
 logger = getLogger(__name__)
 
 
-# Run daily, and not at prime times of biggest users (e.g. US East, Hawaii,
-# Australia).
-@job_runner(
-    interval=timedelta(days=1),
-    offset=datetime.datetime(
-        year=2023, month=1, day=1, hour=7, minute=0,
-        tzinfo=datetime.timezone.utc,
-    ),
-)
-def check_all_sources():
-    scheduled = 0
-    for source in Source.objects.all():
-        # Schedule a check of this source at a random time in the next 4 hours.
-        delay_in_seconds = random.randrange(1, 60*60*4)
-        job, created = schedule_source_check(
-            source.pk, delay=timedelta(seconds=delay_in_seconds))
-        if created:
-            scheduled += 1
-    return f"Scheduled checks for {scheduled} source(s)"
+def after_check(job_id):
+    job = Job.objects.get(pk=job_id)
+
+    # On job lists, showing all source checks can be a lot. Hide the ones
+    # that don't actually schedule anything.
+    if not job.result_message.startswith("Scheduled"):
+        job.hidden = True
+        job.save()
 
 
-@job_runner()
+@job_runner(after_finishing_job=after_check)
 def check_source(source_id):
     """
     Check a source for appropriate vision-backend tasks to run,
@@ -461,7 +453,7 @@ def submit_classifier(source_id, job_id):
     return msg
 
 
-@job_starter(job_name='classify_image')
+@job_starter(job_name='classify_image', job_display_name="Deploy")
 def deploy(api_job_id, api_unit_order, job_id):
     """Begin classifying an image submitted through the deploy-API."""
     try:
@@ -504,7 +496,7 @@ def deploy(api_job_id, api_unit_order, job_id):
     return msg
 
 
-@job_runner(job_name='classify_features')
+@job_runner(job_name='classify_features', job_display_name="Classify")
 def classify_image(image_id):
     """Classify a source's image."""
     try:
@@ -571,19 +563,30 @@ def classify_image(image_id):
             f" with the image's points."
         )
 
-    current_classifier_events = ClassifyImageEvent.objects \
-        .filter(classifier_id=classifier.pk, source_id=img.source_id)
-    incomplete_images = img.source.image_set.incomplete()
-    if current_classifier_events.count() >= incomplete_images.count():
+    this_job = Job.objects.get(
+        job_name='classify_features',
+        arg_identifier=image_id,
+        status=Job.Status.IN_PROGRESS,
+    )
+    if source_is_finished_with_core_jobs(
+        img.source_id, job_id_about_to_finish=this_job.pk,
+    ):
         # Classification for this source may be done.
-        # Confirm whether the source is all caught up. That's useful to know
-        # when looking at job/backend dashboards.
+        # Confirm whether the source is all caught up. It's useful to see that
+        # confirmation message when looking at job/backend dashboards.
         schedule_source_check(img.source_id)
 
     return f"Used classifier {classifier.pk}"
 
 
-@job_runner(interval=timedelta(minutes=1))
+def after_collect(job_id):
+    job = Job.objects.get(pk=job_id)
+    if job.result_message == "Jobs checked/collected: 0":
+        job.hidden = True
+        job.save()
+
+
+@job_runner(interval=timedelta(minutes=1), after_finishing_job=after_collect)
 def collect_spacer_jobs():
     """
     Collects and handles spacer job results until A) the result queue is empty
@@ -633,7 +636,14 @@ def reset_features_for_source(source_id):
     reset_features_bulk(Image.objects.filter(source_id=source_id))
 
 
-@job_runner()
+def after_reset_classifiers(job_id):
+    # Successful jobs related to classifier history should persist in the DB.
+    job = Job.objects.get(pk=job_id)
+    job.persist = True
+    job.save()
+
+
+@job_runner(after_finishing_job=after_reset_classifiers)
 def reset_classifiers_for_source(source_id):
     """
     Removes all traces of the classifiers for this source.

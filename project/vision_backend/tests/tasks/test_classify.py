@@ -13,19 +13,20 @@ from images.models import Point
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
-from jobs.tests.utils import do_job, JobUtilsMixin
+from jobs.tests.utils import do_job
 from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
 from ...models import Classifier, Score
 from ...utils import clear_features
-from .utils import BaseTaskTest, do_collect_spacer_jobs
+from .utils import (
+    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
 
 
 def noop(*args, **kwargs):
     pass
 
 
-class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
+class SourceCheckTest(BaseTaskTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -36,16 +37,17 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
     def test_basic(self):
         self.upload_image_for_classification()
         self.upload_image_for_classification()
-        self.source_check_and_assert_message(
-            "Scheduled 2 image classification(s)")
-        self.source_check_and_assert_message(
-            "Waiting for image classification(s) to finish")
+        self.source_check_and_assert(
+            "Scheduled 2 image classification(s)", expected_hidden=False)
+        self.source_check_and_assert(
+            "Waiting for image classification(s) to finish",
+            expected_hidden=True,
+        )
 
     def test_do_not_schedule_again(self):
         img1 = self.upload_image_for_classification()
         img2 = self.upload_image_for_classification()
-        self.source_check_and_assert_message(
-            "Scheduled 2 image classification(s)")
+        self.source_check_and_assert("Scheduled 2 image classification(s)")
 
         self.upload_image_for_classification()
 
@@ -58,17 +60,10 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             msg="First 2 classifications shouldn't have run yet (sanity check)",
         )
 
-        self.source_check_and_assert_message(
+        self.source_check_and_assert(
             "Scheduled 1 image classification(s)",
             assert_msg="Should not redo the original 2 classifications",
         )
-
-    def check_is_pending(self):
-        return Job.objects.filter(
-            job_name='check_source',
-            arg_identifier=self.source.pk,
-            status=Job.Status.PENDING,
-        ).exists()
 
     def test_schedule_check_after_last_classification(self):
         """
@@ -79,17 +74,17 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         """
         image_1 = self.upload_image_for_classification()
         image_2 = self.upload_image_for_classification()
-        self.source_check_and_assert_message(
+        self.source_check_and_assert(
             "Scheduled 2 image classification(s)")
 
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should not schedule a check after classifying just 1 image",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should schedule a check after classifying both images",
         )
 
@@ -105,14 +100,14 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
 
         do_job('classify_features', image_1.pk, source_id=self.source.pk)
         self.assertFalse(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should not schedule a check after classifying just 1 image,"
                 " even if the other image was handled by the previous"
                 " classifier",
         )
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
-            self.check_is_pending(),
+            source_check_is_scheduled(self.source.pk),
             msg="Should schedule a check after classifying both images",
         )
 
@@ -134,7 +129,7 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
         do_collect_spacer_jobs()
 
         self.assertIsNone(other_source.last_accepted_classifier)
-        self.source_check_and_assert_message(
+        self.source_check_and_assert(
             "Scheduled 1 image classification(s)", source=other_source)
 
     def test_time_out(self):
@@ -142,14 +137,14 @@ class SourceCheckTest(BaseTaskTest, JobUtilsMixin):
             self.upload_image_for_classification()
 
         with override_settings(JOB_MAX_MINUTES=-1):
-            self.source_check_and_assert_message(
+            self.source_check_and_assert(
                 "Scheduled 10 image classification(s) (timed out)")
 
-        self.source_check_and_assert_message(
+        self.source_check_and_assert(
             "Scheduled 2 image classification(s)")
 
 
-class SourceCheckImageCasesTest(BaseTaskTest, JobUtilsMixin):
+class SourceCheckImageCasesTest(BaseTaskTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -253,7 +248,7 @@ class SourceCheckImageCasesTest(BaseTaskTest, JobUtilsMixin):
         self.source.deployed_classifier = classifier
         self.source.save()
 
-        self.source_check_and_assert_message(
+        self.source_check_and_assert(
             f"Scheduled {len(images)} image classification(s)")
 
         scheduled_image_ids = Job.objects \
@@ -353,8 +348,7 @@ class SourceCheckImageCasesTest(BaseTaskTest, JobUtilsMixin):
             self.classifier_1, [self.img3])
 
 
-class ClassifyImageTest(
-        BaseTaskTest, JobUtilsMixin, AnnotationHistoryTestMixin):
+class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
 
     @staticmethod
     def image_label_ids(image):
@@ -807,7 +801,7 @@ class ClassifyImageTest(
             "Applied labels match the given scores")
 
 
-class AbortCasesTest(BaseTaskTest, JobUtilsMixin):
+class AbortCasesTest(BaseTaskTest):
     """Test cases where the task would abort before reaching the end."""
 
     def upload_image_and_schedule_classification(self):
