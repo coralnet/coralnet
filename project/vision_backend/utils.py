@@ -201,8 +201,9 @@ def schedule_source_check(source_id, delay=None):
 
 def schedule_source_check_on_commit(source_id, delay=None):
     """
-    Site views should call this function instead of
-    schedule_source_check() due to race-condition considerations.
+    Site views which do some work and then schedule a source check are
+    susceptible to race conditions. Such views should call this function
+    to ensure the work is database-committed before the source check is run.
     """
     schedule_job_on_commit(
         'check_source',

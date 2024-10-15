@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import timedelta
 import operator
-from typing import Callable
+from typing import Callable, Literal
 from unittest import mock, skip
 
 from bs4 import BeautifulSoup
@@ -1041,16 +1041,40 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
             'jobs:source_job_list', args=[self.sources[0].pk])
         return self.client.get(url, data=data)
 
-    def assert_source_check_status_equal(self, expected_content):
+    def assert_check_related_contents(
+        self,
+        expected_latest_check_line: str,
+        expected_incomplete_check_content: str | Literal['button'],
+    ):
         response = self.get_response()
         response_soup = BeautifulSoup(response.content, 'html.parser')
-        status_soup = response_soup.select('#source-check-status')[0]
-        actual_content=''.join(
-            [str(item) for item in status_soup.contents])
+
+        latest_soup = response_soup.select('#latest-check-status')[0]
+        actual_latest_line = ''.join(
+            [str(item) for item in latest_soup.contents])
         self.assertHTMLEqual(
-            actual_content, expected_content,
-            msg="Source-check status line should be as expected"
+            actual_latest_line, expected_latest_check_line,
+            msg="Latest-check status line should be as expected"
         )
+
+        incomplete_soup = response_soup.select('#incomplete-check-status')[0]
+        if expected_incomplete_check_content == 'button':
+            self.assertIn(
+                "There are no active jobs.", str(incomplete_soup),
+                msg="Incomplete-check line should be as expected")
+            button_soup = incomplete_soup.select('button')[0]
+            self.assertHTMLEqual(
+                str(button_soup), '<button>Run a source check</button>',
+                msg="Button should be present")
+        else:
+            self.assertEqual(
+                incomplete_soup.text.strip(),
+                expected_incomplete_check_content,
+                msg="Incomplete-check line should be as expected"
+            )
+            self.assertEqual(
+                len(incomplete_soup.select('button')), 0,
+                msg="Button shouldn't be present")
 
     @property
     def view_shows_source_jobs(self):
@@ -1085,18 +1109,41 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
             ]
         )
 
-    def test_check_source_message(self):
-        # No recent source check
-        self.assert_source_check_status_equal(
-            "This source hasn't been status-checked recently.")
+    def test_check_related_contents(self):
+        # No recent source check + no active jobs
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            'button',
+        )
 
-        # In progress
+        # An active job other than a source check
+        job = fabricate_job(
+            'train_classifier', self.sources[0].pk,
+            source_id=self.sources[0].pk,
+            status=Job.Status.PENDING)
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "",
+        )
+        job.delete()
+
+        # Pending
         job = fabricate_job(
             'check_source', self.sources[0].pk,
             source_id=self.sources[0].pk,
-            status=Job.Status.IN_PROGRESS)
-        self.assert_source_check_status_equal(
-            "This source is currently being checked for jobs to schedule.")
+            status=Job.Status.PENDING)
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "There is a source check scheduled to run soon.",
+        )
+
+        # In progress
+        job.status = Job.Status.IN_PROGRESS
+        job.save()
+        self.assert_check_related_contents(
+            "This source hasn't been status-checked recently.",
+            "There is a source check running right now.",
+        )
 
         # Completed checks
         job.status = Job.Status.SUCCESS
@@ -1110,9 +1157,11 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
         job.save()
         # Should show the most recent completed source check
         date = date_display(job.modify_date)
-        self.assert_source_check_status_equal(
+        self.assert_check_related_contents(
             f'<strong>Latest source check result:</strong>'
-            f' Message 2 ({date})')
+            f' Message 2 ({date})',
+            'button',
+        )
 
 
 class NonSourceJobListTest(JobListTestsMixin, ClientTest):

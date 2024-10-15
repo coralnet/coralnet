@@ -180,25 +180,30 @@ class SourceJobListView(JobListView):
 
     def get_context(self, request):
         source = get_object_or_404(Source, id=self.source_id)
+        checks = source.job_set.filter(job_name='check_source')
 
         try:
-            latest_check = source.job_set.filter(
-                job_name='check_source',
-                status__in=[
-                    Job.Status.SUCCESS,
-                    Job.Status.FAILURE,
-                    Job.Status.IN_PROGRESS,
-                ]
-            ).latest('pk')
-            check_in_progress = (latest_check.status == Job.Status.IN_PROGRESS)
+            latest_check = checks.completed().latest('pk')
         except Job.DoesNotExist:
             latest_check = None
-            check_in_progress = False
+
+        try:
+            incomplete_check = checks.incomplete().latest('pk')
+        except Job.DoesNotExist:
+            incomplete_check = None
+            # Note that this is not redundant with the form results; the form
+            # can be filtered, but this cannot be filtered.
+            is_doing_any_job = source.job_set.incomplete().exists()
+        else:
+            # Don't need to check this
+            is_doing_any_job = None
 
         context = dict(
             source=source,
             latest_check=latest_check,
-            check_in_progress=check_in_progress,
+            incomplete_check=incomplete_check,
+            is_doing_any_job=is_doing_any_job,
+            JobStatus=Job.Status,
         )
         context |= self.get_job_list_context(request)
         return context

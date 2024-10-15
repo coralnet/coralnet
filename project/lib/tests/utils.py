@@ -1056,6 +1056,15 @@ class HtmlAssertionsMixin:
         self._assert_row_values(
             row, expected_values, column_names, row_number)
 
+    def assert_top_message(self, page_soup, expected_message):
+        messages_ul_soup = page_soup.select('ul.messages')[0]
+        if not messages_ul_soup:
+            raise AssertionError("Page doesn't have any top messages.")
+        li_texts = [li_soup.text for li_soup in messages_ul_soup.select('li')]
+        self.assertIn(
+            expected_message, li_texts,
+            msg="Expected top-message should be in page")
+
 
 class EmailAssertionsMixin(TestCase):
 

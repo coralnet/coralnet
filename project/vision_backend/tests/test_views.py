@@ -1,14 +1,19 @@
+import datetime
+
 from bs4 import BeautifulSoup
 from django.urls import reverse
+from django.utils import timezone
 
 from export.tests.utils import BaseExportTest
-from jobs.tests.utils import do_job
+from jobs.models import Job
+from jobs.tests.utils import do_job, fabricate_job, JobUtilsMixin
 from labels.models import Label
 from lib.tests.utils import BasePermissionTest, ClientTest, HtmlAssertionsMixin
 from .tasks.utils import do_collect_spacer_jobs
+from .tasks.utils import source_check_is_scheduled
 
 
-class BackendViewPermissions(BasePermissionTest):
+class PermissionTest(BasePermissionTest):
 
     def test_backend_main(self):
         url = reverse('backend_main', args=[self.source.pk])
@@ -29,6 +34,17 @@ class BackendViewPermissions(BasePermissionTest):
         self.assertPermissionLevel(
             url, self.SUPERUSER, template=template,
             deny_type=self.REQUIRE_LOGIN)
+
+    def test_request_source_check(self):
+        url = reverse('request_source_check', args=[self.source.pk])
+        template = 'jobs/source_job_list.html'
+
+        self.source_to_private()
+        self.assertPermissionLevel(
+            url, self.SOURCE_EDIT, template=template, post_data={})
+        self.source_to_public()
+        self.assertPermissionLevel(
+            url, self.SOURCE_EDIT, template=template, post_data={})
 
     def test_cm_test(self):
         url = reverse('cm_test')
@@ -313,6 +329,111 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
             'C (C),0,0,0',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
+
+
+class RequestSourceCheckTest(ClientTest, HtmlAssertionsMixin, JobUtilsMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+    def submit(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('request_source_check', args=[self.source.pk]),
+            follow=True)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup
+
+    def test_scheduled_after_no_recent_check(self):
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+        response_soup = self.submit()
+        self.assert_top_message(response_soup, "Source check scheduled.")
+        self.assertTrue(source_check_is_scheduled(self.source.pk))
+
+        job = self.get_latest_job_by_name('check_source')
+        self.assertAlmostEqual(
+            job.scheduled_start_date, timezone.now(),
+            delta=datetime.timedelta(minutes=2),
+            msg="Scheduled date should be close to now",
+        )
+
+    def test_scheduled_after_recent_check(self):
+        # Last check was 20 minutes ago
+        fabricate_job(
+            'check_source', status=Job.Status.SUCCESS,
+            source_id=self.source.pk,
+            modify_date=timezone.now() - datetime.timedelta(hours=2))
+        fabricate_job(
+            'check_source', status=Job.Status.SUCCESS,
+            source_id=self.source.pk,
+            modify_date=timezone.now() - datetime.timedelta(minutes=20))
+
+        response_soup = self.submit()
+        self.assert_top_message(response_soup, "Source check scheduled.")
+
+        # Base delay is 30m, last was 20m ago, so delay by 30 - 20 = 10m
+        job = self.get_latest_job_by_name('check_source')
+        self.assertAlmostEqual(
+            job.scheduled_start_date,
+            timezone.now() + datetime.timedelta(minutes=10),
+            delta=datetime.timedelta(minutes=2),
+            msg="Scheduled date should be close to 10 minutes from now",
+        )
+
+    def test_scheduled_immediately_after_recent_check(self):
+        # Last check was just now
+        fabricate_job(
+            'check_source', status=Job.Status.SUCCESS,
+            source_id=self.source.pk)
+
+        response_soup = self.submit()
+        self.assert_top_message(response_soup, "Source check scheduled.")
+
+        # Full base delay of 30m
+        job = self.get_latest_job_by_name('check_source')
+        self.assertAlmostEqual(
+            job.scheduled_start_date,
+            timezone.now() + datetime.timedelta(minutes=30),
+            delta=datetime.timedelta(minutes=2),
+            msg="Scheduled date should be close to 30 minutes from now",
+        )
+
+    def test_doing_source_job(self):
+        # Pending
+        job = fabricate_job(
+            'train_classifier', status=Job.Status.PENDING,
+            source_id=self.source.pk)
+        self.assert_top_message(
+            self.submit(), "There are still active jobs to wait for.")
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+        # In progress
+        job.status = Job.Status.IN_PROGRESS
+        job.save()
+        self.assert_top_message(
+            self.submit(), "There are still active jobs to wait for.")
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+        # Reset job, not just 'core' VB job
+        job.job_name = 'reset_classifiers_for_source'
+        job.save()
+        self.assert_top_message(
+            self.submit(), "There are still active jobs to wait for.")
+        self.assertFalse(source_check_is_scheduled(self.source.pk))
+
+    def test_doing_other_source_job(self):
+        """Shouldn't matter that a different source is running a job."""
+        source_2 = self.create_source(self.user)
+        fabricate_job(
+            'train_classifier', status=Job.Status.PENDING,
+            source_id=source_2.pk)
+        self.assert_top_message(self.submit(), "Source check scheduled.")
+        self.assertTrue(source_check_is_scheduled(self.source.pk))
 
 
 class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):

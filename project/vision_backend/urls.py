@@ -9,6 +9,7 @@ general_urlpatterns = [
 
 source_urlpatterns = [
     path('', views.backend_main, name="backend_main"),
+    path('check', views.request_source_check, name="request_source_check"),
 ]
 
 urlpatterns = [

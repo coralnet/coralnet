@@ -6,6 +6,17 @@
   
   <ul>
     <li>
+      <strong>Check source:</strong> Checks whether it's time to schedule more feature-extract, training, or classification jobs for the source. The general strategy this job uses is:
+      
+      <ul>
+        <li>First extract features for all images.</li>
+        <li>Then check if the criteria are met for a new training job.</li>
+        <li>Then make sure all non-confirmed images are classified with the selected classifier.</li>
+      </ul>
+      
+      CoralNet makes its best effort to schedule source checks at appropriate times, but in some cases you may have to request a source check yourself. As long as no other jobs are running or pending in the source, you should see a "Run a source check" button near the top of this page.
+    </li>
+    <li>
       <strong>Extract features:</strong> A pre-processing step that must be run for every image, before that image can be classified or used for training a classifier.
     </li>
     <li>
@@ -13,14 +24,6 @@
     </li>
     <li>
       <strong>Classify:</strong> Classifies an image, using the source's selected classifier.
-    </li>
-    <li>
-      <strong>Check source:</strong> Checks whether it's time to schedule more feature-extract, training, or classification jobs for the source. The general strategy this job uses is:
-      <ul>
-        <li>First extract features for all images.</li>
-        <li>Then check if the criteria are met for a new training job.</li>
-        <li>Then make sure all non-confirmed images are classified with the selected classifier.</li>
-      </ul>
     </li>
     <li>
       <strong>Reset classifiers for source:</strong> Clear all previous saved classifiers for the source. Certain changes, such as changing the source's labelset, will result in this job being scheduled.

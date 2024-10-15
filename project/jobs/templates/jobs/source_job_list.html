@@ -22,17 +22,34 @@
   </div>
 </div>
 
-<div class="line" id="source-check-status">
+<div class="line" id="latest-check-status">
   {% if latest_check %}
-    {% if check_in_progress %}
-      This source is currently being checked for jobs to schedule.
-    {% else %}
-      <strong>Latest source check result:</strong>
-      {{ latest_check.result_message }}
-      ({{ latest_check.modify_date }})
-    {% endif %}
+    <strong>Latest source check result:</strong>
+    {{ latest_check.result_message }}
+    ({{ latest_check.modify_date }})
   {% else %}
     This source hasn't been status-checked recently.
+  {% endif %}
+</div>
+
+<div class="line" id="incomplete-check-status">
+  {% if incomplete_check %}
+    {% if incomplete_check.status == JobStatus.PENDING %}
+      There is a source check scheduled to run soon.
+    {% else %}
+      {# IN_PROGRESS #}
+      There is a source check running right now.
+    {% endif %}
+  {% elif not is_doing_any_job %}
+    <form 
+      method="post" 
+      action="{% url 'request_source_check' source.id %}"
+      class="no-padding"
+    >
+      {% csrf_token %}
+      There are no active jobs.
+      <button>Run a source check</button>
+    </form>
   {% endif %}
 </div>
 
