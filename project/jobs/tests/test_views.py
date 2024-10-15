@@ -1217,39 +1217,43 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         return response_soup.select('ul.detail_list')[0]
 
     def test_wait_time(self):
+        # The 30-second adjustments below provide some leeway for the time
+        # string assertions, given that timesince() truncates to the minute
+        # instead of rounding.
+
         def f_20m(_num):
             # Wait time: 20 minutes
             self.job(
                 status=Job.Status.SUCCESS,
-                scheduled_time_ago=timedelta(days=2, minutes=50),
+                scheduled_time_ago=timedelta(days=2, minutes=50, seconds=30),
                 started_time_ago=timedelta(days=2, minutes=30),
             )
         def f_2h(_num):
             # Wait time: 2 hours
             self.job(
                 status=Job.Status.SUCCESS,
-                scheduled_time_ago=timedelta(hours=7),
+                scheduled_time_ago=timedelta(hours=7, seconds=30),
                 started_time_ago=timedelta(hours=5),
             )
         def f_1d(_num):
             # Wait time: 1 day
             self.job(
                 status=Job.Status.IN_PROGRESS,
-                scheduled_time_ago=timedelta(days=2, hours=3),
+                scheduled_time_ago=timedelta(days=2, hours=3, seconds=30),
                 started_time_ago=timedelta(days=1, hours=3),
             )
         def f_1d10h(_num):
             # Wait time: 1 day 10 hours
             self.job(
                 status=Job.Status.FAILURE,
-                scheduled_time_ago=timedelta(days=2, hours=22),
+                scheduled_time_ago=timedelta(days=2, hours=22, seconds=30),
                 started_time_ago=timedelta(days=1, hours=12),
             )
         def f_1d20h(_num):
             # Wait time: 1 day 20 hours
             self.job(
                 status=Job.Status.FAILURE,
-                scheduled_time_ago=timedelta(days=1, hours=23),
+                scheduled_time_ago=timedelta(days=1, hours=23, seconds=30),
                 started_time_ago=timedelta(hours=3),
             )
 
@@ -1261,9 +1265,9 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         scrambled_run([f_20m]*2 + [f_2h] + [f_1d]*15 + [f_1d10h, f_1d20h])
 
         detail_list_soup = self.get_detail_list_soup()
-        self.assertInHTML(
+        self.assertHTMLEqual(
             "Time waited before starting: 1\xa0hour, 50\xa0minutes ~ 1\xa0day, 1\xa0hour",
-            str(detail_list_soup))
+            detail_list_soup.select('#time-waited-line')[0].text)
 
     def test_wait_time_no_jobs(self):
         # Jobs that don't have both a scheduled start time and a start time
@@ -1284,9 +1288,9 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         )
 
         detail_list_soup = self.get_detail_list_soup()
-        self.assertInHTML(
+        self.assertHTMLEqual(
             "Time waited before starting: 0\xa0minutes ~ 0\xa0minutes",
-            str(detail_list_soup))
+            detail_list_soup.select('#time-waited-line')[0].text)
 
     def test_total_time(self):
         # The 30-second adjustments below provide some leeway for the time
@@ -1323,9 +1327,9 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         scrambled_run([f_0m]*2 + [f_10m]*16 + [f_20m]*2)
 
         detail_list_soup = self.get_detail_list_soup()
-        self.assertInHTML(
+        self.assertHTMLEqual(
             "Total time: 9\xa0minutes ~ 11\xa0minutes",
-            str(detail_list_soup))
+            detail_list_soup.select('#total-time-line')[0].text)
 
     def test_total_time_no_jobs(self):
         # Jobs that don't have a scheduled start time don't count.
@@ -1352,9 +1356,9 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         )
 
         detail_list_soup = self.get_detail_list_soup()
-        self.assertInHTML(
+        self.assertHTMLEqual(
             "Total time: 0\xa0minutes ~ 0\xa0minutes",
-            str(detail_list_soup))
+            detail_list_soup.select('#total-time-line')[0].text)
 
     def test_incomplete_count(self):
 
