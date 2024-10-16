@@ -579,10 +579,16 @@ def classify_image(image_id):
     if source_is_finished_with_core_jobs(
         img.source_id, job_id_about_to_finish=this_job.pk,
     ):
-        # Classification for this source may be done.
-        # Confirm whether the source is all caught up. It's useful to see that
-        # confirmation message when looking at job/backend dashboards.
-        schedule_source_check(img.source_id)
+        # There may be more classifications to schedule, if the previous
+        # source check reached the limit for number of classifications.
+        # Or, classification for this source may be done, in which case it's
+        # useful to confirm whether the source is all caught up (can see the
+        # confirmation message when looking at job/backend dashboards).
+        #
+        # Either way (especially the former case), use a delay so that other
+        # jobs get a chance to run. Since most classifications run on the
+        # web server, they can hog web server resources.
+        schedule_source_check(img.source_id, delay=timedelta(minutes=10))
 
     return f"Used classifier {classifier.pk}"
 

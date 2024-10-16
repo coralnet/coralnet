@@ -1,8 +1,10 @@
+from datetime import timedelta
 from unittest import mock
 
 from django.core.cache import cache
 from django.db.utils import IntegrityError
 from django.test import override_settings
+from django.utils import timezone
 import numpy as np
 
 from accounts.utils import get_robot_user, is_robot_user
@@ -81,10 +83,19 @@ class SourceCheckTest(BaseTaskTest):
             source_check_is_scheduled(self.source.pk),
             msg="Should not schedule a check after classifying just 1 image",
         )
+
         do_job('classify_features', image_2.pk, source_id=self.source.pk)
         self.assertTrue(
             source_check_is_scheduled(self.source.pk),
             msg="Should schedule a check after classifying both images",
+        )
+
+        check_job = Job.objects.filter(job_name='check_source').latest('pk')
+        self.assertAlmostEqual(
+            check_job.scheduled_start_date - timezone.now(),
+            timedelta(minutes=10),
+            delta=timedelta(minutes=2),
+            msg="Should be delayed about 10 minutes",
         )
 
         # Accept another classifier.
