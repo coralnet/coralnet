@@ -8,7 +8,6 @@ import numpy as np
 from accounts.utils import get_robot_user, is_robot_user
 from annotations.models import Annotation
 from annotations.tests.utils import AnnotationHistoryTestMixin
-from events.models import ClassifyImageEvent
 from images.models import Point
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
@@ -16,7 +15,7 @@ from jobs.utils import schedule_job
 from jobs.tests.utils import do_job
 from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
-from ...models import Classifier, Score
+from ...models import Classifier, ClassifyImageEvent, Score
 from ...utils import clear_features
 from .utils import (
     BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
