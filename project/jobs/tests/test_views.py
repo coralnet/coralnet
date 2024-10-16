@@ -6,6 +6,7 @@ from unittest import mock, skip
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
@@ -731,7 +732,9 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
 
         job.status = Job.Status.SUCCESS
-        job.scheduled_start_date = timezone.now() - timedelta(minutes=30)
+        job.scheduled_start_date = (
+            timezone.now() - timedelta(minutes=46, seconds=30))
+        job.start_date = timezone.now() - timedelta(minutes=31)
         job.save()
         # Use QuerySet.update() instead of Model.save() so that the modify
         # date doesn't get auto-updated to the current date.
@@ -740,23 +743,56 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         job.refresh_from_db()
         self.assert_cell_and_title(
             "Timing info", "Completed 14\xa0minutes ago",
-            f"Completed {date_display(job.modify_date)},"
-            f" 15\xa0minutes after scheduled start",
+            f"Waited for 15\xa0minutes; ran for 16\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
         )
 
-        # No scheduled start date, but start date.
+        # No scheduled start date, but has start date.
         job.status = Job.Status.FAILURE
         job.scheduled_start_date = None
-        job.start_date = timezone.now() - timedelta(minutes=34)
+        job.start_date = timezone.now() - timedelta(minutes=36)
         job.save()
         Job.objects.filter(pk=job.pk).update(
-            modify_date=timezone.now() - timedelta(minutes=16, seconds=30))
+            modify_date=timezone.now() - timedelta(minutes=17, seconds=30))
         job.refresh_from_db()
         self.assert_cell_and_title(
-            "Timing info", "Completed 16\xa0minutes ago",
-            f"Completed {date_display(job.modify_date)},"
-            f" 17\xa0minutes after scheduled start",
+            "Timing info", "Completed 17\xa0minutes ago",
+            f"Waited for 0\xa0minutes; ran for 18\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
         )
+
+    def test_timing_column_aborted(self):
+        """
+        Don't expect this display to be pretty, but at least it shouldn't get
+        a server error or display total nonsense.
+        """
+        job = self.job(
+            Job.Status.PENDING,
+            delay=-timedelta(minutes=10, seconds=30),
+        )
+        call_command('abort_job', job.pk)
+        self.assert_cell_and_title(
+            "Timing info", "Completed 0\xa0minutes ago",
+            # Wait time is supposed to be scheduled date to start date, but
+            # start date defaults to now if not provided, as in this case.
+            f"Waited for 10\xa0minutes; ran for ;"
+            f" completed {date_display(job.modify_date)}",
+        )
+        job.delete()
+
+        job = self.job(
+            Job.Status.IN_PROGRESS,
+            started_time_ago=timedelta(minutes=10, seconds=30),
+        )
+        job.scheduled_start_date = None
+        job.save()
+        call_command('abort_job', job.pk)
+        self.assert_cell_and_title(
+            "Timing info", "Completed 0\xa0minutes ago",
+            f"Waited for 0\xa0minutes; ran for 10\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
+        )
+        job.delete()
 
     @override_settings(JOBS_PER_PAGE=2)
     def test_multiple_pages(self):

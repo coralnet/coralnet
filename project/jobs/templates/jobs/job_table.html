@@ -116,7 +116,7 @@
 
               <span 
                 class="tooltip" 
-                title="Completed {{ job_entry.modify_date }}, {{ job_entry.scheduled_start_or_start_date|timesince:job_entry.modify_date }} after scheduled start"
+                title="Waited for {{ job_entry.scheduled_start_or_start_date|timesince:job_entry.start_date }}; ran for {{ job_entry.start_date|timesince:job_entry.modify_date }}; completed {{ job_entry.modify_date }}"
               >
                 Completed {{ job_entry.modify_date|timesince:now }} ago
               </span>
