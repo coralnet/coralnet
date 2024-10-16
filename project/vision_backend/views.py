@@ -21,7 +21,7 @@ from lib.utils import paginate
 from sources.models import Source
 from .confmatrix import ConfMatrix
 from .forms import BackendMainForm, CmTestForm
-from .models import Classifier
+from .models import Classifier, SourceCheckRequestEvent
 from .utils import (
     labelset_mapper, map_labels, get_alleviate, schedule_source_check)
 
@@ -309,6 +309,7 @@ def request_source_check(request, source_id):
             delay = max(base_delay - time_since_check, datetime.timedelta(0))
 
         schedule_source_check(source_id, delay=delay)
+        SourceCheckRequestEvent(source_id=source_id, details={}).save()
         messages.success(request, "Source check scheduled.")
 
     return HttpResponseRedirect(reverse('jobs:source_job_list', args=[source_id]))

@@ -296,3 +296,11 @@ class ClassifyImageEvent(Event):
         )
 
         return text
+
+
+class SourceCheckRequestEvent(Event):
+    class Meta:
+        proxy = True
+
+    type_for_subclass = 'source_check_request'
+    required_id_fields = ['source_id']

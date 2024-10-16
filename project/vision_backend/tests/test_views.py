@@ -10,6 +10,7 @@ from jobs.tests.utils import do_job, fabricate_job, JobUtilsMixin
 from labels.models import Label
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run)
+from ..models import SourceCheckRequestEvent
 from .tasks.utils import do_collect_spacer_jobs, source_check_is_scheduled
 
 
@@ -350,10 +351,18 @@ class RequestSourceCheckTest(ClientTest, HtmlAssertionsMixin, JobUtilsMixin):
 
     def test_scheduled_after_no_recent_check(self):
         self.assertFalse(source_check_is_scheduled(self.source.pk))
+        self.assertFalse(
+            SourceCheckRequestEvent.objects
+            .filter(source_id=self.source.pk)
+            .exists())
 
         response_soup = self.submit()
         self.assert_top_message(response_soup, "Source check scheduled.")
         self.assertTrue(source_check_is_scheduled(self.source.pk))
+        self.assertTrue(
+            SourceCheckRequestEvent.objects
+            .filter(source_id=self.source.pk)
+            .exists())
 
         job = self.get_latest_job_by_name('check_source')
         self.assertAlmostEqual(
