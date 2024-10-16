@@ -33,6 +33,13 @@ class Event(models.Model):
     type_for_subclass: str = None
     required_id_fields: list[str] = []
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['type']),
+            models.Index(fields=['source_id']),
+            models.Index(fields=['image_id']),
+        ]
+
     def save(self, *args, **kwargs):
         if self.type_for_subclass and self.type != self.type_for_subclass:
             self.type = self.type_for_subclass
