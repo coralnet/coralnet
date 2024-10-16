@@ -6,6 +6,7 @@ from unittest import mock, skip
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
@@ -731,7 +732,9 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
 
         job.status = Job.Status.SUCCESS
-        job.scheduled_start_date = timezone.now() - timedelta(minutes=30)
+        job.scheduled_start_date = (
+            timezone.now() - timedelta(minutes=46, seconds=30))
+        job.start_date = timezone.now() - timedelta(minutes=31)
         job.save()
         # Use QuerySet.update() instead of Model.save() so that the modify
         # date doesn't get auto-updated to the current date.
@@ -740,23 +743,56 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         job.refresh_from_db()
         self.assert_cell_and_title(
             "Timing info", "Completed 14\xa0minutes ago",
-            f"Completed {date_display(job.modify_date)},"
-            f" 15\xa0minutes after scheduled start",
+            f"Waited for 15\xa0minutes; ran for 16\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
         )
 
-        # No scheduled start date, but start date.
+        # No scheduled start date, but has start date.
         job.status = Job.Status.FAILURE
         job.scheduled_start_date = None
-        job.start_date = timezone.now() - timedelta(minutes=34)
+        job.start_date = timezone.now() - timedelta(minutes=36)
         job.save()
         Job.objects.filter(pk=job.pk).update(
-            modify_date=timezone.now() - timedelta(minutes=16, seconds=30))
+            modify_date=timezone.now() - timedelta(minutes=17, seconds=30))
         job.refresh_from_db()
         self.assert_cell_and_title(
-            "Timing info", "Completed 16\xa0minutes ago",
-            f"Completed {date_display(job.modify_date)},"
-            f" 17\xa0minutes after scheduled start",
+            "Timing info", "Completed 17\xa0minutes ago",
+            f"Waited for 0\xa0minutes; ran for 18\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
         )
+
+    def test_timing_column_aborted(self):
+        """
+        Don't expect this display to be pretty, but at least it shouldn't get
+        a server error or display total nonsense.
+        """
+        job = self.job(
+            Job.Status.PENDING,
+            delay=-timedelta(minutes=10, seconds=30),
+        )
+        call_command('abort_job', job.pk)
+        self.assert_cell_and_title(
+            "Timing info", "Completed 0\xa0minutes ago",
+            # Wait time is supposed to be scheduled date to start date, but
+            # start date defaults to now if not provided, as in this case.
+            f"Waited for 10\xa0minutes; ran for ;"
+            f" completed {date_display(job.modify_date)}",
+        )
+        job.delete()
+
+        job = self.job(
+            Job.Status.IN_PROGRESS,
+            started_time_ago=timedelta(minutes=10, seconds=30),
+        )
+        job.scheduled_start_date = None
+        job.save()
+        call_command('abort_job', job.pk)
+        self.assert_cell_and_title(
+            "Timing info", "Completed 0\xa0minutes ago",
+            f"Waited for 0\xa0minutes; ran for 10\xa0minutes;"
+            f" completed {date_display(job.modify_date)}",
+        )
+        job.delete()
 
     @override_settings(JOBS_PER_PAGE=2)
     def test_multiple_pages(self):
@@ -1206,15 +1242,15 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
         url = reverse('jobs:status')
         return self.client.get(url, data=data)
 
-    def get_content_soup(self, user=None, data=None):
-        response = self.get_response(user=user, data=data)
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        return response_soup.select('#content-container')[0]
-
     def get_detail_list_soup(self, user=None, data=None):
         response = self.get_response(user=user, data=data)
         response_soup = BeautifulSoup(response.content, 'html.parser')
         return response_soup.select('ul.detail_list')[0]
+
+    def get_longest_incomplete_soup(self, user=None, data=None):
+        response = self.get_response(user=user, data=data)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return response_soup.select('#longest-incomplete-line')[0]
 
     def test_wait_time(self):
         # The 30-second adjustments below provide some leeway for the time
@@ -1706,36 +1742,42 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             "Time waited before starting: 5\xa0minutes ~ 5\xa0minutes",
             str(detail_list_soup))
 
-    def test_pending_wait_time(self):
+    def test_longest_incomplete_time(self):
         def f1(_num):
             self.job(
                 status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(minutes=5),
+                scheduled_time_ago=timedelta(minutes=5, seconds=30),
             )
         def f2(_num):
             self.job(
-                status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(hours=5, minutes=15),
+                status=Job.Status.IN_PROGRESS,
+                scheduled_time_ago=timedelta(hours=5, minutes=15, seconds=30),
             )
         def f3(_num):
             self.job(
                 status=Job.Status.PENDING,
-                scheduled_time_ago=timedelta(hours=5, minutes=20),
+                scheduled_time_ago=timedelta(hours=5, minutes=20, seconds=30),
             )
 
         scrambled_run([f1, f2, f3])
 
-        detail_list_soup = self.get_content_soup(user=self.superuser)
-        self.assertInHTML(
-            "Current highest pending wait time: 5\xa0hours, 20\xa0minutes",
-            str(detail_list_soup))
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 5\xa0hours, 20\xa0minutes",
+            soup.text)
 
-    def test_pending_wait_time_no_jobs(self):
-        # Non-pending jobs aren't considered here.
+        # In-progress should also be eligible
         self.job(
             status=Job.Status.IN_PROGRESS,
-            scheduled_time_ago=timedelta(days=2),
+            scheduled_time_ago=timedelta(hours=5, minutes=30, seconds=30),
         )
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 5\xa0hours, 30\xa0minutes",
+            soup.text)
+
+    def test_longest_incomplete_time_no_jobs(self):
+        # Completed jobs aren't considered here.
         self.job(
             status=Job.Status.SUCCESS,
             scheduled_time_ago=timedelta(days=2),
@@ -1745,14 +1787,14 @@ class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
             scheduled_time_ago=timedelta(days=2),
         )
 
-        content_soup = self.get_content_soup(user=self.superuser)
-        self.assertInHTML(
-            "Current highest pending wait time: 0\xa0minutes",
-            str(content_soup))
+        soup = self.get_longest_incomplete_soup(user=self.superuser)
+        self.assertHTMLEqual(
+            "Current longest incomplete job: 0 minutes",
+            soup.text)
 
-    def test_pending_wait_time_not_admin(self):
+    def test_longest_incomplete_time_not_admin(self):
         response = self.get_response(user=self.superuser)
-        self.assertContains(response, "Current highest pending wait time")
+        self.assertContains(response, "Current longest incomplete job")
 
         response = self.get_response()
-        self.assertNotContains(response, "Current highest pending wait time")
+        self.assertNotContains(response, "Current longest incomplete job")

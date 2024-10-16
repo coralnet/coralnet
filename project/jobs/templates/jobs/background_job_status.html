@@ -27,12 +27,18 @@
   <li>
     <ul>
       <li>
-        <span class="tooltip" title="Duration from scheduled start time to actual start time" id="time-waited-line">
+        <span 
+          class="tooltip" id="time-waited-line"
+          title="Duration from scheduled start time to actual start time, among jobs that started in the past {{ recency_threshold_str }}. Excludes the 10% shortest and 10% longest durations."
+        >
           Time waited before starting: {{ recent_wait_time_interval.0|timedelta_display }} ~ {{ recent_wait_time_interval.1|timedelta_display }}
         </span>
       </li>
       <li>
-        <span class="tooltip" title="Duration from scheduled start time to finish time" id="total-time-line">
+        <span
+          class="tooltip" id="total-time-line"
+          title="Duration from scheduled start time to finish time, among jobs that finished in the past {{ recency_threshold_str }}. Excludes the 10% shortest and 10% longest durations."
+        >
           Total time: {{ recent_total_time_interval.0|timedelta_display }} ~ {{ recent_total_time_interval.1|timedelta_display }}
         </span>
       </li>
@@ -43,7 +49,14 @@
   <li>
     <ul>
       <li>Now: {{ incomplete_count }}</li>
-      <li>Rough average over the past {{ recency_threshold_str }}: {{ incomplete_count_average }}</li>
+      <li>
+        <span
+          class="tooltip"
+          title="Based on the below graph. Since there are only a few data points, the math can be skewed by short bursts of high activity. Also note that some jobs are much more resource-intensive than others."
+        >
+          Rough average over the past {{ recency_threshold_str }}: {{ incomplete_count_average }}
+        </span>
+      </li>
     </ul>
   </li>
   <li>
@@ -54,8 +67,16 @@
 {% if request.user.is_superuser %}
   <hr>
   
-  <div class="tooltip" title="Among currently pending jobs, highest duration from scheduled start time to now">
-    Current highest pending wait time: {{ max_pending_wait_time|timedelta_display }}
+  <div class="line tooltip" title="Among currently pending/running jobs, highest duration from scheduled start time to now" id="longest-incomplete-line">
+    Current longest incomplete job:
+    
+    <a href="{% url 'jobs:all_jobs_list' %}">
+      {% if earliest_incomplete_scheduled_date %}
+        {{ earliest_incomplete_scheduled_date|timesince }}
+      {% else %}
+        0 minutes
+      {% endif %}
+    </a>
   </div>
 {% endif %}
   

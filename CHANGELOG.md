@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.15 (WIP)
+
+- New migrations to run for: `events`, `jobs`, `vision_backend`.
+
 ## [1.14](https://github.com/coralnet/coralnet/tree/1.14)
 
 Production: 2024-10-15

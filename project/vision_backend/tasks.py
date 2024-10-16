@@ -24,7 +24,6 @@ from spacer.task_utils import preprocess_labels
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from config.constants import SpacerJobSpec
-from events.models import ClassifyImageEvent
 from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
@@ -34,7 +33,7 @@ from sources.models import Source
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
-from .models import Classifier, Score
+from .models import Classifier, ClassifyImageEvent, Score
 from .queues import get_queue_class
 from .utils import (
     get_extractor,

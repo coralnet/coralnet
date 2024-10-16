@@ -1,7 +1,13 @@
+# This module includes testing of Event subclass mechanics. It's easiest to
+# test using an existing subclass, so we import one from vision_backend,
+# although it's not the best thing from a dependencies/app-coupling standpoint.
+
 from django.core.exceptions import ValidationError
+from django_migration_testcase import MigrationTest
 
 from lib.tests.utils import ClientTest
-from ..models import ClassifyImageEvent, Event
+from vision_backend.models import ClassifyImageEvent
+from ..models import Event
 
 
 class ModelSaveTest(ClientTest):
@@ -75,3 +81,30 @@ class ManagerTest(ClientTest):
             ClassifyImageEvent.objects.get(source_id=source.pk).pk,
             classify_event.pk,
         )
+
+
+class MigrateClassifyImageEventToOtherAppTest(MigrationTest):
+
+    before = [
+        ('events', '0002_event_type_no_choices'),
+    ]
+    after = [
+        ('events', '0003_delete_classifyimageevent'),
+    ]
+
+    def test_dont_delete_events(self):
+        """
+        Since it's just a proxy model being moved, no instances should
+        get deleted.
+        """
+        Event = self.get_model_before('events.Event')
+        event = Event(type='classify_image', details="Some details")
+        event.save()
+        event_id = event.pk
+
+        self.run_migration()
+
+        Event = self.get_model_after('events.Event')
+        # This shouldn't get DoesNotExist
+        event = Event.objects.get(pk=event_id)
+        self.assertEqual(event.type, 'classify_image')

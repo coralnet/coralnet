@@ -3,14 +3,14 @@
 
 {% block css-code %}
 <style>
-tr.source-row.needs_check {
-  background-color: var(--status-color-pending);
-}
 tr.source-row.caught_up {
   background-color: var(--status-color-done);
 }
 tr.source-row.needs_processing {
   background-color: var(--status-color-in-progress);
+}
+tr.source-row.unchecked {
+  /* No color */
 }
 </style>
 {% endblock %}

@@ -1,3 +1,5 @@
+from collections import Counter
+
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import models
@@ -5,6 +7,7 @@ from spacer.data_classes import ImageFeatures, ValResults
 from spacer.messages import DataLocation
 
 from config.constants import SpacerJobSpec
+from events.models import Event
 from jobs.models import Job
 from labels.models import Label, LocalLabel
 from .common import Extractors
@@ -224,3 +227,80 @@ class BatchJob(models.Model):
             f'{settings.SPACER_JOB_HASH}'
             f'-{self.internal_job.job_name}'
             f'-{self.internal_job.pk}')
+
+
+class ClassifyImageEvent(Event):
+    class Meta:
+        proxy = True
+
+    type_for_subclass = 'classify_image'
+    required_id_fields = ['source_id', 'image_id', 'classifier_id']
+
+    @property
+    def summary_text(self):
+        return (
+            f"Image {self.image_id}"
+            f" checked by classifier {self.classifier_id}"
+        )
+
+    @property
+    def details_text(self, image_context=False):
+        """
+        Details example:
+        {
+            1: dict(label=28, result='added'),
+            2: dict(label=12, result='updated'),
+            3: dict(label=28, result='no change'),
+        }
+        """
+        from images.models import Image
+
+        if image_context:
+            text = (
+                f"Checked by classifier {self.classifier_id}"
+                f"\n"
+            )
+        else:
+            image = Image.objects.get(pk=self.image_id)
+            text = (
+                f"Image '{image.metadata.name}' (ID {self.image_id})"
+                f" checked by classifier {self.classifier_id}"
+                f"\n"
+            )
+
+        label_ids = set(
+            [d['label'] for _, d in self.details.items()]
+        )
+        label_values = \
+            Label.objects.filter(pk__in=label_ids).values('pk', 'name')
+        label_ids_to_names = {
+            vs['pk']: vs['name'] for vs in label_values
+        }
+        result_counter = Counter()
+
+        for point_number, d in self.details.items():
+            result = d['result']
+            text += (
+                f"\nPoint {point_number}"
+                f" - {label_ids_to_names[d['label']]}"
+                f" - {result}"
+            )
+            result_counter[result] += 1
+
+        counter_line_items = []
+        for result, count in result_counter.items():
+            counter_line_items.append(f"{count} {result}")
+        text += (
+            "\n"
+            "\nSummary: " + ", ".join(counter_line_items)
+        )
+
+        return text
+
+
+class SourceCheckRequestEvent(Event):
+    class Meta:
+        proxy = True
+
+    type_for_subclass = 'source_check_request'
+    required_id_fields = ['source_id']

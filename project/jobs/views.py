@@ -417,17 +417,15 @@ def background_job_status(request):
     context['incomplete_count_graph_data'] = graph_data
 
     if request.user.is_superuser:
-        earliest_scheduled_pending_job = (
-            background_jobs.pending()
+        earliest_incomplete_scheduled_job = (
+            background_jobs.incomplete()
             .order_by('scheduled_start_date')
             .first()
         )
-        if earliest_scheduled_pending_job is None:
-            max_wait = datetime.timedelta(0)
+        if earliest_incomplete_scheduled_job is None:
+            context['earliest_incomplete_scheduled_date'] = None
         else:
-            max_wait = now - earliest_scheduled_pending_job.scheduled_start_date
-            if max_wait < datetime.timedelta(0):
-                max_wait = datetime.timedelta(0)
-        context['max_pending_wait_time'] = max_wait
+            context['earliest_incomplete_scheduled_date'] = (
+                earliest_incomplete_scheduled_job.scheduled_start_date)
 
     return render(request, 'jobs/background_job_status.html', context)

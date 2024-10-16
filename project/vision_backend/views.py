@@ -21,7 +21,7 @@ from lib.utils import paginate
 from sources.models import Source
 from .confmatrix import ConfMatrix
 from .forms import BackendMainForm, CmTestForm
-from .models import Classifier
+from .models import Classifier, SourceCheckRequestEvent
 from .utils import (
     labelset_mapper, map_labels, get_alleviate, schedule_source_check)
 
@@ -108,15 +108,15 @@ def backend_overview(request):
         check_message = latest_check_lookup.get(source.pk)
         if check_message is None:
             # No source check has been done recently
-            status = 'needs_check'
-            status_order = 2
+            status = 'unchecked'
+            status_order = 3
         elif (
             "all caught up" in check_message
             or "Can't train first classifier" in check_message
             or "Machine classification isn't configured" in check_message
         ):
             status = 'caught_up'
-            status_order = 3
+            status_order = 2
         else:
             status = 'needs_processing'
             status_order = 1
@@ -148,7 +148,8 @@ def backend_overview(request):
                 if last_accepted_classifier
                 else 0
             ),
-            check_message=latest_check_lookup.get(source_id) or "(None)",
+            check_message=
+                latest_check_lookup.get(source_id) or "(Not checked recently)",
         ))
 
     return render(request, 'vision_backend/overview.html', {
@@ -308,6 +309,7 @@ def request_source_check(request, source_id):
             delay = max(base_delay - time_since_check, datetime.timedelta(0))
 
         schedule_source_check(source_id, delay=delay)
+        SourceCheckRequestEvent(source_id=source_id, details={}).save()
         messages.success(request, "Source check scheduled.")
 
     return HttpResponseRedirect(reverse('jobs:source_job_list', args=[source_id]))

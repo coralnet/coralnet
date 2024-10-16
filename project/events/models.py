@@ -1,10 +1,6 @@
-from collections import Counter
-
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from images.models import Image
-from labels.models import Label
 from .managers import EventManager
 
 
@@ -12,10 +8,7 @@ class Event(models.Model):
 
     objects = EventManager()
 
-    class Types(models.TextChoices):
-        CLASSIFY_IMAGE = 'classify_image', "Classify image"
-    type = models.CharField(
-        max_length=30, choices=Types.choices)
+    type = models.CharField(max_length=30)
 
     details = models.JSONField()
 
@@ -40,6 +33,13 @@ class Event(models.Model):
     type_for_subclass: str = None
     required_id_fields: list[str] = []
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['type']),
+            models.Index(fields=['source_id']),
+            models.Index(fields=['image_id']),
+        ]
+
     def save(self, *args, **kwargs):
         if self.type_for_subclass and self.type != self.type_for_subclass:
             self.type = self.type_for_subclass
@@ -61,7 +61,13 @@ class Event(models.Model):
 
     def __str__(self):
         s = "Event: "
-        s += self.type or "(No type)"
+
+        if self.type:
+            # my_type -> My type
+            s += self.type.replace('_', ' ').capitalize()
+        else:
+            s += "(No type)"
+
         if self.source_id:
             s += f" - Source {self.source_id}"
         if self.image_id:
@@ -71,70 +77,3 @@ class Event(models.Model):
         if self.creator_id:
             s += f" - by User {self.creator_id}"
         return s
-
-
-class ClassifyImageEvent(Event):
-    class Meta:
-        proxy = True
-
-    type_for_subclass = Event.Types.CLASSIFY_IMAGE.value
-    required_id_fields = ['source_id', 'image_id', 'classifier_id']
-
-    @property
-    def summary_text(self):
-        return (
-            f"Image {self.image_id}"
-            f" checked by classifier {self.classifier_id}"
-        )
-
-    @property
-    def details_text(self, image_context=False):
-        """
-        Details example:
-        {
-            1: dict(label=28, result='added'),
-            2: dict(label=12, result='updated'),
-            3: dict(label=28, result='no change'),
-        }
-        """
-        if image_context:
-            text = (
-                f"Checked by classifier {self.classifier_id}"
-                f"\n"
-            )
-        else:
-            image = Image.objects.get(pk=self.image_id)
-            text = (
-                f"Image '{image.metadata.name}' (ID {self.image_id})"
-                f" checked by classifier {self.classifier_id}"
-                f"\n"
-            )
-
-        label_ids = set(
-            [d['label'] for _, d in self.details.items()]
-        )
-        label_values = \
-            Label.objects.filter(pk__in=label_ids).values('pk', 'name')
-        label_ids_to_names = {
-            vs['pk']: vs['name'] for vs in label_values
-        }
-        result_counter = Counter()
-
-        for point_number, d in self.details.items():
-            result = d['result']
-            text += (
-                f"\nPoint {point_number}"
-                f" - {label_ids_to_names[d['label']]}"
-                f" - {result}"
-            )
-            result_counter[result] += 1
-
-        counter_line_items = []
-        for result, count in result_counter.items():
-            counter_line_items.append(f"{count} {result}")
-        text += (
-            "\n"
-            "\nSummary: " + ", ".join(counter_line_items)
-        )
-
-        return text

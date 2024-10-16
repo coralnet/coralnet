@@ -22,14 +22,13 @@ from spacer.messages import \
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from errorlogs.utils import instantiate_error_log
-from events.models import ClassifyImageEvent
 from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
 from jobs.utils import finish_job
 from labels.models import Label, LabelSet
 from .exceptions import RowColumnMismatchError
-from .models import Classifier, Score
+from .models import Classifier, ClassifyImageEvent, Score
 from .utils import (
     extractor_to_name,
     schedule_source_check,
