@@ -250,6 +250,15 @@ def check_source(source_id):
             num_scheduled_classifications += 1
 
             if (
+                num_scheduled_classifications
+                >= settings.MAX_SOURCE_CLASSIFICATIONS
+            ):
+                # That's enough for this source at the moment.
+                # If we schedule too many classifications at once, other
+                # jobs may not get a chance to run for a while.
+                break
+
+            if (
                 num_scheduled_classifications % 10 == 0
                 and timezone.now() > wrap_up_time
             ):

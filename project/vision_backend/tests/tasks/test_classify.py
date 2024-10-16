@@ -131,6 +131,16 @@ class SourceCheckTest(BaseTaskTest):
         self.source_check_and_assert(
             "Scheduled 1 image classification(s)", source=other_source)
 
+    def test_max_source_classifications(self):
+        for _ in range(5):
+            self.upload_image_for_classification()
+        with override_settings(MAX_SOURCE_CLASSIFICATIONS=3):
+            self.source_check_and_assert(
+                "Scheduled 3 image classification(s)")
+
+        self.source_check_and_assert(
+            "Scheduled 2 image classification(s)")
+
     def test_time_out(self):
         for _ in range(12):
             self.upload_image_for_classification()
