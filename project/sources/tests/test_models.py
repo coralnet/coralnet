@@ -24,7 +24,7 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
 
     def test_source_memberships(self):
         """
-        Save some source memberships before migration, then see if they gets
+        Save some source memberships before migration, then see if they get
         correctly migrated.
         """
         User = self.get_model_before('auth.User')
