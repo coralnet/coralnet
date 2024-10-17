@@ -142,10 +142,12 @@ class SourceCheckTest(BaseTaskTest):
         self.source_check_and_assert(
             "Scheduled 1 image classification(s)", source=other_source)
 
-    def test_max_source_classifications(self):
+    def test_source_classifications_max_work(self):
         for _ in range(5):
             self.upload_image_for_classification()
-        with override_settings(MAX_SOURCE_CLASSIFICATIONS=3):
+        # 5 points per image means each image contributes 30+5 'work score'.
+        # So a limit of 120 work score means a limit of 3 images.
+        with override_settings(SOURCE_CLASSIFICATIONS_MAX_WORK=120):
             self.source_check_and_assert(
                 "Scheduled 3 image classification(s)")
 

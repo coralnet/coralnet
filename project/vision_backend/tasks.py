@@ -24,6 +24,7 @@ from spacer.task_utils import preprocess_labels
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from config.constants import SpacerJobSpec
+from images.model_utils import PointGen
 from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
@@ -235,28 +236,37 @@ def check_source(source_id):
             active_classify_jobs.values_list('arg_identifier', flat=True)
         ])
 
-        # Try to schedule classifications
         num_scheduled_classifications = 0
-        for image in images_to_classify:
-            if image.pk in active_classify_image_ids:
+        work_score = 0
+
+        # Try to schedule classifications
+        for vals in images_to_classify.values('id', 'point_generation_method'):
+            image_id = vals['id']
+            if image_id in active_classify_image_ids:
                 # Very quick short-circuit without additional DB check.
                 continue
 
+            point_count = PointGen.from_db_value(
+                vals['point_generation_method']).total_points
+            # When measuring the amount of 'work' a classification is, say each
+            # image has a base value of 10, and add the point count to that.
+            # (Based on a vague recollection of classification runtimes with
+            # different point counts, and accounting for general overhead of
+            # starting/finishing jobs.)
+            work_score += 30 + point_count
+
+            if work_score > settings.SOURCE_CLASSIFICATIONS_MAX_WORK:
+                # That's enough for this source at the moment.
+                # If we schedule too much classifications work at once, other
+                # jobs may not get a chance to run for a while.
+                break
+
             job, created = schedule_job(
-                'classify_features', image.pk, source_id=source_id)
+                'classify_features', image_id, source_id=source_id)
             if not created:
                 continue
 
             num_scheduled_classifications += 1
-
-            if (
-                num_scheduled_classifications
-                >= settings.MAX_SOURCE_CLASSIFICATIONS
-            ):
-                # That's enough for this source at the moment.
-                # If we schedule too many classifications at once, other
-                # jobs may not get a chance to run for a while.
-                break
 
             if (
                 num_scheduled_classifications % 10 == 0

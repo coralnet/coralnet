@@ -383,11 +383,14 @@ TRAINING_BATCH_LABEL_COUNT = 5000
 FEATURE_CACHING_ANNOTATION_LIMIT = env(
     'FEATURE_CACHING_ANNOTATION_LIMIT', default=2500000)
 
-# Don't let a source check schedule more than this many classifications.
-# Since most classify-features jobs happen on the web server instead of in
+# Don't let a source check schedule more than this much classification 'work'
+# in one go.
+# See check_source() for how work is calculated as a function of images and
+# points.
+# Since classify-features jobs happen on the web server instead of in
 # Batch, there's a risk of monopolizing the web server resources (namely, the
 # processes allocated for background jobs) if there is no limit here.
-MAX_SOURCE_CLASSIFICATIONS = 500
+SOURCE_CLASSIFICATIONS_MAX_WORK = 50000
 
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.
