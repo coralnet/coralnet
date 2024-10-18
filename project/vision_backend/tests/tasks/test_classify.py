@@ -305,6 +305,8 @@ class SourceCheckImageCasesTest(BaseTaskTest):
             [self.img1, self.img2], self.classifier_1,
             'A', create_events=True,
         )
+        # Label A again, so there's no trace of classifier 2 in annotation
+        # fields/histories, only events
         self.classify(
             [self.img1], self.classifier_2,
             'A', create_events=True,
@@ -642,7 +644,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
 
         self.assertEqual(
             self.get_latest_job_by_name('classify_features').result_message,
-            f"Used classifier {clf.pk}: 4 annotations added, 1 not changed")
+            f"Used classifier {clf.pk}: 4 annotations added")
 
         for point in Point.objects.filter(image__id=img.id):
             if point.point_number == 1:
@@ -658,20 +660,16 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
 
         label_ids = self.image_label_ids(img)
         event = ClassifyImageEvent.objects.latest('pk')
-        # TODO: Point 1 here is actually the classifier's label
-        #  rather than the previously-confirmed label, which is not
-        #  what was intended, and perhaps misleading. The logic needs to
-        #  be revisited.
-        # self.assertDictEqual(
-        #     event.details,
-        #     {
-        #         '1': dict(label=label_ids[0], result='no change'),
-        #         '2': dict(label=label_ids[1], result='added'),
-        #         '3': dict(label=label_ids[2], result='added'),
-        #         '4': dict(label=label_ids[3], result='added'),
-        #         '5': dict(label=label_ids[4], result='added'),
-        #     },
-        # )
+        self.assertDictEqual(
+            event.details,
+            {
+                # Point 1 shouldn't be in here at all.
+                '2': dict(label=label_ids[1], result='added'),
+                '3': dict(label=label_ids[2], result='added'),
+                '4': dict(label=label_ids[3], result='added'),
+                '5': dict(label=label_ids[4], result='added'),
+            },
+        )
 
     def test_classify_confirmed_image(self):
         """Attempt to classify an image where all points are confirmed."""

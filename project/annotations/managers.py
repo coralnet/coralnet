@@ -72,7 +72,7 @@ class AnnotationManager(models.Manager):
         label: 'Label',
         now_confirmed: bool,
         user_or_robot_version: Union['User', 'Classifier'],
-    ) -> str:
+    ) -> str | None:
         """
         Update a single Point's Annotation in the database. If an Annotation
         exists for this point already, update it accordingly. Else, create a
@@ -117,7 +117,11 @@ class AnnotationManager(models.Manager):
 
         if previously_confirmed and not now_confirmed:
             # Never overwrite confirmed with unconfirmed.
-            return self.UpdateResultsCodes.NOT_CHANGED.value
+            # It'd be misleading to report this the same as NOT_CHANGED,
+            # since the confirmed label could actually disagree with
+            # the classifier (which we are ignoring in this case).
+            # So instead we return None.
+            return None
 
         elif (not previously_confirmed and now_confirmed) \
                 or (label != annotation.label):

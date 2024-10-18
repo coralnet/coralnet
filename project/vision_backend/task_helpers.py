@@ -94,7 +94,22 @@ def add_annotations(image_id: int,
             now_confirmed=False,
             user_or_robot_version=classifier)
 
-        event_details[point.point_number] = dict(label=label.pk, result=result)
+        if result is not None:
+            event_details[point.point_number] = dict(
+                label=label.pk, result=result)
+        # If None, then we decided it's better to not include the point in
+        # the event details at all; e.g. it's a confirmed point that shouldn't
+        # be overwritten by unconfirmed.
+        # TODO: CoralNet 1.15 changed the semantics here; this case used to be
+        #  reported as 'no change'. At some point, a data migration should be
+        #  written to migrate pre-1.15 ClassifyImageEvents to use the new
+        #  semantics.
+        #  This may be difficult, involving cross-referencing reversion entries
+        #  to see if the point was already confirmed at this time, or to see
+        #  if the 'no change' entry actually disagreed with a previous entry.
+        #  There is no rush to do this until the details of pre-1.15
+        #  ClassifyImageEvents are displayed in any way, which will probably be
+        #  done on the Annotation History page at some point.
 
     event = ClassifyImageEvent(
         source_id=img.source_id,
