@@ -2,6 +2,7 @@
 This file contains helper functions to vision_backend.tasks.
 """
 from abc import ABC
+from collections import Counter
 from logging import getLogger
 import re
 
@@ -45,7 +46,7 @@ logger = getLogger(__name__)
 def add_annotations(image_id: int,
                     res: ClassifyReturnMsg,
                     label_objs: list[Label],
-                    classifier: Classifier):
+                    classifier: Classifier) -> str:
     """
     Adds DB Annotations using the scores in the spacer return message.
 
@@ -102,6 +103,17 @@ def add_annotations(image_id: int,
         details=event_details,
     )
     event.save()
+
+    counter = Counter([d['result'] for d in event_details.values()])
+    # Example: 2 annotations added, 3 changed, 5 not changed
+    # sorted() puts added first, then changed, then not changed.
+    summary_items = []
+    for index, (result, count) in enumerate(sorted(counter.items())):
+        if index == 0:
+            summary_items.append(f"{count} annotations {result}")
+        else:
+            summary_items.append(f"{count} {result}")
+    return ", ".join(summary_items)
 
 
 def add_scores(image_id: int,

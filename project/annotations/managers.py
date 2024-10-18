@@ -52,10 +52,19 @@ class AnnotationQuerySet(models.QuerySet):
 
 class AnnotationManager(models.Manager):
 
+    # TODO: CoralNet 1.15 changed 'updated' to 'changed', and 'no change' to
+    #  'not changed'. At some point, a data migration should be written to
+    #  migrate pre-1.15 ClassifyImageEvents to use the new codes.
+    #  There is no rush to do this until the details of pre-1.15
+    #  ClassifyImageEvents are displayed in any way, which will probably be
+    #  done on the Annotation History page at some point.
+    #  The data migration may be difficult to make efficient in production
+    #  due to the sheer number of Events, but that's OK since the migration
+    #  should be safe to run while the web server is up.
     class UpdateResultsCodes(Enum):
         ADDED = 'added'
-        UPDATED = 'updated'
-        NO_CHANGE = 'no change'
+        CHANGED = 'changed'
+        NOT_CHANGED = 'not changed'
 
     def update_point_annotation_if_applicable(
         self,
@@ -108,7 +117,7 @@ class AnnotationManager(models.Manager):
 
         if previously_confirmed and not now_confirmed:
             # Never overwrite confirmed with unconfirmed.
-            return self.UpdateResultsCodes.NO_CHANGE.value
+            return self.UpdateResultsCodes.NOT_CHANGED.value
 
         elif (not previously_confirmed and now_confirmed) \
                 or (label != annotation.label):
@@ -124,7 +133,7 @@ class AnnotationManager(models.Manager):
                 annotation.user = get_robot_user()
                 annotation.robot_version = user_or_robot_version
             annotation.save()
-            return self.UpdateResultsCodes.UPDATED.value
+            return self.UpdateResultsCodes.CHANGED.value
 
         # Else, there's nothing to save, so don't do anything.
-        return self.UpdateResultsCodes.NO_CHANGE.value
+        return self.UpdateResultsCodes.NOT_CHANGED.value

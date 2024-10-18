@@ -514,7 +514,27 @@ def deploy(api_job_id, api_unit_order, job_id):
     return msg
 
 
-@job_runner(job_name='classify_features', job_display_name="Classify")
+def after_classify_features(job_id):
+    job = Job.objects.get(pk=job_id)
+    source_id = job.source_id
+
+    if source_is_finished_with_core_jobs(source_id):
+        # There may be more classifications to schedule, if the previous
+        # source check reached the limit for number of classifications.
+        # Or, classification for this source may be done, in which case it's
+        # useful to confirm whether the source is all caught up (can see the
+        # confirmation message when looking at job/backend dashboards).
+        #
+        # Either way (especially the former case), use a delay so that other
+        # jobs get a chance to run. Since most classifications run on the
+        # web server, they can hog web server resources.
+        schedule_source_check(source_id, delay=timedelta(minutes=10))
+
+
+@job_runner(
+    job_name='classify_features', job_display_name="Classify",
+    after_finishing_job=after_classify_features,
+)
 def classify_image(image_id):
     """Classify a source's image."""
     try:
@@ -556,10 +576,13 @@ def classify_image(image_id):
     # Pre-fetch label objects
     label_objs = [Label.objects.get(pk=pk) for pk in res.classes]
 
-    # Add annotations if image isn't already confirmed    
+    result_message = f"Used classifier {classifier.pk}"
+    # Add annotations if image isn't already confirmed
     if not img.annoinfo.confirmed:
         try:
-            th.add_annotations(image_id, res, label_objs, classifier)
+            annotation_summary = th.add_annotations(
+                image_id, res, label_objs, classifier)
+            result_message += f": {annotation_summary}"
         except (IntegrityError, RowColumnMismatchError):
             raise JobError(
                 f"Failed to save annotations for image {image_id}."
@@ -581,26 +604,7 @@ def classify_image(image_id):
             f" with the image's points."
         )
 
-    this_job = Job.objects.get(
-        job_name='classify_features',
-        arg_identifier=image_id,
-        status=Job.Status.IN_PROGRESS,
-    )
-    if source_is_finished_with_core_jobs(
-        img.source_id, job_id_about_to_finish=this_job.pk,
-    ):
-        # There may be more classifications to schedule, if the previous
-        # source check reached the limit for number of classifications.
-        # Or, classification for this source may be done, in which case it's
-        # useful to confirm whether the source is all caught up (can see the
-        # confirmation message when looking at job/backend dashboards).
-        #
-        # Either way (especially the former case), use a delay so that other
-        # jobs get a chance to run. Since most classifications run on the
-        # web server, they can hog web server resources.
-        schedule_source_check(img.source_id, delay=timedelta(minutes=10))
-
-    return f"Used classifier {classifier.pk}"
+    return result_message
 
 
 def after_collect(job_id):

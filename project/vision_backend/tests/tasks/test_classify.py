@@ -246,7 +246,8 @@ class SourceCheckImageCasesTest(BaseTaskTest):
 
                 if create_events:
 
-                    do_job('classify_features', image.pk)
+                    do_job(
+                        'classify_features', image.pk, source_id=self.source.pk)
 
                     self.assertTrue(
                         ClassifyImageEvent.objects.filter(
@@ -256,7 +257,9 @@ class SourceCheckImageCasesTest(BaseTaskTest):
                 else:
 
                     with mock.patch.object(ClassifyImageEvent, 'save', noop):
-                        do_job('classify_features', image.pk)
+                        do_job(
+                            'classify_features', image.pk,
+                            source_id=self.source.pk)
 
                     self.assertFalse(
                         ClassifyImageEvent.objects.filter(
@@ -391,6 +394,10 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         classifier = self.upload_data_and_train_classifier()
 
         img = self.upload_image_and_machine_classify()
+
+        self.assertEqual(
+            self.get_latest_job_by_name('classify_features').result_message,
+            f"Used classifier {classifier.pk}: 5 annotations added")
 
         for point in Point.objects.filter(image__id=img.id):
             try:
@@ -547,6 +554,10 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         ):
             run_scheduled_jobs_until_empty()
 
+        self.assertEqual(
+            self.get_latest_job_by_name('classify_features').result_message,
+            f"Used classifier {clf_2.pk}: 2 annotations changed, 3 not changed")
+
         all_classifiers = self.source.classifier_set.all()
         message = (
             f"clf 1 and 2 IDs: {clf_1.pk}, {clf_2.pk}"
@@ -591,11 +602,11 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         self.assertDictEqual(
             event.details,
             {
-                '1': dict(label=label_ids[0], result='no change'),
-                '2': dict(label=label_ids[1], result='updated'),
-                '3': dict(label=label_ids[2], result='updated'),
-                '4': dict(label=label_ids[3], result='no change'),
-                '5': dict(label=label_ids[4], result='no change'),
+                '1': dict(label=label_ids[0], result='not changed'),
+                '2': dict(label=label_ids[1], result='changed'),
+                '3': dict(label=label_ids[2], result='changed'),
+                '4': dict(label=label_ids[3], result='not changed'),
+                '5': dict(label=label_ids[4], result='not changed'),
             },
         )
 
@@ -617,7 +628,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         Classify an image where some, but not all points have confirmed
         annotations.
         """
-        self.upload_data_and_train_classifier()
+        clf = self.upload_data_and_train_classifier()
 
         # Image without annotations
         img = self.upload_image(self.user, self.source)
@@ -628,6 +639,10 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
+
+        self.assertEqual(
+            self.get_latest_job_by_name('classify_features').result_message,
+            f"Used classifier {clf.pk}: 4 annotations added, 1 not changed")
 
         for point in Point.objects.filter(image__id=img.id):
             if point.point_number == 1:
