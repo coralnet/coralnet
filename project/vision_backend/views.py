@@ -66,7 +66,7 @@ def backend_overview(request):
             percent_display(need_features, total),
         ],
         [
-            "Unclassified, need classification",
+            "Unclassified, need classification*",
             need_classification,
             percent_display(need_classification, total),
         ],
