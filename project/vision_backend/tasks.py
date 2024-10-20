@@ -34,7 +34,7 @@ from sources.models import Source
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
-from .models import Classifier, ClassifyImageEvent, Score
+from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import (
     get_extractor,
@@ -176,54 +176,25 @@ def check_source(source_id):
     # Image classification
 
     if not source.deployed_classifier:
-        # We know that we must be in train mode here. If we were in
-        # use-existing-classifier mode, then we wouldn't have passed the
-        # source.feature_extractor check earlier.
+        # Can't classify without a classifier.
+        #
+        # For the message, we know that we must be in train mode here. If we
+        # were in use-existing-classifier mode, then we wouldn't have passed
+        # the source.feature_extractor check earlier.
         return f"Can't train first classifier: {reason}"
 
-    classifiable_images = source.image_set.incomplete().with_features()
-    unclassified_images = classifiable_images.unclassified()
-
-    # Here we detect whether the deployed classifier is the latest one used
-    # for ANY classifications. We check this because, most of the time,
-    # a given classifier has either taken a pass on ALL classifiable
-    # images, or it hasn't run at all yet.
-    #
-    # Checking the events should work for any classifications that happened
-    # after such events were introduced (CoralNet 1.7). Otherwise, we look
-    # for annotations attributed to the deployed classifier, but that
-    # 1) can miss cases where the current classifier agreed with the previous
-    # classifier on all points, and
-    # 2) is imprecise in terms of getting the latest robot annotation activity,
-    # because we can get the last unconfirmed annotation, but the last robot
-    # activity might've been on a now-confirmed annotation.
-    deployed_classifier = source.deployed_classifier
-    try:
-        latest_event = ClassifyImageEvent.objects.filter(
-            source_id=source_id).latest('pk')
-    except ClassifyImageEvent.DoesNotExist:
-        try:
-            latest_annotation_with_robot = \
-                source.annotation_set.unconfirmed().latest('annotation_date')
-        except Annotation.DoesNotExist:
-            deployed_classifier_used = False
-        else:
-            deployed_classifier_used = (
-                latest_annotation_with_robot.robot_version.pk
-                == deployed_classifier.pk
-            )
-    else:
-        deployed_classifier_used = (
-            latest_event.classifier_id == deployed_classifier.pk
-        )
-
-    if deployed_classifier_used:
-        # Has been used; so most likely the only images to look at are the
-        # unclassified ones.
-        images_to_classify = unclassified_images
-    else:
-        # Hasn't been used; so the classifier needs to run on everything.
-        images_to_classify = classifiable_images
+    # The images we should classify are the images that...
+    # - Have features extracted
+    # - Are non-confirmed (incomplete) and classifier isn't the deployed
+    #   classifier, OR, are unclassified (covering the case where the deployed
+    #   classifier's annotations were deleted)
+    extracted_images = source.image_set.with_features()
+    images_to_classify = (
+        extracted_images.incomplete().exclude(
+            annoinfo__classifier=source.deployed_classifier)
+        |
+        extracted_images.unclassified()
+    )
 
     if images_to_classify.exists():
 
@@ -603,6 +574,10 @@ def classify_image(image_id):
             f" Maybe there was another change happening at the same time"
             f" with the image's points."
         )
+
+    img.annoinfo.refresh_from_db()
+    img.annoinfo.classifier = classifier
+    img.annoinfo.save()
 
     return result_message
 

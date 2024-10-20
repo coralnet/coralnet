@@ -8,7 +8,7 @@ from django.utils import timezone
 import numpy as np
 
 from accounts.utils import get_robot_user, is_robot_user
-from annotations.models import Annotation
+from annotations.models import Annotation, ImageAnnotationInfo
 from annotations.tests.utils import AnnotationHistoryTestMixin
 from images.models import Point
 from jobs.models import Job
@@ -142,15 +142,36 @@ class SourceCheckTest(BaseTaskTest):
         self.source_check_and_assert(
             "Scheduled 1 image classification(s)", source=other_source)
 
+    @override_settings(SOURCE_CLASSIFICATIONS_MAX_WORK=120)
     def test_source_classifications_max_work(self):
         for _ in range(5):
             self.upload_image_for_classification()
+
         # 5 points per image means each image contributes 30+5 'work score'.
         # So a limit of 120 work score means a limit of 3 images.
-        with override_settings(SOURCE_CLASSIFICATIONS_MAX_WORK=120):
-            self.source_check_and_assert(
-                "Scheduled 3 image classification(s)")
+        self.source_check_and_assert(
+            "Scheduled 3 image classification(s)")
+        # Those classifications would generally get to run before the next
+        # source check.
+        run_scheduled_jobs()
+        # Then the next check happens.
+        self.source_check_and_assert(
+            "Scheduled 2 image classification(s)")
+        # Finish classifications before moving on.
+        run_scheduled_jobs()
 
+        # Accept another classifier.
+        with override_settings(
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=0.0001,
+        ):
+            self.upload_data_and_train_classifier(new_train_images_count=0)
+
+        # Scheduling logic should also work with updating classifications of a
+        # previous classifier.
+        self.source_check_and_assert(
+            "Scheduled 3 image classification(s)")
+        run_scheduled_jobs()
         self.source_check_and_assert(
             "Scheduled 2 image classification(s)")
 
@@ -194,77 +215,42 @@ class SourceCheckImageCasesTest(BaseTaskTest):
         images,
         # Classifier to use.
         classifier,
-        # What label the classifier will use for labeling all the points.
-        # The main factor for differing source-check behavior is whether
-        # the labels are the same or different from one classifier to the
-        # next, thus changing whether the next current classifier
-        # has attribution in the annotations.
-        label,
-        # Whether Events are created upon classifying images; otherwise,
-        # annotations have the only record of which classifier last visited.
-        # False will simulate images processed before CoralNet 1.7,
-        # which is when the Events were introduced.
-        create_events: bool,
+        # Whether the ImageAnnotationInfo.classifier field is filled upon
+        # classifying images; this is what the source check relies on to
+        # determine what needs classification.
+        # False will simulate images processed before CoralNet 1.7. That
+        # version introduced Events. Then CoralNet 1.15 introduced this
+        # field, and pre-filled the field for images with such Events.
+        fill_classifier_field: bool,
     ):
 
         self.source.trains_own_classifiers = False
         self.source.deployed_classifier = classifier
         self.source.save()
 
-        def mock_classify_msg_all_a(
-                self_, runtime, scores, classes, valid_rowcol):
-            """Classify any point as A."""
-            self_.runtime = runtime
-            self_.scores = [
-                (row, column, [0.8, 0.2])
-                for row, column, _ in scores
-            ]
-            self_.classes = classes
-            self_.valid_rowcol = valid_rowcol
-        def mock_classify_msg_all_b(
-                self_, runtime, scores, classes, valid_rowcol):
-            """Classify any point as B."""
-            self_.runtime = runtime
-            self_.scores = [
-                (row, column, [0.2, 0.8])
-                for row, column, _ in scores
-            ]
-            self_.classes = classes
-            self_.valid_rowcol = valid_rowcol
+        for image in images:
 
-        if label == 'A':
-            msg_mock = mock_classify_msg_all_a
-        elif label == 'B':
-            msg_mock = mock_classify_msg_all_b
-        else:
-            raise ValueError(f"Unsupported label: {label}")
+            if fill_classifier_field:
 
-        with mock.patch(
-            'spacer.messages.ClassifyReturnMsg.__init__', msg_mock,
-        ):
-            for image in images:
+                do_job(
+                    'classify_features', image.pk, source_id=self.source.pk)
 
-                if create_events:
+                image.annoinfo.refresh_from_db()
+                self.assertIsNotNone(
+                    image.annoinfo.classifier,
+                    msg="Classifier field should be filled (sanity check)")
 
+            else:
+
+                with mock.patch.object(ImageAnnotationInfo, 'save', noop):
                     do_job(
-                        'classify_features', image.pk, source_id=self.source.pk)
+                        'classify_features', image.pk,
+                        source_id=self.source.pk)
 
-                    self.assertTrue(
-                        ClassifyImageEvent.objects.filter(
-                            image_id=image.pk).exists(),
-                        "Classification event should exist (sanity check)")
-
-                else:
-
-                    with mock.patch.object(ClassifyImageEvent, 'save', noop):
-                        do_job(
-                            'classify_features', image.pk,
-                            source_id=self.source.pk)
-
-                    self.assertFalse(
-                        ClassifyImageEvent.objects.filter(
-                            image_id=image.pk).exists(),
-                        "Classification event shouldn't exist (sanity check)")
+                image.annoinfo.refresh_from_db()
+                self.assertIsNone(
+                    image.annoinfo.classifier,
+                    msg="Classifier field shouldn't be filled (sanity check)")
 
     def source_check_and_assert_scheduled_classifications(
         self, classifier, images
@@ -284,95 +270,74 @@ class SourceCheckImageCasesTest(BaseTaskTest):
         for image in images:
             self.assertIn(image.pk, scheduled_image_ids)
 
-    def test_new_classifier_on_events_and_annotations(self):
+    def test_new_classifier_on_field(self):
         self.classify(
             [self.img1, self.img2],
             self.classifier_1,
-            'A',
-            create_events=True,
+            fill_classifier_field=True,
         )
         self.classify(
             [self.img1],
             self.classifier_2,
-            'B',
-            create_events=True,
+            fill_classifier_field=True,
         )
+        # The new classifier still needs to visit img2, and img3
+        # which is unvisited.
         self.source_check_and_assert_scheduled_classifications(
-            self.classifier_2, [self.img3])
+            self.classifier_2, [self.img2, self.img3])
 
-    def test_new_classifier_on_events_only(self):
+    def test_old_classifier_on_field(self):
         self.classify(
             [self.img1, self.img2], self.classifier_1,
-            'A', create_events=True,
-        )
-        # Label A again, so there's no trace of classifier 2 in annotation
-        # fields/histories, only events
-        self.classify(
-            [self.img1], self.classifier_2,
-            'A', create_events=True,
-        )
-        self.source_check_and_assert_scheduled_classifications(
-            self.classifier_2, [self.img3])
-
-    def test_new_classifier_on_annotations_only(self):
-        self.classify(
-            [self.img1, self.img2], self.classifier_1,
-            'A', create_events=False,
+            fill_classifier_field=True,
         )
         self.classify(
             [self.img1], self.classifier_2,
-            'B', create_events=False,
+            fill_classifier_field=True,
         )
+        # The old classifier wasn't the last one to visit img1, and img3
+        # is unvisited.
         self.source_check_and_assert_scheduled_classifications(
-            self.classifier_2, [self.img3])
+            self.classifier_1, [self.img1, self.img3])
 
-    def test_new_classifier_on_nothing(self):
+    def test_nothing_on_field(self):
         self.classify(
             [self.img1, self.img2], self.classifier_1,
-            'A', create_events=False,
+            fill_classifier_field=False,
         )
         self.classify(
             [self.img1], self.classifier_2,
-            'A', create_events=False,
+            fill_classifier_field=False,
         )
+        # With the field not filled for any image, we can only say
+        # all images need classification.
         self.source_check_and_assert_scheduled_classifications(
             self.classifier_2, [self.img1, self.img2, self.img3])
 
-    def test_old_classifier_on_events_only(self):
+    def test_field_filled_but_annotations_deleted(self):
         self.classify(
-            [self.img1, self.img2], self.classifier_1,
-            'A', create_events=True,
+            [self.img1, self.img2],
+            self.classifier_1,
+            fill_classifier_field=True,
         )
         self.classify(
-            [self.img1], self.classifier_2,
-            'A', create_events=True,
+            [self.img1],
+            self.classifier_2,
+            fill_classifier_field=True,
         )
+        self.img1.annotation_set.delete()
+        # Even though the field says the classifier's already visited
+        # img1, the annotations being deleted indicates it needs a
+        # revisit.
         self.source_check_and_assert_scheduled_classifications(
-            self.classifier_1, [self.img1, self.img2, self.img3])
+            self.classifier_2, [self.img1, self.img2, self.img3])
 
-    def test_old_classifier_on_annotations_only(self):
-        self.classify(
-            [self.img1, self.img2], self.classifier_1,
-            'A', create_events=False,
-        )
-        self.classify(
-            [self.img1], self.classifier_2,
-            'B', create_events=False,
-        )
+    def test_field_empty_but_confirmed(self):
+        self.add_annotations(self.user, self.img1)
+        self.add_annotations(self.user, self.img2)
+        # Shouldn't attempt to classify confirmed images.
         self.source_check_and_assert_scheduled_classifications(
-            self.classifier_1, [self.img1, self.img2, self.img3])
-
-    def test_old_classifier_on_nothing(self):
-        self.classify(
-            [self.img1, self.img2], self.classifier_1,
-            'A', create_events=False,
-        )
-        self.classify(
-            [self.img1], self.classifier_2,
-            'A', create_events=False,
-        )
-        self.source_check_and_assert_scheduled_classifications(
-            self.classifier_1, [self.img3])
+            self.classifier_2, [self.img3])
 
 
 class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
@@ -430,6 +395,9 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
                 '5': dict(label=label_ids[4], result='added'),
             },
         )
+
+        img.annoinfo.refresh_from_db()
+        self.assertEqual(img.annoinfo.classifier_id, classifier.pk)
 
         response = self.view_history(self.user, img=img)
         self.assert_history_table_equals(
@@ -673,7 +641,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
 
     def test_classify_confirmed_image(self):
         """Attempt to classify an image where all points are confirmed."""
-        self.upload_data_and_train_classifier()
+        classifier = self.upload_data_and_train_classifier()
 
         # Image with annotations
         img = self.upload_image_with_annotations('confirmed.png')
@@ -693,6 +661,10 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         # There should be no classify event
         with self.assertRaises(ClassifyImageEvent.DoesNotExist):
             ClassifyImageEvent.objects.latest('pk')
+
+        # There should be no annoinfo classifier
+        img.annoinfo.refresh_from_db()
+        self.assertIsNone(img.annoinfo.classifier_id)
 
     def test_classify_scores_and_labels_match(self):
         """

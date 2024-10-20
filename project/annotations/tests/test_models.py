@@ -277,3 +277,117 @@ class PopulateAnnoInfoStatusTest(MigrationTest):
 
     def test_unclassified(self):
         self.do_test(expected_status='unclassified')
+
+
+class PopulateAnnoInfoClassifierTest(MigrationTest):
+
+    before = [
+        ('accounts', '0001_squashed_0012_field_string_attributes_to_unicode'),
+        ('annotations', '0026_annoinfo_add_classifier'),
+        ('events', '0004_indexes_for_type_source_image'),
+        ('images', '0040_delete_source'),
+        ('sources', '0010_populate_deployed_classifier'),
+        ('vision_backend', '0027_sourcecheckrequestevent'),
+    ]
+    after = [
+        ('annotations', '0027_annoinfo_populate_classifier')]
+
+    def test(self):
+        ImageAnnotationInfo = self.get_model_before(
+            'annotations.ImageAnnotationInfo')
+        User = self.get_model_before('auth.User')
+        Event = self.get_model_before('events.Event')
+        Metadata = self.get_model_before('images.Metadata')
+        Image = self.get_model_before('images.Image')
+        Point = self.get_model_before('images.Point')
+        LabelGroup = self.get_model_before('labels.LabelGroup')
+        Label = self.get_model_before('labels.Label')
+        Source = self.get_model_before('sources.Source')
+        Classifier = self.get_model_before('vision_backend.Classifier')
+        Score = self.get_model_before('vision_backend.Score')
+
+        user = User(username='testuser')
+        user.save()
+        robot_user, _ = User.objects.get_or_create(username='robot')
+        group = LabelGroup(name="Group1", code='g1')
+        group.save()
+        label = Label(name="A", default_code='A', group=group)
+        label.save()
+        source = Source(name="Test source")
+        source.save()
+        classifier_1 = Classifier(source=source)
+        classifier_1.save()
+        classifier_2 = Classifier(source=source)
+        classifier_2.save()
+
+        image_ids = []
+        for i in range(4):
+            metadata = Metadata()
+            metadata.save()
+            image = Image(
+                original_file=sample_image_as_file('a.png'),
+                uploaded_by=user,
+                point_generation_method=source.default_point_generation_method,
+                metadata=metadata,
+                source=source,
+            )
+            image.save()
+            image_ids.append(image.pk)
+            annoinfo = ImageAnnotationInfo(image=image)
+            annoinfo.save()
+            point = Point(image=image, row=1, column=1, point_number=1)
+            point.save()
+
+            if i == 0 or i == 2:
+                event = Event(
+                    type='classify_image', classifier_id=classifier_1.pk,
+                    source_id=source.pk, image_id=image.pk, details={},
+                )
+                event.save()
+                event = Event(
+                    type='classify_image', classifier_id=classifier_2.pk,
+                    source_id=source.pk, image_id=image.pk, details={},
+                )
+                event.save()
+            elif i == 1:
+                # Reverse order
+                event = Event(
+                    type='classify_image', classifier_id=classifier_2.pk,
+                    source_id=source.pk, image_id=image.pk, details={},
+                )
+                event.save()
+                event = Event(
+                    type='classify_image', classifier_id=classifier_1.pk,
+                    source_id=source.pk, image_id=image.pk, details={},
+                )
+                event.save()
+            # i == 3: no event.
+
+            if i == 0 or i == 1 or i == 3:
+                score = Score(
+                    label=label, point=point, source=source, image=image)
+                score.save()
+            # i == 2: no score.
+
+        self.run_migration()
+
+        Image = self.get_model_after('images.Image')
+
+        image = Image.objects.get(pk=image_ids[0])
+        self.assertEqual(
+            image.annoinfo.classifier_id, classifier_2.pk,
+            msg="Should be the classifier of this image's latest event")
+        image = Image.objects.get(pk=image_ids[1])
+        self.assertEqual(
+            image.annoinfo.classifier_id, classifier_1.pk,
+            msg="Should be the classifier of this image's latest event")
+
+        image = Image.objects.get(pk=image_ids[2])
+        self.assertIsNone(
+            image.annoinfo.classifier_id,
+            msg="Should not set classifier for images without scores")
+
+        image = Image.objects.get(pk=image_ids[3])
+        self.assertIsNone(
+            image.annoinfo.classifier_id,
+            msg="Should not set classifier for images without events")
