@@ -1,3 +1,4 @@
+import datetime
 from datetime import timedelta
 from unittest import mock
 
@@ -6,6 +7,8 @@ from django.db.utils import IntegrityError
 from django.test import override_settings
 from django.utils import timezone
 import numpy as np
+from reversion import revisions
+from reversion.models import Revision
 
 from accounts.utils import get_robot_user, is_robot_user
 from annotations.models import Annotation, ImageAnnotationInfo
@@ -340,6 +343,13 @@ class SourceCheckImageCasesTest(BaseTaskTest):
             self.classifier_2, [self.img3])
 
 
+def image_label_codes(image):
+    label_codes = []
+    for point in image.point_set.order_by('point_number'):
+        label_codes.append(point.annotation.label_code)
+    return label_codes
+
+
 class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
 
     @staticmethod
@@ -348,13 +358,6 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         for point in image.point_set.order_by('point_number'):
             label_ids.append(point.annotation.label_id)
         return label_ids
-
-    @staticmethod
-    def image_label_codes(image):
-        label_codes = []
-        for point in image.point_set.order_by('point_number'):
-            label_codes.append(point.annotation.label_code)
-        return label_codes
 
     def test_classify_unannotated_image(self):
         """Classify an image where all points are unannotated."""
@@ -379,7 +382,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
             self.assertEqual(
                 2, point.score_set.count(), "Each point should have scores")
 
-        codes = self.image_label_codes(img)
+        codes = image_label_codes(img)
         label_ids = self.image_label_ids(img)
 
         event = ClassifyImageEvent.objects.get(image_id=img.pk)
@@ -808,6 +811,98 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
             "Applied labels match the given scores")
 
 
+class LegacyHistoryCasesTest(BaseTaskTest, AnnotationHistoryTestMixin):
+    """
+    Testing annotation history's display of legacy classification records.
+    """
+    def test_reversion_entries(self):
+        classifier = self.upload_data_and_train_classifier()
+        img = self.upload_image_for_classification()
+
+        with revisions.create_revision():
+            Annotation.objects.update_point_annotation_if_applicable(
+                point=img.point_set.get(point_number=1),
+                label=self.labels.get(name='A'),
+                now_confirmed=False,
+                user_or_robot_version=classifier)
+            Annotation.objects.update_point_annotation_if_applicable(
+                point=img.point_set.get(point_number=2),
+                label=self.labels.get(name='A'),
+                now_confirmed=False,
+                user_or_robot_version=classifier)
+
+        with revisions.create_revision():
+            Annotation.objects.update_point_annotation_if_applicable(
+                point=img.point_set.get(point_number=1),
+                label=self.labels.get(name='B'),
+                now_confirmed=False,
+                user_or_robot_version=classifier)
+
+        response = self.view_history(self.user, img=img)
+        self.assert_history_table_equals(
+            response,
+            [
+                [f'Point 1: B',
+                 f'Robot {classifier.pk}'],
+                [f'Point 1: A<br/>Point 2: A',
+                 f'Robot {classifier.pk}'],
+            ]
+        )
+
+    @override_settings(CORALNET_1_15_DATE='2024-10-20T08:00:00+00:00')
+    def test_pre_1_15_event_objects(self):
+        classifier = self.upload_data_and_train_classifier()
+        img = self.upload_image_and_machine_classify()
+
+        codes = image_label_codes(img)
+        response = self.view_history(self.user, img=img)
+        self.assert_history_table_equals(
+            response,
+            [
+                [f'Point 1: {codes[0]}<br/>Point 2: {codes[1]}'
+                 f'<br/>Point 3: {codes[2]}<br/>Point 4: {codes[3]}'
+                 f'<br/>Point 5: {codes[4]}',
+                 f'Robot {classifier.pk}'],
+            ]
+        )
+
+        # Set the event date to before CoralNet 1.15's date.
+        event = ClassifyImageEvent.objects.latest('pk')
+        event.date = datetime.datetime(
+            2024, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
+        event.save()
+
+        response = self.view_history(self.user, img=img)
+        self.assert_history_table_equals(response, [])
+
+    def test_alpha_robot(self):
+        classifier = self.upload_data_and_train_classifier()
+        img = self.upload_image_for_classification()
+
+        with revisions.create_revision():
+            Annotation.objects.update_point_annotation_if_applicable(
+                point=img.point_set.get(point_number=1),
+                label=self.labels.get(name='A'),
+                now_confirmed=False,
+                user_or_robot_version=classifier)
+
+        # If the Revision's old enough, it should be interpreted as
+        # being from a CoralNet alpha classifier.
+        revision = Revision.objects.latest('pk')
+        revision.date_created = datetime.datetime(
+            2016, 11, 19, 0, tzinfo=datetime.timezone.utc)
+        revision.save()
+
+        response = self.view_history(self.user, img=img)
+        self.assert_history_table_equals(
+            response,
+            [
+                [f'Point 1: A',
+                 f'Robot alpha-{classifier.pk}'],
+            ]
+        )
+
+
 class AbortCasesTest(BaseTaskTest):
     """Test cases where the task would abort before reaching the end."""
 
@@ -922,6 +1017,12 @@ class AbortCasesTest(BaseTaskTest):
 
         img = self.upload_image_and_schedule_classification()
 
+        # Add an annotation of any kind so that classification will go to the
+        # update_point_annotation_if_applicable() case instead of the
+        # bulk-create case.
+        self.add_annotations(self.user, img, {3: 'A'})
+        self.assertEqual(img.annotation_set.count(), 1)
+
         # Try to classify
         with mock.patch(
             'annotations.models.Annotation.objects'
@@ -937,9 +1038,9 @@ class AbortCasesTest(BaseTaskTest):
             f" with the image's points/annotations.")
 
         # Although the error occurred on point 2, nothing should have been
-        # saved, including point 1.
+        # saved, including point 1. That leaves just point 3.
         self.assertEqual(
-            img.annotation_set.count(), 0,
+            img.annotation_set.count(), 1,
             "Point 1's annotation should have been rolled back"
         )
 

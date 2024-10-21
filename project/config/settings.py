@@ -1,4 +1,5 @@
 from collections.abc import MutableMapping
+import datetime
 from email.utils import parseaddr
 from enum import Enum
 import os
@@ -1362,3 +1363,16 @@ else:
     CAROUSEL_IMAGE_COUNT = env.int('CAROUSEL_IMAGE_COUNT', default=0)
     CAROUSEL_IMAGE_POOL = env.list(
         'CAROUSEL_IMAGE_POOL', cast=int, default=[])
+
+if SETTINGS_BASE == Bases.PRODUCTION:
+    # Provide the exact date of CoralNet 1.15's release here, i.e. a date
+    # during the server downtime between 1.14 and 1.15. This is part of the
+    # annotation history migration process.
+    CORALNET_1_15_DATE = datetime.datetime.fromisoformat(
+        env('CORALNET_1_15_DATE'))
+else:
+    # For non-production, a default date is provided. To ensure accurate
+    # annotation histories in your env, provide the actual date that you
+    # updated to CoralNet 1.15.
+    CORALNET_1_15_DATE = datetime.datetime.fromisoformat(
+        env('CORALNET_1_15_DATE', default='2024-10-20T08:00:00+00:00'))

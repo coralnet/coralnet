@@ -84,21 +84,25 @@ def get_annotation_version_user_display(anno_version, date_created):
         if not robot_version_id:
             return "(Robot, unknown version)"
 
-        # On this date/time in UTC, CoralNet alpha had ended and CoralNet beta
-        # robot runs had not yet started.
-        beta_start_dt_naive = datetime.datetime(2016, 11, 20, 2)
-        beta_start_dt = timezone.make_aware(
-            beta_start_dt_naive, datetime.timezone.utc)
-
-        if date_created < beta_start_dt:
-            # Alpha
-            return "Robot alpha-{v}".format(v=robot_version_id)
-
-        # Beta (versions had reset, hence the need for alpha/beta distinction)
-        return "Robot {v}".format(v=robot_version_id)
+        return get_robot_display(robot_version_id, date_created)
 
     else:
         return user.username
+
+
+def get_robot_display(robot_id, event_date):
+    # On this date/time in UTC, CoralNet alpha had ended and CoralNet beta
+    # robot runs had not yet started.
+    beta_start_dt_naive = datetime.datetime(2016, 11, 20, 2)
+    beta_start_dt = timezone.make_aware(
+        beta_start_dt_naive, datetime.timezone.utc)
+
+    if event_date < beta_start_dt:
+        # Alpha
+        return f"Robot alpha-{robot_id}"
+
+    # Beta (versions had reset, hence the need for alpha/beta distinction)
+    return f"Robot {robot_id}"
 
 
 def apply_alleviate(img, label_scores_all_points):

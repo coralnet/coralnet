@@ -37,17 +37,18 @@ class AnnotationQuerySet(models.QuerySet):
         return return_values
 
     def bulk_create(self, *args, **kwargs):
-        raise NotImplementedError(
-            "Bulk creation would skip django-reversion signals.")
+        """
+        Only use this for annotation creation cases where
+        django-reversion isn't needed, since this skips save() signals.
+        """
+        new_annotations = super().bulk_create(*args, **kwargs)
 
-        # new_annotations = super().bulk_create(*args, **kwargs)
-        #
-        # images = Image.objects.filter(
-        #     annotation__in=new_annotations).distinct()
-        # for image in images:
-        #     image.annoinfo.update_annotation_progress_fields()
-        #
-        # return new_annotations
+        images = Image.objects.filter(
+            annotation__in=new_annotations).distinct()
+        for image in images:
+            image.annoinfo.update_annotation_progress_fields()
+
+        return new_annotations
 
 
 class AnnotationManager(models.Manager):

@@ -10,7 +10,8 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 ## 1.15 (WIP)
 
-- New migrations to run for: `events`, `jobs`, `vision_backend`.
+- New migrations to run for: `annotations`, `events`, `jobs`, `vision_backend`.
+- The new `CORALNET_1_15_DATE` setting may have to be specified.
 
 ## [1.14](https://github.com/coralnet/coralnet/tree/1.14)
 
