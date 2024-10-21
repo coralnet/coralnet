@@ -501,7 +501,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
             # 1d, 2e
             ["Unclassified, need features", "2", "22.2%"],
             # 2d
-            ["Unclassified, need classification", "1", "11.1%"],
+            ["Unclassified, need classification*", "1", "11.1%"],
             # 1c
             ["Unclassified, not ready for features/classification",
              "1", "11.1%"],

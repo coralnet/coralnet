@@ -2,15 +2,16 @@
 This file contains helper functions to vision_backend.tasks.
 """
 from abc import ABC
+from collections import Counter
 from logging import getLogger
 import re
 
 import numpy as np
 from django.conf import settings
 from django.core.mail import mail_admins
+from django.db import transaction
 from django.db.models import F
 from django.utils.timezone import now
-from reversion import revisions
 from spacer.data_classes import ImageLabels
 from spacer.messages import \
     ExtractFeaturesMsg, \
@@ -19,6 +20,7 @@ from spacer.messages import \
     ClassifyReturnMsg, \
     JobReturnMsg
 
+from accounts.utils import get_robot_user
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from errorlogs.utils import instantiate_error_log
@@ -38,14 +40,14 @@ from .utils import (
 logger = getLogger(__name__)
 
 
-# This function is generally called outside of Django views, so the
-# middleware which do atomic transactions and create revisions aren't
-# active. This decorator enables both of those things.
-@revisions.create_revision(atomic=True)
+# This function is generally called outside of Django views, meaning the
+# middleware which does atomic transactions isn't active. So we use this
+# decorator to get that property.
+@transaction.atomic
 def add_annotations(image_id: int,
                     res: ClassifyReturnMsg,
                     label_objs: list[Label],
-                    classifier: Classifier):
+                    classifier: Classifier) -> str:
     """
     Adds DB Annotations using the scores in the spacer return message.
 
@@ -57,17 +59,14 @@ def add_annotations(image_id: int,
 
     May throw an IntegrityError when trying to save annotations. The caller is
     responsible for handling the error. In this error case, no annotations
-    are saved due to the `atomic=True` in the decorator.
-
-    This function slowly saves annotations one by one, because bulk-saving
-    annotations would skip signal firing, and thus would not trigger
-    django-reversion's revision creation.
-    So this is slow on a database-ops timescale, although perhaps not on a
-    vision-backend-tasks timescale.
+    are saved due to the @transaction.atomic decorator.
     """
     img = Image.objects.get(pk=image_id)
     points = Point.objects.filter(image=img).order_by('id')
     event_details = dict()
+
+    create_all = not img.annotation_set.exists()
+    create_all_list = []
 
     # From spacer 0.2 we store row, col locations in features and in
     # classifier scores. This allows us to match scores to points
@@ -87,13 +86,47 @@ def add_annotations(image_id: int,
                 raise RowColumnMismatchError
         label = label_objs[int(np.argmax(scores))]
 
-        result = Annotation.objects.update_point_annotation_if_applicable(
-            point=point,
-            label=label,
-            now_confirmed=False,
-            user_or_robot_version=classifier)
+        if create_all:
+            # Gather annotations to be saved more speedily in bulk. We
+            # only bother with this for the common case where all of them
+            # are new. Outside of that common case, it's typically just a
+            # few annotations being changed.
+            create_all_list.append(Annotation(
+                point=point,
+                image=img,
+                source=img.source,
+                label=label,
+                user=get_robot_user(),
+                robot_version=classifier,
+            ))
+            result = Annotation.objects.UpdateResultsCodes.ADDED.value
+        else:
+            # Individual annotation create/update.
+            result = Annotation.objects.update_point_annotation_if_applicable(
+                point=point,
+                label=label,
+                now_confirmed=False,
+                user_or_robot_version=classifier)
 
-        event_details[point.point_number] = dict(label=label.pk, result=result)
+        if result is not None:
+            event_details[point.point_number] = dict(
+                label=label.pk, result=result)
+        # If None, then we decided it's better to not include the point in
+        # the event details at all; e.g. it's a confirmed point that shouldn't
+        # be overwritten by unconfirmed.
+        # TODO: CoralNet 1.15 changed the semantics here; this case used to be
+        #  reported as 'no change'. At some point, a data migration should be
+        #  written to migrate pre-1.15 ClassifyImageEvents to use the new
+        #  semantics.
+        #  This may be difficult, involving cross-referencing reversion entries
+        #  to see if the point was already confirmed at this time, or to see
+        #  if the 'no change' entry actually disagreed with a previous entry.
+        #  There is no rush to do this until the details of pre-1.15
+        #  ClassifyImageEvents are displayed in any way, which will probably be
+        #  done on the Annotation History page at some point.
+
+    if create_all:
+        Annotation.objects.bulk_create(create_all_list)
 
     event = ClassifyImageEvent(
         source_id=img.source_id,
@@ -102,6 +135,17 @@ def add_annotations(image_id: int,
         details=event_details,
     )
     event.save()
+
+    counter = Counter([d['result'] for d in event_details.values()])
+    # Example: 2 annotations added, 3 changed, 5 not changed
+    # sorted() puts added first, then changed, then not changed.
+    summary_items = []
+    for index, (result, count) in enumerate(sorted(counter.items())):
+        if index == 0:
+            summary_items.append(f"{count} annotations {result}")
+        else:
+            summary_items.append(f"{count} {result}")
+    return ", ".join(summary_items)
 
 
 def add_scores(image_id: int,

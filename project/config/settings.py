@@ -1,4 +1,5 @@
 from collections.abc import MutableMapping
+import datetime
 from email.utils import parseaddr
 from enum import Enum
 import os
@@ -382,6 +383,15 @@ TRAINING_BATCH_LABEL_COUNT = 5000
 # that as the default limit for allowing feature caching in training.
 FEATURE_CACHING_ANNOTATION_LIMIT = env(
     'FEATURE_CACHING_ANNOTATION_LIMIT', default=2500000)
+
+# Don't let a source check schedule more than this much classification 'work'
+# in one go.
+# See check_source() for how work is calculated as a function of images and
+# points.
+# Since classify-features jobs happen on the web server instead of in
+# Batch, there's a risk of monopolizing the web server resources (namely, the
+# processes allocated for background jobs) if there is no limit here.
+SOURCE_CLASSIFICATIONS_MAX_WORK = 100000
 
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.
@@ -1353,3 +1363,16 @@ else:
     CAROUSEL_IMAGE_COUNT = env.int('CAROUSEL_IMAGE_COUNT', default=0)
     CAROUSEL_IMAGE_POOL = env.list(
         'CAROUSEL_IMAGE_POOL', cast=int, default=[])
+
+if SETTINGS_BASE == Bases.PRODUCTION:
+    # Provide the exact date of CoralNet 1.15's release here, i.e. a date
+    # during the server downtime between 1.14 and 1.15. This is part of the
+    # annotation history migration process.
+    CORALNET_1_15_DATE = datetime.datetime.fromisoformat(
+        env('CORALNET_1_15_DATE'))
+else:
+    # For non-production, a default date is provided. To ensure accurate
+    # annotation histories in your env, provide the actual date that you
+    # updated to CoralNet 1.15.
+    CORALNET_1_15_DATE = datetime.datetime.fromisoformat(
+        env('CORALNET_1_15_DATE', default='2024-10-20T08:00:00+00:00'))

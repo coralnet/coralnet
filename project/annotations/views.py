@@ -1,5 +1,6 @@
 import json
 
+from django.conf import settings
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
@@ -12,13 +13,6 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
-from .forms import (
-    AnnotationForm, AnnotationAreaPixelsForm, AnnotationToolSettingsForm,
-    AnnotationImageOptionsForm)
-from .model_utils import AnnotationArea
-from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
-from .utils import (
-    apply_alleviate, get_annotation_version_user_display)
 from images.models import Image, Point
 from images.utils import (
     generate_points, get_next_image, get_date_and_aux_metadata_table,
@@ -30,7 +24,18 @@ from lib.decorators import (
 from lib.forms import get_one_form_error
 from sources.models import Source
 from visualization.forms import HiddenForm, create_image_filter_form
+from vision_backend.models import ClassifyImageEvent
 from vision_backend.utils import get_label_scores_for_image, reset_features
+from .forms import (
+    AnnotationForm,
+    AnnotationAreaPixelsForm,
+    AnnotationToolSettingsForm,
+    AnnotationImageOptionsForm,
+)
+from .model_utils import AnnotationArea
+from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
+from .utils import (
+    apply_alleviate, get_annotation_version_user_display, get_robot_display)
 
 
 @image_permission_required('image_id', perm=Source.PermTypes.EDIT.code)
@@ -485,6 +490,17 @@ def annotation_history(request, image_id):
         # We name the arg v_ to avoid shadowing the outer scope's v.
         return Annotation.objects.get(pk=v_.object_id).point.point_number
 
+    def label_id_to_display(label_id_):
+        label_display_ = source.labelset.global_pk_to_code(label_id_)
+        if not label_display_:
+            # Label was removed from the labelset
+            try:
+                label_display_ = Label.objects.get(pk=label_id_).name
+            except Label.DoesNotExist:
+                # Label was deleted from the site
+                label_display_ = f"(Label of ID {label_id_})"
+        return label_display_
+
     event_log = []
 
     for rev in revisions:
@@ -500,17 +516,7 @@ def annotation_history(request, image_id):
         for v in rev_versions:
             point_number = version_to_point_number(v)
             global_label_pk = v.field_dict['label_id']
-
-            label_display = source.labelset.global_pk_to_code(global_label_pk)
-            if not label_display:
-                # Label was removed from the labelset
-                try:
-                    label_display = Label.objects.get(pk=global_label_pk).name
-                except Label.DoesNotExist:
-                    # Label was deleted from the site
-                    label_display = "(Label of ID {pk})".format(
-                        pk=global_label_pk)
-
+            label_display = label_id_to_display(global_label_pk)
             events.append("Point {num}: {label}".format(
                 num=point_number, label=label_display))
 
@@ -523,6 +529,25 @@ def annotation_history(request, image_id):
                 events=events,
             )
         )
+
+    # From CoralNet 1.15 onward, we no longer create django-reversion
+    # Revisions/Versions for machine classification; this case is handled
+    # by ClassifyImageEvents instead.
+    event_objs = ClassifyImageEvent.objects.filter(
+        image_id=image_id, date__gt=settings.CORALNET_1_15_DATE)
+    not_changed_code = Annotation.objects.UpdateResultsCodes.NOT_CHANGED.value
+
+    for event_obj in event_objs:
+        point_events = []
+        for point_number, detail in event_obj.details.items():
+            label_display = label_id_to_display(detail['label'])
+            if detail['result'] != not_changed_code:
+                point_events.append(f"Point {point_number}: {label_display}")
+        event_log.append(dict(
+            date=event_obj.date,
+            user=get_robot_display(event_obj.classifier_id, event_obj.date),
+            events=point_events,
+        ))
 
     for access in AnnotationToolAccess.objects.filter(image=image):
         # Create a log entry for each annotation tool access

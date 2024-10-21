@@ -6,11 +6,12 @@ from django.utils import timezone
 from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from jobs.models import Job
-from jobs.tasks import run_scheduled_jobs_until_empty
+from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.common import Extractors
 from vision_backend.models import Classifier
-from vision_backend.tests.tasks.utils import BaseTaskTest
+from vision_backend.tests.tasks.utils import (
+    BaseTaskTest, source_check_is_scheduled)
 from ..models import Source
 
 
@@ -1119,7 +1120,8 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         image.features.save()
         # Process any source checks, so that later we know any scheduled source
         # checks were scheduled by edit-source.
-        run_scheduled_jobs_until_empty()
+        if source_check_is_scheduled(self.source.pk):
+            do_job('check_source', self.source.pk)
 
         # Directly set initial state of fields.
         self.source.trains_own_classifiers = trains_own_classifiers[0]

@@ -24,6 +24,7 @@ from spacer.task_utils import preprocess_labels
 from annotations.models import Annotation
 from api_core.models import ApiJobUnit
 from config.constants import SpacerJobSpec
+from images.model_utils import PointGen
 from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
@@ -33,7 +34,7 @@ from sources.models import Source
 from . import task_helpers as th
 from .common import CLASSIFIER_MAPPINGS
 from .exceptions import RowColumnMismatchError
-from .models import Classifier, ClassifyImageEvent, Score
+from .models import Classifier, Score
 from .queues import get_queue_class
 from .utils import (
     get_extractor,
@@ -175,54 +176,25 @@ def check_source(source_id):
     # Image classification
 
     if not source.deployed_classifier:
-        # We know that we must be in train mode here. If we were in
-        # use-existing-classifier mode, then we wouldn't have passed the
-        # source.feature_extractor check earlier.
+        # Can't classify without a classifier.
+        #
+        # For the message, we know that we must be in train mode here. If we
+        # were in use-existing-classifier mode, then we wouldn't have passed
+        # the source.feature_extractor check earlier.
         return f"Can't train first classifier: {reason}"
 
-    classifiable_images = source.image_set.incomplete().with_features()
-    unclassified_images = classifiable_images.unclassified()
-
-    # Here we detect whether the deployed classifier is the latest one used
-    # for ANY classifications. We check this because, most of the time,
-    # a given classifier has either taken a pass on ALL classifiable
-    # images, or it hasn't run at all yet.
-    #
-    # Checking the events should work for any classifications that happened
-    # after such events were introduced (CoralNet 1.7). Otherwise, we look
-    # for annotations attributed to the deployed classifier, but that
-    # 1) can miss cases where the current classifier agreed with the previous
-    # classifier on all points, and
-    # 2) is imprecise in terms of getting the latest robot annotation activity,
-    # because we can get the last unconfirmed annotation, but the last robot
-    # activity might've been on a now-confirmed annotation.
-    deployed_classifier = source.deployed_classifier
-    try:
-        latest_event = ClassifyImageEvent.objects.filter(
-            source_id=source_id).latest('pk')
-    except ClassifyImageEvent.DoesNotExist:
-        try:
-            latest_annotation_with_robot = \
-                source.annotation_set.unconfirmed().latest('annotation_date')
-        except Annotation.DoesNotExist:
-            deployed_classifier_used = False
-        else:
-            deployed_classifier_used = (
-                latest_annotation_with_robot.robot_version.pk
-                == deployed_classifier.pk
-            )
-    else:
-        deployed_classifier_used = (
-            latest_event.classifier_id == deployed_classifier.pk
-        )
-
-    if deployed_classifier_used:
-        # Has been used; so most likely the only images to look at are the
-        # unclassified ones.
-        images_to_classify = unclassified_images
-    else:
-        # Hasn't been used; so the classifier needs to run on everything.
-        images_to_classify = classifiable_images
+    # The images we should classify are the images that...
+    # - Have features extracted
+    # - Are non-confirmed (incomplete) and classifier isn't the deployed
+    #   classifier, OR, are unclassified (covering the case where the deployed
+    #   classifier's annotations were deleted)
+    extracted_images = source.image_set.with_features()
+    images_to_classify = (
+        extracted_images.incomplete().exclude(
+            annoinfo__classifier=source.deployed_classifier)
+        |
+        extracted_images.unclassified()
+    )
 
     if images_to_classify.exists():
 
@@ -235,15 +207,34 @@ def check_source(source_id):
             active_classify_jobs.values_list('arg_identifier', flat=True)
         ])
 
-        # Try to schedule classifications
         num_scheduled_classifications = 0
-        for image in images_to_classify:
-            if image.pk in active_classify_image_ids:
+        work_score = 0
+
+        # Try to schedule classifications
+        for vals in images_to_classify.values('id', 'point_generation_method'):
+            image_id = vals['id']
+            if image_id in active_classify_image_ids:
                 # Very quick short-circuit without additional DB check.
                 continue
 
+            point_count = PointGen.from_db_value(
+                vals['point_generation_method']).total_points
+            # When measuring the amount of 'work' a classification is, say each
+            # image has this base value, and add the point count to that.
+            # (Based on a vague recollection of classification runtimes with
+            # different point counts, recent changes since those recollections,
+            # and accounting for general overhead of starting/finishing jobs.)
+            image_base_value = 100
+            work_score += image_base_value + point_count
+
+            if work_score > settings.SOURCE_CLASSIFICATIONS_MAX_WORK:
+                # That's enough for this source at the moment.
+                # If we schedule too much classifications work at once, other
+                # jobs may not get a chance to run for a while.
+                break
+
             job, created = schedule_job(
-                'classify_features', image.pk, source_id=source_id)
+                'classify_features', image_id, source_id=source_id)
             if not created:
                 continue
 
@@ -495,7 +486,27 @@ def deploy(api_job_id, api_unit_order, job_id):
     return msg
 
 
-@job_runner(job_name='classify_features', job_display_name="Classify")
+def after_classify_features(job_id):
+    job = Job.objects.get(pk=job_id)
+    source_id = job.source_id
+
+    if source_is_finished_with_core_jobs(source_id):
+        # There may be more classifications to schedule, if the previous
+        # source check reached the limit for number of classifications.
+        # Or, classification for this source may be done, in which case it's
+        # useful to confirm whether the source is all caught up (can see the
+        # confirmation message when looking at job/backend dashboards).
+        #
+        # Either way (especially the former case), use a delay so that other
+        # jobs get a chance to run. Since most classifications run on the
+        # web server, they can hog web server resources.
+        schedule_source_check(source_id, delay=timedelta(minutes=10))
+
+
+@job_runner(
+    job_name='classify_features', job_display_name="Classify",
+    after_finishing_job=after_classify_features,
+)
 def classify_image(image_id):
     """Classify a source's image."""
     try:
@@ -537,10 +548,13 @@ def classify_image(image_id):
     # Pre-fetch label objects
     label_objs = [Label.objects.get(pk=pk) for pk in res.classes]
 
-    # Add annotations if image isn't already confirmed    
+    result_message = f"Used classifier {classifier.pk}"
+    # Add annotations if image isn't already confirmed
     if not img.annoinfo.confirmed:
         try:
-            th.add_annotations(image_id, res, label_objs, classifier)
+            annotation_summary = th.add_annotations(
+                image_id, res, label_objs, classifier)
+            result_message += f": {annotation_summary}"
         except (IntegrityError, RowColumnMismatchError):
             raise JobError(
                 f"Failed to save annotations for image {image_id}."
@@ -562,20 +576,11 @@ def classify_image(image_id):
             f" with the image's points."
         )
 
-    this_job = Job.objects.get(
-        job_name='classify_features',
-        arg_identifier=image_id,
-        status=Job.Status.IN_PROGRESS,
-    )
-    if source_is_finished_with_core_jobs(
-        img.source_id, job_id_about_to_finish=this_job.pk,
-    ):
-        # Classification for this source may be done.
-        # Confirm whether the source is all caught up. It's useful to see that
-        # confirmation message when looking at job/backend dashboards.
-        schedule_source_check(img.source_id)
+    img.annoinfo.refresh_from_db()
+    img.annoinfo.classifier = classifier
+    img.annoinfo.save()
 
-    return f"Used classifier {classifier.pk}"
+    return result_message
 
 
 def after_collect(job_id):

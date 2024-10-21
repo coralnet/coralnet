@@ -194,6 +194,11 @@ def finish_job(
             schedule_job(name, delay=next_run_delay(interval, offset))
 
 
+def abort_job(job_id: int):
+    job = Job.objects.get(pk=job_id)
+    finish_job(job, success=False, result_message="Aborted manually")
+
+
 class JobDecorator:
     def __init__(
         self, job_name: str = None, job_display_name: str = None,

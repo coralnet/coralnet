@@ -56,6 +56,13 @@ class ImageAnnotationInfo(models.Model):
         # Name of reverse relation
         related_name='annoinfo')
 
+    # The Classifier that this image's Scores (if any) are from, and that this
+    # image's unconfirmed Annotations (if any) match up with.
+    classifier = models.ForeignKey(
+        Classifier, on_delete=models.SET_NULL,
+        editable=False, null=True,
+    )
+
     # The image's annotation status. This is a redundant field, in the sense
     # that it can be computed from the annotations. But it's necessary
     # for image-searching performance.

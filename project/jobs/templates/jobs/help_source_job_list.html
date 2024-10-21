@@ -23,7 +23,7 @@
       <strong>Train classifier:</strong> Trains a new classifier for the source, using all the confirmed and feature-extracted images in the source up to that point. The new classifier may or may not be saved, depending on how the evaluation results compare to the source's previous classifier.
     </li>
     <li>
-      <strong>Classify:</strong> Classifies an image, using the source's selected classifier.
+      <strong>Classify:</strong> Classifies an image, using the source's selected classifier. This updates machine suggestions for the annotation tool and for exports, and also updates annotations if they're not confirmed yet.
     </li>
     <li>
       <strong>Reset classifiers for source:</strong> Clear all previous saved classifiers for the source. Certain changes, such as changing the source's labelset, will result in this job being scheduled.
