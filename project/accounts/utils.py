@@ -1,13 +1,18 @@
+from functools import lru_cache
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
 
+@lru_cache
 def get_imported_user():
     return User.objects.get(username=settings.IMPORTED_USERNAME)
+@lru_cache
 def get_robot_user():
     return User.objects.get(username=settings.ROBOT_USERNAME)
+@lru_cache
 def get_alleviate_user():
     return User.objects.get(username=settings.ALLEVIATE_USERNAME)
 
