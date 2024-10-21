@@ -158,31 +158,44 @@ class ExtractFeaturesTest(BaseTaskTest):
 
     @override_settings(SPACER={'MAX_IMAGE_PIXELS': 100})
     def test_resolution_too_large(self):
-        # Upload image.
-        img1 = self.upload_image(
-            self.user, self.source, image_options=dict(width=10, height=10))
+        # Upload enough within-limit images for training.
+        # (The too-large message only shows when the source has a classifier.)
+        filenames = ['val0.png'] + [
+            f'train{i}.png' for i in range(settings.TRAINING_MIN_IMAGES)]
+        for filename in filenames:
+            image = self.upload_image(
+                self.user, self.source,
+                image_options=dict(width=10, height=10, filename=filename))
+            self.add_annotations(self.user, image)
         # Upload too-large image.
-        img2 = self.upload_image(
+        large_image = self.upload_image(
             self.user, self.source, image_options=dict(width=10, height=11))
+
         # Extract features + process result.
         run_scheduled_jobs_until_empty()
         do_collect_spacer_jobs()
 
-        # Let the next source-check get past the training and classification
-        # checks.
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, img1)
+        large_image.features.refresh_from_db()
+        self.assertFalse(
+            large_image.features.extracted,
+            msg="Too-large image shouldn't have features extracted")
 
-        # Check source again.
+        # Train.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+        # Classify.
         run_scheduled_jobs_until_empty()
 
-        img2.features.refresh_from_db()
-        self.assertFalse(img2.features.extracted)
+        large_image.features.refresh_from_db()
+        self.assertFalse(
+            large_image.features.extracted,
+            msg="Too-large image shouldn't have features extracted")
         self.source_check_and_assert(
             "At least one image has too large of a resolution to extract"
-            f" features (example: image ID {img2.pk})."
+            f" features (example: image ID {large_image.pk})."
             f" Otherwise, the source seems to be all caught up."
-            f" Not enough annotated images for initial training",
+            f" Need 5 annotated images for next training, and currently"
+            f" have 4",
             expected_hidden=True,
         )
 
