@@ -6,7 +6,6 @@ from unittest import mock, skip
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
-from django.core.management import call_command
 from django.template.defaultfilters import date as date_template_filter
 from django.test import override_settings
 from django.urls import reverse
@@ -17,6 +16,7 @@ from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run
 )
 from ..models import Job
+from ..utils import abort_job
 from .utils import fabricate_job
 
 
@@ -770,7 +770,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             Job.Status.PENDING,
             delay=-timedelta(minutes=10, seconds=30),
         )
-        call_command('abort_job', job.pk)
+        abort_job(job.pk)
         self.assert_cell_and_title(
             "Timing info", "Completed 0\xa0minutes ago",
             # Wait time is supposed to be scheduled date to start date, but
@@ -786,7 +786,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
         )
         job.scheduled_start_date = None
         job.save()
-        call_command('abort_job', job.pk)
+        abort_job(job.pk)
         self.assert_cell_and_title(
             "Timing info", "Completed 0\xa0minutes ago",
             f"Waited for 0\xa0minutes; ran for 10\xa0minutes;"

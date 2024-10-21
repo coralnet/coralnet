@@ -1,7 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from jobs.models import Job
-from jobs.utils import finish_job
+from ...utils import abort_job
 
 
 class Command(BaseCommand):
@@ -17,7 +16,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         job_ids = options.get('job_ids')
         for job_id in job_ids:
-            job = Job.objects.get(pk=job_id)
-            finish_job(job, success=False, result_message="Aborted manually")
+            abort_job(job_id)
         self.stdout.write(
             f"The {len(job_ids)} specified Job(s) have been aborted.")
