@@ -391,7 +391,7 @@ FEATURE_CACHING_ANNOTATION_LIMIT = env(
 # Since classify-features jobs happen on the web server instead of in
 # Batch, there's a risk of monopolizing the web server resources (namely, the
 # processes allocated for background jobs) if there is no limit here.
-SOURCE_CLASSIFICATIONS_MAX_WORK = 50000
+SOURCE_CLASSIFICATIONS_MAX_WORK = 100000
 
 # Spacer job hash to identify this server instance's jobs in the AWS Batch
 # dashboard.

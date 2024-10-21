@@ -220,11 +220,12 @@ def check_source(source_id):
             point_count = PointGen.from_db_value(
                 vals['point_generation_method']).total_points
             # When measuring the amount of 'work' a classification is, say each
-            # image has a base value of 10, and add the point count to that.
+            # image has this base value, and add the point count to that.
             # (Based on a vague recollection of classification runtimes with
-            # different point counts, and accounting for general overhead of
-            # starting/finishing jobs.)
-            work_score += 30 + point_count
+            # different point counts, recent changes since those recollections,
+            # and accounting for general overhead of starting/finishing jobs.)
+            image_base_value = 100
+            work_score += image_base_value + point_count
 
             if work_score > settings.SOURCE_CLASSIFICATIONS_MAX_WORK:
                 # That's enough for this source at the moment.
