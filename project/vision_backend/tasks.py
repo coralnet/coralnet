@@ -652,9 +652,34 @@ def reset_classifiers_for_source(source_id):
     """
     Removes all traces of the classifiers for this source.
     """
+    # Nobody has foreign keys to Scores, so this is one efficient query.
     Score.objects.filter(source_id=source_id).delete()
+
+    # There are SET_NULL FKs to Annotations, so deletion would induce Django
+    # to fetch all Annotations as part of implementing setting null. This could
+    # run us out of memory with production amounts of Annotations, so we chunk
+    # it.
+    # We also use only() to reduce what's fetched.
+    #
+    # We do this before deleting Classifiers, since Annotations have FKs to
+    # Classifiers, but not vice versa. So this order should reduce a bit of
+    # work, and also makes more sense from a data consistency standpoint.
+    annotations = (
+        Annotation.objects.filter(source_id=source_id)
+        .unconfirmed()
+        .only('pk')
+    )
+    while True:
+        chunk_pks = annotations[:settings.QUERYSET_CHUNK_SIZE].values('pk')
+        if chunk_pks:
+            Annotation.objects.filter(pk__in=chunk_pks).only('pk').delete()
+        else:
+            break
+
+    # There are SET_NULL FKs to Classifiers, so this fetches all classifiers to
+    # implement setting null. But that's okay since there aren't many
+    # classifiers per source.
     Classifier.objects.filter(source_id=source_id).delete()
-    Annotation.objects.filter(source_id=source_id).unconfirmed().delete()
 
     # Can probably train a new classifier.
     schedule_source_check(source_id)

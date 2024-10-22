@@ -3,10 +3,13 @@ from unittest import mock
 from django.test.utils import override_settings
 from django.urls import reverse
 
+from annotations.managers import AnnotationQuerySet
 from annotations.models import Annotation
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
+from jobs.tests.utils import do_job
 from jobs.utils import schedule_job
+from lib.tests.utils import spy_decorator
 from ...models import Score, Classifier
 from .utils import BaseTaskTest, do_collect_spacer_jobs
 
@@ -86,6 +89,72 @@ class ResetTaskTest(BaseTaskTest):
             self.assertTrue(
                 image.annoinfo.confirmed,
                 "Confirmed image should still be confirmed")
+
+    @override_settings(QUERYSET_CHUNK_SIZE=10)
+    def test_reset_classifiers_in_chunks(self):
+
+        self.upload_data_and_train_classifier()
+
+        # 5x5 = 25 unconfirmed annotations
+        for _ in range(5):
+            self.upload_image_and_machine_classify()
+
+        self.assertEqual(
+            self.source.annotation_set.unconfirmed().count(), 25,
+            "Should have expected number of unconfirmed annotations")
+
+        # Reset classifiers, while tracking how many chunks are used when
+        # deleting the unconfirmed annotations.
+        annotation_delete = spy_decorator(AnnotationQuerySet.delete)
+        with mock.patch.object(AnnotationQuerySet, 'delete', annotation_delete):
+            do_job(
+                'reset_classifiers_for_source', self.source.pk,
+                source_id=self.source.pk)
+        self.assertEqual(
+            annotation_delete.mock_obj.call_count, 3,
+            msg="Should require 3 chunks of 10 to delete 25 annotations"
+        )
+
+        self.assertEqual(
+            self.source.annotation_set.unconfirmed().count(), 0,
+            "Should have no unconfirmed annotations left")
+        self.assertGreater(
+            self.source.annotation_set.confirmed().count(), 0,
+            "Should still have confirmed annotations")
+        self.assertEqual(
+            self.source.classifier_set.count(), 0,
+            "Should have no classifier left")
+
+    def test_reset_classifiers_doesnt_affect_other_sources(self):
+
+        self.upload_data_and_train_classifier()
+        self.upload_data_and_train_classifier()
+        for _ in range(3):
+            self.upload_image_and_machine_classify()
+
+        source_2 = self.create_source(self.user)
+        self.create_labelset(self.user, source_2, self.labels)
+        self.upload_data_and_train_classifier(source=source_2)
+        for _ in range(3):
+            self.upload_image_and_machine_classify(source=source_2)
+
+        do_job(
+            'reset_classifiers_for_source', self.source.pk,
+            source_id=self.source.pk)
+
+        self.assertEqual(
+            self.source.annotation_set.unconfirmed().count(), 0,
+            "self.source should have no unconfirmed annotations left")
+        self.assertEqual(
+            self.source.classifier_set.count(), 0,
+            "self.source should have no classifier left")
+
+        self.assertGreater(
+            source_2.annotation_set.unconfirmed().count(), 0,
+            "source_2 should still have unconfirmed annotations")
+        self.assertGreater(
+            source_2.classifier_set.count(), 0,
+            "source_2 should still have a classifier")
 
     def test_reset_features_for_source(self):
 
