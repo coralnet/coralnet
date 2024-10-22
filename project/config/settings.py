@@ -320,6 +320,14 @@ IMAGE_UPLOAD_ACCEPTED_CONTENT_TYPES = [
 ]
 CSV_UPLOAD_MAX_FILE_SIZE = 30*1024*1024  # 30 MB
 
+# [CoralNet setting]
+# Sometimes we specify a really large queryset and anticipate that our code
+# will induce Django to load it all into memory. For example, QuerySet.delete()
+# seems to do this if there are any SET_NULL foreign keys pointing to the model
+# in question. In these cases, we can code it in such a way that the objects
+# are loaded in chunks so that we don't run out of memory.
+QUERYSET_CHUNK_SIZE = 100000
+
 
 #
 # PySpacer and the vision backend
@@ -1191,6 +1199,9 @@ LOGGING = {
     },
 }
 # This can help with debugging DB queries.
+# Note: you must set django.db.connection.force_debug_cursor to True
+# before the code of interest to actually log any non-schema queries.
+# Then set to False when you don't need to log any more.
 if env.bool('LOG_DATABASE_QUERIES', default=False):
     LOGGING['handlers']['database'] = {
         'filename': LOG_DIR / 'database.log',

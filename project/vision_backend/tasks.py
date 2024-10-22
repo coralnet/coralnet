@@ -68,6 +68,13 @@ def check_source(source_id):
     except Source.DoesNotExist:
         raise JobError(f"Can't find source {source_id}")
 
+    active_reset_jobs = source.job_set.incomplete().filter(
+        job_name__in=['reset_classifiers_for_source',
+                      'reset_features_for_source'],
+    )
+    if active_reset_jobs.exists():
+        return "Waiting for reset job to finish"
+
     if source.feature_extractor is None:
         # None of the backend processes can happen without being able to
         # extract features.
@@ -632,10 +639,21 @@ def collect_spacer_jobs():
     return result_str
 
 
-@job_runner()
+def reset_start_condition(job_id):
+    job = Job.objects.get(pk=job_id)
+    return source_is_finished_with_core_jobs(job.source_id)
+
+
+@job_runner(
+    atomic=True,
+    start_condition=reset_start_condition)
 def reset_features_for_source(source_id):
     """
     Clears all extracted features for this source.
+
+    atomic=True because there is a schedule_source_check_on_commit()
+    within here, which we want to run after this job finishes, so that the
+    source check isn't stopped by this reset job still being active.
     """
     reset_features_bulk(Image.objects.filter(source_id=source_id))
 
@@ -646,15 +664,29 @@ def after_reset_classifiers(job_id):
     job.persist = True
     job.save()
 
+    # Can probably train a new classifier. Also, it's possible that the
+    # reset job made a previous source check get cut short.
+    schedule_source_check(job.source_id)
 
-@job_runner(after_finishing_job=after_reset_classifiers)
+
+@job_runner(
+    start_condition=reset_start_condition,
+    after_finishing_job=after_reset_classifiers)
 def reset_classifiers_for_source(source_id):
     """
     Removes all traces of the classifiers for this source.
     """
+    # Nobody has foreign keys to Scores, so this is one efficient query.
     Score.objects.filter(source_id=source_id).delete()
-    Classifier.objects.filter(source_id=source_id).delete()
-    Annotation.objects.filter(source_id=source_id).unconfirmed().delete()
 
-    # Can probably train a new classifier.
-    schedule_source_check(source_id)
+    # Delete unconfirmed Annotations.
+    # We do this before deleting Classifiers, since Annotations have FKs to
+    # Classifiers, but not vice versa. So this order should reduce a bit of
+    # work, and also makes more sense from a data consistency standpoint.
+    Annotation.objects.filter(
+        source_id=source_id).unconfirmed().delete_in_chunks()
+
+    # There are SET_NULL FKs to Classifiers, so this fetches all classifiers to
+    # implement setting null. But that's okay since there aren't many
+    # classifiers per source.
+    Classifier.objects.filter(source_id=source_id).delete()

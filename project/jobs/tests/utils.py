@@ -83,7 +83,7 @@ def do_job(
     now = datetime.now(timezone.utc)
 
     if created:
-        start_job(job)
+        started = start_job(job)
     else:
         if job.status == Job.Status.PENDING:
             if job.scheduled_start_date < now:
@@ -92,8 +92,12 @@ def do_job(
                 # since it can be misleading.
                 job.scheduled_start_date = None
                 job.save()
-            start_job(job)
-        # Else, the same job was already existing and running.
+            started = start_job(job)
+        else:
+            # The same job was already existing and running.
+            started = True
+
+    assert started, "Expected to start the job, but start condition not met."
 
     job.refresh_from_db()
     return job

@@ -75,11 +75,13 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
     @classmethod
     def upload_image_with_annotations(
         cls, filename,
-        annotation_scheme='cycle', label_codes=None,
+        source=None, annotation_scheme='cycle', label_codes=None,
     ):
+        source = source or cls.source
         img = cls.upload_image(
-            cls.user, cls.source, image_options=dict(filename=filename))
+            cls.user, source, image_options=dict(filename=filename))
         label_codes = label_codes or ['A', 'B']
+
         match annotation_scheme:
             case 'cycle':
                 # As long as there are at least 2 points per image, this will
@@ -96,14 +98,17 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
                 }
             case _:
                 assert False, "label_choices should be a valid option"
+
         cls.add_annotations(cls.user, img, annotations)
         return img
 
     @classmethod
     def upload_images_for_training(
-        cls, train_image_count=None, val_image_count=1,
+        cls, source=None, train_image_count=None, val_image_count=1,
         annotation_scheme='cycle', label_codes=None,
     ):
+        source = source or cls.source
+
         if train_image_count is None:
             # Provide enough data for initial training
             train_image_count = settings.TRAINING_MIN_IMAGES
@@ -115,6 +120,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
             train_images.append(
                 cls.upload_image_with_annotations(
                     'train{}.png'.format(cls.image_count),
+                    source=source,
                     annotation_scheme=annotation_scheme,
                     label_codes=label_codes,
                 )
@@ -123,6 +129,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
             val_images.append(
                 cls.upload_image_with_annotations(
                     'val{}.png'.format(cls.image_count),
+                    source=source,
                     annotation_scheme=annotation_scheme,
                     label_codes=label_codes,
                 )
@@ -131,40 +138,50 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
         return train_images, val_images
 
     @classmethod
-    def upload_data_and_train_classifier(cls, new_train_images_count=None):
+    def upload_data_and_train_classifier(
+        cls, source=None, new_train_images_count=None,
+    ):
+        source = source or cls.source
         train_images, val_images = cls.upload_images_for_training(
-            train_image_count=new_train_images_count, val_image_count=1)
+            source=source,
+            train_image_count=new_train_images_count,
+            val_image_count=1,
+        )
         # Extract features
         # In most cases, run_scheduled_jobs_until_empty() would be equivalent
         # to these do_job() calls, but sometimes it's useful to make sure no
         # other job runs in the meantime.
         for image in [*train_images, *val_images]:
-            do_job('extract_features', image.pk, source_id=cls.source.pk)
+            do_job('extract_features', image.pk, source_id=source.pk)
         do_collect_spacer_jobs()
         # Train classifier
         job = do_job(
-            'train_classifier', cls.source.pk, source_id=cls.source.pk)
+            'train_classifier', source.pk, source_id=source.pk)
         do_collect_spacer_jobs()
 
         return Classifier.objects.get(train_job_id=job.pk)
 
     @classmethod
-    def upload_image_for_classification(cls):
+    def upload_image_for_classification(cls, source=None):
+        source = source or cls.source
+
         # Image without annotations
-        image = cls.upload_image(cls.user, cls.source)
+        image = cls.upload_image(cls.user, source)
         # Extract features
-        do_job('extract_features', image.pk, source_id=cls.source.pk)
+        do_job('extract_features', image.pk, source_id=source.pk)
         do_collect_spacer_jobs()
 
         image.refresh_from_db()
         return image
 
     @classmethod
-    def upload_image_and_machine_classify(cls):
+    def upload_image_and_machine_classify(cls, source=None):
+        source = source or cls.source
+
         # Image without annotations, with features extracted
-        image = cls.upload_image_for_classification()
+        image = cls.upload_image_for_classification(source=source)
         # Classify image (assumes there's already a classifier)
-        do_job('classify_features', image.pk, source_id=cls.source.pk)
+        do_job('classify_features', image.pk, source_id=source.pk)
 
         image.refresh_from_db()
         return image

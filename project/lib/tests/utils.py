@@ -1470,3 +1470,17 @@ def make_media_url_comparable(url):
     comparable_url = urlunsplit(
         urlsplit(url)._replace(query=urlencode(comparable_query_args)))
     return comparable_url
+
+
+def spy_decorator(method_to_decorate):
+    """
+    A way to track calls to a class's instance method, across all instances
+    of the class. From:
+    https://stackoverflow.com/a/41599695
+    """
+    mock_obj = mock.MagicMock()
+    def wrapper(self, *args, **kwargs):
+        mock_obj(*args, **kwargs)
+        return method_to_decorate(self, *args, **kwargs)
+    wrapper.mock_obj = mock_obj
+    return wrapper

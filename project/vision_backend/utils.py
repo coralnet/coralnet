@@ -213,25 +213,21 @@ def schedule_source_check_on_commit(source_id, delay=None):
     )
 
 
-def source_is_finished_with_core_jobs(
-    source_id: int,
-    job_id_about_to_finish: int = None,
-) -> bool:
+def source_is_finished_with_core_jobs(source_id: int) -> bool:
     """
     Is the source still running any 'core' vision-backend jobs?
-    This quick confirmation can be useful when deciding whether to run
-    another source check.
-
-    If this is called from a core job which is about to finish (and thus we
-    don't want to count that job), that job's ID can be passed as
-    job_id_about_to_finish.
+    This quick confirmation can be useful, for example, when deciding
+    whether to run another source check.
     """
     core_source_job_names = [
-        'extract_features', 'train_classifier', 'classify_features']
+        'extract_features',
+        'train_classifier',
+        'classify_features',
+        'check_source',
+    ]
     incomplete_core_jobs = (
         Job.objects
         .filter(source_id=source_id, job_name__in=core_source_job_names)
-        .exclude(pk=job_id_about_to_finish)
         .incomplete()
     )
     return not incomplete_core_jobs.exists()
