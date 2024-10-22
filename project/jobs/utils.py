@@ -159,15 +159,24 @@ def schedule_job_on_commit(name: str, *args, **kwargs) -> None:
         functools.partial(schedule_job, name, *args, **kwargs))
 
 
-def start_job(job: Job) -> None:
+def start_job(job: Job) -> bool:
     """
     Immediately add an existing Job to huey's queue.
 
     The Job's JobDecorator (part of the 'run function') will
     presumably take care of updating the Job's status/fields.
+
+    Return True if the job was actually started, else False.
     """
-    starter_task = get_job_details(job.job_name)['run_function']
+    job_details = get_job_details(job.job_name)
+
+    if job_details['start_condition'] is not None:
+        if not job_details['start_condition'](job.pk):
+            return False
+
+    starter_task = job_details['run_function']
     starter_task(*Job.identifier_to_args(job.arg_identifier))
+    return True
 
 
 def finish_job(
@@ -205,6 +214,8 @@ class JobDecorator:
         interval: timedelta = None, offset: datetime = None,
         huey_interval_minutes: int = None,
         task_queue_name: str = None,
+        atomic: bool = False,
+        start_condition: Callable[[int], bool] = None,
         after_finishing_job: Callable[[int], None] = None,
     ):
         # This can be left unspecified if the task name works as the
@@ -240,6 +251,15 @@ class JobDecorator:
         # task.
         # Only minute-intervals are supported for simplicity.
         self.huey_interval_minutes = huey_interval_minutes
+
+        # If True, we're database-atomic from just after starting the job
+        # until just after the task function + after_finishing_job.
+        self.atomic = atomic
+
+        # Optional callable that's called at the start of start_job()
+        # (if applicable to the task decorator); if it returns True, then
+        # the job is allowed to start. Takes the Job ID as an argument.
+        self.start_condition = start_condition
 
         # Optional callable that's called after finish_job() (if applicable to
         # the task decorator) and takes the Job ID as an argument.
@@ -324,12 +344,44 @@ class JobDecorator:
             run_function=task_wrapper,
             is_source_job=is_source_job,
             task_queue_name=self.task_queue_name,
+            start_condition=self.start_condition,
         )
 
         return task_wrapper
 
     def run_task_wrapper(self, task_func, task_args):
         raise NotImplementedError
+
+    def run_entire_task_wrapper(self, job, task_func, task_args):
+        """
+        Wrapper for a task function which consists of the job spec
+        in its entirety. Thus, it's just started as we enter here,
+        and this wrapper should mark it finished.
+        """
+        success = False
+        result_message = None
+        try:
+            # Run the task function (which isn't a huey task itself;
+            # the result of this wrapper should be registered as a
+            # huey task).
+            result_message = task_func(*task_args)
+            success = True
+        except JobError as e:
+            result_message = str(e)
+        except Exception as e:
+            # Non-JobError; a category of error we haven't expected here, and
+            # likely needs fixing. Report it like a server error.
+            self.report_unexpected_error()
+            # Include the error class name, since some error types' messages
+            # don't have enough context otherwise (e.g. a KeyError's message
+            # is just the key that was tried).
+            result_message = f'{type(e).__name__}: {e}'
+        finally:
+            # Regardless of error or not, mark job as done
+            finish_job(job, success=success, result_message=result_message)
+
+            if self.after_finishing_job:
+                self.after_finishing_job(job.pk)
 
     def report_unexpected_error(self):
         # Get the most recent exception's info.
@@ -435,30 +487,14 @@ class FullJobDecorator(JobDecorator):
         if job is None:
             return
 
-        success = False
-        result_message = None
-        try:
-            # Run the task function (which isn't a huey task itself;
-            # the result of this wrapper should be registered as a
-            # huey task).
-            result_message = task_func(*task_args)
-            success = True
-        except JobError as e:
-            result_message = str(e)
-        except Exception as e:
-            # Non-JobError; a category of error we haven't expected here, and
-            # likely needs fixing. Report it like a server error.
-            self.report_unexpected_error()
-            # Include the error class name, since some error types' messages
-            # don't have enough context otherwise (e.g. a KeyError's message
-            # is just the key that was tried).
-            result_message = f'{type(e).__name__}: {e}'
-        finally:
-            # Regardless of error or not, mark job as done
-            finish_job(job, success=success, result_message=result_message)
-
-            if self.after_finishing_job:
-                self.after_finishing_job(job.pk)
+        if self.atomic:
+            # Note that the above job creation isn't atomic with
+            # this part, otherwise we'd never see the job status
+            # until the job's done (at which point it's marked completed).
+            with transaction.atomic():
+                self.run_entire_task_wrapper(job, task_func, task_args)
+        else:
+            self.run_entire_task_wrapper(job, task_func, task_args)
 
 
 full_job = FullJobDecorator
@@ -477,24 +513,14 @@ class JobRunnerDecorator(JobDecorator):
         if job is None:
             return
 
-        success = False
-        result_message = None
-        try:
-            result_message = task_func(*task_args)
-            success = True
-        except JobError as e:
-            result_message = str(e)
-        except Exception as e:
-            # Non-JobError, likely needs fixing:
-            # report it like a server error.
-            self.report_unexpected_error()
-            result_message = f'{type(e).__name__}: {e}'
-        finally:
-            # Regardless of error or not, mark job as done
-            finish_job(job, success=success, result_message=result_message)
-
-            if self.after_finishing_job:
-                self.after_finishing_job(job.pk)
+        if self.atomic:
+            # Note that the above update to in-progress isn't atomic with
+            # this part, otherwise we'd never see the in-progress status
+            # until the job's done (at which point it's marked completed).
+            with transaction.atomic():
+                self.run_entire_task_wrapper(job, task_func, task_args)
+        else:
+            self.run_entire_task_wrapper(job, task_func, task_args)
 
 
 job_runner = JobRunnerDecorator
@@ -514,6 +540,13 @@ class JobStarterDecorator(JobDecorator):
         if job is None:
             return
 
+        if self.atomic:
+            with transaction.atomic():
+                self.run_task_start_wrapper(job, task_func, task_args)
+        else:
+            self.run_task_start_wrapper(job, task_func, task_args)
+
+    def run_task_start_wrapper(self, job, task_func, task_args):
         try:
             task_func(*task_args, job_id=job.pk)
         except JobError as e:
@@ -557,13 +590,15 @@ def get_job_details(job_name):
 
 
 def _register_job(
-    name, display_name, run_function, is_source_job, task_queue_name
+    name, display_name, run_function, is_source_job, task_queue_name,
+    start_condition=None,
 ):
     _registered_jobs[name] = dict(
         display_name=display_name,
         run_function=run_function,
         is_source_job=is_source_job,
         task_queue_name=task_queue_name,
+        start_condition=start_condition,
     )
 
 

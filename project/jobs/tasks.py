@@ -64,10 +64,16 @@ def run_scheduled_jobs():
 
     for job in jobs_to_run:
         try:
-            start_job(job)
+            started = start_job(job)
         except UnrecognizedJobNameError:
             finish_job(
                 job, success=False, result_message="Unrecognized job name")
+            continue
+
+        if not started:
+            # May refuse to start if the start condition for the job is
+            # currently not met.
+            # Try again next time.
             continue
 
         jobs_ran += 1

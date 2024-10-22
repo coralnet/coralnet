@@ -382,6 +382,28 @@ class RegeneratePointsTest(ImageDetailActionBaseTest):
     def test_show_button_if_no_annotations(self):
         self.assertLinkPresent(self.user, self.img)
 
+    def test_reset_features(self):
+        """
+        If we generate new points, features must be reset.
+        """
+        image = self.upload_image(self.user, self.source)
+        image.features.extracted = True
+        image.features.save()
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, image)
+
+        image.features.refresh_from_db()
+        image.annoinfo.refresh_from_db()
+        self.assertTrue(image.features.extracted, "Should have features")
+        self.assertTrue(image.annoinfo.classified, "Should be classified")
+
+        self.post_to_action_view(self.user, image)
+
+        image.features.refresh_from_db()
+        image.annoinfo.refresh_from_db()
+        self.assertFalse(image.features.extracted, "Features should be reset")
+        self.assertFalse(image.annoinfo.classified, "Should not be classified")
+
 
 class ResetPointGenTest(ImageDetailActionBaseTest):
     action_url_name = 'image_reset_point_generation_method'
