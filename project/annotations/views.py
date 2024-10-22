@@ -152,7 +152,7 @@ def batch_delete_annotations_ajax(request, source_id):
     image_count = image_set.count()
 
     # Delete annotations.
-    Annotation.objects.filter(image__in=image_set).delete()
+    Annotation.objects.filter(image__in=image_set).delete_in_chunks()
 
     # This should appear on the next browse load.
     messages.success(

@@ -1,10 +1,14 @@
+from unittest import mock
+
 from bs4 import BeautifulSoup
+from django.test.utils import override_settings
 from django.urls import reverse
 
 from jobs.tasks import run_scheduled_jobs_until_empty
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, ClientTest, spy_decorator
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, do_collect_spacer_jobs)
+from ..managers import AnnotationQuerySet
 
 
 class PermissionTest(BasePermissionTest):
@@ -132,7 +136,7 @@ class SuccessTest(BaseDeleteTest):
 
         for image in [self.img1, self.img2, self.img3]:
             image.refresh_from_db()
-            self.add_annotations(self.user, image, {1: 'A', 2: 'B'})
+            self.add_annotations(self.user, image)
 
     def test_delete_for_all_images(self):
         """
@@ -185,6 +189,30 @@ class SuccessTest(BaseDeleteTest):
         self.assert_annotations_deleted(self.img3)
 
         self.assert_confirmation_message(count=2)
+
+    @override_settings(QUERYSET_CHUNK_SIZE=4)
+    def test_chunks(self):
+        # Add a few more annotated images (3 -> 7) so the chunk-math
+        # instills a bit more confidence.
+        for _ in range(4):
+            image = self.upload_image(self.user, self.source)
+            self.add_annotations(self.user, image)
+        self.assertEqual(
+            self.source.annotation_set.count(), 14,
+            msg="Should have 2*7 = 14 annotations"
+        )
+
+        # Delete for all images, while tracking how many chunks are used
+        # when deleting.
+        annotation_delete = spy_decorator(AnnotationQuerySet.delete)
+        with mock.patch.object(AnnotationQuerySet, 'delete', annotation_delete):
+            self.client.force_login(self.user)
+            self.client.post(self.url, default_search_params)
+
+        self.assertEqual(
+            annotation_delete.mock_obj.call_count, 4,
+            msg="Should require 4 chunks of 4 to delete 14 annotations"
+        )
 
 
 class NotFullyAnnotatedTest(BaseDeleteTest):

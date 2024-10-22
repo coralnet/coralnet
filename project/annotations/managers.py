@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Union
 
+from django.conf import settings
 from django.db import models
 
 from accounts.utils import get_robot_user, is_robot_user
@@ -16,6 +17,25 @@ class AnnotationQuerySet(models.QuerySet):
     def unconfirmed(self):
         """Unconfirmed annotations only."""
         return self.filter(user=get_robot_user())
+
+    def delete_in_chunks(self):
+        """
+        Deletion would induce Django to fetch all Annotations to be deleted,
+        at the very least because there are SET_NULL FKs to Annotations. This
+        could run us out of memory in some cases with production amounts of
+        Annotations. This method allows deleting in chunks so that's not a
+        concern.
+        Pattern is from https://stackoverflow.com/questions/60736901/
+        We also use only() to reduce what's fetched.
+        """
+        queryset = self.only('pk')
+
+        while True:
+            chunk_pks = queryset[:settings.QUERYSET_CHUNK_SIZE].values('pk')
+            if chunk_pks:
+                self.model.objects.filter(pk__in=chunk_pks).only('pk').delete()
+            else:
+                break
 
     def delete(self):
         """
