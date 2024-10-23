@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 
 def populate(apps, schema_editor):
+    Classifier = apps.get_model('vision_backend', 'Classifier')
     Event = apps.get_model('events', 'Event')
     Image = apps.get_model('images', 'Image')
     Score = apps.get_model('vision_backend', 'Score')
@@ -15,6 +16,10 @@ def populate(apps, schema_editor):
         .filter(type='classify_image')
         # only() limits fetching to only the specified fields.
         .only('image_id', 'classifier_id')
+        # Increasing image ids instead of decreasing, so that the images
+        # handled earliest - i.e. the images with the biggest desync due to
+        # this migration's long transaction - are hopefully not the most
+        # active images (when running this migration with the web server up).
         .order_by('image_id', '-pk')
         .distinct('image_id')
         # iterator() should avoid attempting to cache the whole result set,
@@ -26,9 +31,19 @@ def populate(apps, schema_editor):
         if not Score.objects.filter(image_id=event.image_id).exists():
             # Was previously classified, but scores were deleted, so it's
             # meaningless to set a classifier value.
+            # This also checks for the image being deleted or not.
+            continue
+        if not Classifier.objects.filter(pk=event.classifier_id).exists():
+            # Latest-event classifier was deleted. Likely needs reclassifying,
+            # so leave as null.
             continue
 
         image = Image.objects.only('pk', 'annoinfo').get(pk=event.image_id)
+        if image.annoinfo.classifier:
+            # Already filled in by a classification that happened before or
+            # during this migration.
+            continue
+
         image.annoinfo.classifier_id = event.classifier_id
         image.annoinfo.save()
 
