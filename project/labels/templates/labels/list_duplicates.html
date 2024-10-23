@@ -5,22 +5,25 @@
 
 <p>A duplicate label can still be used, but we encourage using the verified label instead.</p>
 
-<p>In total {{stats.dup_count}} duplicates has been identified with a total of {{stats.ann_count}} annotations.</p>
-<table class="detail_table_popup">
-<tr>
-    <th>Label</th>
-    <th>is duplicate of</th>
-    <th>Annotation count</th>
-</tr>
-{% for dup in labels %}
+<p>In total, {{ duplicates|length }} duplicates have been identified, with a total of {{ annotation_total }} confirmed annotations.</p>
+
+<table class="detail_table">
+  <thead>
     <tr>
-        <th><a href="{% url 'label_main' dup.id %}" style="color: green">{{ dup }}</a></th>
-        <th><a href="{% url 'label_main' dup.duplicate.id %}" style="color: green">{{ dup.duplicate }}</a></th>
-        <th>{{ dup.ann_count }}</th>
+      <th>Label</th>
+      <th>is duplicate of</th>
+      <th>Annotation count</th>
     </tr>
-
-{% endfor %}
-
+  </thead>
+  <tbody>
+    {% for dup in duplicates %}
+      <tr>
+        <td><a href="{% url 'label_main' dup.id %}" style="color: green">{{ dup.name }}</a></td>
+        <td><a href="{% url 'label_main' dup.duplicate_id %}" style="color: green">{{ dup.duplicate__name }}</a></td>
+        <td>{{ dup.annotation_count }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>
 
 {% endblock %}

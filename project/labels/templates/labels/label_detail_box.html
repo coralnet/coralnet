@@ -1,5 +1,4 @@
 {% load static %}
-{% load truncate_float from common_tags %}
 
 {% load calcify_rate_indicator from calcification %}
 
@@ -20,7 +19,7 @@
          data-src="{{ label.thumbnail.url }}"
          class="label-thumbnail lazy-load" alt="{{ label.name }}"/>
   {% else %}
-    <img src="{% static "img/placeholders/media-no-image-available__150x150.png" %}"
+    <img src="{% static 'img/placeholders/media-no-image-available__150x150.png' %}"
          class="label-thumbnail" alt="{{ label.name }}" />
   {% endif %}
 

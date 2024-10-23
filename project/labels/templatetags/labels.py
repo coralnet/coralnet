@@ -2,12 +2,14 @@ from django import template
 from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
+from ..utils import label_popularity
+
 register = template.Library()
 
 
 @register.simple_tag
 def popularity_bar(label, short=False):
-    if label.popularity >= 30:
+    if label_popularity(label.pk) >= 30:
         color = 'green'
     else:
         color = 'red'
@@ -18,13 +20,19 @@ def popularity_bar(label, short=False):
         meter_class = 'meter'
 
     # float -> int to truncate decimal, then int -> str
-    bar_width = str(int(label.popularity)) + '%'
+    bar_width = str(int(label_popularity(label.pk))) + '%'
     return mark_safe(
         '<div class="{meter_class}" title="{bar_width}">'
         '  <span class="{color}" style="width: {bar_width};"></span>'
         '</div>'.format(
             meter_class=meter_class, color=color, bar_width=bar_width)
     )
+
+
+@register.simple_tag
+def popularity_value(label):
+    # We display popularity values with the decimal part truncated.
+    return int(label_popularity(label.pk))
 
 
 @register.simple_tag

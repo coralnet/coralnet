@@ -1,5 +1,4 @@
-{% load labels %}
-{% load truncate_float from common_tags %}
+{% load popularity_bar popularity_value status_icon from labels %}
 
 <div class="line">Name: {{ label.name }}</div>
 <div class="line">Functional Group: {{ label.group.name }}</div>
@@ -24,6 +23,6 @@
 </div>
 
 <div class="line">Popularity:
-  {{ label.popularity|truncate_float }}%
+  {% popularity_value label %}%
   {% popularity_bar label %}
 </div>

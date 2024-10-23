@@ -1,4 +1,3 @@
-import math
 import posixpath
 import re
 
@@ -10,7 +9,7 @@ from django.db import models
 from django.forms import model_to_dict
 from easy_thumbnails.fields import ThumbnailerImageField
 
-from lib.utils import CacheableValue, rand_string
+from lib.utils import rand_string
 
 
 class LabelGroupManager(models.Manager):
@@ -131,93 +130,6 @@ class Label(models.Model):
         To-string method.
         """
         return self.name
-
-    @property
-    def popularity(self):
-        label_details = cacheable_label_details.get()
-        if not label_details or self.pk not in label_details:
-            return 0
-        return label_details[self.pk]['popularity']
-
-    @property
-    def ann_count(self):
-        """ Returns the number of annotations for this label """
-        label_details = cacheable_label_details.get()
-        if not label_details or self.pk not in label_details:
-            return 0
-        return label_details[self.pk]['annotation_count']
-
-
-def compute_label_details():
-    """
-    Details (which are worth caching) for all labels, including annotation
-    counts and popularities.
-    As of 2023/11, this may take 1.5 hours to run in production.
-
-    Annotation count can take several seconds to compute for a single
-    widely-used label.
-
-    Caching the first page of random patches is good for two reasons:
-    1) On the label detail page, random patch generation involves computing
-    the page count of the entire annotation set, and thus involves at least
-    computing the annotation count.
-    2) We don't have to generate different patch images for different
-    visitors of the label detail page, in most cases. Most folks will only
-    look at the first page of patches (if anything).
-    """
-    labels = Label.objects.all()
-    details = dict()
-
-    for label in labels:
-
-        source_count = label.locallabel_set.count()
-        annotation_count = label.annotation_set.count()
-
-        # This popularity formula accounts for:
-        # - The number of sources using the label
-        # - The number of annotations using the label
-        #
-        # Overall, it's not too nuanced, and could use further tinkering
-        # at some point.
-        raw_score = (
-            source_count * math.sqrt(annotation_count)
-        )
-        if raw_score == 0:
-            popularity = 0
-        else:
-            # Map to a 0-100 scale.
-            # The exponent determines the "shape" of the mapping.
-            # -0.15 maps raw score of 10 to 29%, 100 to 50%,
-            # 10000 to 75%, and 10000000 to 91%.
-            popularity = 100 * (1 - raw_score**(-0.15))
-
-        # List of annotation IDs to use for the first page of random patches
-        # on the label detail page.
-        random_patches_page_1 = list(
-            label.annotation_set
-            .order_by('?')
-            .values_list('pk', flat=True)
-            [:settings.LABEL_EXAMPLE_PATCHES_PER_PAGE]
-        )
-
-        details[label.pk] = dict(
-            source_count=source_count,
-            annotation_count=annotation_count,
-            popularity=popularity,
-            random_patches_page_1=random_patches_page_1,
-        )
-
-    return details
-
-
-cacheable_label_details = CacheableValue(
-    cache_key='label_details',
-    compute_function=compute_label_details,
-    cache_update_interval=60*60*24*7,
-    cache_timeout_interval=60*60*24*30,
-    on_demand_computation_ok=False,
-    use_context_scoped_cache=True,
-)
 
 
 class LabelSet(models.Model):

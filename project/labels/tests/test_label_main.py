@@ -20,6 +20,7 @@ from visualization.utils import get_patch_path
 from ..models import LabelGroup, Label
 from ..templatetags.labels import (
     popularity_bar as popularity_bar_tag, status_icon as status_icon_tag)
+from ..utils import label_popularity
 
 
 class PermissionTest(BasePermissionTest):
@@ -191,6 +192,11 @@ class LabelMainTest(BaseLabelMainTest):
             name="User's private source")
         self.create_labelset(self.user, user_private_s, labels)
         img = self.upload_image(self.user, user_private_s)
+        # 1 confirmed annotation, and machine annotations which shouldn't
+        # contribute to the count
+        self.add_robot_annotations(
+            self.create_robot(user_private_s), img,
+            {1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
         self.add_annotations(self.user, img, {1: 'A'})
 
         # No annotation, but has A in the labelset
@@ -233,7 +239,7 @@ class LabelMainTest(BaseLabelMainTest):
 
         # Popularity.
         with context_scoped_cache():
-            popularity_str = str(int(label_a.popularity)) + '%'
+            popularity_str = str(int(label_popularity(label_a.pk))) + '%'
             popularity_bar_html = popularity_bar_tag(label_a)
         self.assertInHTML(
             'Popularity: {} {}'.format(
@@ -549,7 +555,7 @@ class PopularityTest(ClientTest):
 
         with context_scoped_cache():
             self.assertEqual(
-                self.label_a.popularity, 0,
+                label_popularity(self.label_a.pk), 0,
                 msg="0 sources should mean 0 popularity")
 
     def test_zero_annotations(self):
@@ -561,7 +567,7 @@ class PopularityTest(ClientTest):
 
         with context_scoped_cache():
             self.assertEqual(
-                self.label_a.popularity, 0,
+                label_popularity(self.label_a.pk), 0,
                 msg="1 source and 0 annotations still should mean 0 popularity")
 
     def test_nonzero_annotations(self):
@@ -574,7 +580,7 @@ class PopularityTest(ClientTest):
 
         with context_scoped_cache():
             self.assertGreater(
-                self.label_a.popularity, 0,
+                label_popularity(self.label_a.pk), 0,
                 msg="Non-0 annotations should mean non-0 popularity")
 
 
