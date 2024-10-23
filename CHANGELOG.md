@@ -15,7 +15,14 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
     - events 0004 took 1 minute in production. The rest finished very quickly.
   - annotations 0027 took about 3 hours in production. It seems okay to run while the web server's running, but running in a transaction is a bit risky because we might overwrite new values from new classifications made during the migration. So for production, we ended up running the migration code in shell instead of with `manage.py migrate`, and faked the migration itself with `--fake`.
 - Ensure the cached label details are updated before restarting the production web server. Otherwise, visiting the label_main pages will get errors.
-  - To do this, start the background-queue huey consumer without starting the web server. Then in manage.py shell, run `job = do_job('update_label_details')`. Do `job.refresh_from_db()` every so often until `job.status` is `success`.
+  - To do this, run the following in manage.py shell:
+    ```python
+    from labels.utils import cacheable_label_details
+    from lib.utils import context_scoped_cache
+    with context_scoped_cache():
+        cacheable_label_details.update()
+    ```
+  - This took 13 minutes in production.
 - The new `CORALNET_1_15_DATE` setting must be specified for production, and may have to be specified more accurately in other envs.
 
 ## [1.14](https://github.com/coralnet/coralnet/tree/1.14)
