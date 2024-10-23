@@ -1,99 +1,15 @@
-"""
-This file contains scripts that are not part of the main production server. But that reads/exports/manipulates things on a one-to-one basis.
-"""
+# These old functions have ideas that can still be useful for CoralNet's
+# operations. They should be reworked and incorporated into management
+# commands or jobs at some point.
 
 import os
 import re
 import subprocess
 
 from django.conf import settings
-import numpy as np
 
 from images.models import Image
 from sources.models import Source
-
-
-def export_imgage_and_annotations(source_idlist, outdir):
-    """
-    This script exports all imges and annotations for the purpose of training
-    a deep net.
-    """
-
-    for source_id in source_idlist:
-        this_dir = os.path.join(outdir, 's{}'.format(source_id))
-        os.mkdir(this_dir)
-        os.mkdir(os.path.join(this_dir, 'imgs'))
-        imdict = []
-        source = Source.objects.get(id = source_id)
-        for im in source.get_all_images:
-
-            # Special check for MLC. Do not want the imgs from 2008!!!!
-            if source_id == 16 and im.metadata.photo_date.year == 2008:
-                continue
-            if not im.status.annotatedByHuman:
-                continue
-            
-            annlist = []
-            for a in im.annotation_set.filter():
-                annlist.append((a.label.name, a.point.row, a.point.column))
-            imdict[im.metadata.name] = (annlist, im.height_cm())
-            copyfile(os.path.join('/cnhome/media', str(i.original_file)), os.path.join(this_dir, 'imgs', im.metadata.name))
-        pickle.dump(imdict, os.path.join(this_dir, 'imdict.p'))
-
-
-
-def get_source_stats():
-    """
-    This script organizes some key stats of all the source, and puts it in a nice list.
-    """
-    nlabels = Label.objects.order_by('-id')[0].id #highest label id on the site
-    labelname = {}
-    labelfunc = {}
-    funcname = {}
-    for label in Label.objects.filter():
-        labelname[label.id] = label.name
-        labelfunc[label.id] = label.group_id
-    for fg in LabelGroup.objects.filter():
-        funcname[fg.id] = fg.name
-    ss = []
-    for s in Source.objects.filter():
-        annlist = [a.label_id for a in s.annotation_set.confirmed()]
-        if not annlist:
-            continue
-        print(s.name)
-        sp = {}
-        sp['name'] = s.name
-        sp['lat'] = s.latitude
-        sp['long'] = s.longitude
-        sp['id'] = s.id
-        sp['labelids'] = [l.id for l in s.labelset.get_globals()]
-        sp['nlabels'] = s.labelset.get_labels().count()
-        sp['nimgs'] = s.get_all_images().filter(status__annotatedByHuman=True).count()
-        sp['nanns'] = len(annlist)
-        sp['anncount'] = np.bincount(annlist, minlength = nlabels)
-        ss.append(sp)
-    return ss, labelname, labelfunc, funcname
-
-
-
-
-
-def export_images(source_id, outDir, original_file_name = True):
-    """
-    This script exports all images from a source.
-    """
-    mysource = Source.objects.filter(id = source_id)
-    images = Image.objects.filter(source = mysource[0])
-    for i in images:
-        m = i.metadata
-        if original_file_name:
-            fname = m.name
-        else:
-            fname = str(m.value1) + '_' + str(m.value2) + '_' + \
-            str(m.value3) + '_' + str(m.value4) + '_' + str(m.value5) + \
-            '_' + m.photo_date.isoformat() + '.jpg'
-        copyfile(os.path.join('/cnhome/media', str(i.original_file)), 
-        os.path.join(outDir, fname))
 
 
 def find_duplicate_imagenames():
