@@ -10,8 +10,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 ## 1.15 (WIP)
 
-- New migrations to run for: `annotations`, `events`, `jobs`, `vision_backend`.
-- The new `CORALNET_1_15_DATE` setting may have to be specified.
+- New migrations to run for: `annotations`, `events`, `vision_backend`.
+  - Before restarting the web server, run everything except annotations 0027. annotations 0027 is expected to take a while, but it can run while the web server's running.
+- Ensure the cached label details are updated before restarting the production web server. Otherwise, visiting the label_main pages will get errors.
+  - To do this, start the background-queue huey consumer without starting the web server. Then in manage.py shell, run `job = do_job('update_label_details')`. Do `job.refresh_from_db()` every so often until `job.status` is `success`.
+- The new `CORALNET_1_15_DATE` setting must be specified for production, and may have to be specified more accurately in other envs.
 
 ## [1.14](https://github.com/coralnet/coralnet/tree/1.14)
 

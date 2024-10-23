@@ -1,5 +1,5 @@
 from jobs.utils import job_runner
-from .models import cacheable_label_details
+from .utils import cacheable_label_details
 
 
 @job_runner(interval=cacheable_label_details.cache_update_interval)

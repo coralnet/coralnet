@@ -28,24 +28,36 @@ from .decorators import label_edit_permission_required
 from .forms import (
     LabelForm, LabelSearchForm, LabelSetForm, LocalLabelForm,
     BaseLocalLabelFormSet, labels_csv_process, LabelFormForCurators)
-from .models import cacheable_label_details, Label, LocalLabel, LabelSet
-from .utils import search_labels_by_text, is_label_editable_by_user
+from .models import Label, LocalLabel, LabelSet
+from .utils import (
+    cacheable_label_details,
+    is_label_editable_by_user,
+    label_confirmed_annotation_count,
+    label_popularity,
+    search_labels_by_text,
+)
 
 
 @login_required
 def duplicates_overview(request):
     """
-    Renders the view for the duplicates overview.
+    Overview of all labels that are marked as duplicates of a verified label.
     """
+    duplicates = Label.objects.filter(duplicate__isnull=False).values(
+        'id', 'name', 'duplicate_id', 'duplicate__name',
+    )
+    duplicates = [
+        d | {'annotation_count': label_confirmed_annotation_count(d['id'])}
+        for d in duplicates
+    ]
 
-    dups = Label.objects.exclude(duplicate=None)
+    annotation_total = sum(d['annotation_count'] for d in duplicates)
+
     return render(request, 'labels/list_duplicates.html', {
-        'labels': dups,
-        'stats': {
-            'ann_count': sum([dup.ann_count for dup in dups]),
-            'dup_count': len(dups),
-        }
+        'duplicates': duplicates,
+        'annotation_total': annotation_total,
     })
+
 
 @login_required
 def label_new(request):
@@ -215,7 +227,7 @@ def labelset_add_search_ajax(request):
     # Sort by: verified over non-verified, then by highest popularity.
     def sort_key(label):
         key_1 = 1 if label.verified else 0
-        key_2 = label.popularity
+        key_2 = label_popularity(label.pk)
         return key_1, key_2
     limit = 50
     labels = sorted(labels, key=sort_key, reverse=True)[:limit]
@@ -416,7 +428,7 @@ def label_main(request, label_id):
         'other_public_sources': other_public,
         'other_private_sources': other_private,
         'source_count': source_count,
-        'annotation_count': label.ann_count,
+        'annotation_count': label_confirmed_annotation_count(label_id),
     })
 
 
@@ -449,7 +461,7 @@ def label_example_patches_ajax(request, label_id):
         annotation_ids = annotation_ids_full_page[:page_size]
 
         patch_annotations = Annotation.objects.filter(pk__in=annotation_ids)
-        is_last_page = page_size >= label.ann_count
+        is_last_page = page_size >= label_confirmed_annotation_count(label_id)
     else:
         all_annotations = Annotation.objects.confirmed() \
             .filter(label=label) \

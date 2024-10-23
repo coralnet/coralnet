@@ -8,7 +8,9 @@ from django.db.models import F
 from storages.backends.s3 import S3Storage
 from tqdm import tqdm
 
-from annotations.models import Label, Annotation
+from annotations.models import Annotation
+from labels.models import Label
+from labels.utils import label_confirmed_annotation_count
 from sources.models import Source
 from sources.utils import filter_out_test_sources
 from .utils import log
@@ -52,13 +54,15 @@ class Command(BaseCommand):
     def labelset_json(self):
         cont = []
         for label in Label.objects.filter():
-            cont.append({'id': label.pk,
-                         'name': label.name,
-                         'code': label.default_code,
-                         'group': label.group.name,
-                         'duplicate_of': str(label.duplicate),
-                         'is_verified': label.verified,
-                         'ann_count': label.ann_count})
+            cont.append({
+                'id': label.pk,
+                'name': label.name,
+                'code': label.default_code,
+                'group': label.group.name,
+                'duplicate_of': str(label.duplicate),
+                'is_verified': label.verified,
+                'ann_count': label_confirmed_annotation_count(label.pk),
+            })
         return json.dumps(cont, indent=2)
 
     @staticmethod

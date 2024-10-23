@@ -19,7 +19,7 @@ from lib.forms import (
     BoxFormRenderer, FieldsetsFormComponent, get_one_form_error)
 from upload.utils import csv_to_dicts
 from .models import Label, LabelGroup, LabelSet, LocalLabel
-from .utils import search_labels_by_text
+from .utils import label_popularity, search_labels_by_text
 
 
 def labels_csv_process(csv_stream, source):
@@ -284,7 +284,7 @@ class LabelSearchForm(FieldsetsFormComponent, Form):
             # list here.
             labels = [
                 label for label in labels
-                if label.popularity >= min_popularity]
+                if label_popularity(label.pk) >= min_popularity]
 
         return labels
 
