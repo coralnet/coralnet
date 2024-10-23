@@ -192,6 +192,11 @@ class LabelMainTest(BaseLabelMainTest):
             name="User's private source")
         self.create_labelset(self.user, user_private_s, labels)
         img = self.upload_image(self.user, user_private_s)
+        # 1 confirmed annotation, and machine annotations which shouldn't
+        # contribute to the count
+        self.add_robot_annotations(
+            self.create_robot(user_private_s), img,
+            {1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
         self.add_annotations(self.user, img, {1: 'A'})
 
         # No annotation, but has A in the labelset

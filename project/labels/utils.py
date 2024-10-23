@@ -1,11 +1,15 @@
+from collections import defaultdict
 import math
 import re
 
 from django.conf import settings
+from django.db.models import Count, Q
 
+from accounts.utils import get_robot_user
+from annotations.models import Annotation
 from lib.utils import CacheableValue
 from sources.models import Source
-from .models import Label
+from .models import Label, LocalLabel
 
 
 def search_labels_by_text(search_value):
@@ -65,26 +69,53 @@ def compute_label_details():
     """
     Details (which are worth caching) for all labels, including annotation
     counts and popularities.
-    As of 2023/11, this may take 1.5 hours to run in production.
 
-    Annotation count can take several seconds to compute for a single
-    widely-used label.
+    We cache the first page of random patches, because there isn't really a
+    point in showing different patch images for different visitors of the
+    label_main page. And most folks will only look at the first page of
+    patches (if anything).
 
-    Caching the first page of random patches is good for two reasons:
-    1) On the label detail page, random patch generation involves computing
-    the page count of the entire annotation set, and thus involves at least
-    computing the annotation count.
-    2) We don't have to generate different patch images for different
-    visitors of the label detail page, in most cases. Most folks will only
-    look at the first page of patches (if anything).
+    Computing details for all labels like this is much more efficient than
+    computing details individually for every label. One aggregated Count
+    instead of a count per label, and one random ordering instead of a
+    random ordering per label.
     """
-    labels = Label.objects.all()
+    values = (
+        Label.objects.all().annotate(
+            num_confirmed_annotations=Count(
+                "annotation", filter=~Q(annotation__user=get_robot_user()))
+        )
+        .values('pk', 'num_confirmed_annotations')
+    )
+    confirmed_annotation_counts = {
+        d['pk']: d['num_confirmed_annotations'] for d in values}
+
+    random_annotations_per_label = defaultdict(list)
+    # Order randomly.
+    # Another idea is ('label', '?') which would order by label and then
+    # randomly, but couldn't think of how to leverage that to optimize
+    # the below code.
+    confirmed_annotations = (
+        Annotation.objects.confirmed()
+        .order_by('?')
+        .values('pk', 'label')
+    )
+    target_num_patches = settings.LABEL_EXAMPLE_PATCHES_PER_PAGE
+    # iterator() helps to not run out of memory with lots of annotations.
+    for values in confirmed_annotations.iterator():
+        this_label_annotations = random_annotations_per_label[values['label']]
+        if len(this_label_annotations) < target_num_patches:
+            this_label_annotations.append(values['pk'])
+
     details = dict()
 
-    for label in labels:
+    # confirmed_annotation_counts has all labels, random_annotations_per_label
+    # does not.
+    for label_id in confirmed_annotation_counts.keys():
 
-        source_count = label.locallabel_set.count()
-        confirmed_annotation_count = label.annotation_set.confirmed().count()
+        source_count = (
+            LocalLabel.objects.filter(global_label_id=label_id).count())
+        confirmed_annotation_count = confirmed_annotation_counts[label_id]
 
         # This popularity formula accounts for:
         # - The number of sources using the label
@@ -106,14 +137,9 @@ def compute_label_details():
 
         # List of annotation IDs to use for the first page of random patches
         # on the label detail page.
-        random_patches_page_1 = list(
-            label.annotation_set
-            .order_by('?')
-            .values_list('pk', flat=True)
-            [:settings.LABEL_EXAMPLE_PATCHES_PER_PAGE]
-        )
+        random_patches_page_1 = random_annotations_per_label[label_id]
 
-        details[label.pk] = dict(
+        details[label_id] = dict(
             source_count=source_count,
             confirmed_annotation_count=confirmed_annotation_count,
             popularity=popularity,
