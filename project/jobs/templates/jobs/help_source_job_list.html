@@ -10,8 +10,8 @@
       
       <ul>
         <li>First extract features for all images.</li>
-        <li>Then check if the criteria are met for a new training job.</li>
-        <li>Then make sure all non-confirmed images are classified with the selected classifier.</li>
+        <li>Then, if the source is configured to train classifiers, check if the criteria are met for a new training job.</li>
+        <li>Then make sure all non-confirmed images are classified with the source's selected classifier.</li>
       </ul>
       
       CoralNet makes its best effort to schedule source checks at appropriate times, but in some cases you may have to request a source check yourself. As long as no other jobs are running or pending in the source, you should see a "Run a source check" button near the top of this page.
@@ -20,16 +20,16 @@
       <strong>Extract features:</strong> A pre-processing step that must be run for every image, before that image can be classified or used for training a classifier.
     </li>
     <li>
-      <strong>Train classifier:</strong> Trains a new classifier for the source, using all the confirmed and feature-extracted images in the source up to that point. The new classifier may or may not be saved, depending on how the evaluation results compare to the source's previous classifier.
+      <strong>Train classifier:</strong> Trains a new classifier for the source, using all the confirmed and feature-extracted images in the source up to that point. The new classifier may or may not be saved, depending on how the evaluation results compare to the source's previous classifiers.
     </li>
     <li>
       <strong>Classify:</strong> Classifies an image, using the source's selected classifier. This updates machine suggestions for the annotation tool and for exports, and also updates annotations if they're not confirmed yet.
     </li>
     <li>
-      <strong>Reset classifiers for source:</strong> Clear all previous saved classifiers for the source. Certain changes, such as changing the source's labelset, will result in this job being scheduled.
+      <strong>Reset classifiers for source:</strong> Delete all previous trained classifiers saved in the source. Certain changes, such as changing the source's labelset, will result in this job being scheduled.
     </li>
     <li>
-      <strong>Reset features for source:</strong> Clear all previous saved extracted features for the source. Changing the source's feature-extractor setting results in this job being scheduled (unless no feature extractions have been done yet).
+      <strong>Reset features for source:</strong> Delete all previous extracted features saved in the source. Changing the source's feature-extractor setting, or changing the selected classifier to one that uses a different extractor, results in this job being scheduled.
     </li>
   </ul>
   
