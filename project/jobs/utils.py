@@ -76,7 +76,11 @@ def get_or_create_job(
         # See if the same job failed last time (if there was a last time).
         # If so, set the attempt count accordingly.
         try:
-            last_completed_job = Job.objects.completed().latest('pk')
+            last_completed_job = (
+                Job.objects.completed()
+                .filter(**job_lookup_kwargs)
+                .latest('pk')
+            )
         except Job.DoesNotExist:
             pass
         else:
