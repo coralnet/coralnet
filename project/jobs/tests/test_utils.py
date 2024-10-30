@@ -67,25 +67,44 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
         )
 
     def test_attempt_number_increment(self):
-        job = fabricate_job('name', 'arg', status=Job.Status.FAILURE)
-        job.result_message = "An error"
-        job.save()
-
-        job_2, _ = schedule_job('name', 'arg')
+        fabricate_job('name', 'arg', status=Job.Status.FAILURE)
+        job, _ = schedule_job('name', 'arg')
 
         self.assertEqual(
-            job_2.attempt_number,
+            job.attempt_number,
             2,
             "Should have attempt number of 2")
 
     def test_attempt_number_non_increment(self):
         fabricate_job('name', 'arg', status=Job.Status.SUCCESS)
-        job_2, _ = schedule_job('name', 'arg')
+        job, _ = schedule_job('name', 'arg')
 
         self.assertEqual(
-            job_2.attempt_number,
+            job.attempt_number,
             1,
-            "Should have attempt number of 1")
+            "Shouldn't increment if last completed attempt succeeded")
+
+    def test_attempt_number_increment_among_other_jobs(self):
+        fabricate_job('name', 'arg', status=Job.Status.FAILURE)
+        fabricate_job('other', 'arg', status=Job.Status.SUCCESS)
+
+        job, _ = schedule_job('name', 'arg')
+        self.assertEqual(
+            job.attempt_number,
+            2,
+            "Should increment, ignoring the different-named job"
+            " that succeeded")
+
+        job.status = Job.Status.FAILURE
+        job.save()
+        fabricate_job('name', 'arg2', status=Job.Status.FAILURE)
+        fabricate_job('name', 'arg3', status=Job.Status.FAILURE)
+
+        job, _ = schedule_job('name', 'arg')
+        self.assertEqual(
+            job.attempt_number,
+            3,
+            "Should increment from 2 to 3, ignoring the different-arg jobs")
 
     def test_repeated_failure(self):
         # 5 fails in a row
