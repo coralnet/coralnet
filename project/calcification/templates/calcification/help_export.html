@@ -2,10 +2,10 @@
 
 <h3>Export Calcification Rates</h3>
 
-<p>Calcification rates are reported as confidence intervals. For example, image 0001.JPG's calcification rates are: mean 4.8, lower bound 3.2, upper bound 6.0. The rates are computed based on the image's annotations, and the calcification rates specified for each label (you must pick a label rate table to use). There are optional sets of columns available:</p>
+<p>The export has optional sets of columns available:</p>
 
 <ul>
-  <li>Per-label contributions to mean rate: This shows the per-label breakdown for the mean rate calculation. For example, image 0001.JPG has a 4.8 mean rate, and the per-label breakdown is: 4.0 from Acropora, 1.5 from Porites, -0.7 from Hard substrate. These columns will be named like "Acropora M", "Porites M", etc.</li>
+  <li>Per-label contributions to mean rate: This shows the per-label breakdown for the mean rate calculation. For example, "image 0001.JPG has a 4.8 mean rate, and the per-label breakdown is: 4.0 from Acropora, 1.5 from Porites, -0.7 from Hard substrate." These columns will be named like "Acropora M", "Porites M", etc.</li>
 
   <li>Per-label contributions to confidence bounds: This shows the per-label breakdowns for the lower bound and upper bound rate calculations. These columns will be named like "Acropora LB", "Porites LB", "Acropora UB", "Porites UB", etc.</li>
 </ul>
@@ -13,5 +13,7 @@
 <p>The "ALL IMAGES" summary row at the end shows the average stats over all the images, with each image being weighted equally. Unannotated images are excluded from the analysis. If you choose to export an Excel workbook instead of CSV, it will include a sheet with the label rate table you chose.</p>
 
 {% include 'export/help_wait_times.html' %}
+
+{% include 'calcification/help_rates.html' with default_calcification_tables=default_calcification_tables %}
 
 </div>

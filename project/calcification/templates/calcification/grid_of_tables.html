@@ -1,43 +1,63 @@
 <table class="detail_table" id="table-of-calcify-tables">
-  <tr>
-    <th>Name</th>
-    <th>Description</th>
-    <th></th>
-  </tr>
-
-  {% for rate_table in source_calcification_tables %}
+  <thead>
     <tr>
-      <td>{{ rate_table.name }}</td>
-      <td class="description">{{ rate_table.description }}</td>
-      <td class="actions">
-        <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
-          <button>Download CSV</button>
-        </form>
+      <th>Name</th>
+      <th>Description</th>
+      <th></th>
+    </tr>
+  </thead>
 
-        {% if can_manage_source_data %}
-          <form action="{% url 'calcification:rate_table_delete_ajax' rate_table.pk %}" method="post" class="rate-table-delete">
-            {% csrf_token %}
-            <button>Delete</button>
+  <tbody>
+    {% for rate_table in source_calcification_tables %}
+      <tr>
+        <td class="name">{{ rate_table.name }}</td>
+        <td class="description">{{ rate_table.description }}</td>
+        <td class="actions">
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
+            <button>Download CSV</button>
           </form>
-        {% endif %}
-      </td>
-    </tr>
-  {% endfor %}
 
-  {% for rate_table in default_calcification_tables %}
-    <tr>
-      <td>{{ rate_table.name }}</td>
-      <td class="description"></td>
-      <td class="actions">
-        <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
-          <input type="hidden" name="source_id" value="{{ source.pk }}" />
-          <button>Download CSV (labelset entries only)</button>
-        </form>
+          {% if can_manage_source_data %}
+            <form
+              action="{% url 'calcification:rate_table_delete_ajax' rate_table.pk %}"
+              method="post"
+              class="no-padding rate-table-delete"
+            >
+              {% csrf_token %}
+              <button>Delete</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
 
-        <form action="{% url 'calcification:rate_table_download' rate_table.pk %}" method="get">
-          <button>Download CSV (full)</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
+    {% for rate_table in global_calcification_tables %}
+      <tr>
+        <td class="name">{{ rate_table.name }}</td>
+        <td class="description"></td>
+        <td class="actions">
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
+            <input type="hidden" name="source_id" value="{{ source.pk }}" />
+            <button>Download CSV (labelset entries only)</button>
+          </form>
+
+          <form
+            action="{% url 'calcification:rate_table_download' rate_table.pk %}"
+            method="get"
+            class="no-padding"
+          >
+            <button>Download CSV (full)</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>
