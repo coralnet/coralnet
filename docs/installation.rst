@@ -85,6 +85,10 @@ If you think something messed up and you want to undo a pip installation, use ``
 
 From now on, whenever you need to get your packages up to date, activate your virtual environment and run ``pip install -U -r requirements/<name>.txt``.
 
+- Add ``--dry-run`` to see what will be installed without actually doing anything yet.
+
+- ``-U`` helps to get the latest patch-version for packages when our requirement only pins the major/minor versions. However, it does not help with upgrading transitive dependencies, and those occasionally need some attention (such as scipy).
+
 
 Settings
 --------
