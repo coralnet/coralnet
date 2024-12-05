@@ -520,6 +520,10 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
         # This error class covers the point limit too, but that's already
         # checked by the deploy view.
         'spacer.exceptions.DataLimitError',
+        # If the user specifies a point row or column that's not an
+        # integer or is outside the image's valid range, then this
+        # error class is raised.
+        'spacer.exceptions.RowColumnInvalidError',
         # If there are any issues with downloading from the user-specified
         # URL, then the download step gets one of a few different
         # URLDownloadErrors. Now, this scenario could potentially indicate
