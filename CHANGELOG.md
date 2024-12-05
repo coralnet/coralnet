@@ -8,6 +8,14 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.16 (WIP)
+
+- Updates to required packages:
+  - boto3 >=1.26.122,<1.27 -> >=1.34.162,<1.35
+  - numpy 1.24.1 -> 2.1.3
+  - Pillow 10.3.0 -> 11.0.0
+  - pyspacer 0.9.0 -> 0.11.0
+
 ## [1.15.1](https://github.com/coralnet/coralnet/tree/1.15.1)
 
 Production: 2024-10-30

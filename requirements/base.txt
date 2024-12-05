@@ -31,7 +31,9 @@ django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+cor
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-Pillow==10.3.0
+# Compat: Python 3.9-3.13, and matches pyspacer dev requirements as of
+# pyspacer 0.11.0
+Pillow==11.0.0
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
@@ -107,7 +109,8 @@ psycopg2-binary>=2.9.6,<2.10
 
 # Amazon Web Services SDK for Python
 # Changelog: https://github.com/boto/boto3/blob/develop/CHANGELOG.rst
-boto3>=1.26.122,<1.27
+# Compat: Python 3.8-3.12
+boto3>=1.34.162,<1.35
 
 # Nicer interface for AWS S3 compared to using boto3 alone; also supports
 # many other storage systems.
@@ -190,9 +193,11 @@ django-markdownx>=4.0.7,<4.1
 # We match whatever version of numpy pyspacer uses for development, for optimal
 # consistency.
 # Changelog: https://numpy.org/devdocs/release.html
-numpy==1.24.1
+# Compat: Python 3.10-3.13
+numpy==2.1.3
 
 # Machine-learning backend behind coralnet
 # This can be installed from a local directory (not just PyPI), as long as
 # the local copy's setup.py matches this version number.
-pyspacer==0.9.0
+# Compat: Python 3.10-3.12, numpy 1.22-2.1.x
+pyspacer==0.11.0

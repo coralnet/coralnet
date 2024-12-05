@@ -1,6 +1,6 @@
 from django.conf import settings
 import numpy as np
-from spacer.extract_features import (
+from spacer.extractors import (
     DummyExtractor,
     EfficientNetExtractor,
     FeatureExtractor,
