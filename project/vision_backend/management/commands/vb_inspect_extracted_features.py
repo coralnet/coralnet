@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 
 from images.models import Image
 from sources.models import Source
-from ...utils import reset_features
+from ...utils import image_features_valid, reset_features
 from .utils import log
 
 
@@ -43,34 +43,11 @@ class Command(BaseCommand):
         if not image.features.extracted:
             return
 
-        rowcols_from_db = [
-            (p['row'], p['column'])
-            for p in image.point_set.values('row', 'column')
-        ]
+        features_valid, reason = image_features_valid(image)
 
-        try:
-            # This may raise an AssertionError, ValueError,
-            # or FileNotFoundError.
-            features = image.features.load()
-
-            if features.valid_rowcol:
-                rowcols_from_features = [
-                    (pf.row, pf.col)
-                    for pf in features.point_features
-                ]
-
-                if not set(rowcols_from_db) == set(rowcols_from_features):
-                    raise ValueError(
-                        "Feature rowcols don't match the DB rowcols.")
-            else:
-                if not len(rowcols_from_db) == len(features.point_features):
-                    raise ValueError(
-                        "Legacy feature rowcols don't match the number of DB"
-                        " rowcols.")
-
-        except (AssertionError, ValueError, FileNotFoundError) as err:
-            self.errors[image.source.id].append((image.id, repr(err)))
-            self.log(f"Img: {image.id}, error: {err}")
+        if not features_valid:
+            self.errors[image.source.id].append((image.id, reason))
+            self.log(f"Img: {image.id}, error: {reason}")
             if do_correct:
                 reset_features(image)
 

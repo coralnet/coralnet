@@ -385,7 +385,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
         errors = dict(errors_json[str(self.source_1.pk)])
         self.assertEqual(
             errors[self.image_1a.pk],
-            "ValueError(\"Feature rowcols don't match the DB rowcols.\")",
+            "Feature rowcols don't match the DB rowcols.",
         )
 
         self.assertIn(
@@ -436,8 +436,7 @@ class InspectExtractedFeaturesTest(ManagementCommandTest):
         errors = dict(errors_json[str(self.source_1.pk)])
         self.assertEqual(
             errors[self.image_1a.pk],
-            "ValueError(\"Legacy feature rowcols don't match the number of DB"
-            " rowcols.\")",
+            "Legacy feature rowcols don't match the number of DB rowcols.",
         )
 
         self.assertIn(
