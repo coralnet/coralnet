@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import timedelta
 import operator
 from typing import Callable, Literal
-from unittest import mock, skip
+from unittest import mock
 
 from bs4 import BeautifulSoup
 from django.contrib.auth.models import User
@@ -520,9 +520,6 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             data=dict(show_hidden=True),
         )
 
-    @skip(
-        "This test interacts badly with tests that register made-up jobs."
-        " Not sure how to solve that in a clean way yet.")
     def test_type_choices(self):
         response = self.get_response()
         form = response.context['job_search_form']
@@ -570,9 +567,17 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
                 ('realtime_queue_types', "Any realtime job"),
             ] + non_source_types
 
-        self.assertListEqual(
-            list(form.fields['type'].choices),
-            expected_choices,
+        # TODO: Ideally we'd be able to do
+        #  self.assertListEqual(
+        #      list(form.fields['type'].choices),
+        #      expected_choices,
+        #  )
+        #  but, tests that register made-up jobs end up polluting the list
+        #  of choices, so the above fails. Until we find a way around that,
+        #  we'll do a subset check instead.
+        self.assertTrue(
+            set(expected_choices).issubset(
+                set(form.fields['type'].choices))
         )
 
     def test_status_row_classes(self):
