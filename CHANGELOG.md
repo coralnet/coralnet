@@ -8,7 +8,9 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.16 (WIP)
+## [1.16](https://github.com/coralnet/coralnet/tree/1.16)
+
+Production: 2024-12-08
 
 - Updates to required packages:
   - boto3 >=1.26.122,<1.27 -> >=1.34.162,<1.35
