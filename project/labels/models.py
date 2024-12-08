@@ -210,6 +210,15 @@ class LocalLabel(models.Model):
     global_label = models.ForeignKey(Label, on_delete=models.PROTECT)
     labelset = models.ForeignKey(LabelSet, on_delete=models.CASCADE)
 
+    class Meta:
+        constraints = [
+            # A LabelSet can't have two entries pointing to the same label.
+            models.UniqueConstraint(
+                fields=['global_label', 'labelset'],
+                name='unique_label_within_labelset',
+            ),
+        ]
+
     @property
     def name(self):
         return self.global_label.name
