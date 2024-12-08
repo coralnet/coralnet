@@ -33,6 +33,7 @@ from .exceptions import RowColumnMismatchError
 from .models import Classifier, ClassifyImageEvent, Score
 from .utils import (
     extractor_to_name,
+    reset_invalid_features_bulk,
     schedule_source_check,
     source_is_finished_with_core_jobs,
 )
@@ -262,7 +263,9 @@ class SpacerResultHandler(ABC):
                     job_res_repr,
                 )
 
+                # Just the class name, not the whole dotted path.
                 error_class_name = error_class.split('.')[-1]
+
                 error_html = f'<pre>{error_traceback}</pre>'
                 error_log = instantiate_error_log(
                     kind=error_class_name,
@@ -273,7 +276,7 @@ class SpacerResultHandler(ABC):
                 )
                 error_log.save()
 
-            spacer_error = error_message
+            spacer_error = error_class, error_message
         else:
             spacer_error = None
 
@@ -335,7 +338,7 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
             cls,
             task: ExtractFeaturesMsg,
             job_res: JobReturnMsg,
-            spacer_error: str | None) -> None:
+            spacer_error: tuple[str, str] | None) -> None:
 
         internal_job = cls.get_internal_job(task)
         image_id = internal_job.arg_identifier
@@ -346,7 +349,8 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
 
         if spacer_error:
             # Error from spacer when running the spacer job.
-            raise JobError(spacer_error)
+            error_class, error_message = spacer_error
+            raise JobError(error_message)
 
         # If there was no spacer error, then a task result is available.
         task_res = job_res.results[0]
@@ -388,12 +392,21 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
 class SpacerTrainResultHandler(SpacerResultHandler):
     job_name = 'train_classifier'
 
+    non_priority_error_classes = [
+        # This appears to be an uncommon race condition where points are
+        # regenerated sometime during the gathering of training data.
+        # We expect to automatically recover from this situation by
+        # re-extracting features as necessary, and notifying admins
+        # shouldn't be needed.
+        'spacer.exceptions.RowColumnMismatchError',
+    ]
+
     @classmethod
     def handle_spacer_task_result(
             cls,
             task: TrainClassifierMsg,
             job_res: JobReturnMsg,
-            spacer_error: str | None) -> str | None:
+            spacer_error: tuple[str, str] | None) -> str | None:
 
         # Parse out pk for current and previous classifiers.
         regex_pattern = (
@@ -429,7 +442,18 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             # Error from spacer when running the spacer job.
             classifier.status = Classifier.TRAIN_ERROR
             classifier.save()
-            raise JobError(spacer_error)
+
+            error_class, error_message = spacer_error
+            if error_class == 'spacer.exceptions.RowColumnMismatchError':
+                # Desynced rowcols.
+                # Note that we could have checked for this before training
+                # as well, but since checking takes a somewhat long time,
+                # we try to only check when we have to (i.e. when a failure
+                # actually happens).
+                reset_invalid_features_bulk(
+                    Image.objects.filter(source_id=classifier.source_id))
+
+            raise JobError(error_message)
 
         # If there was no spacer error, then a task result is available.
         task_res = job_res.results[0]
@@ -520,6 +544,10 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
         # This error class covers the point limit too, but that's already
         # checked by the deploy view.
         'spacer.exceptions.DataLimitError',
+        # If the user specifies a point row or column that's not an
+        # integer or is outside the image's valid range, then this
+        # error class is raised.
+        'spacer.exceptions.RowColumnInvalidError',
         # If there are any issues with downloading from the user-specified
         # URL, then the download step gets one of a few different
         # URLDownloadErrors. Now, this scenario could potentially indicate
@@ -533,7 +561,7 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
             cls,
             task: ClassifyImageMsg,
             job_res: JobReturnMsg,
-            spacer_error: str | None) -> None:
+            spacer_error: tuple[str, str] | None) -> None:
 
         internal_job = cls.get_internal_job(task)
         try:
@@ -545,7 +573,8 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
 
         if spacer_error:
             # Error from spacer when running the spacer job.
-            raise JobError(spacer_error)
+            error_class, error_message = spacer_error
+            raise JobError(error_message)
 
         # If there was no spacer error, then a task result is available.
         task_res = job_res.results[0]

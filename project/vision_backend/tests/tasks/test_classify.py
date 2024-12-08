@@ -1031,6 +1031,9 @@ class AbortCasesTest(BaseTaskTest):
         ):
             do_job('classify_features', img.pk)
 
+        img.features.refresh_from_db()
+        self.assertTrue(img.features.extracted, "Features shouldn't be reset")
+
         self.assert_job_failure_message(
             'classify_features',
             f"Failed to save annotations for image {img.pk}."
@@ -1060,11 +1063,15 @@ class AbortCasesTest(BaseTaskTest):
         ):
             do_job('classify_features', img.pk)
 
+        img.features.refresh_from_db()
+        self.assertFalse(img.features.extracted, "Features should be reset")
+
         self.assert_job_failure_message(
             'classify_features',
             f"Failed to save annotations for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points/annotations.")
+            f" with the image's points/annotations. Will redo feature"
+            f" extraction to get back on track.")
 
     def test_integrity_error_when_saving_scores(self):
 
@@ -1085,6 +1092,9 @@ class AbortCasesTest(BaseTaskTest):
             mock_add_scores
         ):
             do_job('classify_features', img.pk)
+
+        img.features.refresh_from_db()
+        self.assertTrue(img.features.extracted, "Features shouldn't be reset")
 
         self.assert_job_failure_message(
             'classify_features',
@@ -1108,8 +1118,12 @@ class AbortCasesTest(BaseTaskTest):
         ):
             do_job('classify_features', img.pk)
 
+        img.features.refresh_from_db()
+        self.assertFalse(img.features.extracted, "Features should be reset")
+
         self.assert_job_failure_message(
             'classify_features',
             f"Failed to save scores for image {img.pk}."
             f" Maybe there was another change happening at the same time"
-            f" with the image's points.")
+            f" with the image's points. Will redo feature"
+            f" extraction to get back on track.")

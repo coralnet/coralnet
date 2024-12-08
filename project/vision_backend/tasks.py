@@ -562,7 +562,17 @@ def classify_image(image_id):
             annotation_summary = th.add_annotations(
                 image_id, res, label_objs, classifier)
             result_message += f": {annotation_summary}"
-        except (IntegrityError, RowColumnMismatchError):
+        except RowColumnMismatchError:
+            reset_features(img)
+            raise JobError(
+                f"Failed to save annotations for image {image_id}."
+                f" Maybe there was another change happening at the same time"
+                f" with the image's points/annotations. Will redo feature"
+                f" extraction to get back on track."
+            )
+        except IntegrityError:
+            # Don't reset features. Just wait till next attempt to see what
+            # the situation is.
             raise JobError(
                 f"Failed to save annotations for image {image_id}."
                 f" Maybe there was another change happening at the same time"
@@ -572,11 +582,19 @@ def classify_image(image_id):
     # Always add scores
     try:
         th.add_scores(image_id, res, label_objs)
-    except (IntegrityError, RowColumnMismatchError):
+    except RowColumnMismatchError:
+        reset_features(img)
         # If we got here, then the annotations saved, so it might seem strange
         # to finish the job with an error. However, if we got here, then the
         # points also got regenerated, so the just-saved annotations got
         # deleted anyway.
+        raise JobError(
+            f"Failed to save scores for image {image_id}."
+            f" Maybe there was another change happening at the same time"
+            f" with the image's points. Will redo feature"
+            f" extraction to get back on track."
+        )
+    except IntegrityError:
         raise JobError(
             f"Failed to save scores for image {image_id}."
             f" Maybe there was another change happening at the same time"

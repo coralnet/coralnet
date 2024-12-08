@@ -11,7 +11,8 @@ from PIL import UnidentifiedImageError
 from rest_framework import status
 from rest_framework.exceptions import ParseError
 from rest_framework.request import Request
-from spacer.exceptions import DataLimitError, URLDownloadError
+from spacer.exceptions import (
+    DataLimitError, RowColumnInvalidError, URLDownloadError)
 
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
@@ -782,6 +783,23 @@ class TaskErrorsTest(
         self.assertEqual(
             "spacer.exceptions.DataLimitError:"
             " 1500 point locations were specified",
+            job_unit.result_message,
+            "Result JSON should have the error info")
+
+        self.assert_no_error_log_saved()
+        self.assert_no_email()
+
+    def test_row_column_invalid_error(self):
+        """These errors aren't considered priority."""
+        job_unit = self.do_test_spacer_error(RowColumnInvalidError(
+            "Row value 909 falls outside this image's valid range of 0-799."))
+
+        self.assertEqual(
+            job_unit.status, Job.Status.FAILURE,
+            "Unit should have failed")
+        self.assertEqual(
+            "spacer.exceptions.RowColumnInvalidError:"
+            " Row value 909 falls outside this image's valid range of 0-799.",
             job_unit.result_message,
             "Result JSON should have the error info")
 

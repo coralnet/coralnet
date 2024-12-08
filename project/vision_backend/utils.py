@@ -8,7 +8,7 @@ from spacer.extractors import (
 )
 from spacer.messages import DataLocation
 
-from images.models import Point
+from images.models import Image, Point
 from jobs.models import Job
 from jobs.utils import schedule_job, schedule_job_on_commit
 from labels.models import Label, LocalLabel
@@ -183,6 +183,66 @@ def reset_features_bulk(image_queryset):
     source_ids = image_queryset.values_list('source_id', flat=True).distinct()
     for source_id in source_ids:
         schedule_source_check_on_commit(source_id)
+
+
+def image_features_valid(image) -> tuple[bool, str|None]:
+    """
+    Returns:
+    1) True if the image's features are valid, False if re-extraction is
+       needed.
+    2) The reason why if 1 is False, or None if True.
+
+    Assumes the image's source has classifiers enabled at all, and that
+    the image is flagged as having features extracted. So, we won't
+    waste DB queries on those things here.
+    """
+    try:
+        features = image.features.load()
+    except FileNotFoundError as err:
+        # Feature file not found; feature status needs resetting.
+        return False, repr(err)
+    except AssertionError as err:
+        # Failed some basic check while instantiating ImageFeatures.
+        return False, repr(err)
+
+    rowcols_from_db = [
+        (p['row'], p['column'])
+        for p in image.point_set.values('row', 'column')
+    ]
+
+    if features.valid_rowcol:
+        rowcols_from_features = [
+            (pf.row, pf.col)
+            for pf in features.point_features
+        ]
+
+        if set(rowcols_from_db) == set(rowcols_from_features):
+            return True, None
+        else:
+            return False, "Feature rowcols don't match the DB rowcols."
+    else:
+        if len(rowcols_from_db) == len(features.point_features):
+            return True, None
+        else:
+            return False, (
+                "Legacy feature rowcols don't match the number of DB"
+                " rowcols.")
+
+
+def reset_invalid_features_bulk(image_queryset):
+    """
+    Check if features match the actual point rows/columns in the CoralNet
+    database and are otherwise valid.
+    Reset just the invalid features.
+    """
+    image_ids_to_reset = []
+    image_queryset = image_queryset.with_features()
+    for image in image_queryset:
+        features_valid, reason = image_features_valid(image)
+        if not features_valid:
+            image_ids_to_reset.append(image.pk)
+
+    reset_features_bulk(Image.objects.filter(pk__in=image_ids_to_reset))
 
 
 def schedule_source_check(source_id, delay=None):

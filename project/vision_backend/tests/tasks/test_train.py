@@ -3,7 +3,9 @@ from unittest import mock
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.test import override_settings
+from django.urls import reverse
 from spacer.data_classes import ValResults
+from spacer.exceptions import RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
 from images.model_utils import PointGen
@@ -653,7 +655,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         ]
         self.do_lacking_unique_labels_test(uploads)
 
-    def test_spacer_error(self):
+    def test_spacer_priority_error(self):
+        """Spacer error that's not in the non-priority categories."""
+
         # Prepare training images + features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
@@ -683,6 +687,88 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             "Spacer job failed: train_classifier",
             ["ValueError: A spacer error"],
         )
+
+    @staticmethod
+    def image_rowcols_set(image):
+        return set(
+            (p['row'], p['column'])
+            for p in image.point_set.values('row', 'column')
+        )
+
+    def test_row_column_mismatch_error(self):
+        """
+        These errors aren't considered priority, and should be
+        auto-recovered from.
+        """
+        # Prepare training images.
+        train_images, val_images = self.upload_images_for_training()
+        all_images = train_images + val_images
+        self.assertGreaterEqual(
+            len(all_images), 2,
+            msg="Sanity check: want at least 2 images for this test")
+
+        # Prepare features.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+        for image in all_images:
+            image.features.refresh_from_db()
+            self.assertTrue(
+                image.features.extracted,
+                msg="Sanity check: features should be extracted"
+                    " for all images going into training")
+
+        # Submit training, with a spacer function mocked to
+        # throw an error.
+        def raise_error(*args):
+            raise RowColumnMismatchError("Row-column positions don't match")
+        with mock.patch('spacer.tasks.train_classifier', raise_error):
+            run_scheduled_jobs_until_empty()
+
+        # Change points of one image, but not the others.
+        #
+        # It would have been more satisfying to have this points change
+        # actually be the thing triggering the error, rather than relying
+        # on the mock above. But the timing of the race condition is a
+        # bit too tricky to emulate without taking pains.
+        # So this part is just to test how we recover from the race
+        # condition.
+
+        changed_image = train_images[0]
+        unchanged_images = train_images[1:] + val_images
+        old_points = self.image_rowcols_set(changed_image)
+        # Need to delete confirmed annotations before being allowed to
+        # regenerate points.
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('image_delete_annotations', args=[changed_image.pk]))
+        self.client.post(
+            reverse('image_regenerate_points', args=[changed_image.pk]))
+
+        self.assertNotEqual(
+            self.image_rowcols_set(changed_image),
+            old_points,
+            msg="Sanity check: points should have actually changed")
+
+        # Collect training.
+        do_collect_spacer_jobs()
+
+        self.assert_job_failure_message(
+            'train_classifier',
+            "spacer.exceptions.RowColumnMismatchError:"
+            " Row-column positions don't match")
+
+        self.assert_no_error_log_saved()
+        self.assert_no_email()
+
+        changed_image.features.refresh_from_db()
+        self.assertFalse(
+            changed_image.features.extracted,
+            msg="Features should be marked invalid for the changed image")
+        for image in unchanged_images:
+            image.features.refresh_from_db()
+            self.assertTrue(
+                image.features.extracted,
+                msg="Features should still be valid for unchanged images")
 
     def test_classifier_deleted_before_collection(self):
         """
