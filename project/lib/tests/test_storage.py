@@ -24,7 +24,8 @@ from ..utils import (
     context_scoped_cache,
     scoped_cache_context_var,
 )
-from .utils import BaseTest, ClientTest, sample_image_as_file
+from .utils import BaseTest, ClientTest
+from .utils_data import sample_image_as_file
 
 
 class TestSettingsStorageTest(BaseTest):

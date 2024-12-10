@@ -2,7 +2,7 @@ from abc import ABCMeta
 
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest, sample_image_as_file
+from lib.tests.utils import ClientTest
 from ..models import LabelGroup, Label
 
 
@@ -27,7 +27,7 @@ class LabelTest(ClientTest, metaclass=ABCMeta):
                 description="Description",
                 # A new filename will be generated, and the uploaded
                 # filename will be discarded, so this filename doesn't matter.
-                thumbnail=sample_image_as_file('_.png'),
+                thumbnail=cls.sample_image_as_file('_.png'),
             )
         )
         cls.client.logout()

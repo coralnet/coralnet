@@ -12,8 +12,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from images.models import Image
-from lib.tests.utils import (
-    BasePermissionTest, ClientTest, sample_image_as_file, create_sample_image)
+from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils_data import create_sample_image
 
 
 class PermissionTest(BasePermissionTest):
@@ -144,7 +144,7 @@ class UploadImageTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=sample_image_as_file('1.png'), name='1.png')
+            dict(file=self.sample_image_as_file('1.png'), name='1.png')
         )
 
         response_json = response.json()
@@ -158,7 +158,7 @@ class UploadImageTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=sample_image_as_file('A.jpg'), name='A.jpg')
+            dict(file=self.sample_image_as_file('A.jpg'), name='A.jpg')
         )
 
         response_json = response.json()
@@ -173,7 +173,7 @@ class UploadImageTest(ClientTest):
         """
         datetime_before_upload = timezone.now()
 
-        image_file = sample_image_as_file(
+        image_file = self.sample_image_as_file(
             '1.png',
             image_options=dict(
                 width=600, height=450,
@@ -217,7 +217,7 @@ class UploadImageTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=sample_image_as_file('1.png'), name='1.png')
+            dict(file=self.sample_image_as_file('1.png'), name='1.png')
         )
 
         response_json = response.json()
@@ -281,7 +281,7 @@ class UploadImageFormatTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=sample_image_as_file('1.PNG'), name='1.PNG')
+            dict(file=self.sample_image_as_file('1.PNG'), name='1.PNG')
         )
 
         response_json = response.json()
@@ -324,7 +324,7 @@ class UploadImageFormatTest(ClientTest):
 
     def test_max_image_dimensions_1(self):
         """Should check the max image width."""
-        image_file = sample_image_as_file(
+        image_file = self.sample_image_as_file(
             '1.png', image_options=dict(width=600, height=450),
         )
 
@@ -346,7 +346,7 @@ class UploadImageFormatTest(ClientTest):
 
     def test_max_image_dimensions_2(self):
         """Should check the max image height."""
-        image_file = sample_image_as_file(
+        image_file = self.sample_image_as_file(
             '1.png', image_options=dict(width=600, height=450),
         )
 
@@ -388,7 +388,7 @@ class UploadImageFormatTest(ClientTest):
 
     def test_upload_max_memory_size(self):
         """Exceeding the upload max memory size setting should be okay."""
-        image_file = sample_image_as_file(
+        image_file = self.sample_image_as_file(
             '1.png', image_options=dict(width=600, height=450),
         )
 
@@ -453,7 +453,7 @@ class UploadImageFilenameCollisionTest(ClientTest):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=sample_image_as_file(image_name), name=image_name)
+            dict(file=self.sample_image_as_file(image_name), name=image_name)
         )
         return response
 

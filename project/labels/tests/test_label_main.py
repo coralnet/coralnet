@@ -13,7 +13,6 @@ from lib.tests.utils import (
     ClientTest,
     HtmlAssertionsMixin,
     make_media_url_comparable,
-    sample_image_as_file,
 )
 from lib.utils import context_scoped_cache
 from sources.models import Source
@@ -114,7 +113,7 @@ class LabelMainTest(BaseLabelMainTest):
             group=group,
             description="This is a\nmultiline description.",
             # This filename will be discarded in favor of a generated one.
-            thumbnail=sample_image_as_file('_.png'),
+            thumbnail=self.sample_image_as_file('_.png'),
             created_by=self.user,
         )
         label.save()

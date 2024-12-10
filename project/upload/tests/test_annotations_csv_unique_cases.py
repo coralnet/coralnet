@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from annotations.models import Annotation
 from images.models import Point
-from lib.tests.utils import ClientTest, sample_image_as_file
+from lib.tests.utils import ClientTest
 from .utils import UploadAnnotationsCsvTestMixin
 
 
@@ -250,7 +250,7 @@ class AnnotationsCSVFormatTest(ClientTest, UploadAnnotationsCsvTestMixin):
         """
         Do at least basic detection of non-CSV files.
         """
-        f = sample_image_as_file('A.jpg')
+        f = self.sample_image_as_file('A.jpg')
         preview_response = self.preview_annotations(
             self.user, self.source, f)
 
