@@ -1,19 +1,17 @@
-{% include 'calcification/grid_of_tables.html' with default_calcification_tables=default_calcification_tables source_calcification_tables=source_calcification_tables %}
+{% include 'calcification/grid_of_tables.html' with global_calcification_tables=global_calcification_tables source_calcification_tables=source_calcification_tables %}
 
 {% if can_manage_source_data %}
-  <button id="new-rate-table-form-show-button">+ Upload a new table</button>
+  <div class="line">
+    <button id="new-rate-table-form-show-button">+ Upload a custom table</button>
+  </div>
 {% endif %}
-
-<p>If a table does not define a rate for a particular label, CoralNet's computation assumes a rate of 0 for that label.</p>
-
-{% include 'calcification/help_rates.html' %}
 
 
 {# Modal dialog contents live in this hidden element until they're needed. #}
 <div hidden>
   <div id="new-rate-table-form-popup">
     <div class="line">
-      If you want to create a rate table for this source, we recommend you start off with a template table by clicking the "Download CSV (labelset entries only)" button next to one of the default tables.
+      If you want to create a custom rate table for this source, we recommend you start off with a template table by clicking the "Download CSV (labelset entries only)" button next to one of the default tables.
     </div>
 
     <form id="new-rate-table-form"

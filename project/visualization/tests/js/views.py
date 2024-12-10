@@ -34,7 +34,7 @@ class BrowseImagesActionsQUnitView(QUnitView):
             'calcify_table_form': DummyForm(),
             'source_calcification_tables': [dict(
                 name="Table name", pk=2, description="Table description")],
-            'default_calcification_tables': [dict(
+            'global_calcification_tables': [dict(
                 name="Default table", pk=1, description="Table description")],
             'cpc_export_form': DummyForm(),
         }

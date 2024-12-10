@@ -33,7 +33,7 @@ class CalcifyTablesHelper {
                 width: 500,
                 height: 300,
                 modal: true,
-                title: "Upload a rate table",
+                title: "Upload a custom rate table",
                 // This option adds an extra CSS class to the dialog.
                 // https://api.jqueryui.com/dialog/#option-classes
                 classes: {

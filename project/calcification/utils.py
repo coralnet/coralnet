@@ -8,6 +8,10 @@ from upload.utils import csv_to_dicts
 from .models import CalcifyRateTable
 
 
+def get_global_calcify_tables():
+    return CalcifyRateTable.objects.filter(source__isnull=True).order_by('-pk')
+
+
 def get_default_calcify_tables():
     # Get the latest global table from each region.
     return CalcifyRateTable.objects.filter(source__isnull=True).order_by(

@@ -1,5 +1,36 @@
-<p>Rates are in units of kg CaCO<sub>3</sub> m<sup>-2</sup> yr<sup>-1</sup>. A rate above 0 means that the label's presence contributes to positive carbonate production (i.e., calcification). A rate below 0 means that the label's presence contributes to negative carbonate production (i.e., bioerosion).</p>
+<h3>About Calcification Rates</h3>
 
-<p>CoralNet's calcification rates are derived from <a href="http://geography.exeter.ac.uk/reefbudget/" target="_blank">ReefBudget</a>'s data.</p>
+<p>Calcification and bioerosion rates are in units of kg CaCO<sub>3</sub> m<sup>-2</sup> yr<sup>-1</sup>. A rate above 0 indicates positive carbonate production (i.e., calcification). A rate below 0 indicates negative carbonate production (i.e., bioerosion).</p>
 
-{# TODO: Link to Zenodo repo with rate table change history #}
+<p>A label-rate table is used in conjunction with image annotation data to compute a rate estimate for an entire image. Here's a simple example: if an annotated image has 3 points, and the labels on those points have rates of 8, 6, and -2, then the whole image's calcification rate is computed as (8 + 6 - 2) / 3 = 4.</p>
+
+<p>To be more precise, CoralNet reports rates as confidence intervals; for example, mean 4.8, lower bound 3.2, upper bound 6.0.</p>
+
+<p>To export rates for your source's data, or to create custom label-rate tables for your source, go to: Browse Images page -> Image Actions box -> Export Calcification Rates</p>
+
+<h3>Label-Rate Tables</h3>
+
+<p>
+  CoralNet provides default label-rate tables. Here they are in CSV format:
+</p>
+
+<ul>
+  {% for table in default_calcification_tables %}
+    <li>
+      <a href="{% url 'calcification:rate_table_download' table.pk %}">
+        {{ table.name }}
+      </a>
+    </li>
+  {% endfor %}
+</ul>
+
+<p>To read about how these default tables were produced, including changes from version 1 to version 2, see:
+  <a href="https://github.com/traviscourtney/CoralNetCalcificationRatesV2/" target="_blank">https://github.com/traviscourtney/CoralNetCalcificationRatesV2/</a>
+</p>
+
+<p>We encourage using these default tables, though you may want to edit the default tables to create a custom table for your source if...</p>
+<ul>
+  <li>You have locally derived calcification or bioerosion rates to substitute for the default regional values.</li>
+  <li>The default table for your region is missing some of the labels you use. When computing image-level rates, missing labels are assumed to have a rate of 0.</li>
+  <li>Your data has non-carbonate rocks. The CoralNet default rates for rock, bare reef substrate, rubble, and algal covered hard substrate assume that all such rocks are calcium carbonate and subject to bioerosion. If they are non-carbonate, your custom table should specify a rate of 0 for such rocks.</li>
+</ul>

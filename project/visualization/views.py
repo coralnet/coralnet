@@ -10,7 +10,8 @@ from django.views.decorators.http import require_POST
 
 from annotations.models import Annotation
 from calcification.forms import CalcifyRateTableForm, ExportCalcifyStatsForm
-from calcification.utils import get_default_calcify_tables
+from calcification.utils import (
+    get_default_calcify_tables, get_global_calcify_tables)
 from cpce.forms import CpcExportForm
 from export.forms import ExportAnnotationsForm, ExportImageCoversForm
 from images.forms import MetadataFormForGrid, BaseMetadataFormSet
@@ -109,6 +110,7 @@ def browse_images(request, source_id):
         'calcify_table_form': CalcifyRateTableForm(source=source),
         'source_calcification_tables': source.calcifyratetable_set.order_by(
             'name'),
+        'global_calcification_tables': get_global_calcify_tables(),
         'default_calcification_tables': get_default_calcify_tables(),
 
         'cpc_export_form': CpcExportForm(

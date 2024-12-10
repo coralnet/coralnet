@@ -6,11 +6,12 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 
-from calcification.tests.utils import create_default_calcify_table
+from calcification.tests.utils import create_global_calcify_table
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest,
     ClientTest,
+    HtmlAssertionsMixin,
     make_media_url_comparable,
     sample_image_as_file,
 )
@@ -584,7 +585,7 @@ class PopularityTest(ClientTest):
                 msg="Non-0 annotations should mean non-0 popularity")
 
 
-class CalcificationRatesTest(BaseLabelMainTest):
+class CalcificationRatesTest(BaseLabelMainTest, HtmlAssertionsMixin):
     """Label-main-page tests related to label calcification rates."""
 
     @classmethod
@@ -597,17 +598,33 @@ class CalcificationRatesTest(BaseLabelMainTest):
             cls.user, ['A', 'B'], "Group1")
         cls.label_a = cls.labels.get(name='A')
         cls.label_b = cls.labels.get(name='B')
+        cls.label_dict = {'A': cls.label_a, 'B': cls.label_b}
+
+    def create_table(self, region, rates_dict, name=None, description=None):
+        rates_dict = {
+            self.label_dict[label_code].pk:
+            dict(mean=mean, lower_bound=mean-1, upper_bound=mean+1)
+            for label_code, mean in rates_dict.items()
+        }
+        return create_global_calcify_table(
+            region, rates_dict, name=name, description=description)
+
+    def assert_calcify_rate_table_values(self, response, expected_values):
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        calcify_data_table_soup = response_soup.find(
+            'dd', class_='calcification-rate-data').find('table')
+
+        self.assert_table_values(
+            calcify_data_table_soup,
+            expected_values,
+        )
 
     def test_no_data(self):
         """No calcification rate data for the label."""
 
         # 2 regions defined, but only label B gets rates
-        create_default_calcify_table(
-            'Atlantic', {
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
-        create_default_calcify_table(
-            'Indo-Pacific', {
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
+        self.create_table('Atlantic', {'B': 2})
+        self.create_table('Indo-Pacific', {'B': 2})
 
         response = self.get_label_main()
         response_soup = BeautifulSoup(response.content, 'html.parser')
@@ -624,69 +641,74 @@ class CalcificationRatesTest(BaseLabelMainTest):
         The label has calcification rate data for at least one, but not
         all of the regions.
         """
-        create_default_calcify_table(
-            'Atlantic', {
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
-        create_default_calcify_table(
-            'Indo-Pacific', {
-                self.label_a.pk: dict(mean=5, lower_bound=4, upper_bound=6),
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
+        self.create_table('Atlantic', {'B': 2})
+        self.create_table('Indo-Pacific', {'A': 5, 'B': 2})
 
         response = self.get_label_main()
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        calcify_data_soup = response_soup.find(
-            'dd', class_='calcification-rate-data')
-
-        self.assertNotIn(
-            'Atlantic', str(calcify_data_soup),
-            msg="Should not have rate data for the Atlantic region")
-        self.assertInHTML(
-            '<td>Indo-Pacific</td> <td>5</td> <td>4</td> <td>6</td>',
-            str(calcify_data_soup),
-            msg_prefix="Should include Indo-Pacific rate: ")
+        self.assert_calcify_rate_table_values(
+            response,
+            [['Indo-Pacific', 5, 4, 6]]
+        )
 
     def test_data_for_all_regions(self):
         """
         The label has calcification rate data for all regions.
         """
-        create_default_calcify_table(
-            'Atlantic', {
-                self.label_a.pk: dict(mean=4, lower_bound=3, upper_bound=5),
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
-        create_default_calcify_table(
-            'Indo-Pacific', {
-                self.label_a.pk: dict(mean=5, lower_bound=4, upper_bound=6),
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
+        self.create_table('Atlantic', {'A': 4, 'B': 2})
+        self.create_table('Indo-Pacific', {'A': 5, 'B': 2})
 
         response = self.get_label_main()
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        calcify_data_soup = response_soup.find(
-            'dd', class_='calcification-rate-data')
+        self.assert_calcify_rate_table_values(
+            response,
+            [
+                ['Atlantic', 4, 3, 5],
+                ['Indo-Pacific', 5, 4, 6],
+            ]
+        )
 
-        self.assertInHTML(
-            '<td>Atlantic</td> <td>4</td> <td>3</td> <td>5</td>',
-            str(calcify_data_soup),
-            msg_prefix="Should include Atlantic rate: ")
-        self.assertInHTML(
-            '<td>Indo-Pacific</td> <td>5</td> <td>4</td> <td>6</td>',
-            str(calcify_data_soup),
-            msg_prefix="Should include Indo-Pacific rate: ")
+    def test_latest_table_takes_precedence(self):
+        """
+        Label has <region> data in multiple global tables; only use the
+        latest table's data.
+        """
+        self.create_table('Atlantic', {'A': 4, 'B': 2})
+        self.create_table('Atlantic', {'A': 3, 'B': 2})
+        self.create_table('Indo-Pacific', {'A': 5, 'B': 2})
+
+        response = self.get_label_main()
+        self.assert_calcify_rate_table_values(
+            response,
+            [
+                ['Atlantic', 3, 2, 4],
+                ['Indo-Pacific', 5, 4, 6],
+            ]
+        )
+
+    def test_data_only_in_old_table(self):
+        """
+        Label has <region> data only in an old global table; don't show any
+        data.
+        """
+        self.create_table('Atlantic', {'A': 4, 'B': 2})
+        self.create_table('Atlantic', {'B': 2})
+        self.create_table('Indo-Pacific', {'A': 5, 'B': 2})
+
+        response = self.get_label_main()
+        self.assert_calcify_rate_table_values(
+            response,
+            [
+                ['Indo-Pacific', 5, 4, 6],
+            ]
+        )
 
     def test_links_to_default_tables(self):
         """
         The calcification rates help dialog should have download links to the
         latest default tables.
         """
-        atlantic_table_1 = create_default_calcify_table(
-            'Atlantic', {
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
-        atlantic_table_2 = create_default_calcify_table(
-            'Atlantic', {
-                self.label_b.pk: dict(mean=2, lower_bound=0.8, upper_bound=3)})
-        indo_pacific_table = create_default_calcify_table(
-            'Indo-Pacific', {
-                self.label_a.pk: dict(mean=5, lower_bound=4, upper_bound=6),
-                self.label_b.pk: dict(mean=2, lower_bound=1, upper_bound=3)})
+        atlantic_table_1 = self.create_table('Atlantic', {'B': 2})
+        atlantic_table_2 = self.create_table('Atlantic', {'B': 1.5})
+        indo_pacific_table = self.create_table('Indo-Pacific', {'A': 5, 'B': 2})
 
         response = self.get_label_main()
         response_soup = BeautifulSoup(response.content, 'html.parser')
@@ -705,10 +727,11 @@ class CalcificationRatesTest(BaseLabelMainTest):
             str(help_dialog_tag),
             msg="Atlantic table 1 download link should be absent")
         self.assertInHTML(
-            f'<a href="{atlantic_2_download_url}">Atlantic</a>',
+            f'<a href="{atlantic_2_download_url}">Table Name - Atlantic</a>',
             str(help_dialog_tag),
             msg_prefix="Atlantic table 2 download link should be present")
         self.assertInHTML(
-            f'<a href="{indo_pacific_download_url}">Indo-Pacific</a>',
+            f'<a href="{indo_pacific_download_url}">'
+            f'Table Name - Indo-Pacific</a>',
             str(help_dialog_tag),
             msg_prefix="Indo-Pacific table download link should be present")
