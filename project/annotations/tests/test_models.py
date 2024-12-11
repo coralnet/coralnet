@@ -2,7 +2,8 @@ from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
 from images.models import Point
-from lib.tests.utils import ClientTest, sample_image_as_file
+from lib.tests.utils import ClientTest
+from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
     ImageAnnoStatuses,
     image_annotation_status,

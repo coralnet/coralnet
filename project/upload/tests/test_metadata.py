@@ -6,8 +6,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from images.models import Image
-from lib.tests.utils import (
-    BasePermissionTest, ClientTest, sample_image_as_file)
+from lib.tests.utils import BasePermissionTest, ClientTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -1399,7 +1398,7 @@ class UploadMetadataPreviewFormatTest(ClientTest):
         """
         self.client.force_login(self.user)
 
-        f = sample_image_as_file('A.jpg')
+        f = self.sample_image_as_file('A.jpg')
         preview_response = self.preview(f)
 
         self.assertDictEqual(

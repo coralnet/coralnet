@@ -370,10 +370,8 @@ class PerformanceTest(ClientTest):
         # First allow label popularities to be cached.
         self.client.get(reverse('label_list'))
 
-        # We just want the number of queries to be less than 20
-        # (the label count), but assertNumQueries only asserts on an exact
-        # number of queries.
-        with self.assertNumQueries(5):
+        # Number of queries should be less than the label count.
+        with self.assert_queries_less_than(20):
             response = self.client.get(reverse('label_list'))
         self.assertStatusOK(response)
 
@@ -388,9 +386,7 @@ class PerformanceTest(ClientTest):
             min_popularity='',
         )
 
-        # We just want the number of queries to be less than 20
-        # (the label count), but assertNumQueries only asserts on an exact
-        # number of queries.
-        with self.assertNumQueries(3):
+        # Number of queries should be less than the label count.
+        with self.assert_queries_less_than(20):
             response = self.client.get(url, data)
         self.assertStatusOK(response)

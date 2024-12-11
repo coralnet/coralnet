@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.test import override_settings
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, sample_image_as_file
+from lib.tests.utils import BasePermissionTest
 from sources.models import Source
 from ..models import LabelGroup, Label
 from .utils import LabelTest
@@ -163,7 +163,7 @@ class NewEditLabelBaseTest(LabelTest, metaclass=ABCMeta):
             description="Description\ngoes here.",
             # A new filename will be generated, and the uploaded
             # filename will be discarded, so this filename doesn't matter.
-            thumbnail=sample_image_as_file('_.png'),
+            thumbnail=self.sample_image_as_file('_.png'),
         )
         post_data.update(params)
 
@@ -206,7 +206,7 @@ class NewEditLabelBaseTest(LabelTest, metaclass=ABCMeta):
             description="Description\ngoes here.",
             # A new filename will be generated, and the uploaded
             # filename will be discarded, so this filename doesn't matter.
-            thumbnail=sample_image_as_file('_.png'),
+            thumbnail=self.sample_image_as_file('_.png'),
         )
         post_data.update(params)
 
@@ -341,7 +341,7 @@ class LabelCreationGeneralTest(NewEditLabelBaseTest):
             description="Species C.",
             # A new filename will be generated, and this uploaded
             # filename will be discarded, so it doesn't matter.
-            thumbnail=sample_image_as_file('_.png'),
+            thumbnail=self.sample_image_as_file('_.png'),
         ))
 
         # Check that the label was created, and has the expected field values
@@ -378,7 +378,7 @@ class LabelCreationGeneralTest(NewEditLabelBaseTest):
             description="Species C.",
             # A new filename will be generated, and the uploaded
             # filename will be discarded, so it doesn't matter.
-            thumbnail=sample_image_as_file('_.png'),
+            thumbnail=self.sample_image_as_file('_.png'),
         ))
 
         # Check that the label was created, and has the expected field values
@@ -617,7 +617,8 @@ class GeneralFieldsTest(NewEditLabelBaseTest):
     def test_thumbnail_change(self):
         original_filename = self.get_label('A').thumbnail.name
 
-        response = self.submit_edit(thumbnail=sample_image_as_file('_.png'))
+        response = self.submit_edit(
+            thumbnail=self.sample_image_as_file('_.png'))
 
         self.assertContains(
             response, "Label successfully edited.",
@@ -677,7 +678,7 @@ class GeneralFieldsTest(NewEditLabelBaseTest):
         instead of keeping the original size.
         """
         params = dict(
-            thumbnail=sample_image_as_file(
+            thumbnail=self.sample_image_as_file(
                 '_.png',
                 image_options=dict(
                     width=Label.THUMBNAIL_WIDTH+100,

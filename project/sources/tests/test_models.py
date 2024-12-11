@@ -2,7 +2,7 @@ from django.db.utils import IntegrityError
 from django_migration_testcase import MigrationTest
 from guardian.shortcuts import get_users_with_perms
 
-from lib.tests.utils import sample_image_as_file
+from lib.tests.utils_data import sample_image_as_file
 
 
 class MigrateSourceFromImagesAppTest(MigrationTest):

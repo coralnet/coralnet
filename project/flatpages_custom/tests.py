@@ -8,8 +8,7 @@ from django.urls import reverse
 from django_migration_testcase import MigrationTest
 from reversion.models import Version
 
-from lib.tests.utils import (
-    BasePermissionTest, ClientTest, sample_image_as_file)
+from lib.tests.utils import BasePermissionTest, ClientTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -105,7 +104,7 @@ class FlatpageEditTest(ClientTest):
 
     def test_markdownx_image_upload(self):
         """Simple check that the image upload view works."""
-        data = dict(image=sample_image_as_file('sample.png'))
+        data = dict(image=self.sample_image_as_file('sample.png'))
         response = self.client.post(
             reverse('markdownx_upload'), data,
             # The view's response type varies depending on what

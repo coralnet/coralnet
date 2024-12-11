@@ -9,7 +9,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 from images.models import Image
-from lib.tests.utils import (
+from lib.tests.utils_selenium import (
     BrowserTest, EC_alert_is_not_present, EC_javascript_global_var_value)
 
 

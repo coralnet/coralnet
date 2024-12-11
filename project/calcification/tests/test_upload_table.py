@@ -4,8 +4,7 @@ from bs4 import BeautifulSoup
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
-from lib.tests.utils import (
-    BasePermissionTest, ClientTest, sample_image_as_file)
+from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import CalcifyRateTable
 from .utils import (
     create_global_calcify_table, grid_of_tables_html_to_tuples)
@@ -179,7 +178,7 @@ class TableUploadTest(ClientTest):
         data = dict(
             name="Name",
             description="Description",
-            csv_file=sample_image_as_file('A.jpg'),
+            csv_file=self.sample_image_as_file('A.jpg'),
         )
         url = reverse(
             'calcification:rate_table_upload_ajax', args=[self.source.pk])

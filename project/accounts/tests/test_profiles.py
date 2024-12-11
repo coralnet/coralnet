@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from django.shortcuts import resolve_url
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest, sample_image_as_file
+from lib.tests.utils import BasePermissionTest, ClientTest
 from ..models import Profile
 
 
@@ -252,7 +252,8 @@ class ProfileEditTest(ClientTest):
     def test_submit(self):
         user = self.create_user()
         self.client.force_login(user)
-        response = self.edit_submit(avatar_file=sample_image_as_file('_.png'))
+        response = self.edit_submit(
+            avatar_file=self.sample_image_as_file('_.png'))
         self.assertTemplateUsed(response, 'profiles/profile_detail.html')
 
         user.refresh_from_db()
@@ -327,7 +328,7 @@ class ProfileEditTest(ClientTest):
         user = self.create_user()
         self.client.force_login(user)
         response = self.edit_submit(
-            avatar_file=sample_image_as_file('_.png'),
+            avatar_file=self.sample_image_as_file('_.png'),
             use_email_gravatar=True)
 
         self.assertTemplateUsed(response, 'profiles/profile_detail.html')
@@ -342,7 +343,7 @@ class ProfileEditTest(ClientTest):
         user = self.create_user()
         self.client.force_login(user)
         response = self.edit_submit(
-            avatar_file=sample_image_as_file('_.png'),
+            avatar_file=self.sample_image_as_file('_.png'),
             use_email_gravatar=False)
 
         self.assertTemplateUsed(response, 'profiles/profile_detail.html')

@@ -10,7 +10,7 @@ from rest_framework import status
 
 from api_core.tests.utils import BaseAPITest
 from jobs.tasks import run_scheduled_jobs_until_empty
-from lib.tests.utils import create_sample_image
+from lib.tests.utils_data import create_sample_image
 from sources.models import Source
 from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 

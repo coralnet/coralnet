@@ -4,12 +4,13 @@ from django_migration_testcase import MigrationTest
 import numpy as np
 from spacer.messages import ClassifyReturnMsg
 
-from jobs.utils import schedule_job
-from lib.tests.utils import ClientTest, sample_image_as_file
 from images.models import Point
+from jobs.utils import schedule_job
+from lib.tests.utils import ClientTest
+from lib.tests.utils_data import sample_image_as_file
 from ..common import Extractors
 from ..models import BatchJob, Score
-import vision_backend.task_helpers as th
+from ..task_helpers import add_scores
 
 
 class ImageInitialStatusTest(ClientTest):
@@ -68,7 +69,7 @@ class CascadeDeleteTest(ClientTest):
             valid_rowcol=False,
         )
 
-        th.add_scores(img.pk, return_msg, label_objs)
+        add_scores(img.pk, return_msg, label_objs)
 
         expected_nbr_scores = min(5, label_objs.count())
         self.assertEqual(Score.objects.filter(image=img).count(),

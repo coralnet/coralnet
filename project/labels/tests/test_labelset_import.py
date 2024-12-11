@@ -4,7 +4,7 @@ from io import StringIO
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, sample_image_as_file
+from lib.tests.utils import BasePermissionTest
 from ..models import Label
 from .utils import LabelTest
 
@@ -495,7 +495,7 @@ class LabelsetImportFormatTest(LabelsetImportBaseTest):
 
     def test_non_csv(self):
         self.client.force_login(self.user)
-        f = sample_image_as_file('A.jpg')
+        f = self.sample_image_as_file('A.jpg')
         response = self.client.post(
             reverse('labelset_import_preview_ajax', args=[self.source.pk]),
             {'csv_file': f},
