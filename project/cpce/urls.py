@@ -27,7 +27,7 @@ source_urlpatterns = [
          name="upload_confirm_ajax"),
 
     path('export_prepare_ajax/',
-         views.export_prepare_ajax,
+         views.ExportPrepareAjaxView.as_view(),
          name="export_prepare_ajax"),
     path('export_serve/',
          views.export_serve,
