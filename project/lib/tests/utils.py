@@ -11,9 +11,12 @@ from django.contrib.auth import get_user_model
 from django.core import mail, management
 from django.core.cache import cache
 from django.conf import settings
+from django.db import connections
+from django.db.utils import DEFAULT_DB_ALIAS
 from django.test import override_settings, TestCase
 from django.test.client import Client
 from django.test.runner import DiscoverRunner
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 import django_huey
@@ -65,17 +68,11 @@ class CustomTestRunner(DiscoverRunner):
         return return_code
 
 
-class BaseTest(TestCase):
+class StorageDirTest(TestCase):
     """
-    Base automated-test class.
-
     Ensures that the test storage directories defined in the test runner
     are used as they should be.
     """
-
-    # Assertion errors have the raw error followed by the
-    # msg argument, if present.
-    longMessage = True
 
     @classmethod
     def setUpClass(cls):
@@ -107,12 +104,71 @@ class BaseTest(TestCase):
         storage_manager.copy_dir(
             settings.POST_SETUPTESTDATA_STATE_DIR, settings.TEST_STORAGE_DIR)
 
+        super().setUp()
+
+
+class _AssertQueriesLessThanContext(CaptureQueriesContext):
+    """
+    Similar to Django's _AssertNumQueriesContext, but checks less-than
+    instead of equality.
+    """
+    def __init__(self, test_case, num, connection):
+        self.test_case = test_case
+        self.num = num
+        super().__init__(connection)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        super().__exit__(exc_type, exc_value, traceback)
+        if exc_type is not None:
+            return
+        executed = len(self)
+        queries_string = '\n'.join(
+            f"{i}. {query['sql']}"
+            for i, query in enumerate(self.captured_queries, start=1)
+        )
+        self.test_case.assertLess(
+            executed,
+            self.num,
+            f"{executed} queries executed, less than {self.num} expected"
+            f"\nCaptured queries were:"
+            f"\n{queries_string}"
+        )
+
+
+class BaseTest(StorageDirTest):
+    """
+    Base automated-test class.
+    """
+
+    # Assertion errors have the raw error followed by the
+    # msg argument, if present.
+    longMessage = True
+
+    def setUp(self):
         # Some site functionality uses the cache for performance, but leaving
         # the cache uncleared between cache-using tests can mess up test
         # results.
         cache.clear()
 
         super().setUp()
+
+    def assert_queries_less_than(
+            self, num, func=None, *args, using=DEFAULT_DB_ALIAS, **kwargs):
+        """
+        Similar to Django's assertNumQueries(), but checks less-than
+        instead of equality.
+        For example, to check that we don't do O(n) queries, we might
+        assert that the number of queries is less than n (which should be
+        a valid test for large enough n).
+        """
+        conn = connections[using]
+
+        context = _AssertQueriesLessThanContext(self, num, conn)
+        if func is None:
+            return context
+
+        with context:
+            func(*args, **kwargs)
 
 
 class ClientTest(DataTestMixin, BaseTest):

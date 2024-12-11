@@ -1033,10 +1033,9 @@ class PerformanceTest(BaseCalcifyStatsExportTest):
             label_display='code', export_format='csv')
         self.client.force_login(self.user)
 
-        # We just want the number of queries to be reasonably close to 15
-        # (image count), and definitely less than 300 (annotation count),
-        # but assertNumQueries only asserts on an exact number of queries.
-        with self.assertNumQueries(30):
+        # Number of queries should be reasonably close to 15
+        # (image count) and definitely less than 300 (annotation count).
+        with self.assert_queries_less_than(15*4):
             response = self.client.post(url, data)
         self.assertStatusOK(response)
         self.assertEqual(response['content-type'], 'text/csv')
