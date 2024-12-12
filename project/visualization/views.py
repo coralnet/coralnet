@@ -8,12 +8,13 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from annotations.forms import ExportAnnotationsForm
 from annotations.models import Annotation
 from calcification.forms import CalcifyRateTableForm, ExportCalcifyStatsForm
 from calcification.utils import (
     get_default_calcify_tables, get_global_calcify_tables)
 from cpce.forms import CpcExportForm
-from export.forms import ExportAnnotationsForm, ExportImageCoversForm
+from export.forms import ExportImageCoversForm
 from images.forms import MetadataFormForGrid, BaseMetadataFormSet
 from images.models import Image, Metadata
 from images.utils import delete_images

@@ -12,15 +12,22 @@ from upload.tests.utils import UploadAnnotationsCsvTestMixin
 
 class PermissionTest(BasePermissionTest):
 
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
     def test_annotations(self):
         url = reverse('export_annotations', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
-            url, self.SOURCE_VIEW, content_type='text/csv')
+            url, self.SOURCE_VIEW, post_data={}, content_type='text/csv')
         self.source_to_public()
         self.assertPermissionLevel(
-            url, self.SIGNED_IN, content_type='text/csv',
+            url, self.SIGNED_IN, post_data={}, content_type='text/csv',
             deny_type=self.REQUIRE_LOGIN)
 
 
@@ -821,3 +828,166 @@ class UploadAndExportSameDataTest(BaseExportTest):
         response = self.export_annotations(post_data)
 
         self.assert_csv_content_equal(response.content, csv_lines)
+
+
+class QueriesPerPointTest(BaseExportTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            # 100 points per image
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=10, cell_columns=10))
+        labels = cls.create_labels(
+            # At least enough labels to fill in 5 suggestions
+            cls.user, ['A', 'B', 'C', 'D', 'E', 'F', 'G'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='1.jpg', width=400, height=300))
+        cls.img2 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='2.jpg', width=400, height=300))
+        cls.img3 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='3.jpg', width=400, height=300))
+
+    def test_default_columns(self):
+        self.add_annotations(self.user, self.img1)
+        self.add_annotations(self.user, self.img2)
+        self.add_annotations(self.user, self.img3)
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            response = self.export_annotations(self.default_search_params)
+
+        csv_content = response.content.decode()
+        self.assertEqual(
+            csv_content.count('\n'), 301,
+            msg="Sanity check: CSV should have one line per point plus"
+                " header and total rows = 302 lines, 301 newlines")
+
+    def test_with_all_optional_columns(self):
+        # Machine suggestions and some confirmed annotations
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img1)
+        self.add_annotations(self.user, self.img1)
+        self.add_robot_annotations(robot, self.img2)
+        self.add_annotations(self.user, self.img2)
+        self.add_robot_annotations(robot, self.img3)
+
+        # Image metadata
+        self.img1.metadata.photo_date = datetime.date(2001, 2, 3)
+        self.img1.metadata.aux1 = "Site A"
+        self.img1.metadata.camera = "Canon"
+        self.img1.metadata.save()
+        self.img2.metadata.photo_date = datetime.date(2001, 2, 3)
+        self.img2.metadata.aux1 = "Site A"
+        self.img2.metadata.camera = "Canon"
+        self.img2.metadata.save()
+        self.img3.metadata.photo_date = datetime.date(2003, 4, 5)
+        self.img3.metadata.aux1 = "Site B"
+        self.img3.metadata.camera = "Nikon"
+        self.img3.metadata.save()
+
+        post_data = self.default_search_params.copy()
+        post_data['optional_columns'] = [
+            'annotator_info', 'machine_suggestions',
+            'metadata_date_aux', 'metadata_other']
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            response = self.export_annotations(post_data)
+
+        csv_content = response.content.decode()
+        self.assertEqual(
+            csv_content.count('\n'), 301,
+            msg="Sanity check: CSV should have one line per point plus"
+                " header and total rows = 302 lines, 301 newlines")
+        self.assertIn(
+            "Machine suggestion 5", csv_content,
+            msg="Sanity check: CSV should have machine suggestion columns")
+        self.assertIn(
+            "Nikon", csv_content,
+            msg="Sanity check: CSV should have some expected metadata")
+
+
+class QueriesPerImageTest(BaseExportTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            # 1 point per image
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1))
+        labels = cls.create_labels(
+            cls.user,
+            # A larger labelset could make the queries per image go up if
+            # handled naively.
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+            'GroupA',
+        )
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.images = []
+        for n in range(1, 40+1):
+            cls.images.append(cls.upload_image(
+                cls.user, cls.source,
+                dict(filename=f'{n}.jpg', width=50, height=50),
+            ))
+
+    def test_default_columns(self):
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        # Number of queries should be linear in image count, but with
+        # not too large of a constant factor.
+        with self.assert_queries_less_than(40*5):
+            response = self.export_annotations(self.default_search_params)
+
+        csv_content = response.content.decode()
+        self.assertEqual(
+            csv_content.count('\n'), 41,
+            msg="Sanity check: CSV should have one line per point plus"
+                " header and total rows = 42 lines, 41 newlines")
+
+    def test_with_all_optional_columns(self):
+        robot = self.create_robot(self.source)
+        for image in self.images:
+            # Machine suggestions and confirmed annotations
+            self.add_robot_annotations(robot, image)
+            self.add_annotations(self.user, image)
+            # Image metadata
+            image.metadata.photo_date = datetime.date(2001, 2, 3)
+            image.metadata.aux1 = "Site A"
+            image.metadata.camera = "Canon"
+            image.metadata.save()
+
+        post_data = self.default_search_params.copy()
+        post_data['optional_columns'] = [
+            'annotator_info', 'machine_suggestions',
+            'metadata_date_aux', 'metadata_other']
+
+        with self.assert_queries_less_than(40*5):
+            response = self.export_annotations(post_data)
+
+        csv_content = response.content.decode()
+        self.assertEqual(
+            csv_content.count('\n'), 41,
+            msg="Sanity check: CSV should have one line per point plus"
+                " header and total rows = 42 lines, 41 newlines")
+        self.assertIn(
+            "Machine suggestion 5", csv_content,
+            msg="Sanity check: CSV should have machine suggestion columns")
+        self.assertIn(
+            "Canon", csv_content,
+            msg="Sanity check: CSV should have some expected metadata")

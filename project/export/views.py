@@ -21,12 +21,11 @@ from lib.decorators import source_visibility_required
 from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
-from .forms import ExportAnnotationsForm, ExportImageCoversForm
+from .forms import ExportImageCoversForm
 from .utils import (
     create_csv_stream_response,
     create_stream_response,
     get_request_images,
-    write_annotations_csv,
     write_labelset_csv,
 )
 
@@ -38,8 +37,9 @@ decorators = [
     source_visibility_required('source_id'),
     # These exports can be resource intensive, so no bots allowed.
     login_required,
-    # This is a potentially slow view that doesn't modify the database,
-    # so don't open a transaction for the view.
+    # This is a potentially slow view that doesn't modify the database
+    # in a time-sensitive way.
+    # So don't open a transaction for the view.
     transaction.non_atomic_requests]
 @method_decorator(decorators, name='dispatch')
 class SourceCsvExportView(View, ABC):
@@ -94,7 +94,7 @@ class SourceCsvExportView(View, ABC):
             return HttpResponseRedirect(
                 reverse('browse_images', args=[source_id]))
 
-        if export_form.cleaned_data['export_format'] == 'excel':
+        if export_form.cleaned_data.get('export_format') == 'excel':
 
             # Excel with meta information in additional sheet(s)
             filename = self.get_export_filename(source, '.xlsx')
@@ -287,34 +287,6 @@ def export_metadata(request, source_id):
                 value = ''
             row.append(value)
         writer.writerow(row)
-
-    return response
-
-
-@source_visibility_required('source_id')
-@login_required
-@transaction.non_atomic_requests
-def export_annotations(request, source_id):
-    source = get_object_or_404(Source, id=source_id)
-
-    try:
-        image_set, _ = get_request_images(request, source)
-    except ValidationError as e:
-        messages.error(request, e.message)
-        return HttpResponseRedirect(
-            reverse('browse_images', args=[source_id]))
-
-    export_annotations_form = ExportAnnotationsForm(request.POST)
-    if not export_annotations_form.is_valid():
-        messages.error(request, get_one_form_error(export_annotations_form))
-        return HttpResponseRedirect(
-            reverse('browse_images', args=[source_id]))
-
-    response = create_csv_stream_response('annotations.csv')
-
-    write_annotations_csv(
-        response, source, image_set,
-        export_annotations_form.cleaned_data['optional_columns'])
 
     return response
 
