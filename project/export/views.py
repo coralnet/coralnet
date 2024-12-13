@@ -17,7 +17,8 @@ from django.views import View
 import pyexcel
 
 from annotations.model_utils import ImageAnnoStatuses
-from lib.decorators import source_visibility_required
+from lib.decorators import (
+    source_labelset_required, source_visibility_required)
 from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
@@ -35,6 +36,10 @@ from .utils import (
 decorators = [
     # Access control.
     source_visibility_required('source_id'),
+    # Most/all of these exports require annotations, which require a
+    # labelset.
+    source_labelset_required('source_id', message=(
+        "You must create a labelset before exporting data.")),
     # These exports can be resource intensive, so no bots allowed.
     login_required,
     # This is a potentially slow view that doesn't modify the database

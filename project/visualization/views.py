@@ -85,6 +85,20 @@ def browse_images(request, source_id):
         page_image_ids = None
         links = None
 
+    if not request.user.is_authenticated:
+        # Annotation and deletion require source roles, and export
+        # requires login to keep out bots. So, no actions are available
+        # if not logged in.
+        can_see_actions = False
+        no_actions_reason = (
+            "Exports and other actions will be available here"
+            " if you're signed in.")
+    else:
+        can_see_actions = True
+        no_actions_reason = None
+
+    has_labelset = bool(source.labelset)
+
     return render(request, 'visualization/browse_images.html', {
         'source': source,
         'page_results': page_results,
@@ -94,6 +108,9 @@ def browse_images(request, source_id):
         'image_search_form': image_search_form,
         'hidden_image_form': hidden_image_form,
 
+        'can_see_actions': can_see_actions,
+        'no_actions_reason': no_actions_reason,
+        'has_labelset': has_labelset,
         'can_annotate': request.user.has_perm(
             Source.PermTypes.EDIT.code, source),
         # CPC export's fields can contain PC filepaths recently used

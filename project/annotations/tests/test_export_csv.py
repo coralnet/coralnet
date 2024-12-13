@@ -8,6 +8,7 @@ from annotations.models import Annotation
 from export.tests.utils import BaseExportTest
 from lib.tests.utils import BasePermissionTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
+from visualization.tests.utils import BrowseActionsFormTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -29,6 +30,40 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(
             url, self.SIGNED_IN, post_data={}, content_type='text/csv',
             deny_type=self.REQUIRE_LOGIN)
+
+
+class NoLabelsetTest(BaseExportTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+    def test(self):
+        response = self.export_annotations(self.default_search_params)
+        self.assertContains(
+            response,
+            "You must create a labelset before exporting data.")
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
+
+
+class FormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'export-annotations-form'
+
+    def test_no_labelset(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_placeholdered(
+            response,
+            "This action isn't available because the source has no labelset.")
+
+    def test_with_labelset(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_available(response)
 
 
 class ImageSetTest(BaseExportTest):

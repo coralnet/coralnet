@@ -9,10 +9,18 @@ from django.utils.html import escape as html_escape
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
+from visualization.tests.utils import BrowseActionsFormTest
 from ..utils import get_previous_cpcs_status
 
 
 class PermissionTest(BasePermissionTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_cpc_create_ajax(self):
         url = reverse(
@@ -35,6 +43,52 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
         self.source_to_public()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
+
+
+class NoLabelsetTest(ClientTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+    def test_cpc_create_ajax(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('cpce:export_prepare_ajax', args=[self.source.pk]))
+
+        self.assertContains(
+            response,
+            "You must create a labelset before exporting data.")
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
+
+    # We don't really care about export_serve here, since that already
+    # requires a session variable from export_prepare_ajax.
+
+
+class FormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'export-annotations-cpc-ajax-form'
+
+    def test_no_labelset(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_placeholdered(
+            response,
+            "This action isn't available because the source has no labelset.")
+
+    def test_with_labelset(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_available(response)
+
+    def test_view_perms_only(self):
+        self.client.force_login(self.user_viewer)
+        response = self.client.post(
+            self.browse_url, self.default_search_params)
+        self.assert_form_absent(response)
 
 
 class CPCExportBaseTest(ClientTest):

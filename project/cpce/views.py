@@ -142,7 +142,10 @@ class CpcAnnotationsUploadConfirmView(AnnotationsUploadConfirmView):
 
 decorators = [
     source_permission_required(
-        'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)]
+        'source_id', perm=Source.PermTypes.EDIT.code, ajax=True),
+    source_labelset_required('source_id', message=(
+        "You must create a labelset before exporting data.")),
+]
 @method_decorator(decorators, name='dispatch')
 class ExportPrepareAjaxView(View):
     """
