@@ -103,9 +103,7 @@
 
         {{ export_annotations_form }}
 
-        <div class="line">
-          Note: This can take a very long time, potentially 1 minute per 5000 annotations. If your source has thousands of images, please consider filtering your search to a smaller number of images before exporting.
-        </div>
+        {% include "export/annotation_export_wait_times.html" %}
 
         <button class="submit red">Go</button>
 
@@ -238,6 +236,8 @@
           </div>
 
           {{ cpc_export_form }}
+
+          {% include "export/annotation_export_wait_times.html" %}
 
           <button class="submit red">Go</button>
 
