@@ -169,6 +169,15 @@ class LabelSet(models.Model):
             return None
         return local_label.code
 
+    def global_pk_to_code_dict(self):
+        """
+        This helps to reduce database queries compared to calling
+        global_pk_to_code() once per label.
+        """
+        local_labels_values = self.get_labels().values('global_label', 'code')
+        return dict(
+            (v['global_label'], v['code']) for v in local_labels_values)
+
     def save_copy(self) -> 'LabelSet':
         # Copy fields and save a new instance
         kwargs = model_to_dict(self, exclude=['id'])

@@ -8,12 +8,13 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from annotations.forms import ExportAnnotationsForm
 from annotations.models import Annotation
 from calcification.forms import CalcifyRateTableForm, ExportCalcifyStatsForm
 from calcification.utils import (
     get_default_calcify_tables, get_global_calcify_tables)
 from cpce.forms import CpcExportForm
-from export.forms import ExportAnnotationsForm, ExportImageCoversForm
+from export.forms import ExportImageCoversForm
 from images.forms import MetadataFormForGrid, BaseMetadataFormSet
 from images.models import Image, Metadata
 from images.utils import delete_images
@@ -84,6 +85,20 @@ def browse_images(request, source_id):
         page_image_ids = None
         links = None
 
+    if not request.user.is_authenticated:
+        # Annotation and deletion require source roles, and export
+        # requires login to keep out bots. So, no actions are available
+        # if not logged in.
+        can_see_actions = False
+        no_actions_reason = (
+            "Exports and other actions will be available here"
+            " if you're signed in.")
+    else:
+        can_see_actions = True
+        no_actions_reason = None
+
+    has_labelset = bool(source.labelset)
+
     return render(request, 'visualization/browse_images.html', {
         'source': source,
         'page_results': page_results,
@@ -93,6 +108,9 @@ def browse_images(request, source_id):
         'image_search_form': image_search_form,
         'hidden_image_form': hidden_image_form,
 
+        'can_see_actions': can_see_actions,
+        'no_actions_reason': no_actions_reason,
+        'has_labelset': has_labelset,
         'can_annotate': request.user.has_perm(
             Source.PermTypes.EDIT.code, source),
         # CPC export's fields can contain PC filepaths recently used

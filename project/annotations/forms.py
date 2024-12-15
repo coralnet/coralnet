@@ -5,9 +5,16 @@ from django.core.exceptions import ValidationError
 from django import forms
 from django.forms import Form
 from django.forms.fields import (
-    BooleanField, CharField, DecimalField, IntegerField, MultiValueField)
+    BooleanField,
+    CharField,
+    DecimalField,
+    IntegerField,
+    MultipleChoiceField,
+    MultiValueField,
+)
 from django.forms.models import ModelForm
-from django.forms.widgets import HiddenInput, NumberInput, TextInput
+from django.forms.widgets import (
+    CheckboxSelectMultiple, HiddenInput, NumberInput, TextInput)
 
 from accounts.utils import is_robot_user
 from images.models import Metadata, Point
@@ -298,3 +305,15 @@ class AnnotationAreaPixelsForm(Form):
 
         self.cleaned_data = data
         super().clean()
+
+
+class ExportAnnotationsForm(Form):
+    optional_columns_choices = (
+        ('annotator_info', "Annotator info"),
+        ('machine_suggestions', "Machine suggestions"),
+        ('metadata_date_aux', "Image metadata - date and auxiliary fields"),
+        ('metadata_other', "Image metadata - other fields"),
+    )
+    optional_columns = MultipleChoiceField(
+        widget=CheckboxSelectMultiple, choices=optional_columns_choices,
+        required=False)

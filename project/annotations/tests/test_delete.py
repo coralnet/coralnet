@@ -1,6 +1,5 @@
 from unittest import mock
 
-from bs4 import BeautifulSoup
 from django.test.utils import override_settings
 from django.urls import reverse
 
@@ -8,6 +7,7 @@ from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest, spy_decorator
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, do_collect_spacer_jobs)
+from visualization.tests.utils import BrowseActionsFormTest
 from ..managers import AnnotationQuerySet
 
 
@@ -85,38 +85,28 @@ class BaseDeleteTest(ClientTest):
             f"The {count} selected images have had their annotations deleted.")
 
 
-class FormAvailabilityTest(BaseDeleteTest):
-    """
-    This form's submit button shouldn't be available in Browse if no search
-    was submitted.
-    """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.img1 = cls.upload_image(
-            cls.user, cls.source, dict(filename='1.png'))
-        cls.browse_url = reverse('browse_images', args=[cls.source.pk])
-
-    def assert_form_availability(self, response, expected_available):
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        form_soup = response_soup.find(
-            'form', id='delete-annotations-ajax-form')
-        submit_button_soup = form_soup.find('button', class_='submit')
-        if expected_available:
-            self.assertIsNotNone(submit_button_soup)
-        else:
-            self.assertIsNone(submit_button_soup)
+class FormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'delete-annotations-ajax-form'
 
     def test_no_search(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url, dict())
-        self.assert_form_availability(response, False)
+        response = self.client.post(self.browse_url)
+        self.assert_form_placeholdered(
+            response,
+            "You must first submit the Search form before you can batch-delete annotations. (This is a safety check to reduce the chances of accidentally deleting all your annotations. If you really want to delete all annotations, just click Search without changing any of the search fields.)",
+        )
 
     def test_after_search(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url, default_search_params)
-        self.assert_form_availability(response, True)
+        response = self.client.post(
+            self.browse_url, self.default_search_params)
+        self.assert_form_available(response)
+
+    def test_view_perms_only(self):
+        self.client.force_login(self.user_viewer)
+        response = self.client.post(
+            self.browse_url, self.default_search_params)
+        self.assert_form_absent(response)
 
 
 class SuccessTest(BaseDeleteTest):

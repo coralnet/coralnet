@@ -10,6 +10,7 @@ from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
+from visualization.tests.utils import BrowseActionsFormTest
 
 tz = timezone.get_current_timezone()
 
@@ -27,9 +28,6 @@ class PermissionTest(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
-    # TODO: Implement and test permissions on the availability of the
-    # action form's actions.
-
 
 default_search_params = dict(
     image_form_type='search',
@@ -44,6 +42,20 @@ default_search_params = dict(
     last_annotator_0='', last_annotator_1='',
     sort_method='name', sort_direction='asc',
 )
+
+
+class AnnotateFormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'annotate-all-form'
+
+    def test_available(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_available(response)
+
+    def test_view_perms_only(self):
+        self.client.force_login(self.user_viewer)
+        response = self.client.post(self.browse_url)
+        self.assert_form_absent(response)
 
 
 class BaseSearchTest(ClientTest):

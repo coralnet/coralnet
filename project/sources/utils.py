@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 from django.conf import settings
 
 from images.models import Metadata
@@ -8,10 +6,11 @@ from images.utils import get_aux_field_names, get_aux_label
 
 def metadata_field_names_to_labels(source):
     """
-    Get an OrderedDict of Metadata field names to field labels.
+    Get a dict of Metadata field names to field labels.
     e.g. 'photo_date': "Date", 'aux1': "Site", 'camera': "Camera", ...
+    Note that dicts are sorted based on insertion order since Python 3.7.
     """
-    d = OrderedDict(
+    d = dict(
         (field_name, Metadata._meta.get_field(field_name).verbose_name)
         for field_name
         in Metadata.EDIT_FORM_FIELDS

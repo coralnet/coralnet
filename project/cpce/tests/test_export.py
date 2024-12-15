@@ -9,10 +9,18 @@ from django.utils.html import escape as html_escape
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
+from visualization.tests.utils import BrowseActionsFormTest
 from ..utils import get_previous_cpcs_status
 
 
 class PermissionTest(BasePermissionTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_cpc_create_ajax(self):
         url = reverse(
@@ -35,6 +43,52 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
         self.source_to_public()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
+
+
+class NoLabelsetTest(ClientTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+    def test_cpc_create_ajax(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('cpce:export_prepare_ajax', args=[self.source.pk]))
+
+        self.assertContains(
+            response,
+            "You must create a labelset before exporting data.")
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
+
+    # We don't really care about export_serve here, since that already
+    # requires a session variable from export_prepare_ajax.
+
+
+class FormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'export-annotations-cpc-ajax-form'
+
+    def test_no_labelset(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_placeholdered(
+            response,
+            "This action isn't available because the source has no labelset.")
+
+    def test_with_labelset(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_available(response)
+
+    def test_view_perms_only(self):
+        self.client.force_login(self.user_viewer)
+        response = self.client.post(
+            self.browse_url, self.default_search_params)
+        self.assert_form_absent(response)
 
 
 class CPCExportBaseTest(ClientTest):
@@ -88,6 +142,11 @@ class CPCExportBaseTest(ClientTest):
         zf = ZipFile(BytesIO(response.content))
         # Use decode() to get a Unicode string
         return zf.read(cpc_filename).decode()
+
+    @staticmethod
+    def export_response_file_count(response):
+        zf = ZipFile(BytesIO(response.content))
+        return len(zf.namelist())
 
     def upload_cpcs(self, cpc_files, label_mapping='id_only'):
         self.client.force_login(self.user)
@@ -1349,3 +1408,199 @@ class UtilsTest(ClientTest):
         self.img2.save()
         image_set = Image.objects.filter(source=self.source)
         self.assertEqual(get_previous_cpcs_status(image_set), 'all')
+
+
+class QueriesPerPointTest(CPCExportBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            # 100 points per image
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=10, cell_columns=10))
+        labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='1.jpg', width=400, height=300))
+        cls.img2 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='2.jpg', width=400, height=300))
+        cls.img3 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='3.jpg', width=400, height=300))
+
+    def test_no_annotations_no_previous_cpcs(self):
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            response = self.export_cpcs(self.default_export_params)
+
+        cpc_content = self.export_response_to_cpc(response, '2.cpc')
+        self.assertGreater(
+            cpc_content.count('\n'), 100,
+            msg="Sanity check: CPC should have one line per point plus"
+                " a few more lines")
+
+    def test_robot_annotations_no_previous_cpcs(self):
+        """
+        If there are robot annotations and the 'confirmed and confident'
+        filter is used, more database objects are checked.
+        """
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img1)
+        self.add_robot_annotations(robot, self.img2)
+        self.add_robot_annotations(robot, self.img3)
+
+        post_data = self.default_export_params.copy()
+        post_data.update(
+            annotation_filter='confirmed_and_confident',
+        )
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            response = self.export_cpcs(post_data)
+
+        cpc_content = self.export_response_to_cpc(response, '2.cpc')
+        self.assertGreater(
+            cpc_content.count('\n'), 100,
+            msg="Sanity check: CPC should have one line per point plus"
+                " a few more lines")
+
+    def test_with_previous_cpcs(self):
+        """
+        If there are previously uploaded cpcs, a different code path is taken.
+        """
+        files = []
+        for base_name in ['1', '2', '3']:
+            cpc_lines = [
+                (r'"C:\CPCe codefiles\My codes.txt",'
+                 fr'"C:\Queries test\{base_name}.jpg",'
+                 '6000,4500,20000,25000'),
+                '0,4485',
+                '5985,4485',
+                '5985,0',
+                '0,0',
+                '100',
+                *[f'{column},{row}'
+                  for column in range(100, 4000, 400)
+                  for row in range(100, 3000, 300)],
+                *[f'"{num}","A","Notes",""'
+                  for num in range(1, 100+1)],
+                *(['"Header value goes here"']*28),
+            ]
+            cpc_content = '\r\n'.join(cpc_lines) + '\r\n'
+            files.append(
+                ContentFile(cpc_content, name=f'{base_name}.cpc'))
+        self.upload_cpcs(files)
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            response = self.export_cpcs(self.default_export_params)
+
+        cpc_content = self.export_response_to_cpc(response, '2.cpc')
+        self.assertGreater(
+            cpc_content.count('\n'), 100,
+            msg="Sanity check: CPC should have one line per point plus"
+                " a few more lines")
+        self.assertIn(
+            r"C:\Queries test", cpc_content,
+            msg="Sanity check: CPC should have the uploaded CPC's path,"
+                " showing that the previously uploaded CPC was used as"
+                " a base")
+
+
+class QueriesPerImageTest(CPCExportBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            # 1 point per image
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=1))
+        labels = cls.create_labels(
+            cls.user,
+            # A larger labelset could make the queries per image go up if
+            # handled naively.
+            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'],
+            'GroupA',
+        )
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.images = []
+        for n in range(1, 40+1):
+            cls.images.append(cls.upload_image(
+                cls.user, cls.source,
+                dict(filename=f'{n}.jpg', width=50, height=50),
+            ))
+
+    def test_no_annotations_no_previous_cpcs(self):
+        # Number of queries should be linear in image count, but with
+        # not too large of a constant factor.
+        with self.assert_queries_less_than(40*5):
+            response = self.export_cpcs(self.default_export_params)
+
+        self.assertEqual(
+            self.export_response_file_count(response), 40,
+            msg="Sanity check: zip file response should have one CPC per"
+                " image")
+
+    def test_robot_annotations_no_previous_cpcs(self):
+        robot = self.create_robot(self.source)
+        for image in self.images:
+            self.add_robot_annotations(robot, image)
+
+        post_data = self.default_export_params.copy()
+        post_data.update(
+            annotation_filter='confirmed_and_confident',
+        )
+
+        with self.assert_queries_less_than(40*5):
+            response = self.export_cpcs(post_data)
+
+        self.assertEqual(
+            self.export_response_file_count(response), 40,
+            msg="Sanity check: zip file response should have one CPC per"
+                " image")
+
+    def test_with_previous_cpcs(self):
+        files = []
+        for base_name in range(1, 40+1):
+            cpc_lines = [
+                (r'"C:\CPCe codefiles\My codes.txt",'
+                 fr'"C:\Queries test\{base_name}.jpg",'
+                 '750,750,20000,25000'),
+                '0,735',
+                '735,735',
+                '735,0',
+                '0,0',
+                '1',
+                '360,360',
+                '"1","A","Notes",""',
+                *(['"Header value goes here"']*28),
+            ]
+            cpc_content = '\r\n'.join(cpc_lines) + '\r\n'
+            files.append(
+                ContentFile(cpc_content, name=f'{base_name}.cpc'))
+        self.upload_cpcs(files)
+
+        with self.assert_queries_less_than(40*5):
+            response = self.export_cpcs(self.default_export_params)
+
+        self.assertEqual(
+            self.export_response_file_count(response), 40,
+            msg="Sanity check: zip file response should have one CPC per"
+                " image")
+        cpc_content = self.export_response_to_cpc(response, '2.cpc')
+        self.assertIn(
+            r"C:\Queries test", cpc_content,
+            msg="Sanity check: CPC should have the uploaded CPC's path,"
+                " showing that the previously uploaded CPC was used as"
+                " a base")

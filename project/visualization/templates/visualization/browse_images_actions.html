@@ -51,12 +51,11 @@
         images on this page</option>
     </select>
 
-    {# Below are the possible action forms. #}
-
-    {# This form allows refreshing the current Browse page #}
-
-    <form hidden action=""
-    method="post" class="no-padding" id="refresh-browse-form">
+    {# This form allows refreshing the current Browse page, which is sometimes what we want after running some ajax. #}
+    <form
+      hidden action=""
+      method="post" class="no-padding" id="refresh-browse-form"
+    >
       {% csrf_token %}
       <span id="previous-image-form-fields">
         {# The image-filter parameters that led us to this browse page. #}
@@ -66,8 +65,12 @@
       </span>
     </form>
 
-    <form hidden action="{% url 'export_metadata' source.pk %}" method="post"
-    class="no-padding" id="export-metadata-form">
+    {# Below are the possible action forms. One at a time will be shown depending on which image-action is selected. #}
+
+    <form
+      hidden action="{% url 'export_metadata' source.pk %}" method="post"
+      class="no-padding" id="export-metadata-form"
+    >
       {% csrf_token %}
 
       <div class="line">
@@ -81,77 +84,113 @@
       <button class="submit red">Go</button>
     </form>
 
-    <form hidden action="{% url 'export_annotations' source.pk %}"
-    method="post" class="no-padding" id="export-annotations-form">
-      <hr/>
-      {% csrf_token %}
+    <form
+      hidden action="{% url 'export_annotations' source.pk %}"
+      method="post" class="no-padding" id="export-annotations-form"
+    >
+      {% if has_labelset %}
 
-      <div class="line">
-        Export annotations for these images in CSV format - one row per annotation.
+        <hr/>
+        {% csrf_token %}
 
-        <div class="tutorial-message">
-          {% include "export/help_annotations_csv.html" %}
+        <div class="line">
+          Export annotations for these images in CSV format - one row per annotation.
+
+          <div class="tutorial-message">
+            {% include "export/help_annotations_csv.html" %}
+          </div>
         </div>
-      </div>
 
-      {{ export_annotations_form }}
+        {{ export_annotations_form }}
 
-      <div class="line">
-        Note: This can take a very long time, potentially 1 minute per 5000 annotations. If your source has thousands of images, please consider filtering your search to a smaller number of images before exporting.
-      </div>
+        {% include "export/annotation_export_wait_times.html" %}
 
-      <button class="submit red">Go</button>
+        <button class="submit red">Go</button>
+
+      {% else %}
+
+        <div class="line">
+          This action isn't available because the source has no labelset.
+        </div>
+
+      {% endif %}
     </form>
 
-    <form hidden action="{% url 'export_image_covers' source.pk %}" method="post"
-    class="no-padding" id="export-image-covers-form">
-      <hr/>
-      {% csrf_token %}
+    <form
+      hidden action="{% url 'export_image_covers' source.pk %}" method="post"
+      class="no-padding" id="export-image-covers-form"
+    >
+      {% if has_labelset %}
 
-      <div class="line">
-        Export per-image coverage statistics for each of these images. For example, image 0001.JPG consists of 5% Acropora, 10% Porites, etc. based on the annotations.
+        <hr/>
+        {% csrf_token %}
 
-        <div class="tutorial-message">
-          {% include "export/help_image_covers.html" %}
+        <div class="line">
+          Export per-image coverage statistics for each of these images. For example, image 0001.JPG consists of 5% Acropora, 10% Porites, etc. based on the annotations.
+
+          <div class="tutorial-message">
+            {% include "export/help_image_covers.html" %}
+          </div>
         </div>
-      </div>
 
-      {{ export_image_covers_form }}
+        {{ export_image_covers_form }}
 
-      <button class="submit red">Go</button>
+        <button class="submit red">Go</button>
+
+      {% else %}
+
+        <div class="line">
+          This action isn't available because the source has no labelset.
+        </div>
+
+      {% endif %}
     </form>
 
-    <form hidden action="{% url 'calcification:stats_export' source.pk %}"
-    method="post" class="no-padding" id="export-calcify-rates-form">
-      <hr/>
-      {% csrf_token %}
+    <form
+      hidden action="{% url 'calcification:stats_export' source.pk %}"
+      method="post" class="no-padding" id="export-calcify-rates-form"
+    >
+      {% if has_labelset %}
 
-      <div class="line">
-        Export per-image calcification rates for each of these images.
+        <hr/>
+        {% csrf_token %}
 
-        <div class="tutorial-message">
-          {% include "calcification/help_export.html" %}
+        <div class="line">
+          Export per-image calcification rates for each of these images.
+
+          <div class="tutorial-message">
+            {% include "calcification/help_export.html" %}
+          </div>
         </div>
-      </div>
 
-      {# TODO: Make this button a bit more easily distinguishable if possible #}
-      <button type="button" id="manage-calcify-tables-button">
-        {% if can_manage_source_data %}
-          Click here to manage label-rate tables
-        {% else %}
-          Click here to view label-rate tables
-        {% endif %}
-      </button>
+        {# TODO: Make this button a bit more easily distinguishable if possible #}
+        <button type="button" id="manage-calcify-tables-button">
+          {% if can_manage_source_data %}
+            Click here to manage label-rate tables
+          {% else %}
+            Click here to view label-rate tables
+          {% endif %}
+        </button>
 
-      {{ export_calcify_rates_form }}
+        {{ export_calcify_rates_form }}
 
-      <button class="submit red">Go</button>
+        <button class="submit red">Go</button>
+
+      {% else %}
+
+        <div class="line">
+          This action isn't available because the source has no labelset.
+        </div>
+
+      {% endif %}
     </form>
 
     {% if can_annotate %}
 
-      <form hidden action="{{ links.annotation_tool_first_result }}"
-      method="post" class="no-padding" id="annotate-all-form">
+      <form
+        hidden action="{{ links.annotation_tool_first_result }}"
+        method="post" class="no-padding" id="annotate-all-form"
+      >
         {% csrf_token %}
         <div class="line">
           This takes you to the annotation tool for the first image in this image set. Then, the annotation tool's Prev/Next buttons will only navigate through this image set.
@@ -160,8 +199,10 @@
         <button class="submit red">Go</button>
       </form>
 
-      <form hidden action="{{ links.annotation_tool_page_results.0 }}"
-      method="post" class="no-padding" id="annotate-selected-form">
+      <form
+        hidden action="{{ links.annotation_tool_page_results.0 }}"
+        method="post" class="no-padding" id="annotate-selected-form"
+      >
         {% csrf_token %}
         <div class="line">
           This takes you to the annotation tool for the first image in this image set. Then, the annotation tool's Prev/Next buttons will only navigate through this image set.
@@ -176,26 +217,44 @@
 
       {# Export annotations CPC #}
 
-      <form hidden action="{% url 'cpce:export_prepare_ajax' source.pk %}"
-      method="post" class="no-padding" id="export-annotations-cpc-ajax-form">
-        <hr/>
-        {% csrf_token %}
+      <form
+        hidden action="{% url 'cpce:export_prepare_ajax' source.pk %}"
+        method="post" class="no-padding"
+        id="export-annotations-cpc-ajax-form"
+      >
+        {% if has_labelset %}
 
-        <div class="line">
-          {{ cpc_export_form.previous_cpcs_help_text }}
+          <hr/>
+          {% csrf_token %}
 
-          <div class="tutorial-message">
-            {% include "cpce/help_export.html" %}
+          <div class="line">
+            {{ cpc_export_form.previous_cpcs_help_text }}
+
+            <div class="tutorial-message">
+              {% include "cpce/help_export.html" %}
+            </div>
           </div>
-        </div>
 
-        {{ cpc_export_form }}
+          {{ cpc_export_form }}
 
-        <button class="submit red">Go</button>
+          {% include "export/annotation_export_wait_times.html" %}
+
+          <button class="submit red">Go</button>
+
+        {% else %}
+
+          <div class="line">
+            This action isn't available because the source has no labelset.
+          </div>
+
+        {% endif %}
       </form>
 
-      <form hidden action="{% url 'cpce:export_serve' source.pk %}"
-      method="get" class="no-padding" id="export-annotations-cpc-serve-form">
+      <form
+        hidden action="{% url 'cpce:export_serve' source.pk %}"
+        method="get" class="no-padding"
+        id="export-annotations-cpc-serve-form"
+      >
         <input type="hidden" name="session_data_timestamp" />
       </form>
 
@@ -205,8 +264,10 @@
 
       {# Delete images #}
 
-      <form hidden action="{% url 'browse_delete_ajax' source.pk %}"
-      method="post" class="no-padding" id="delete-images-ajax-form">
+      <form
+        hidden action="{% url 'browse_delete_ajax' source.pk %}"
+        method="post" class="no-padding" id="delete-images-ajax-form"
+      >
         {% if hidden_image_form %}
 
           {% csrf_token %}
@@ -227,8 +288,10 @@
 
       {# Delete annotations #}
 
-      <form hidden action="{% url 'batch_delete_annotations_ajax' source.pk %}"
-      method="post" class="no-padding" id="delete-annotations-ajax-form">
+      <form
+        hidden action="{% url 'batch_delete_annotations_ajax' source.pk %}"
+        method="post" class="no-padding" id="delete-annotations-ajax-form"
+      >
         {% if hidden_image_form %}
 
           {% csrf_token %}

@@ -54,11 +54,10 @@
     {# Pagination info and links #}
     {% include 'pagination_links.html' with use_post_form=True hidden_form=hidden_image_form page_results=page_results %}
 
-    {# Annotation and deletion require source roles, and export requires login to keep out bots. So, no actions are available if not logged in. #}
-    {% if user.is_authenticated %}
-
+    {% if can_see_actions %}
       {% include 'visualization/browse_images_actions.html' %}
-
+    {% else %}
+      <div class="page-section">{{ no_actions_reason }}</div>
     {% endif %}
 
   {% endif %}
@@ -72,7 +71,7 @@
   </script>
 
   <script type="text/javascript">
-    {% if page_results.paginator.count > 0 and user.is_authenticated %}
+    {% if page_results.paginator.count > 0 and can_see_actions %}
       {# Action form is present. #}
       let browseActionHelper = new BrowseActionHelper(
           {{ page_image_ids|jsonify }});

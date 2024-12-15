@@ -5,6 +5,7 @@ import pyexcel
 from export.tests.utils import BaseExportTest
 from labels.models import LocalLabel
 from lib.tests.utils import BasePermissionTest, ClientTest
+from visualization.tests.utils import BrowseActionsFormTest
 from .utils import (
     create_global_calcify_table, create_source_calcify_table,
     grid_of_tables_html_to_tuples)
@@ -54,6 +55,43 @@ class PermissionTest(BasePermissionTest):
         self.assertTrue(form_is_present())
         self.client.logout()
         self.assertFalse(form_is_present())
+
+
+class NoLabelsetTest(ClientTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+    def test(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('calcification:stats_export', args=[self.source.pk]))
+
+        self.assertContains(
+            response,
+            "You must create a labelset before exporting data.")
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
+
+
+class FormAvailabilityTest(BrowseActionsFormTest):
+    form_id = 'export-calcify-rates-form'
+
+    def test_no_labelset(self):
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_placeholdered(
+            response,
+            "This action isn't available because the source has no labelset.")
+
+    def test_with_labelset(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.force_login(self.user)
+        response = self.client.post(self.browse_url)
+        self.assert_form_available(response)
 
 
 class BaseCalcifyStatsExportTest(BaseExportTest):

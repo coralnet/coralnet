@@ -1,3 +1,5 @@
+from collections import defaultdict
+import csv
 import json
 
 from django.conf import settings
@@ -13,24 +15,38 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
+from export.views import SourceCsvExportView
 from images.models import Image, Point
 from images.utils import (
-    generate_points, get_next_image, get_date_and_aux_metadata_table,
-    get_prev_image, get_image_order_placement)
+    generate_points,
+    get_date_and_aux_metadata_table,
+    get_image_order_placement,
+    get_next_image,
+    get_prev_image,
+)
 from labels.models import Label
 from lib.decorators import (
-    image_permission_required, image_annotation_area_must_be_editable,
-    image_labelset_required, login_required_ajax, source_permission_required)
+    image_annotation_area_must_be_editable,
+    image_labelset_required,
+    image_permission_required,
+    login_required_ajax,
+    source_permission_required,
+)
 from lib.forms import get_one_form_error
 from sources.models import Source
+from sources.utils import metadata_field_names_to_labels
 from visualization.forms import HiddenForm, create_image_filter_form
-from vision_backend.models import ClassifyImageEvent
-from vision_backend.utils import get_label_scores_for_image, reset_features
+from vision_backend.models import ClassifyImageEvent, Score
+from vision_backend.utils import (
+    get_label_scores_for_image,
+    reset_features,
+)
 from .forms import (
     AnnotationForm,
     AnnotationAreaPixelsForm,
     AnnotationToolSettingsForm,
     AnnotationImageOptionsForm,
+    ExportAnnotationsForm,
 )
 from .model_utils import AnnotationArea
 from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
@@ -569,3 +585,203 @@ def annotation_history(request, image_id):
         'image_meta_table': get_date_and_aux_metadata_table(image),
         'event_log': event_log,
     })
+
+
+class AnnotationsExportView(SourceCsvExportView):
+
+    labelset_dict: dict
+    metadata_date_aux_fields: list
+    metadata_field_labels: dict
+    metadata_other_fields: list
+    optional_columns: list[str]
+    username_dict: dict
+    writer: csv.DictWriter
+
+    def get_export_filename(self, source, suffix='.csv'):
+        return f'annotations{suffix}'
+
+    def get_export_form(self, source, data):
+        return ExportAnnotationsForm(data)
+
+    def point_score_values_for_image(self, image):
+        """
+        Database values this view needs regarding an image's points.
+        """
+        point_fields = [
+            'id',
+            'point_number',
+            'column',
+            'row',
+            'annotation',
+            'annotation__label',
+            'annotation__user',
+        ]
+        if 'annotator_info' in self.optional_columns:
+            point_fields.extend([
+                'annotation__annotation_date',
+            ])
+        point_set_values = (
+            image.point_set
+            .order_by('point_number')
+            .values(*point_fields)
+        )
+
+        score_set_values = (
+            Score.objects.filter(point__image=image)
+            .order_by('point', '-score')
+            .values('point', 'score', 'label')
+        )
+        score_set_values_per_point = defaultdict(list)
+        for score_values in score_set_values:
+            point_id = score_values['point']
+            score_set_values_per_point[point_id].append(score_values)
+
+        return point_set_values, score_set_values_per_point
+
+    def write_csv(self, stream, source, image_set, export_form_data):
+        # List of string keys indicating optional column sets to add.
+        self.optional_columns = export_form_data['optional_columns']
+
+        self.metadata_field_labels = metadata_field_names_to_labels(source)
+        self.metadata_date_aux_fields = [
+            'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5']
+        self.metadata_other_fields = [
+            f for f in self.metadata_field_labels.keys()
+            if f not in [
+                'name', 'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5']
+        ]
+
+        fieldnames = ["Name", "Row", "Column", "Label"]
+
+        self.labelset_dict = source.labelset.global_pk_to_code_dict()
+
+        users_values = (
+            Annotation.objects.filter(image__source=source)
+            .values('user', 'user__username').distinct()
+        )
+        self.username_dict = dict(
+            (v['user'], v['user__username']) for v in users_values)
+
+        if 'annotator_info' in self.optional_columns:
+            fieldnames.extend(["Annotator", "Date annotated"])
+
+        if 'machine_suggestions' in self.optional_columns:
+            for n in range(1, settings.NBR_SCORES_PER_ANNOTATION+1):
+                fieldnames.extend([
+                    "Machine suggestion {n}".format(n=n),
+                    "Machine confidence {n}".format(n=n),
+                ])
+
+        if 'metadata_date_aux' in self.optional_columns:
+            date_aux_labels = [
+                self.metadata_field_labels[name]
+                for name in self.metadata_date_aux_fields
+            ]
+            # Insert these columns before the Row column
+            insert_index = fieldnames.index("Row")
+            fieldnames = (
+                fieldnames[:insert_index]
+                + date_aux_labels
+                + fieldnames[insert_index:])
+
+        if 'metadata_other' in self.optional_columns:
+            other_meta_labels = [
+                self.metadata_field_labels[name]
+                for name in self.metadata_other_fields
+            ]
+            # Insert these columns before the Row column
+            insert_index = fieldnames.index("Row")
+            fieldnames = (
+                fieldnames[:insert_index]
+                + other_meta_labels
+                + fieldnames[insert_index:])
+
+        self.writer = csv.DictWriter(stream, fieldnames)
+        self.writer.writeheader()
+
+        # One image at a time.
+        for image in image_set:
+
+            # point_set_values should be in point-number order (as ensured
+            # by the method we call here).
+            point_set_values, score_set_values_per_point = (
+                self.point_score_values_for_image(image))
+
+            for point_values in point_set_values:
+                score_set_values = score_set_values_per_point[
+                    point_values['id']]
+                self.write_csv_one_point(
+                    image, point_values, score_set_values)
+
+    def write_csv_one_point(self, image, point_values, score_set_values):
+
+        if not point_values['annotation']:
+            # Only write a row for points with annotations.
+            return
+
+        # One row per annotation.
+        label_code = (
+            self.labelset_dict[point_values['annotation__label']])
+        row = {
+            "Name": image.metadata.name,
+            "Row": point_values['row'],
+            "Column": point_values['column'],
+            "Label": label_code,
+        }
+
+        if 'annotator_info' in self.optional_columns:
+            # Truncate date precision at seconds
+            annotation_date = point_values[
+                'annotation__annotation_date']
+            date_annotated = annotation_date.replace(
+                microsecond=0)
+            annotator = (
+                self.username_dict[point_values['annotation__user']])
+            row.update({
+                "Annotator": annotator,
+                "Date annotated": date_annotated,
+            })
+
+        if 'machine_suggestions' in self.optional_columns:
+            # These scores should be in order from highest score
+            # to lowest.
+            for i in range(settings.NBR_SCORES_PER_ANNOTATION):
+                try:
+                    score_values = score_set_values[i]
+                except IndexError:
+                    # We might need to fill in some blank scores. For
+                    # example, when the classification system hasn't
+                    # annotated these points yet, or when the labelset
+                    # has fewer than NBR_SCORES_PER_ANNOTATION labels.
+                    label_code = ""
+                    score = ""
+                else:
+                    label_code = self.labelset_dict[score_values['label']]
+                    score = score_values['score']
+                n = i + 1
+                row.update({
+                    f"Machine suggestion {n}": label_code,
+                    f"Machine confidence {n}": score,
+                })
+
+        if 'metadata_date_aux' in self.optional_columns:
+            label_value_tuples = []
+            for field_name in self.metadata_date_aux_fields:
+                label = self.metadata_field_labels[field_name]
+                value = getattr(image.metadata, field_name)
+                if value is None:
+                    value = ""
+                label_value_tuples.append((label, value))
+            row.update(dict(label_value_tuples))
+
+        if 'metadata_other' in self.optional_columns:
+            label_value_tuples = []
+            for field_name in self.metadata_other_fields:
+                label = self.metadata_field_labels[field_name]
+                value = getattr(image.metadata, field_name)
+                if value is None:
+                    value = ""
+                label_value_tuples.append((label, value))
+            row.update(dict(label_value_tuples))
+
+        self.writer.writerow(row)

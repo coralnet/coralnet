@@ -218,7 +218,7 @@ let formLookup = {
         'export-metadata-form', '/source/1/export/metadata/',
     ),
     export_annotations: new Form(
-        'export-annotations-form', '/source/1/export/annotations/',
+        'export-annotations-form', '/source/1/annotation/export/',
         {actionFormParams: {field1: 'value1'}},
     ),
     export_annotations_cpc: new Form(
@@ -271,6 +271,20 @@ let secondFormLookup = {
 QUnit.module("Constructor", (hooks) => {
     hooks.beforeEach(() => {
         useFixture('all_images');
+    });
+
+    test("Main constructor should succeed", function(assert) {
+        browseActionHelper = new BrowseActionHelper([1, 2, 3]);
+        assert.ok(browseActionHelper, "Constructor should get initialized");
+    });
+});
+
+
+/* Having no labelset makes some forms unavailable, which should at least
+not cause errors. */
+QUnit.module("Constructor with no labelset", (hooks) => {
+    hooks.beforeEach(() => {
+        useFixture('no_labelset');
     });
 
     test("Main constructor should succeed", function(assert) {

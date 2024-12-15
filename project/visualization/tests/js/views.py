@@ -23,6 +23,8 @@ class BrowseImagesActionsQUnitView(QUnitView):
 
             'hidden_image_form': None,
 
+            'can_see_actions': True,
+            'has_labelset': True,
             'can_annotate': True,
             'can_export_cpc_annotations': True,
             'can_manage_source_data': True,
@@ -43,6 +45,9 @@ class BrowseImagesActionsQUnitView(QUnitView):
     def test_template_contexts(self):
         return {
             'all_images': self.create_test_template_context(),
+            'no_labelset': self.create_test_template_context(**{
+                'has_labelset': False,
+            }),
             'with_search_filters': self.create_test_template_context(**{
                 'hidden_image_form': DummyForm(
                     aux1='Site A',

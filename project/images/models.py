@@ -274,43 +274,9 @@ class Point(models.Model):
     row = models.IntegerField()
     column = models.IntegerField()
     point_number = models.IntegerField()
-    # TODO: Is this even used anywhere? If not, delete this and rename
-    # annotation_status_property to annotation_status.
+    # TODO: Is this even used anywhere? If not, delete the field.
     annotation_status = models.CharField(max_length=1, blank=True)
     image = models.ForeignKey(Image, on_delete=models.CASCADE)
-
-    @property
-    def annotation_status_property(self):
-        try:
-            annotation = self.annotation
-        except ObjectDoesNotExist:
-            # We use ObjectDoesNotExist instead of Annotation.DoesNotExist
-            # to avoid having to import annotations.models.
-            return 'unclassified'
-
-        if is_robot_user(annotation.user):
-            return 'unconfirmed'
-        return 'confirmed'
-
-    @property
-    def label_code(self):
-        try:
-            annotation = self.annotation
-        except ObjectDoesNotExist:
-            # Unannotated point
-            return ''
-
-        # Annotated point
-        return annotation.label_code
-
-    @property
-    def machine_confidence(self):
-        try:
-            scores = [s.score for s in self.score_set.all()]
-            return max(scores)
-        except ValueError:
-            # No scores means max(scores) will raise this
-            return 0
 
     def save(self, *args, **kwargs):
         # Check row/column against image bounds before saving.
