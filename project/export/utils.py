@@ -1,3 +1,4 @@
+import base64
 from zipfile import ZipFile
 
 from django.core.exceptions import ValidationError
@@ -86,3 +87,25 @@ def write_labelset_csv(writer, source):
             label.code,
         ]
         writer.writerow(row)
+
+
+def file_to_session_data(filename, io_stream, is_binary):
+    if is_binary:
+        # Session data is encoded as JSON, and bytes instances can't
+        # be encoded as JSON. So we convert to a base64 string.
+        content = base64.b64encode(io_stream.getvalue()).decode()
+    else:
+        content = io_stream.getvalue()
+    return dict(
+        filename=filename,
+        content=content,
+        is_binary=is_binary,
+    )
+
+
+def session_data_to_file(session_data):
+    if session_data['is_binary']:
+        content = base64.b64decode(session_data['content'])
+    else:
+        content = session_data['content']
+    return session_data['filename'], content

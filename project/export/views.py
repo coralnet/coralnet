@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
@@ -18,15 +18,23 @@ import pyexcel
 
 from annotations.model_utils import ImageAnnoStatuses
 from lib.decorators import (
-    source_labelset_required, source_visibility_required)
+    login_required_ajax,
+    source_labelset_required,
+    source_visibility_required,
+)
 from lib.forms import get_one_form_error
+from lib.sessions import (
+    get_session_data, save_session_data, session_error_response, SessionError)
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
 from .forms import ExportImageCoversForm
 from .utils import (
     create_csv_stream_response,
     create_stream_response,
+    create_zip_stream_response,
+    file_to_session_data,
     get_request_images,
+    session_data_to_file,
     write_labelset_csv,
 )
 
@@ -35,19 +43,20 @@ from .utils import (
 
 decorators = [
     # Access control.
-    source_visibility_required('source_id'),
+    source_visibility_required('source_id', ajax=True),
     # Most/all of these exports require annotations, which require a
     # labelset.
-    source_labelset_required('source_id', message=(
-        "You must create a labelset before exporting data.")),
+    source_labelset_required(
+        'source_id', ajax=True,
+        message="You must create a labelset before exporting data."),
     # These exports can be resource intensive, so no bots allowed.
-    login_required,
+    login_required_ajax,
     # This is a potentially slow view that doesn't modify the database
     # in a time-sensitive way.
     # So don't open a transaction for the view.
     transaction.non_atomic_requests]
 @method_decorator(decorators, name='dispatch')
-class SourceCsvExportView(View, ABC):
+class SourceCsvExportPrepView(View, ABC):
     """
     Data export on a subset of an source's images.
     """
@@ -89,20 +98,19 @@ class SourceCsvExportView(View, ABC):
             image_set, applied_search_display = get_request_images(
                 request, source)
         except ValidationError as e:
-            messages.error(request, e.message)
-            return HttpResponseRedirect(
-                reverse('browse_images', args=[source_id]))
+            return JsonResponse(dict(
+                error=e.message,
+            ))
 
         export_form = self.get_export_form(source, request.POST)
         if not export_form.is_valid():
-            messages.error(request, get_one_form_error(export_form))
-            return HttpResponseRedirect(
-                reverse('browse_images', args=[source_id]))
+            return JsonResponse(dict(
+                error=get_one_form_error(export_form),
+            ))
 
         if export_form.cleaned_data.get('export_format') == 'excel':
 
             # Excel with meta information in additional sheet(s)
-            filename = self.get_export_filename(source, '.xlsx')
             book = pyexcel.Book()
 
             csv_stream = StringIO()
@@ -128,26 +136,94 @@ class SourceCsvExportView(View, ABC):
 
             # For some reason, pyexcel can't seem to accept HttpResponse as
             # a stream, so we give it a BytesIO instead.
-            temp_stream = BytesIO()
-            book.save_to_memory('xlsx', stream=temp_stream)
-            response = create_stream_response(
-                'application/'
-                'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                filename)
-            response.content = temp_stream.getvalue()
+            excel_stream = BytesIO()
+            book.save_to_memory('xlsx', stream=excel_stream)
+            session_data = file_to_session_data(
+                filename=self.get_export_filename(source, '.xlsx'),
+                io_stream=excel_stream,
+                is_binary=True,
+            )
 
         else:
 
             # CSV
-            filename = self.get_export_filename(source)
-            response = create_csv_stream_response(filename)
+            csv_stream = StringIO()
             self.write_csv(
-                response, source, image_set, export_form.cleaned_data)
+                csv_stream, source, image_set, export_form.cleaned_data)
+            session_data = file_to_session_data(
+                filename=self.get_export_filename(source),
+                io_stream=csv_stream,
+                is_binary=False,
+            )
 
+        session_data_timestamp = save_session_data(
+            request.session, 'export', session_data)
+
+        return JsonResponse(dict(
+            session_data_timestamp=session_data_timestamp,
+            success=True,
+        ))
+
+
+class ExportServeView(View, ABC):
+
+    session_key = 'export'
+    session_error_redirect: list | str
+    session_error_prefix: str
+
+    def dispatch(self, request, *args, **kwargs):
+        # Getting session data with a direct call instead of a decorator
+        # allows defining the redirect and prefix with class variables,
+        # which in turn allows subclasses to override those details.
+        try:
+            session_data = get_session_data(
+                key=self.session_key, request=request)
+        except SessionError as error:
+            return session_error_response(
+                error=error,
+                request=request,
+                redirect_spec=self.session_error_redirect,
+                prefix=self.session_error_prefix,
+                view_kwargs=kwargs,
+            )
+
+        # get() or post() must expect a session_data arg.
+        return super().dispatch(
+            request, *args, session_data=session_data, **kwargs)
+
+    def get(self, request, session_data, **kwargs):
+        filename, content = session_data_to_file(session_data)
+
+        if filename.endswith('.csv'):
+            response = create_csv_stream_response(filename)
+        elif filename.endswith('.xlsx'):
+            response = create_stream_response(
+                'application/'
+                'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                filename)
+        elif filename.endswith('.zip'):
+            response = create_zip_stream_response(filename)
+        else:
+            raise ValueError(f"Unsupported filetype: {filename}")
+
+        response.content = content
         return response
 
 
-class ImageStatsExportView(SourceCsvExportView, ABC):
+decorators = [
+    source_visibility_required('source_id'),
+    login_required,
+]
+@method_decorator(decorators, name='dispatch')
+class SourceExportServeView(ExportServeView):
+    """
+    Serve an export prepared at the Browse Images page.
+    """
+    session_error_redirect = ['browse_images', 'source_id']
+    session_error_prefix = "Export failed"
+
+
+class ImageStatsExportPrepView(SourceCsvExportPrepView, ABC):
     """
     Stats export where each row pertains to a single image's annotation data.
     """
@@ -296,7 +372,7 @@ def export_metadata(request, source_id):
     return response
 
 
-class ImageCoversExportView(ImageStatsExportView):
+class ImageCoversExportPrepView(ImageStatsExportPrepView):
 
     def get_export_filename(self, source, suffix='.csv'):
         return f'percent_covers{suffix}'

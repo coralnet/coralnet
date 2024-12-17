@@ -218,23 +218,23 @@ let formLookup = {
         'export-metadata-form', '/source/1/export/metadata/',
     ),
     export_annotations: new Form(
-        'export-annotations-form', '/source/1/annotation/export/',
+        'export-annotations-prep-form', '/source/1/annotation/export_prep/',
         {actionFormParams: {field1: 'value1'}},
     ),
     export_annotations_cpc: new Form(
-        'export-annotations-cpc-ajax-form',
-        '/source/1/cpce/export_prepare_ajax/',
+        'export-annotations-cpc-prep-form',
+        '/source/1/cpce/export_prep/',
         {returnsSessionDataTimestamp: true,
          actionFormParams: {field1: 'value1'}},
     ),
     export_image_covers: new Form(
-        'export-image-covers-form',
-        '/source/1/export/image_covers/',
+        'export-image-covers-prep-form',
+        '/source/1/export/image_covers_prep/',
         {actionFormParams: {field1: 'value1'}},
     ),
     export_calcify_rates: new Form(
-        'export-calcify-rates-form',
-        '/source/1/calcification/stats_export/',
+        'export-calcify-rates-prep-form',
+        '/source/1/calcification/stats_export_prep/',
         {actionFormParams: {field1: 'value1'}},
     ),
     delete_images: new Form(
@@ -249,9 +249,23 @@ let formLookup = {
     ),
 }
 let secondFormLookup = {
+    export_annotations: new Form(
+        'export-serve-form', '/source/1/export/serve/',
+        {expectsSessionDataTimestamp: true,
+         hasCsrf: false, imageFilters: 'none'},
+    ),
     export_annotations_cpc: new Form(
-        'export-annotations-cpc-serve-form',
-        '/source/1/cpce/export_serve/',
+        'export-serve-form', '/source/1/export/serve/',
+        {expectsSessionDataTimestamp: true,
+         hasCsrf: false, imageFilters: 'none'},
+    ),
+    export_image_covers: new Form(
+        'export-serve-form', '/source/1/export/serve/',
+        {expectsSessionDataTimestamp: true,
+         hasCsrf: false, imageFilters: 'none'},
+    ),
+    export_calcify_rates: new Form(
+        'export-serve-form', '/source/1/export/serve/',
         {expectsSessionDataTimestamp: true,
          hasCsrf: false, imageFilters: 'none'},
     ),
@@ -445,18 +459,6 @@ QUnit.module("Form submission", (hooks) => {
                 ['export_metadata', 'selected', 'all_images'],
                 ['export_metadata', 'all', 'with_search_filters'],
                 ['export_metadata', 'selected', 'with_search_filters'],
-                ['export_annotations', 'all', 'all_images'],
-                ['export_annotations', 'selected', 'all_images'],
-                ['export_annotations', 'all', 'with_search_filters'],
-                ['export_annotations', 'selected', 'with_search_filters'],
-                ['export_image_covers', 'all', 'all_images'],
-                ['export_image_covers', 'selected', 'all_images'],
-                ['export_image_covers', 'all', 'with_search_filters'],
-                ['export_image_covers', 'selected', 'with_search_filters'],
-                ['export_calcify_rates', 'all', 'all_images'],
-                ['export_calcify_rates', 'selected', 'all_images'],
-                ['export_calcify_rates', 'all', 'with_search_filters'],
-                ['export_calcify_rates', 'selected', 'with_search_filters'],
             ],
             (assert, [actionValue, imageSelectType, fixtureName]) => {
 
@@ -483,10 +485,22 @@ QUnit.module("Form submission", (hooks) => {
     test.each(
             "Async actions: request",
             [
+                ['export_annotations', 'all', 'all_images'],
+                ['export_annotations', 'selected', 'all_images'],
+                ['export_annotations', 'all', 'with_search_filters'],
+                ['export_annotations', 'selected', 'with_search_filters'],
                 ['export_annotations_cpc', 'all', 'all_images'],
                 ['export_annotations_cpc', 'selected', 'all_images'],
                 ['export_annotations_cpc', 'all', 'with_search_filters'],
                 ['export_annotations_cpc', 'selected', 'with_search_filters'],
+                ['export_image_covers', 'all', 'all_images'],
+                ['export_image_covers', 'selected', 'all_images'],
+                ['export_image_covers', 'all', 'with_search_filters'],
+                ['export_image_covers', 'selected', 'with_search_filters'],
+                ['export_calcify_rates', 'all', 'all_images'],
+                ['export_calcify_rates', 'selected', 'all_images'],
+                ['export_calcify_rates', 'all', 'with_search_filters'],
+                ['export_calcify_rates', 'selected', 'with_search_filters'],
                 // Deletion can't be tested with all_images, because deletion
                 // has a safety measure against accidentally deleting all
                 // images.

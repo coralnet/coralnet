@@ -20,19 +20,40 @@ class PermissionTest(BasePermissionTest):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
-    def test_annotations(self):
-        url = reverse('export_annotations', args=[self.source.pk])
+    def test_export_prep(self):
+        url = reverse('annotations_export_prep', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
-            url, self.SOURCE_VIEW, post_data={}, content_type='text/csv')
+            url, self.SOURCE_VIEW,
+            is_json=True, post_data={}, content_type='text/csv')
         self.source_to_public()
         self.assertPermissionLevel(
-            url, self.SIGNED_IN, post_data={}, content_type='text/csv',
+            url, self.SIGNED_IN,
+            is_json=True, post_data={}, content_type='text/csv',
             deny_type=self.REQUIRE_LOGIN)
 
 
-class NoLabelsetTest(BaseExportTest):
+class BaseAnnotationExportTest(BaseExportTest):
+
+    def export_annotations_prep(self, post_data):
+        self.client.force_login(self.user)
+        return self.client.post(
+            reverse('annotations_export_prep', args=[self.source.pk]),
+            post_data,
+            follow=True,
+        )
+
+    def export_annotations(self, post_data):
+        prep_response = self.export_annotations_prep(post_data)
+        timestamp = prep_response.json()['session_data_timestamp']
+        return self.client.get(
+            reverse('source_export_serve', args=[self.source.pk]),
+            dict(session_data_timestamp=timestamp),
+        )
+
+
+class NoLabelsetTest(BaseAnnotationExportTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -41,19 +62,20 @@ class NoLabelsetTest(BaseExportTest):
         cls.source = cls.create_source(cls.user)
 
     def test(self):
-        response = self.export_annotations(self.default_search_params)
-        self.assertContains(
-            response,
+        response = self.export_annotations_prep(self.default_search_params)
+
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
             "You must create a labelset before exporting data.")
-        self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
 class FormAvailabilityTest(BrowseActionsFormTest):
-    form_id = 'export-annotations-form'
+    form_id = 'export-annotations-prep-form'
 
     def test_no_labelset(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_placeholdered(
             response,
             "This action isn't available because the source has no labelset.")
@@ -62,11 +84,18 @@ class FormAvailabilityTest(BrowseActionsFormTest):
         self.create_labelset(self.user, self.source, self.labels)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_available(response)
 
+    def test_logged_out(self):
+        self.create_labelset(self.user, self.source, self.labels)
 
-class ImageSetTest(BaseExportTest):
+        self.client.logout()
+        response = self.client.get(self.browse_url)
+        self.assert_form_absent(response)
+
+
+class ImageSetTest(BaseAnnotationExportTest):
     """Test annotations export to CSV for different kinds of image subsets."""
 
     @classmethod
@@ -218,11 +247,12 @@ class ImageSetTest(BaseExportTest):
 
         post_data = self.default_search_params.copy()
         post_data['photo_date_0'] = 'abc'
-        response = self.export_annotations(post_data)
+        response = self.export_annotations_prep(post_data)
 
-        # Display an error in HTML instead of serving CSV.
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        self.assertContains(response, "Image-search parameters were invalid.")
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
+            "Image-search parameters were invalid.")
 
     def test_dont_get_other_sources_images(self):
         """Don't export for other sources' images."""
@@ -251,7 +281,7 @@ class ImageSetTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class AnnotationStatusTest(BaseExportTest):
+class AnnotationStatusTest(BaseAnnotationExportTest):
     """Test annotations export to CSV for images of various annotation
     statuses."""
 
@@ -327,7 +357,8 @@ class AnnotationStatusTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class AnnotatorInfoColumnsTest(BaseExportTest, UploadAnnotationsCsvTestMixin):
+class AnnotatorInfoColumnsTest(
+        BaseAnnotationExportTest, UploadAnnotationsCsvTestMixin):
     """Test the optional annotation info columns."""
 
     @classmethod
@@ -407,7 +438,7 @@ class AnnotatorInfoColumnsTest(BaseExportTest, UploadAnnotationsCsvTestMixin):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class MachineSuggestionColumnsTest(BaseExportTest):
+class MachineSuggestionColumnsTest(BaseAnnotationExportTest):
     """Test the optional machine suggestion columns."""
 
     @classmethod
@@ -483,7 +514,7 @@ class MachineSuggestionColumnsTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class MetadataAuxColumnsTest(BaseExportTest):
+class MetadataAuxColumnsTest(BaseAnnotationExportTest):
     """Test the optional aux. metadata columns."""
 
     @classmethod
@@ -556,7 +587,7 @@ class MetadataAuxColumnsTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class MetadataOtherColumnsTest(BaseExportTest):
+class MetadataOtherColumnsTest(BaseAnnotationExportTest):
     """Test the optional other metadata columns."""
 
     @classmethod
@@ -620,7 +651,7 @@ class MetadataOtherColumnsTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class MoreOptionalColumnsCasesTest(BaseExportTest):
+class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
     """Test combinations of optional column sets, and invalid columns."""
 
     @classmethod
@@ -767,17 +798,16 @@ class MoreOptionalColumnsCasesTest(BaseExportTest):
 
         post_data = self.default_search_params.copy()
         post_data['optional_columns'] = ['jpg_files']
-        response = self.export_annotations(post_data)
+        response = self.export_annotations_prep(post_data)
 
-        # Display an error in HTML instead of serving CSV.
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        self.assertContains(
-            response,
-            "Select a valid choice."
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
+            "Optional columns: Select a valid choice."
             " jpg_files is not one of the available choices.")
 
 
-class UnicodeTest(BaseExportTest):
+class UnicodeTest(BaseAnnotationExportTest):
     """Test that non-ASCII characters don't cause problems."""
 
     @classmethod
@@ -816,7 +846,7 @@ class UnicodeTest(BaseExportTest):
             response.content, expected_lines)
 
 
-class UploadAndExportSameDataTest(BaseExportTest):
+class UploadAndExportSameDataTest(BaseAnnotationExportTest):
     """Test that we can upload a CSV and then export the exact same CSV."""
 
     @classmethod
@@ -865,7 +895,7 @@ class UploadAndExportSameDataTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, csv_lines)
 
 
-class QueriesPerPointTest(BaseExportTest):
+class QueriesPerPointTest(BaseAnnotationExportTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -952,7 +982,7 @@ class QueriesPerPointTest(BaseExportTest):
             msg="Sanity check: CSV should have some expected metadata")
 
 
-class QueriesPerImageTest(BaseExportTest):
+class QueriesPerImageTest(BaseAnnotationExportTest):
 
     @classmethod
     def setUpTestData(cls):

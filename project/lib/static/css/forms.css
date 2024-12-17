@@ -176,7 +176,7 @@ input[type="number"][size="3"] {
 
 /* Specific fields. */
 
-#export-annotations-cpc-ajax-form input.cpc-filepath {
+#export-annotations-cpc-prep-form input.cpc-filepath {
     width: 25em;
 }
 

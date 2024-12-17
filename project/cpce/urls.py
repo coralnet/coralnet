@@ -12,7 +12,7 @@ general_urlpatterns = [
          views.cpc_batch_editor_process_ajax,
          name="cpc_batch_editor_process_ajax"),
     path('cpc_batch_editor_file_serve/',
-         views.cpc_batch_editor_file_serve,
+         views.CpcBatchEditorServeView.as_view(),
          name="cpc_batch_editor_file_serve"),
 ]
 
@@ -26,12 +26,9 @@ source_urlpatterns = [
          views.CpcAnnotationsUploadConfirmView.as_view(),
          name="upload_confirm_ajax"),
 
-    path('export_prepare_ajax/',
-         views.ExportPrepareAjaxView.as_view(),
-         name="export_prepare_ajax"),
-    path('export_serve/',
-         views.export_serve,
-         name="export_serve"),
+    path('export_prep/',
+         views.ExportPrepView.as_view(),
+         name="export_prep"),
 ]
 
 urlpatterns = [

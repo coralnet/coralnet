@@ -21,8 +21,8 @@ image_urlpatterns = [
 ]
 
 source_urlpatterns = [
-    path('export/',
-         views.AnnotationsExportView.as_view(), name="export_annotations"),
+    path('export_prep/',
+         views.ExportPrepView.as_view(), name="annotations_export_prep"),
     path('batch_delete_ajax/',
          views.batch_delete_annotations_ajax,
          name="batch_delete_annotations_ajax"),

@@ -85,8 +85,8 @@
     </form>
 
     <form
-      hidden action="{% url 'export_annotations' source.pk %}"
-      method="post" class="no-padding" id="export-annotations-form"
+      hidden action="{% url 'annotations_export_prep' source.pk %}"
+      method="post" class="no-padding" id="export-annotations-prep-form"
     >
       {% if has_labelset %}
 
@@ -117,8 +117,8 @@
     </form>
 
     <form
-      hidden action="{% url 'export_image_covers' source.pk %}" method="post"
-      class="no-padding" id="export-image-covers-form"
+      hidden action="{% url 'export_image_covers_prep' source.pk %}" method="post"
+      class="no-padding" id="export-image-covers-prep-form"
     >
       {% if has_labelset %}
 
@@ -147,8 +147,8 @@
     </form>
 
     <form
-      hidden action="{% url 'calcification:stats_export' source.pk %}"
-      method="post" class="no-padding" id="export-calcify-rates-form"
+      hidden action="{% url 'calcification:stats_export_prep' source.pk %}"
+      method="post" class="no-padding" id="export-calcify-rates-prep-form"
     >
       {% if has_labelset %}
 
@@ -218,9 +218,9 @@
       {# Export annotations CPC #}
 
       <form
-        hidden action="{% url 'cpce:export_prepare_ajax' source.pk %}"
+        hidden action="{% url 'cpce:export_prep' source.pk %}"
         method="post" class="no-padding"
-        id="export-annotations-cpc-ajax-form"
+        id="export-annotations-cpc-prep-form"
       >
         {% if has_labelset %}
 
@@ -250,15 +250,17 @@
         {% endif %}
       </form>
 
-      <form
-        hidden action="{% url 'cpce:export_serve' source.pk %}"
-        method="get" class="no-padding"
-        id="export-annotations-cpc-serve-form"
-      >
-        <input type="hidden" name="session_data_timestamp" />
-      </form>
-
     {% endif %}
+
+    {# This can serve exports prepared by any of the above export-prep forms. #}
+
+    <form
+      hidden action="{% url 'source_export_serve' source.pk %}"
+      method="get" class="no-padding"
+      id="export-serve-form"
+    >
+      <input type="hidden" name="session_data_timestamp" />
+    </form>
 
     {% if can_manage_source_data %}
 
