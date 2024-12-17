@@ -1,12 +1,12 @@
 import csv
-from io import StringIO
+from io import BytesIO, StringIO
 from pathlib import PureWindowsPath
 import re
 from typing import List, Tuple
 
 from django.conf import settings
 
-from export.utils import create_zip_stream_response, write_zip
+from export.utils import write_zip
 from images.models import Image
 from lib.exceptions import FileProcessError
 from sources.models import Source
@@ -59,15 +59,15 @@ def annotations_cpcs_to_dict(
     return cpc_info
 
 
-def create_zipped_cpcs_stream_response(cpc_strings, zip_filename):
-    response = create_zip_stream_response(zip_filename)
+def cpcs_to_zip(cpc_strings):
     # Convert Unicode strings to byte strings
     cpc_byte_strings = dict([
         (cpc_filename, cpc_content.encode())
         for cpc_filename, cpc_content in cpc_strings.items()
     ])
-    write_zip(response, cpc_byte_strings)
-    return response
+    zip_stream = BytesIO()
+    write_zip(zip_stream, cpc_byte_strings)
+    return zip_stream
 
 
 def get_previous_cpcs_status(image_set):

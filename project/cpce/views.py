@@ -5,27 +5,26 @@ from pathlib import PureWindowsPath
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_POST
 
 from accounts.utils import get_robot_user
 from annotations.model_utils import AnnotationArea
-from export.utils import get_request_images
+from export.utils import file_to_session_data, get_request_images
+from export.views import ExportServeView
 from images.models import Image
 from lib.decorators import (
     login_required_ajax,
-    session_key_required,
     source_permission_required,
     source_labelset_required,
 )
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
-from lib.utils import save_session_data
+from lib.sessions import save_session_data
 from sources.models import Source
 from upload.utils import annotations_preview, text_file_to_unicode_stream
 from upload.views import AnnotationsUploadConfirmView
@@ -41,7 +40,7 @@ from .utils import (
     CpcFileContent,
     cpc_editor_csv_to_dicts,
     cpc_edit_labels,
-    create_zipped_cpcs_stream_response,
+    cpcs_to_zip,
 )
 
 
@@ -143,11 +142,12 @@ class CpcAnnotationsUploadConfirmView(AnnotationsUploadConfirmView):
 decorators = [
     source_permission_required(
         'source_id', perm=Source.PermTypes.EDIT.code, ajax=True),
-    source_labelset_required('source_id', message=(
-        "You must create a labelset before exporting data.")),
+    source_labelset_required(
+        'source_id', ajax=True,
+        message="You must create a labelset before exporting data."),
 ]
 @method_decorator(decorators, name='dispatch')
-class ExportPrepareAjaxView(View):
+class ExportPrepView(View):
     """
     This is the first view after requesting a CPC export.
     Process the request fields, create the requested CPCs, and save them
@@ -179,13 +179,21 @@ class ExportPrepareAjaxView(View):
         self.confidence_threshold = source.confidence_threshold
         # Create a dict of filenames to CPC-file-content strings
         cpc_strings = self.create_cpc_strings()
+        # Create a zip
+        zip_stream = cpcs_to_zip(cpc_strings)
+
         # Save CPC prefs to the database for use next time
         source.cpce_code_filepath = self.cpc_prefs['local_code_filepath']
         source.cpce_image_dir = self.cpc_prefs['local_image_dir']
         source.save()
 
+        session_data = file_to_session_data(
+            filename='annotations_cpc.zip',
+            io_stream=zip_stream,
+            is_binary=True,
+        )
         session_data_timestamp = save_session_data(
-            request.session, 'cpc_export', cpc_strings)
+            request.session, 'export', session_data)
 
         return JsonResponse(dict(
             session_data_timestamp=session_data_timestamp,
@@ -494,23 +502,6 @@ class ExportPrepareAjaxView(View):
         return cpc_filename
 
 
-@source_permission_required('source_id', perm=Source.PermTypes.EDIT.code)
-@require_GET
-@session_key_required(
-    key='cpc_export',
-    error_redirect=['browse_images', 'source_id'],
-    error_prefix="Export failed")
-@transaction.non_atomic_requests
-def export_serve(request, source_id, session_data):
-    """
-    This is the second view after requesting a CPC export.
-    Grab the previously crafted CPCs from the session, and serve them in a
-    zip file.
-    """
-    return create_zipped_cpcs_stream_response(
-        session_data, 'annotations_cpc.zip')
-
-
 @login_required
 def cpc_batch_editor(request):
     return render(request, 'cpce/cpc_batch_editor.html', {
@@ -560,8 +551,14 @@ def cpc_batch_editor_process_ajax(request):
         cpc_strings[filepath] = cpc_edit_labels(
             cpc_stream, label_spec, spec_fields_option)
 
+    zip_stream = cpcs_to_zip(cpc_strings)
+    session_data = file_to_session_data(
+        filename='edited_cpcs.zip',
+        io_stream=zip_stream,
+        is_binary=True,
+    )
     session_data_timestamp = save_session_data(
-        request.session, 'cpc_batch_editor', cpc_strings)
+        request.session, 'cpc_batch_editor', session_data)
 
     return JsonResponse(dict(
         session_data_timestamp=session_data_timestamp,
@@ -570,12 +567,11 @@ def cpc_batch_editor_process_ajax(request):
     ))
 
 
-@login_required
-@require_GET
-@session_key_required(
-    key='cpc_batch_editor',
-    error_redirect='cpce:cpc_batch_editor',
-    error_prefix="Batch edit failed")
-def cpc_batch_editor_file_serve(request, session_data):
-    return create_zipped_cpcs_stream_response(
-        session_data, 'edited_cpcs.zip')
+@method_decorator(login_required, name='dispatch')
+class CpcBatchEditorServeView(ExportServeView):
+    """
+    Serve a download prepared at the CPC batch editor page.
+    """
+    session_key = 'cpc_batch_editor'
+    session_error_redirect = 'cpce:cpc_batch_editor'
+    session_error_prefix = "Batch edit failed"

@@ -29,32 +29,17 @@ class PermissionTest(BasePermissionTest):
         data = dict(
             rate_table_id=self.calcify_table.pk,
             label_display='code', export_format='csv')
-        url = reverse('calcification:stats_export', args=[self.source.pk])
+        url = reverse('calcification:stats_export_prep', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
-            url, self.SOURCE_VIEW, post_data=data, content_type='text/csv')
+            url, self.SOURCE_VIEW,
+            is_json=True, post_data=data, content_type='text/csv')
         self.source_to_public()
         self.assertPermissionLevel(
-            url, self.SIGNED_IN, post_data=data, content_type='text/csv',
+            url, self.SIGNED_IN,
+            is_json=True, post_data=data, content_type='text/csv',
             deny_type=self.REQUIRE_LOGIN)
-
-    def test_export_form_requires_login(self):
-        url = reverse('browse_images', args=[self.source.pk])
-
-        def form_is_present():
-            response = self.client.get(url, follow=True)
-            response_soup = BeautifulSoup(response.content, 'html.parser')
-
-            export_form = response_soup.find(
-                'form', id='export-calcify-rates-form')
-            return bool(export_form)
-
-        self.source_to_public()
-        self.client.force_login(self.user_outsider)
-        self.assertTrue(form_is_present())
-        self.client.logout()
-        self.assertFalse(form_is_present())
 
 
 class NoLabelsetTest(ClientTest):
@@ -68,20 +53,20 @@ class NoLabelsetTest(ClientTest):
     def test(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('calcification:stats_export', args=[self.source.pk]))
+            reverse('calcification:stats_export_prep', args=[self.source.pk]))
 
-        self.assertContains(
-            response,
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
             "You must create a labelset before exporting data.")
-        self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
 class FormAvailabilityTest(BrowseActionsFormTest):
-    form_id = 'export-calcify-rates-form'
+    form_id = 'export-calcify-rates-prep-form'
 
     def test_no_labelset(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_placeholdered(
             response,
             "This action isn't available because the source has no labelset.")
@@ -90,14 +75,21 @@ class FormAvailabilityTest(BrowseActionsFormTest):
         self.create_labelset(self.user, self.source, self.labels)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_available(response)
+
+    def test_logged_out(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.logout()
+        response = self.client.get(self.browse_url)
+        self.assert_form_absent(response)
 
 
 class BaseCalcifyStatsExportTest(BaseExportTest):
     """Subclasses must define self.client and self.source."""
 
-    def export_calcify_stats(self, data):
+    def export_calcify_stats_prep(self, data):
         """POST the export view and return the response."""
         if 'label_display' not in data:
             data['label_display'] = 'code'
@@ -106,8 +98,16 @@ class BaseCalcifyStatsExportTest(BaseExportTest):
 
         self.client.force_login(self.user)
         return self.client.post(
-            reverse('calcification:stats_export', args=[self.source.pk]),
+            reverse('calcification:stats_export_prep', args=[self.source.pk]),
             data, follow=True)
+
+    def export_calcify_stats(self, data):
+        prep_response = self.export_calcify_stats_prep(data)
+        timestamp = prep_response.json()['session_data_timestamp']
+        return self.client.get(
+            reverse('source_export_serve', args=[self.source.pk]),
+            dict(session_data_timestamp=timestamp),
+        )
 
 
 class FileTypeTest(BaseCalcifyStatsExportTest):
@@ -528,16 +528,14 @@ class ExportTest(BaseCalcifyStatsExportTest):
         """
         # No tables should have been created yet, so this ID should be
         # nonexistent.
-        response = self.export_calcify_stats(
+        response = self.export_calcify_stats_prep(
             dict(rate_table_id=1))
 
-        # Display an error in HTML instead of serving CSV.
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        # It's not the most intuitive error message, but it shouldn't be a
-        # common error case either (e.g. people editing params with
-        # Inspect Element).
-        self.assertContains(
-            response,
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
+            # It's not the most intuitive error message, but it shouldn't be a
+            # common error case either (e.g. table deleted in a separate tab).
             "Label rates to use: Select a valid choice."
             " 1 is not one of the available choices.")
 
@@ -549,12 +547,12 @@ class ExportTest(BaseCalcifyStatsExportTest):
         source2 = self.create_source(self.user)
         table = create_source_calcify_table(source2, {})
 
-        response = self.export_calcify_stats(
+        response = self.export_calcify_stats_prep(
             dict(rate_table_id=table.pk))
 
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        self.assertContains(
-            response,
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
             "Label rates to use: Select a valid choice."
             f" {table.pk} is not one of the available choices.")
 
@@ -710,11 +708,12 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
         data = self.default_search_params.copy()
         data['photo_date_0'] = 'abc'
         data['rate_table_id'] = self.calcify_table.pk
-        response = self.export_calcify_stats(data)
+        response = self.export_calcify_stats_prep(data)
 
-        # Display an error in HTML instead of serving CSV.
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        self.assertContains(response, "Image-search parameters were invalid.")
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
+            "Image-search parameters were invalid.")
 
     def test_dont_get_other_sources_images(self):
         """Don't export for other sources' images."""
@@ -906,7 +905,7 @@ class BrowseFormsTest(ClientTest):
 
         response_soup = BeautifulSoup(response.content, 'html.parser')
         export_form = response_soup.find(
-            'form', id='export-calcify-rates-form')
+            'form', id='export-calcify-rates-prep-form')
 
         option_1 = export_form.select('label[for="id_optional_columns_0"]')[0]
         self.assertEqual(
@@ -1065,15 +1064,10 @@ class PerformanceTest(BaseCalcifyStatsExportTest):
             },
         )
 
-        url = reverse('calcification:stats_export', args=[self.source.pk])
-        data = dict(
-            rate_table_id=calcify_table.pk,
-            label_display='code', export_format='csv')
-        self.client.force_login(self.user)
-
-        # Number of queries should be reasonably close to 15
+        # Number of queries should be a small constant factor from 15
         # (image count) and definitely less than 300 (annotation count).
         with self.assert_queries_less_than(15*4):
-            response = self.client.post(url, data)
+            response = self.export_calcify_stats(dict(
+                rate_table_id=calcify_table.pk))
         self.assertStatusOK(response)
         self.assertEqual(response['content-type'], 'text/csv')

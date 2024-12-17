@@ -10,7 +10,7 @@ from django.views.decorators.http import require_GET, require_POST
 import pyexcel
 
 from export.utils import create_csv_stream_response
-from export.views import ImageStatsExportView
+from export.views import ImageStatsExportPrepView
 from lib.decorators import source_permission_required
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
@@ -89,7 +89,7 @@ def rate_table_download(request, table_id):
     return response
 
 
-class CalcifyStatsExportView(ImageStatsExportView):
+class CalcifyStatsExportPrepView(ImageStatsExportPrepView):
 
     def get_export_filename(self, source, suffix='.csv'):
         # Current date as YYYY-MM-DD

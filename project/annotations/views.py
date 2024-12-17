@@ -15,7 +15,7 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
-from export.views import SourceCsvExportView
+from export.views import SourceCsvExportPrepView
 from images.models import Image, Point
 from images.utils import (
     generate_points,
@@ -587,7 +587,7 @@ def annotation_history(request, image_id):
     })
 
 
-class AnnotationsExportView(SourceCsvExportView):
+class ExportPrepView(SourceCsvExportPrepView):
 
     labelset_dict: dict
     metadata_date_aux_fields: list

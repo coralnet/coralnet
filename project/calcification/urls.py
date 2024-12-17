@@ -15,9 +15,9 @@ general_urlpatterns = [
 ]
 
 source_urlpatterns = [
-    path('stats_export/',
-         views.CalcifyStatsExportView.as_view(),
-         name='stats_export'),
+    path('stats_export_prep/',
+         views.CalcifyStatsExportPrepView.as_view(),
+         name='stats_export_prep'),
     path('table_upload/',
          views.rate_table_upload_ajax,
          name='rate_table_upload_ajax'),

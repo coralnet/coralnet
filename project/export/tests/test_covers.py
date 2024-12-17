@@ -17,24 +17,26 @@ class PermissionTest(BasePermissionTest):
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_image_covers(self):
-        url = reverse('export_image_covers', args=[self.source.pk])
+        url = reverse('export_image_covers_prep', args=[self.source.pk])
         data = dict(label_display='code', export_format='csv')
 
         self.source_to_private()
         self.assertPermissionLevel(
-            url, self.SOURCE_VIEW, post_data=data, content_type='text/csv')
+            url, self.SOURCE_VIEW,
+            is_json=True, post_data=data, content_type='text/csv')
         self.source_to_public()
         self.assertPermissionLevel(
-            url, self.SIGNED_IN, post_data=data, content_type='text/csv',
+            url, self.SIGNED_IN,
+            is_json=True, post_data=data, content_type='text/csv',
             deny_type=self.REQUIRE_LOGIN)
 
 
 class FormAvailabilityTest(BrowseActionsFormTest):
-    form_id = 'export-image-covers-form'
+    form_id = 'export-image-covers-prep-form'
 
     def test_no_labelset(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_placeholdered(
             response,
             "This action isn't available because the source has no labelset.")
@@ -43,15 +45,21 @@ class FormAvailabilityTest(BrowseActionsFormTest):
         self.create_labelset(self.user, self.source, self.labels)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_available(response)
+
+    def test_logged_out(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
+        self.client.logout()
+        response = self.client.get(self.browse_url)
+        self.assert_form_absent(response)
 
 
 class BaseImageCoversExportTest(BaseExportTest):
     """Subclasses must define self.client and self.source."""
 
-    def export_image_covers(self, data):
-        """POST to export_image_covers, and return the response."""
+    def export_image_covers_prep(self, data):
         if 'label_display' not in data:
             data['label_display'] = 'code'
         if 'export_format' not in data:
@@ -59,8 +67,16 @@ class BaseImageCoversExportTest(BaseExportTest):
 
         self.client.force_login(self.user)
         return self.client.post(
-            reverse('export_image_covers', args=[self.source.pk]),
+            reverse('export_image_covers_prep', args=[self.source.pk]),
             data, follow=True)
+
+    def export_image_covers(self, data):
+        prep_response = self.export_image_covers_prep(data)
+        timestamp = prep_response.json()['session_data_timestamp']
+        return self.client.get(
+            reverse('source_export_serve', args=[self.source.pk]),
+            dict(session_data_timestamp=timestamp),
+        )
 
 
 class NoLabelsetTest(BaseImageCoversExportTest):
@@ -72,11 +88,12 @@ class NoLabelsetTest(BaseImageCoversExportTest):
         cls.source = cls.create_source(cls.user)
 
     def test(self):
-        response = self.export_image_covers(dict())
-        self.assertContains(
-            response,
+        response = self.export_image_covers_prep(dict())
+
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
             "You must create a labelset before exporting data.")
-        self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
 class FileTypeTest(BaseImageCoversExportTest):
@@ -315,11 +332,12 @@ class ImageSetTest(BaseImageCoversExportTest):
 
         data = self.default_search_params.copy()
         data['photo_date_0'] = 'abc'
-        response = self.export_image_covers(data)
+        response = self.export_image_covers_prep(data)
 
-        # Display an error in HTML instead of serving CSV.
-        self.assertTrue(response['content-type'].startswith('text/html'))
-        self.assertContains(response, "Image-search parameters were invalid.")
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
+            "Image-search parameters were invalid.")
 
     def test_dont_get_other_sources_images(self):
         """Don't export for other sources' images."""
@@ -482,13 +500,9 @@ class PerformanceTest(BaseImageCoversExportTest):
                 self.add_robot_annotations(
                     robot, img, {p: 'A' for p in range(1, 20+1)})
 
-        url = reverse('export_image_covers', args=[self.source.pk])
-        data = dict(label_display='code', export_format='csv')
-        self.client.force_login(self.user)
-
-        # Number of queries should be reasonably close to 20
+        # Number of queries should be a small constant factor from 20
         # (image count), and definitely less than 400 (annotation count).
         with self.assert_queries_less_than(20*3):
-            response = self.client.post(url, data)
+            response = self.export_image_covers(dict())
         self.assertStatusOK(response)
         self.assertEqual(response['content-type'], 'text/csv')

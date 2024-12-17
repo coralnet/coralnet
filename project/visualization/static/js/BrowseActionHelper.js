@@ -56,27 +56,24 @@ class BrowseActionHelper {
             formId = 'export-metadata-form';
         }
         else if (action === 'export_annotations') {
-            formId = 'export-annotations-form';
+            formId = 'export-annotations-prep-form';
+            this.isAjax = true;
+            this.actionAfterAjax = this.serveExport.bind(this);
         }
         else if (action === 'export_annotations_cpc') {
-            formId = 'export-annotations-cpc-ajax-form';
+            formId = 'export-annotations-cpc-prep-form';
             this.isAjax = true;
-            this.actionAfterAjax = (response) => {
-                // Submit the download form, passing in the session key
-                // from the Ajax response.
-                let downloadForm = document.getElementById(
-                    'export-annotations-cpc-serve-form');
-                let sessionDataTimeField = downloadForm.querySelector(
-                    'input[name="session_data_timestamp"]');
-                sessionDataTimeField.value = response.session_data_timestamp;
-                downloadForm.submit();
-            };
+            this.actionAfterAjax = this.serveExport.bind(this);
         }
         else if (action === 'export_image_covers') {
-            formId = 'export-image-covers-form';
+            formId = 'export-image-covers-prep-form';
+            this.isAjax = true;
+            this.actionAfterAjax = this.serveExport.bind(this);
         }
         else if (action === 'export_calcify_rates') {
-            formId = 'export-calcify-rates-form';
+            formId = 'export-calcify-rates-prep-form';
+            this.isAjax = true;
+            this.actionAfterAjax = this.serveExport.bind(this);
         }
         else if (action === 'delete_images') {
             formId = 'delete-images-ajax-form';
@@ -221,6 +218,16 @@ class BrowseActionHelper {
         this.actionSubmitButton.disabled = false;
         this.actionSubmitButton.textContent = "Go";
         this.actionSelectField.disabled = false;
+    }
+
+    serveExport(prepResponse) {
+        // Submit the download form, passing in the session key
+        // from the export-prep Ajax response.
+        let downloadForm = document.getElementById('export-serve-form');
+        let sessionDataTimeField = downloadForm.querySelector(
+            'input[name="session_data_timestamp"]');
+        sessionDataTimeField.value = prepResponse.session_data_timestamp;
+        downloadForm.submit();
     }
 
     refreshBrowse() {

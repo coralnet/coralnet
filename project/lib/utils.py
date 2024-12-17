@@ -203,21 +203,3 @@ def rand_string(num_of_chars):
     return ''.join(
         random.choice(string.ascii_lowercase + string.digits)
         for _ in range(num_of_chars))
-
-
-def save_session_data(session, key, data):
-    """
-    Save data to session, then return a timestamp. This timestamp should be
-    sent to the server by any subsequent request which wants to get this
-    session data. Generally, the key verifies which page the session data is
-    for, and the timestamp verifies that it's for a particular visit/request
-    on that page. This ensures that nothing chaotic happens if a single user
-    opens multiple browser tabs on session-using pages.
-
-    An example use of sessions in CoralNet is to do a GET non-Ajax file-serve
-    after a POST Ajax processing step. Lengthy processing is better as Ajax
-    for browser responsiveness, and file serving is more natural as non-Ajax.
-    """
-    timestamp = str(datetime.datetime.now().timestamp())
-    session[key] = dict(data=data, timestamp=timestamp)
-    return timestamp

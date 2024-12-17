@@ -4,7 +4,6 @@ from zipfile import ZipFile
 from bs4 import BeautifulSoup
 from django.core.files.base import ContentFile
 from django.urls import reverse
-from django.utils.html import escape as html_escape
 
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
@@ -22,9 +21,9 @@ class PermissionTest(BasePermissionTest):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
-    def test_cpc_create_ajax(self):
+    def test_cpc_export_prep(self):
         url = reverse(
-            'cpce:export_prepare_ajax', args=[self.source.pk])
+            'cpce:export_prep', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
@@ -32,17 +31,6 @@ class PermissionTest(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(
             url, self.SOURCE_EDIT, is_json=True, post_data={})
-
-    def test_cpc_serve(self):
-        # Without session variables from export-prepare, this should redirect
-        # to browse images.
-        url = reverse('cpce:export_serve', args=[self.source.pk])
-        template = 'visualization/browse_images.html'
-
-        self.source_to_private()
-        self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
-        self.source_to_public()
-        self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
 
 class NoLabelsetTest(ClientTest):
@@ -53,26 +41,23 @@ class NoLabelsetTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
 
-    def test_cpc_create_ajax(self):
+    def test_cpc_export_prep(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('cpce:export_prepare_ajax', args=[self.source.pk]))
+            reverse('cpce:export_prep', args=[self.source.pk]))
 
-        self.assertContains(
-            response,
+        # Error in JSON instead of serving CSV.
+        self.assertEqual(
+            response.json()['error'],
             "You must create a labelset before exporting data.")
-        self.assertTemplateUsed(response, 'labels/labelset_required.html')
-
-    # We don't really care about export_serve here, since that already
-    # requires a session variable from export_prepare_ajax.
 
 
 class FormAvailabilityTest(BrowseActionsFormTest):
-    form_id = 'export-annotations-cpc-ajax-form'
+    form_id = 'export-annotations-cpc-prep-form'
 
     def test_no_labelset(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_placeholdered(
             response,
             "This action isn't available because the source has no labelset.")
@@ -81,13 +66,14 @@ class FormAvailabilityTest(BrowseActionsFormTest):
         self.create_labelset(self.user, self.source, self.labels)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_available(response)
 
     def test_view_perms_only(self):
+        self.create_labelset(self.user, self.source, self.labels)
+
         self.client.force_login(self.user_viewer)
-        response = self.client.post(
-            self.browse_url, self.default_search_params)
+        response = self.client.get(self.browse_url)
         self.assert_form_absent(response)
 
 
@@ -128,12 +114,12 @@ class CPCExportBaseTest(ClientTest):
         """
         self.client.force_login(self.user)
         prepare_response = self.client.post(
-            reverse('cpce:export_prepare_ajax', args=[self.source.pk]),
+            reverse('cpce:export_prep', args=[self.source.pk]),
             post_data,
         )
         timestamp = prepare_response.json()['session_data_timestamp']
         return self.client.get(
-            reverse('cpce:export_serve', args=[self.source.pk]),
+            reverse('source_export_serve', args=[self.source.pk]),
             dict(session_data_timestamp=timestamp),
         )
 
@@ -213,7 +199,7 @@ class CPCExportBaseTest(ClientTest):
     def get_form_soup(response):
         response_soup = BeautifulSoup(response.content, 'html.parser')
         return response_soup.find(
-            'form', dict(id='export-annotations-cpc-ajax-form'))
+            'form', dict(id='export-annotations-cpc-prep-form'))
 
     def assert_field_hidden(self, response, field_name):
         field = self.get_form_soup(response).find(
@@ -404,7 +390,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
         )
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('cpce:export_prepare_ajax', args=[self.source.pk]),
+            reverse('cpce:export_prep', args=[self.source.pk]),
             post_data)
 
         self.assertEqual(
@@ -418,7 +404,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
         )
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('cpce:export_prepare_ajax', args=[self.source.pk]),
+            reverse('cpce:export_prep', args=[self.source.pk]),
             post_data)
 
         self.assertEqual(
@@ -435,7 +421,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
         )
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('cpce:export_prepare_ajax', args=[self.source.pk]),
+            reverse('cpce:export_prep', args=[self.source.pk]),
             post_data)
 
         self.assertEqual(
@@ -1309,75 +1295,6 @@ class DiscardCPCAfterPointsChangeTest(
         self.assertEqual(
             'More CPC file contents go here', img2.cpc_content,
             msg="img2's CPC content should be unchanged")
-
-
-class SessionErrorTest(ClientTest):
-    """Test session-related error cases on the serve view."""
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user)
-
-    def test_no_session_data_timestamp(self):
-        self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('cpce:export_serve', args=[self.source.pk]),
-            dict(session_data_timestamp=''),
-            follow=True,
-        )
-
-        self.assertRedirects(
-            response, reverse('browse_images', args=[self.source.pk]))
-        self.assertContains(
-            response,
-            html_escape(
-                "Export failed: Request data doesn't have a"
-                " session_data_timestamp."),
-        )
-
-    def test_no_session_data(self):
-        self.client.force_login(self.user)
-        response = self.client.get(
-            reverse('cpce:export_serve', args=[self.source.pk]),
-            dict(session_data_timestamp='123'),
-            follow=True,
-        )
-
-        self.assertRedirects(
-            response, reverse('browse_images', args=[self.source.pk]))
-        self.assertContains(
-            response,
-            html_escape(
-                "Export failed: We couldn't find the expected data"
-                " in your session."),
-        )
-
-    def test_mismatched_timestamp(self):
-        self.client.force_login(self.user)
-
-        # To modify the session and then save it, it must be stored in a
-        # variable first.
-        # https://docs.djangoproject.com/en/dev/topics/testing/tools/#django.test.Client.session
-        session = self.client.session
-        session['cpc_export'] = dict(
-            timestamp='123', data=dict())
-        session.save()
-
-        response = self.client.get(
-            reverse('cpce:export_serve', args=[self.source.pk]),
-            dict(session_data_timestamp='456'),
-            follow=True,
-        )
-
-        self.assertRedirects(
-            response, reverse('browse_images', args=[self.source.pk]))
-        self.assertContains(
-            response,
-            html_escape(
-                "Export failed: Session data timestamp didn't match."),
-        )
 
 
 class UtilsTest(ClientTest):

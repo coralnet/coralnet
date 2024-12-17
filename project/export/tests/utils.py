@@ -24,13 +24,6 @@ class BaseExportTest(ClientTest):
             sort_method='name', sort_direction='asc',
         )
 
-    def export_annotations(self, post_data):
-        """POST to export_annotations, and return the response."""
-        self.client.force_login(self.user)
-        return self.client.post(
-            resolve_url('export_annotations', self.source.pk), post_data,
-            follow=True)
-
     def export_metadata(self, post_data):
         """POST to export_metadata, and return the response."""
         self.client.force_login(self.user)
