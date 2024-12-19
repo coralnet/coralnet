@@ -74,21 +74,11 @@ class BackendMainTest(ClientTest):
 
         cls.url = reverse('backend_main', args=[cls.source.pk])
 
-    def test_no_robot(self):
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        self.assertNotContains(response, '<div id="cm"')
-        self.assertContains(
-            response, "This source does not have an automated classifier yet.")
-
-    def test_confusion_matrix(self):
+    def set_valres(self, gt, est, scores):
         robot = self.create_robot(self.source)
         valres = dict(
             classes=self.valres_classes,
-            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
-            scores=[.8]*10,
+            gt=gt, est=est, scores=scores,
         )
 
         # Add valres to the session so that we don't have to create it in S3.
@@ -101,6 +91,67 @@ class BackendMainTest(ClientTest):
         session['valres'] = valres
         session['classifier_id'] = robot.pk
         session.save()
+
+    def test_no_robot(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+
+        self.assertNotContains(response, '<div id="cm"')
+        self.assertContains(
+            response, "This source does not have an automated classifier yet.")
+
+    def test_alleviate_plot_data(self):
+        self.set_valres(
+            gt=[
+                0,  0,  0,  0,  0,  1,  1,  1,  2,  2],
+            est=[
+                0,  0,  1,  1,  1,  1,  1,  2,  2,  2],
+            scores=[
+                .3, .4, .2, .5, .8, .7, .8, .6, .9, .9],
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get(self.url)
+
+        # Alleviate plot element should be on the page
+        self.assertContains(response, '<div id="alleviate"')
+        self.assertNotContains(
+            response, "This source does not have an automated classifier yet.")
+
+        # Check the alleviate context var, which goes into the alleviate
+        # line plot
+        context_alleviate = response.context['alleviate']
+        self.assertNotIn(
+            'np.', repr(context_alleviate),
+            msg="Should have basic floats, not numpy floats, so that it"
+                " can be read into Javascript once stringified")
+
+        # TODO: Check the actual values.
+        # self.assertListEqual(
+        #     context_alleviate['acc_full'],
+        #     [
+        #         [0, 0], [0, 0], [0, 0],
+        #     ]
+        # )
+        # self.assertListEqual(
+        #     context_alleviate['acc_func'],
+        #     [
+        #         [0, 0], [0, 0], [0, 0],
+        #     ]
+        # )
+        # self.assertListEqual(
+        #     context_alleviate['ratios'],
+        #     [
+        #         [0, 0], [0, 0], [0, 0],
+        #     ]
+        # )
+
+    def test_confusion_matrix(self):
+        self.set_valres(
+            gt=[0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+            est=[0, 0, 1, 1, 1, 1, 1, 1, 1, 0],
+            scores=[.8]*10,
+        )
 
         self.client.force_login(self.user)
         response = self.client.get(self.url)
