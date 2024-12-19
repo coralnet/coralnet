@@ -75,7 +75,7 @@ def get_alleviate(estlabels, gtlabels, scores):
     gtlabels = np.asarray(gtlabels, dtype=int)
     estlabels = np.asarray(estlabels, dtype=int)
     
-    # Figure out teh appropriate thresholds to use
+    # Figure out the appropriate thresholds to use
     ths = sorted(scores)
 
     # Append something slightly lower and higher to ensure we
@@ -92,10 +92,16 @@ def get_alleviate(estlabels, gtlabels, scores):
     accs, ratios = [], []
     for th in ths:
         keep_ind = scores > th
+
         this_acc = acc(estlabels[keep_ind], gtlabels[keep_ind])
-        accs.append(round(100 * this_acc, 1))
-        ratios.append(round(100 * np.sum(keep_ind) / len(estlabels), 1))
-    ths = [round(100 * th, 1) for th in ths]
+        # Returned values should be basic floats, not numpy floats, so
+        # they can be read into Javascript once stringified.
+        accs.append(round(100 * float(this_acc), 1))
+
+        ratio = np.sum(keep_ind) / len(estlabels)
+        ratios.append(round(100 * float(ratio), 1))
+
+    ths = [round(100 * float(th), 1) for th in ths]
     
     return accs, ratios, ths
 
