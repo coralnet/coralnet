@@ -8,7 +8,8 @@ from django.urls import reverse
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
 from upload.tests.utils import UploadAnnotationsCsvTestMixin
-from visualization.tests.utils import BrowseActionsFormTest
+from visualization.tests.utils import (
+    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
 from ..utils import get_previous_cpcs_status
 
 
@@ -84,19 +85,7 @@ class CPCExportBaseTest(ClientTest):
         super().setUpTestData()
 
         # Image search parameters
-        cls.default_search_params = dict(
-            image_form_type='search',
-            aux1='', aux2='', aux3='', aux4='', aux5='',
-            height_in_cm='', latitude='', longitude='', depth='',
-            photographer='', framing='', balance='',
-            photo_date_0='', photo_date_1='', photo_date_2='',
-            photo_date_3='', photo_date_4='',
-            image_name='', annotation_status='',
-            last_annotated_0='', last_annotated_1='', last_annotated_2='',
-            last_annotated_3='', last_annotated_4='',
-            last_annotator_0='', last_annotator_1='',
-            sort_method='name', sort_direction='asc',
-        )
+        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
         cls.default_export_params = cls.default_search_params.copy()
         cls.default_export_params.update(
             override_filepaths='no',

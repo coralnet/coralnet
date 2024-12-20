@@ -10,7 +10,8 @@ from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
-from visualization.tests.utils import BrowseActionsFormTest
+from visualization.tests.utils import (
+    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
 
 tz = timezone.get_current_timezone()
 
@@ -27,21 +28,6 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_VIEW, template=template)
         self.source_to_public()
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
-
-
-default_search_params = dict(
-    image_form_type='search',
-    aux1='', aux2='', aux3='', aux4='', aux5='',
-    height_in_cm='', latitude='', longitude='', depth='',
-    photographer='', framing='', balance='',
-    photo_date_0='', photo_date_1='', photo_date_2='',
-    photo_date_3='', photo_date_4='',
-    image_name='', annotation_status='',
-    last_annotated_0='', last_annotated_1='', last_annotated_2='',
-    last_annotated_3='', last_annotated_4='',
-    last_annotator_0='', last_annotator_1='',
-    sort_method='name', sort_direction='asc',
-)
 
 
 class AnnotateFormAvailabilityTest(BrowseActionsFormTest):
@@ -121,7 +107,7 @@ class BaseSearchTest(ClientTest):
         """
         Submit the search form with the given kwargs, and return the response.
         """
-        data = default_search_params.copy()
+        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         data.update(**kwargs)
         response = self.client.post(self.url, data, follow=True)
         return response
@@ -1007,13 +993,14 @@ class ResultsAndPagesTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
         cls.url = reverse('browse_images', args=[cls.source.pk])
+        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
         cls.imgs = [
             cls.upload_image(cls.user, cls.source) for _ in range(10)
         ]
 
     def test_zero_results(self):
-        post_data = default_search_params.copy()
+        post_data = self.default_search_params.copy()
         post_data['photo_date_0'] = 'date'
         post_data['photo_date_2'] = datetime.date(2000, 1, 1)
 
@@ -1025,7 +1012,7 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "No image results.")
 
     def test_one_page_results(self):
-        post_data = default_search_params.copy()
+        post_data = self.default_search_params.copy()
         post_data['aux1'] = 'Site1'
 
         self.imgs[0].metadata.aux1 = 'Site1'
@@ -1046,7 +1033,7 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 1</span>", html=True)
 
     def test_multiple_pages_results(self):
-        post_data = default_search_params.copy()
+        post_data = self.default_search_params.copy()
         post_data['aux1'] = ''
 
         self.client.force_login(self.user)
@@ -1059,7 +1046,7 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 4</span>", html=True)
 
     def test_page_two(self):
-        post_data = default_search_params.copy()
+        post_data = self.default_search_params.copy()
         post_data['aux1'] = ''
         post_data['page'] = 2
 
