@@ -589,6 +589,7 @@ def annotation_history(request, image_id):
 
 class ExportPrepView(SourceCsvExportPrepView):
 
+    label_format: str
     labelset_dict: dict
     metadata_date_aux_fields: list
     metadata_field_labels: dict
@@ -651,7 +652,16 @@ class ExportPrepView(SourceCsvExportPrepView):
                 'name', 'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5']
         ]
 
-        fieldnames = ["Name", "Row", "Column", "Label"]
+        fieldnames = ["Name", "Row", "Column"]
+
+        self.label_format = export_form_data['label_format']
+        match self.label_format:
+            case 'code':
+                fieldnames.append("Label code")
+            case 'id':
+                fieldnames.append("Label ID")
+            case _:
+                assert f"Unsupported label format: {self.label_format}"
 
         self.labelset_dict = source.labelset.global_pk_to_code_dict()
 
@@ -720,14 +730,20 @@ class ExportPrepView(SourceCsvExportPrepView):
             return
 
         # One row per annotation.
-        label_code = (
-            self.labelset_dict[point_values['annotation__label']])
         row = {
             "Name": image.metadata.name,
             "Row": point_values['row'],
             "Column": point_values['column'],
-            "Label": label_code,
         }
+
+        match self.label_format:
+            case 'code':
+                row["Label code"] = (
+                    self.labelset_dict[point_values['annotation__label']])
+            case 'id':
+                row["Label ID"] = point_values['annotation__label']
+            case _:
+                assert f"Unsupported label format: {self.label_format}"
 
         if 'annotator_info' in self.optional_columns:
             # Truncate date precision at seconds

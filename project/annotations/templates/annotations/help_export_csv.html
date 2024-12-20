@@ -1,0 +1,34 @@
+<div class="article-body">
+
+<h3>Export Annotations, CSV</h3>
+
+<p>CoralNet will prepare the annotations as a CSV (comma-separated values) file, which can then be downloaded to your computer and opened in a spreadsheet program like Excel.</p>
+
+<p>The CSV file will include the following columns:</p>
+
+<ul>
+  <li><strong>Name</strong>: The name of the image that the annotation is for.</li>
+  <li><strong>Row</strong>: Pixel y-position from the top edge of the image.</li>
+  <li><strong>Column</strong>: Pixel x-position from the left edge of the image.</li>
+  <li><strong>Label code</strong> or <strong>Label ID</strong>: Label applied to the point.</li>
+</ul>
+
+<p>The <em>Label format</em> option determines whether labels are written as labelset-defined short codes, or as site-wide label ID numbers. Short codes are more human-readable, while ID numbers can be useful because they are source-independent and very rarely change.</p>
+
+<p>There are also optional sets of columns available:</p>
+
+<ul>
+  <li><em>Annotator info</em>: The username of the user who made the annotation, and the date the annotation was made. Imported annotations show as "Imported" and machine annotations show as "robot".</li>
+
+  <li><em>Machine suggestions</em>: Labels and confidence scores for the machine's top 5 suggestions.</li>
+
+  <li><em>Image metadata - date and auxiliary fields</em>: The image's date field and 5 auxiliary metadata fields.</li>
+
+  <li><em>Image metadata - other fields</em>: Other image metadata fields such as depth, camera, and white balance.</li>
+</ul>
+
+<p><strong>Tip:</strong> If you are only interested in Confirmed annotations, then first do an image search with "Annotation status" set to "Confirmed", and then export annotations.</p>
+
+{% include 'export/help_wait_times.html' %}
+
+</div>
