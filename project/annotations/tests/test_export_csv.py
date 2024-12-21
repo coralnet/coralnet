@@ -5,12 +5,12 @@ from django.core.files.base import ContentFile
 from django.test import override_settings
 from django.urls import reverse
 
-from annotations.models import Annotation
 from export.tests.utils import BaseExportTest
 from lib.tests.utils import BasePermissionTest
-from upload.tests.utils import UploadAnnotationsCsvTestMixin
 from visualization.tests.utils import (
     BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from ..models import Annotation
+from .utils import UploadAnnotationsCsvTestMixin
 
 
 class PermissionTest(BasePermissionTest):
@@ -932,13 +932,11 @@ class UploadAndExportSameDataTest(BaseAnnotationExportTest):
 
         self.client.force_login(self.user)
         self.client.post(
-            reverse('upload_annotations_csv_preview_ajax',
-                    args=[self.source.pk]),
+            reverse('annotations_upload_preview', args=[self.source.pk]),
             {'csv_file': csv_file},
         )
         self.client.post(
-            reverse('upload_annotations_csv_confirm_ajax',
-                    args=[self.source.pk]),
+            reverse('annotations_upload_confirm', args=[self.source.pk]),
         )
 
         # Export annotations

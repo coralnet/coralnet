@@ -12,8 +12,11 @@ from django.urls import reverse
 from images.models import Point
 from lib.tests.utils import BasePermissionTest, ClientTest
 from .utils import (
-    UploadAnnotationsCsvTestMixin, UploadAnnotationsFormatTest,
-    UploadAnnotationsGeneralCasesTest, UploadAnnotationsMultipleSourcesTest)
+    UploadAnnotationsCsvTestMixin,
+    UploadAnnotationsFormatTest,
+    UploadAnnotationsGeneralCasesTest,
+    UploadAnnotationsMultipleSourcesTest,
+)
 
 
 class PermissionTest(BasePermissionTest):
@@ -26,8 +29,8 @@ class PermissionTest(BasePermissionTest):
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_annotations_csv(self):
-        url = reverse('upload_annotations_csv', args=[self.source.pk])
-        template = 'upload/upload_annotations_csv.html'
+        url = reverse('annotations_upload_page', args=[self.source.pk])
+        template = 'annotations/upload.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
@@ -35,8 +38,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
     def test_annotations_csv_preview_ajax(self):
-        url = reverse(
-            'upload_annotations_csv_preview_ajax', args=[self.source.pk])
+        url = reverse('annotations_upload_preview', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
@@ -46,8 +48,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
     def test_annotations_csv_confirm_ajax(self):
-        url = reverse(
-            'upload_annotations_csv_confirm_ajax', args=[self.source.pk])
+        url = reverse('annotations_upload_confirm', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
@@ -72,7 +73,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_page(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv', args=[self.source.pk]),
+            reverse('annotations_upload_page', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -82,8 +83,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_preview(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv_preview_ajax', args=[
-                self.source.pk]),
+            reverse('annotations_upload_preview', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -93,8 +93,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_confirm(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv_confirm_ajax', args=[
-                self.source.pk]),
+            reverse('annotations_upload_confirm', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -272,7 +271,7 @@ class GeneralCasesTest(
         def raise_error(self, *args, **kwargs):
             raise ValueError
 
-        with mock.patch('upload.views.reset_features', raise_error):
+        with mock.patch('annotations.views.reset_features', raise_error):
             with self.assertRaises(ValueError):
                 self.upload_annotations(self.user, self.source)
 

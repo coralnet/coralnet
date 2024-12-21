@@ -18,13 +18,4 @@ urlpatterns = [
          views.upload_metadata_preview_ajax, name="upload_metadata_preview_ajax"),
     path('metadata_ajax/',
          views.upload_metadata_ajax, name="upload_metadata_ajax"),
-
-    path('annotations_csv/',
-         views.upload_annotations_csv, name="upload_annotations_csv"),
-    path('annotations_csv_preview_ajax/',
-         views.upload_annotations_csv_preview_ajax,
-         name="upload_annotations_csv_preview_ajax"),
-    path('annotations_csv_confirm_ajax/',
-         views.AnnotationsUploadConfirmView.as_view(),
-         name="upload_annotations_csv_confirm_ajax"),
 ]

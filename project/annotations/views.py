@@ -8,6 +8,8 @@ from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views import View
 from django.views.decorators.http import require_POST
 
 from easy_thumbnails.files import get_thumbnailer
@@ -15,7 +17,9 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
+from accounts.utils import get_imported_user
 from export.views import SourceCsvExportPrepView
+from images.model_utils import PointGen
 from images.models import Image, Point
 from images.utils import (
     generate_points,
@@ -30,11 +34,14 @@ from lib.decorators import (
     image_labelset_required,
     image_permission_required,
     login_required_ajax,
+    source_labelset_required,
     source_permission_required,
 )
+from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
+from upload.forms import CSVImportForm
 from visualization.forms import HiddenForm, create_image_filter_form
 from vision_backend.models import ClassifyImageEvent, Score
 from vision_backend.utils import (
@@ -51,7 +58,12 @@ from .forms import (
 from .model_utils import AnnotationArea
 from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import (
-    apply_alleviate, get_annotation_version_user_display, get_robot_display)
+    annotations_csv_to_dict,
+    annotations_preview,
+    apply_alleviate,
+    get_annotation_version_user_display,
+    get_robot_display,
+)
 
 
 @image_permission_required('image_id', perm=Source.PermTypes.EDIT.code)
@@ -585,6 +597,162 @@ def annotation_history(request, image_id):
         'image_meta_table': get_date_and_aux_metadata_table(image),
         'event_log': event_log,
     })
+
+
+@source_permission_required('source_id', perm=Source.PermTypes.EDIT.code)
+@source_labelset_required('source_id', message=(
+    "You must create a labelset before uploading annotations."))
+def upload_page(request, source_id):
+    source = get_object_or_404(Source, id=source_id)
+
+    csv_import_form = CSVImportForm()
+
+    return render(request, 'annotations/upload.html', {
+        'source': source,
+        'csv_import_form': csv_import_form,
+    })
+
+
+@source_permission_required(
+    'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
+@source_labelset_required('source_id', message=(
+    "You must create a labelset before uploading annotations."))
+def upload_preview(request, source_id):
+    """
+    Add points/annotations to images by uploading a CSV file.
+
+    This view takes the CSV file, processes it, saves the processed data
+    to the session, and returns a preview table of the data to be saved.
+    """
+    if request.method != 'POST':
+        return JsonResponse(dict(
+            error="Not a POST request",
+        ))
+
+    source = get_object_or_404(Source, id=source_id)
+
+    csv_import_form = CSVImportForm(request.POST, request.FILES)
+    if not csv_import_form.is_valid():
+        return JsonResponse(dict(
+            error=csv_import_form.errors['csv_file'][0],
+        ))
+
+    try:
+        csv_annotations = annotations_csv_to_dict(
+            csv_import_form.get_csv_stream(), source)
+    except FileProcessError as error:
+        return JsonResponse(dict(
+            error=str(error),
+        ))
+
+    preview_table, preview_details = \
+        annotations_preview(csv_annotations, source)
+
+    request.session['uploaded_annotations'] = csv_annotations
+
+    return JsonResponse(dict(
+        success=True,
+        previewTable=preview_table,
+        previewDetails=preview_details,
+    ))
+
+
+@method_decorator(
+    [
+        # Access control.
+        source_permission_required(
+            'source_id', perm=Source.PermTypes.EDIT.code, ajax=True),
+        source_labelset_required('source_id', message=(
+            "You must create a labelset before uploading annotations."))
+    ],
+    name='dispatch')
+class AnnotationsUploadConfirmView(View):
+    """
+    This view gets the annotation data that was previously saved to the
+    session by an upload-annotations-preview view. Then it saves the data
+    to the database, while deleting all previous points/annotations for the
+    images involved.
+    """
+    def post(self, request, source_id):
+        source = get_object_or_404(Source, id=source_id)
+
+        uploaded_annotations = request.session.pop('uploaded_annotations', None)
+        if not uploaded_annotations:
+            return JsonResponse(dict(
+                error=(
+                    "We couldn't find the expected data in your session."
+                    " Please try loading this page again. If the problem"
+                    " persists, let us know on the forum."
+                ),
+            ))
+
+        self.extra_source_level_actions(request, source)
+
+        for image_id, annotations_for_image in uploaded_annotations.items():
+
+            img = Image.objects.get(pk=image_id, source=source)
+
+            # Delete previous annotations and points for this image.
+            # Calling delete() on these querysets is more efficient
+            # than calling delete() on each of the individual objects.
+            Annotation.objects.filter(image=img).delete()
+            Point.objects.filter(image=img).delete()
+
+            # Create new points and annotations.
+            new_points = []
+            new_annotations = []
+
+            for num, point_dict in enumerate(annotations_for_image, 1):
+                # Create a Point.
+                point = Point(
+                    row=point_dict['row'], column=point_dict['column'],
+                    point_number=num, image=img)
+                new_points.append(point)
+            # Save to DB with an efficient bulk operation.
+            Point.objects.bulk_create(new_points)
+
+            for num, point_dict in enumerate(annotations_for_image, 1):
+                # Create an Annotation if a label is specified.
+                if point_dict.get('label'):
+                    label_obj = source.labelset.get_global_by_code(
+                        point_dict['label'])
+                    # TODO: Django 1.10 can set database IDs on newly created
+                    # objects, so re-fetching the points may not be needed:
+                    # https://docs.djangoproject.com/en/dev/releases/1.10/#database-backends
+                    new_annotations.append(Annotation(
+                        point=Point.objects.get(point_number=num, image=img),
+                        image=img, source=source,
+                        label=label_obj, user=get_imported_user()))
+            # Do NOT bulk-create the annotations so that the versioning signals
+            # (for annotation history) do not get bypassed.
+            # Create them one by one.
+            for annotation in new_annotations:
+                annotation.save()
+
+            # Update relevant image/metadata fields.
+            self.update_image_and_metadata_fields(img, new_points)
+
+            reset_features(img)
+
+        return JsonResponse(dict(
+            success=True,
+        ))
+
+    def extra_source_level_actions(self, request, source):
+        pass
+
+    def update_image_and_metadata_fields(self, image, new_points):
+        image.point_generation_method = PointGen(
+            type=PointGen.Types.IMPORTED.value,
+            points=len(new_points)).db_value
+        # Clear previously-uploaded CPC info.
+        image.cpc_content = ''
+        image.cpc_filename = ''
+        image.save()
+
+        image.metadata.annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_IMPORTED).db_value
+        image.metadata.save()
 
 
 class ExportPrepView(SourceCsvExportPrepView):

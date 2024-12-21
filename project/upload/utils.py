@@ -1,13 +1,11 @@
 import codecs
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
 import csv
 from io import StringIO
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import chardet
 import charset_normalizer
-from django.conf import settings
-from django.urls import reverse
 
 from annotations.models import ImageAnnotationInfo
 from images.forms import MetadataForm
@@ -294,169 +292,6 @@ def metadata_preview(csv_metadata, source):
 
     details['numImages'] = len(csv_metadata)
     details['numFieldsReplaced'] = num_fields_replaced
-
-    return table, details
-
-
-def annotations_csv_to_dict(
-        csv_stream: StringIO, source: Source) -> Dict[int, List[Dict]]:
-    """
-    Returned dict has keys = image ids, and
-    values = lists of dicts with keys row, column, (opt.) label).
-
-    Valid CSV headers: Name, Row, Column, Label (not case sensitive)
-    Label is optional.
-    """
-    row_dicts = csv_to_dicts(
-        csv_stream,
-        required_columns=dict(
-            name="Name",
-            row="Row",
-            column="Column",
-        ),
-        optional_columns=dict(
-            label="Label",
-        ),
-        unique_keys=[],
-    )
-
-    csv_annotations = defaultdict(list)
-    for row_dict in row_dicts:
-        image_name = row_dict.pop('name')
-        csv_annotations[image_name].append(row_dict)
-
-    # So far we've checked the CSV formatting. Now check the validity
-    # of the contents.
-    csv_annotations = annotations_csv_verify_contents(csv_annotations, source)
-
-    return csv_annotations
-
-
-def annotations_csv_verify_contents(csv_annotations, source):
-    """
-    Argument dict is indexed by image name. We'll create a new dict indexed
-    by image id, while verifying image existence, row, column, and label.
-    """
-    annotations = OrderedDict()
-
-    for image_name, annotations_for_image in csv_annotations.items():
-        try:
-            img = Image.objects.get(metadata__name=image_name, source=source)
-        except Image.DoesNotExist:
-            # This filename isn't in the source. Just skip it
-            # without raising an error. It could be an image the user is
-            # planning to upload later, or an image they're not planning
-            # to upload but are still tracking in their records.
-            continue
-
-        point_count = len(annotations_for_image)
-        if point_count > settings.MAX_POINTS_PER_IMAGE:
-            raise FileProcessError(
-                f"For image {image_name}:"
-                f" Found {point_count} points, which exceeds the"
-                f" maximum allowed of {settings.MAX_POINTS_PER_IMAGE}")
-
-        for point_number, point_dict in enumerate(annotations_for_image, 1):
-
-            # Check that row/column are integers within the image dimensions.
-
-            point_error_prefix = \
-                f"For image {image_name}, point {point_number}:"
-
-            row_str = point_dict['row']
-            try:
-                row = int(row_str)
-                if row < 0:
-                    raise ValueError
-            except ValueError:
-                raise FileProcessError(
-                    point_error_prefix +
-                    f" Row should be a non-negative integer, not {row_str}")
-
-            column_str = point_dict['column']
-            try:
-                column = int(column_str)
-                if column < 0:
-                    raise ValueError
-            except ValueError:
-                raise FileProcessError(
-                    point_error_prefix +
-                    f" Column should be a non-negative integer,"
-                    f" not {column_str}")
-
-            if row > img.max_row:
-                raise FileProcessError(
-                    point_error_prefix +
-                    f" Row value is {row}, but"
-                    f" the image is only {img.original_height} pixels high"
-                    f" (accepted values are 0~{img.max_row})")
-
-            if column > img.max_column:
-                raise FileProcessError(
-                    point_error_prefix +
-                    f" Column value is {column}, but"
-                    f" the image is only {img.original_width} pixels wide"
-                    f" (accepted values are 0~{img.max_column})")
-
-            label_code = point_dict.get('label')
-            if label_code:
-                # Check that the label is in the labelset
-                if not source.labelset.get_global_by_code(label_code):
-                    raise FileProcessError(
-                        point_error_prefix +
-                        f" No label of code {label_code} found"
-                        f" in this source's labelset")
-
-        annotations[img.pk] = annotations_for_image
-
-    if len(annotations) == 0:
-        raise FileProcessError("No matching image names found in the source")
-
-    return annotations
-
-
-def annotations_preview(
-        csv_annotations: Dict[int, list],
-        source: Source,
-) -> Tuple[list, dict]:
-
-    table = []
-    details = dict()
-    total_csv_points = 0
-    total_csv_annotations = 0
-    num_images_with_existing_annotations = 0
-
-    for image_id, points_list in csv_annotations.items():
-
-        img = Image.objects.get(pk=image_id, source=source)
-        preview_dict = dict(
-            name=img.metadata.name,
-            link=reverse('annotation_tool', kwargs=dict(image_id=img.pk)),
-        )
-
-        num_csv_points = len(points_list)
-        total_csv_points += num_csv_points
-        num_csv_annotations = \
-            sum(1 for point_dict in points_list if point_dict.get('label'))
-        total_csv_annotations += num_csv_annotations
-        preview_dict['createInfo'] = \
-            "Will create {points} points, {annotations} annotations".format(
-                points=num_csv_points, annotations=num_csv_annotations)
-
-        num_existing_annotations = img.annotation_set.confirmed().count()
-        if num_existing_annotations > 0:
-            preview_dict['deleteInfo'] = \
-                "Will delete {annotations} existing annotations".format(
-                    annotations=num_existing_annotations)
-            num_images_with_existing_annotations += 1
-
-        table.append(preview_dict)
-
-    details['numImages'] = len(csv_annotations)
-    details['totalPoints'] = total_csv_points
-    details['totalAnnotations'] = total_csv_annotations
-    details['numImagesWithExistingAnnotations'] = \
-        num_images_with_existing_annotations
 
     return table, details
 

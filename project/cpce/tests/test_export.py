@@ -5,9 +5,9 @@ from bs4 import BeautifulSoup
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
+from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
-from upload.tests.utils import UploadAnnotationsCsvTestMixin
 from visualization.tests.utils import (
     BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
 from ..utils import get_previous_cpcs_status

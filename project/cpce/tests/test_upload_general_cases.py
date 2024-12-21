@@ -1,5 +1,5 @@
 # These tests should be one-to-one with
-# upload/tests/test_annotations_general_cases.py.
+# annotations/tests/test_annotations_general_cases.py.
 
 import codecs
 from unittest import mock
@@ -8,11 +8,13 @@ from django.core.files.base import ContentFile
 from django.test.utils import override_settings
 from django.urls import reverse
 
+from annotations.tests.utils import (
+    UploadAnnotationsFormatTest,
+    UploadAnnotationsGeneralCasesTest,
+    UploadAnnotationsMultipleSourcesTest,
+)
 from images.models import Point
 from lib.tests.utils import BasePermissionTest, ClientTest
-from upload.tests.utils import (
-    UploadAnnotationsFormatTest, UploadAnnotationsGeneralCasesTest,
-    UploadAnnotationsMultipleSourcesTest)
 from .utils import UploadAnnotationsCpcTestMixin
 
 
@@ -330,7 +332,7 @@ class GeneralCasesTest(
         def raise_error(self, *args, **kwargs):
             raise ValueError
 
-        with mock.patch('upload.views.reset_features', raise_error):
+        with mock.patch('annotations.views.reset_features', raise_error):
             with self.assertRaises(ValueError):
                 self.upload_annotations(self.user, self.source)
 

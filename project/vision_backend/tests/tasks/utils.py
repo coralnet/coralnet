@@ -2,11 +2,11 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.test import override_settings
 
+from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tests.utils import do_job, JobUtilsMixin
 from lib.tests.utils import ClientTest
-from upload.tests.utils import UploadAnnotationsCsvTestMixin
 from ...models import Classifier
 
 
