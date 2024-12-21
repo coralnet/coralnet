@@ -711,15 +711,18 @@ class AnnotationsUploadConfirmView(View):
             # Save to DB with an efficient bulk operation.
             Point.objects.bulk_create(new_points)
 
+            # Mapping of newly-saved points.
+            point_numbers_to_ids = dict(
+                (p.point_number, p.pk) for p in new_points)
+
             for num, point_dict in enumerate(annotations_for_image, 1):
-                # Create an Annotation if a label is specified.
+                # The annotation-preview view should've processed annotation
+                # data to just label IDs, not codes.
                 label_id = point_dict.get('label_id')
+                # Create an Annotation if a label is specified.
                 if label_id:
-                    # TODO: Django 1.10 can set database IDs on newly created
-                    # objects, so re-fetching the points may not be needed:
-                    # https://docs.djangoproject.com/en/dev/releases/1.10/#database-backends
                     new_annotations.append(Annotation(
-                        point=Point.objects.get(point_number=num, image=img),
+                        point_id=point_numbers_to_ids[num],
                         image=img, source=source,
                         label_id=label_id, user=get_imported_user()))
             # Do NOT bulk-create the annotations so that the versioning signals
