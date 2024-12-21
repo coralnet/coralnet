@@ -152,14 +152,21 @@ def apply_alleviate(img, label_scores_all_points):
         img.annoinfo.refresh_from_db()
 
 
+def at_most_one_label_column(accepted_columns):
+    label_columns = [
+        c for c in accepted_columns
+        if c in ["Label code", "Label ID", "Label"]]
+    if len(label_columns) > 1:
+        raise FileProcessError(
+            f"CSV cannot have multiple columns specifying the label"
+            f" ({', '.join(label_columns)})")
+
+
 def annotations_csv_to_dict(
         csv_stream: StringIO, source: Source) -> dict[int, list[dict]]:
     """
     Returned dict has keys = image ids, and
     values = lists of dicts with keys row, column, (opt.) label).
-
-    Valid CSV headers: Name, Row, Column, Label (not case sensitive)
-    Label is optional.
     """
     row_dicts = csv_to_dicts(
         csv_stream,
@@ -168,14 +175,28 @@ def annotations_csv_to_dict(
             row="Row",
             column="Column",
         ),
+        # Two ways to specify the label: code or ID.
+        # For backward compatibility with older CoralNet exports, the header
+        # "Label" is also accepted, and interpreted the same as "Label code".
         optional_columns=dict(
+            label_code="Label code",
+            label_id="Label ID",
             label="Label",
         ),
+        # Dupe point locations are allowed.
         unique_keys=[],
+        # Don't specify the labels in more than one way.
+        more_column_checks=at_most_one_label_column,
     )
 
     csv_annotations = defaultdict(list)
+
     for row_dict in row_dicts:
+        # If 'label' exists, replace that legacy column name with the
+        # current name 'label_code'.
+        if 'label' in row_dict:
+            row_dict['label_code'] = row_dict.pop('label')
+
         image_name = row_dict.pop('name')
         csv_annotations[image_name].append(row_dict)
 
@@ -192,6 +213,9 @@ def annotations_csv_verify_contents(csv_annotations, source):
     by image id, while verifying image existence, row, column, and label.
     """
     annotations = dict()
+
+    labelset_ids_to_codes = source.labelset.global_pk_to_code_dict()
+    labelset_codes_to_ids = source.labelset.code_to_global_pk_dict()
 
     for image_name, annotations_for_image in csv_annotations.items():
         try:
@@ -252,14 +276,32 @@ def annotations_csv_verify_contents(csv_annotations, source):
                     f" the image is only {img.original_width} pixels wide"
                     f" (accepted values are 0~{img.max_column})")
 
-            label_code = point_dict.get('label')
-            if label_code:
-                # Check that the label is in the labelset
-                if not source.labelset.get_global_by_code(label_code):
+            if point_dict.get('label_id'):
+                try:
+                    label_id = int(point_dict['label_id'])
+                except ValueError:
+                    raise FileProcessError(
+                        point_error_prefix +
+                        f" Label ID should be a positive integer,"
+                        f" not {point_dict['label_id']}")
+
+                if label_id not in labelset_ids_to_codes:
+                    raise FileProcessError(
+                        point_error_prefix +
+                        f" No label of ID {label_id} found"
+                        f" in this source's labelset")
+            elif point_dict.get('label_code'):
+                label_code = point_dict.pop('label_code')
+
+                if label_code.lower() not in labelset_codes_to_ids:
                     raise FileProcessError(
                         point_error_prefix +
                         f" No label of code {label_code} found"
                         f" in this source's labelset")
+                # We want point dicts with label_id instead of label_code
+                # from here on out.
+                point_dict['label_id'] = (
+                    labelset_codes_to_ids[label_code.lower()])
 
         annotations[img.pk] = annotations_for_image
 
@@ -290,18 +332,18 @@ def annotations_preview(
 
         num_csv_points = len(points_list)
         total_csv_points += num_csv_points
-        num_csv_annotations = \
-            sum(1 for point_dict in points_list if point_dict.get('label'))
+        num_csv_annotations = sum(
+            1 for point_dict in points_list
+            if point_dict.get('label_id'))
         total_csv_annotations += num_csv_annotations
-        preview_dict['createInfo'] = \
-            "Will create {points} points, {annotations} annotations".format(
-                points=num_csv_points, annotations=num_csv_annotations)
+        preview_dict['createInfo'] = (
+            f"Will create {num_csv_points} points,"
+            f" {num_csv_annotations} annotations")
 
         num_existing_annotations = img.annotation_set.confirmed().count()
         if num_existing_annotations > 0:
-            preview_dict['deleteInfo'] = \
-                "Will delete {annotations} existing annotations".format(
-                    annotations=num_existing_annotations)
+            preview_dict['deleteInfo'] = (
+                f"Will delete {num_existing_annotations} existing annotations")
             num_images_with_existing_annotations += 1
 
         table.append(preview_dict)

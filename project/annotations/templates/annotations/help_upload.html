@@ -9,7 +9,7 @@ The first row must contain column headers that specify which column is which.
     <td>Name</td>
     <td>Row</td>
     <td>Column</td>
-    <td>Label</td>
+    <td>Label code</td>
   </tr>
   <tr>
     <td>IMG_0056.jpg</td>
@@ -43,15 +43,71 @@ The first row must contain column headers that specify which column is which.
   </tr>
 </table>
 
-<p>Name is the image name. Row is the pixel row of the point.
-  Column is the pixel column of the point. Label is the label code
-to annotate the point with.</p>
+<ul>
+  <li><strong>Name</strong>: The name of the image that the point is for.</li>
+  <li><strong>Row</strong>: Pixel y-position from the top edge of the image.</li>
+  <li><strong>Column</strong>: Pixel x-position from the left edge of the image.</li>
+  <li><strong>Label code</strong> or <strong>Label ID</strong>: Label to annotate the point with, if any.</li>
+</ul>
 
-<p>Label is optional. If specified, both a point and an annotation will be
-  created. If not specified, only a point will be created.</p>
+<p>Labels can be specified using the labelset's short codes (in the <strong>Label code</strong> case), or using site-wide label ID numbers (<strong>Label ID</strong>). These labels will be applied as confirmed annotations. If no label is specified for a particular point, then CoralNet will not apply a confirmed annotation to that point.</p>
+
+<p>Another example, using ID numbers for labels, and leaving the label blank for one point:</p>
+
+<table>
+  <tr>
+    <td>Name</td>
+    <td>Row</td>
+    <td>Column</td>
+    <td>Label ID</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>1528</td>
+    <td>426</td>
+    <td>74</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>786</td>
+    <td>1104</td>
+    <td>101</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>39</td>
+    <td>1576</td>
+    <td></td>
+  </tr>
+</table>
+
+<p>Another example, without a label column at all:</p>
+
+<table>
+  <tr>
+    <td>Name</td>
+    <td>Row</td>
+    <td>Column</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>1528</td>
+    <td>426</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>786</td>
+    <td>1104</td>
+  </tr>
+  <tr>
+    <td>IMG_0056.jpg</td>
+    <td>39</td>
+    <td>1576</td>
+  </tr>
+</table>
 
 <p>You can use a spreadsheet program such as Excel to create the
-CSV file. It's not much different from creating a normal spreadsheet;
+CSV file. It's not much different from creating a typical Excel spreadsheet;
   just select the CSV format in Excel's "Save As" dialog.
   Alternatively, depending on how your point and annotation data is organized,
   you could automate the CSV file creation
@@ -59,23 +115,14 @@ CSV file. It's not much different from creating a normal spreadsheet;
 
 <p>Details on how your CSV file will be processed:</p>
 <ul>
-  <li>If you specify any points for an image, all existing points and
-  annotations for that image will be overwritten. The preview will warn you
-  if you are overwriting any existing confirmed annotations.</li>
-  <li>Name, Row, and Column must be specified in every CSV row. Label
-  can be specified in all, any, or none of the CSV rows.</li>
-  <li>If your image is 1000 pixels wide, then the possible column
-    numbers are 0 to 999. The same thing applies to row
-    numbers and image height.</li>
-  <li>Label codes in the CSV file must correspond to
-  a label in your source's labelset.</li>
-  <li>Label codes are case-insensitive. If your labelset has a label
-  code <code>PORIT</code>, and the CSV file has
-  <code>Porit</code>, then these codes will match.</li>
-  <li>You may include CSV rows with image names that aren't in your source.
-  Those rows will just be ignored.</li>
-  <li>You may include extra CSV columns with names outside of the recognized
-  column names. Those columns will just be ignored.</li>
+  <li>If you specify any points for an image, all existing points and annotations for that image will be overwritten. The preview will warn you if you are overwriting any existing confirmed annotations.</li>
+  <li><strong>Name</strong>, <strong>Row</strong>, and <strong>Column</strong> must be specified in every CSV row. <strong>Label code</strong> or <strong>Label ID</strong> can be specified in all, any, or none of the CSV rows.</li>
+  <li>For backward compatibility with older CoralNet exports, the column header <strong>Label</strong> is also accepted, and interpreted the same as <strong>Label code</strong>.</li>
+  <li>If your image is 1000 pixels wide, then the possible column numbers are 0 to 999. The same thing applies to row numbers and image height.</li>
+  <li>Label codes or IDs in the CSV file must correspond to a label in your source's labelset.</li>
+  <li>Label codes are case-insensitive. If your labelset has a label code <code>PORIT</code>, and the CSV file has <code>Porit</code>, then these codes will match.</li>
+  <li>You may include CSV rows with image names that aren't in your source. Those rows will just be ignored.</li>
+  <li>You may include extra CSV columns with names outside of the recognized column names. Those columns will just be ignored.</li>
 </ul>
 
 </div>

@@ -74,7 +74,8 @@ def csv_to_dicts(
     required_columns must be filled in for every row.
     optional_columns may have blank cells and may not be included in the
     CSV at all.
-    unique_keys aren't necessarily required columns.
+    unique_keys are the columns we check to look for duplicate rows;
+    these aren't necessarily required columns.
     """
     # DictReader is not used here, because the fact that column names need
     # to be transformed to get the dict keys makes usage a bit clunky.

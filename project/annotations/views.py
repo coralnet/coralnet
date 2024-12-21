@@ -713,16 +713,15 @@ class AnnotationsUploadConfirmView(View):
 
             for num, point_dict in enumerate(annotations_for_image, 1):
                 # Create an Annotation if a label is specified.
-                if point_dict.get('label'):
-                    label_obj = source.labelset.get_global_by_code(
-                        point_dict['label'])
+                label_id = point_dict.get('label_id')
+                if label_id:
                     # TODO: Django 1.10 can set database IDs on newly created
                     # objects, so re-fetching the points may not be needed:
                     # https://docs.djangoproject.com/en/dev/releases/1.10/#database-backends
                     new_annotations.append(Annotation(
                         point=Point.objects.get(point_number=num, image=img),
                         image=img, source=source,
-                        label=label_obj, user=get_imported_user()))
+                        label_id=label_id, user=get_imported_user()))
             # Do NOT bulk-create the annotations so that the versioning signals
             # (for annotation history) do not get bypassed.
             # Create them one by one.

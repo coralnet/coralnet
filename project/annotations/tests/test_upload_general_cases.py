@@ -133,7 +133,7 @@ class GeneralCasesTest(
         Annotations on all specified points.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -151,7 +151,7 @@ class GeneralCasesTest(
         Annotations on some specified points, but not all.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -171,7 +171,7 @@ class GeneralCasesTest(
         Save some annotations, then overwrite those with other annotations.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -184,7 +184,7 @@ class GeneralCasesTest(
         self.upload_annotations(self.user, self.source)
 
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, 'A'],
             ['2.png', 30, 30],
@@ -210,7 +210,7 @@ class GeneralCasesTest(
         self.create_labelset(self.user, self.source, labels)
 
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 60, 40, 'aBc'],
         ]
         csv_file = self.make_annotations_file('A.csv', rows)
@@ -227,7 +227,7 @@ class GeneralCasesTest(
         will just be ignored.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['4.png', 60, 40, 'B'],
         ]
@@ -243,7 +243,7 @@ class GeneralCasesTest(
         The upload should create an annotation history entry.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, ''],
             ['1.png', 30, 30, 'B'],
@@ -260,7 +260,7 @@ class GeneralCasesTest(
         then the saves should be rolled back.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, ''],
             ['1.png', 30, 30, 'B'],
@@ -290,7 +290,7 @@ class MultipleSourcesTest(
         """
         # Upload to source 2
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'B'],
             ['1.png', 20, 20, 'B'],
             ['2.png', 15, 15, 'A'],
@@ -302,7 +302,7 @@ class MultipleSourcesTest(
 
         # Upload to source 1
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             # This image doesn't exist in source 1
             ['2.png', 60, 40, 'B'],
@@ -346,7 +346,7 @@ class UploadAnnotationsContentsTest(ClientTest, UploadAnnotationsCsvTestMixin):
         if len(rows[0]) == 3:
             header_row = ['Name', 'Column', 'Row']
         else:
-            header_row = ['Name', 'Column', 'Row', 'Label']
+            header_row = ['Name', 'Column', 'Row', 'Label code']
         csv_file = self.make_annotations_file('A.csv', [header_row] + rows)
         self.preview_annotations(self.user, self.source, csv_file)
         self.upload_annotations(self.user, self.source)
@@ -361,7 +361,7 @@ class UploadAnnotationsContentsTest(ClientTest, UploadAnnotationsCsvTestMixin):
         if len(rows[0]) == 3:
             header_row = ['Name', 'Column', 'Row']
         else:
-            header_row = ['Name', 'Column', 'Row', 'Label']
+            header_row = ['Name', 'Column', 'Row', 'Label code']
         csv_file = self.make_annotations_file('A.csv', [header_row] + rows)
         preview_response = self.preview_annotations(
             self.user, self.source, csv_file)
@@ -512,7 +512,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
     def test_unicode(self):
         """Test Unicode image filenames and label codes."""
         content = (
-            'Name,Column,Row,Label\n'
+            'Name,Column,Row,Label code\n'
             'あ.png,50,50,い\n'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -525,7 +525,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_crlf(self):
         content = (
-            'Name,Column,Row,Label\r\n'
+            'Name,Column,Row,Label code\r\n'
             '1.png,50,50,A\r\n'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -538,7 +538,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_cr(self):
         content = (
-            'Name,Column,Row,Label\r'
+            'Name,Column,Row,Label code\r'
             '1.png,50,50,A\r'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -551,7 +551,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_utf8_bom(self):
         content = (
-            codecs.BOM_UTF8.decode() + 'Name,Column,Row,Label\n'
+            codecs.BOM_UTF8.decode() + 'Name,Column,Row,Label code\n'
             '1.png,50,50,A\n'
         )
         csv_file = ContentFile(content, name='A.csv')
