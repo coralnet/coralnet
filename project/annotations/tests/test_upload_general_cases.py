@@ -16,6 +16,8 @@ from .utils import (
     UploadAnnotationsFormatTest,
     UploadAnnotationsGeneralCasesTest,
     UploadAnnotationsMultipleSourcesTest,
+    UploadAnnotationsQueriesPerImageTest,
+    UploadAnnotationsQueriesPerPointTest,
 )
 
 
@@ -572,3 +574,72 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
             preview_response.json(),
             dict(error="The submitted file is empty."),
         )
+
+
+class QueriesPerPointTest(
+    UploadAnnotationsQueriesPerPointTest, UploadAnnotationsCsvTestMixin
+):
+
+    def test(self):
+        csv_data = [
+            [name, column, row]
+            # 3 images
+            for name in ['1.jpg', '2.jpg', '3.jpg']
+            # 100 points per image
+            for column, row in self.point_positions()
+        ]
+        csv_data = [
+            entry + [label_code]
+            for entry, label_code in zip(csv_data, self.label_codes())
+        ]
+
+        csv_file = self.make_annotations_file('A.csv', [
+            ['Name', 'Column', 'Row', 'Label code'],
+            *csv_data])
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            self.preview_annotations(
+                self.user, self.source, csv_file)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.img1, self.img2, self.img3]:
+            self.assertEqual(
+                image.annotation_set.count(), 100,
+                "Sanity check: should have 100 annotations per image")
+
+
+class QueriesPerImageTest(
+    UploadAnnotationsQueriesPerImageTest, UploadAnnotationsCsvTestMixin
+):
+
+    def test(self):
+        csv_data = [
+            [name, column, row]
+            # 20 images
+            for name in [image.metadata.name for image in self.images]
+            # 1 point per image
+            for column, row in self.point_positions()
+        ]
+        csv_data = [
+            entry + [label_code]
+            for entry, label_code in zip(csv_data, self.label_codes())
+        ]
+
+        csv_file = self.make_annotations_file('A.csv', [
+            ['Name', 'Column', 'Row', 'Label code'],
+            *csv_data])
+
+        # Number of queries should be linear in image count, but with
+        # not TOO large of a constant factor.
+        # TODO: Improve this. At this time of writing, it can't get under
+        #  40 queries per image.
+        with self.assert_queries_less_than(20*50):
+            self.preview_annotations(
+                self.user, self.source, csv_file)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.images[0], self.images[10], self.images[19]]:
+            self.assertEqual(
+                image.annotation_set.count(), 1,
+                "Sanity check: should have 1 annotation per image")

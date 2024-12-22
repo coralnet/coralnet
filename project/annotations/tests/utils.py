@@ -703,6 +703,85 @@ class UploadAnnotationsFormatTest(ClientTest, ABC):
         })
 
 
+class UploadAnnotationsQueriesPerPointTest(ClientTest, ABC):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.labels = cls.create_labels(
+            # Enough labels to confirm label count isn't a major factor
+            cls.user, ['A', 'B', 'C', 'D', 'E', 'F', 'G'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='1.jpg', width=400, height=300))
+        cls.img2 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='2.jpg', width=400, height=300))
+        cls.img3 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='3.jpg', width=400, height=300))
+        cls.image_dimensions = (400, 300)
+
+    @staticmethod
+    def point_positions():
+        # 100 points per image
+        for column in range(20, 380+1, 40):
+            for row in range(15, 285+1, 30):
+                yield column, row
+
+    @classmethod
+    def label_codes(cls):
+        # Label data which uses the whole labelset
+        labelset_codes = list(
+            cls.source.labelset.code_to_global_pk_dict().keys())
+        for i in range(300):
+            yield labelset_codes[i % len(labelset_codes)]
+
+
+class UploadAnnotationsQueriesPerImageTest(ClientTest, ABC):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.labels = cls.create_labels(
+            # Enough labels to confirm label count isn't a major factor
+            cls.user, ['A', 'B', 'C', 'D', 'E', 'F', 'G'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.labelset_codes = list(
+            cls.source.labelset.code_to_global_pk_dict().keys())
+
+        # 20 images
+        cls.images = []
+        for n in range(1, 20+1):
+            cls.images.append(cls.upload_image(
+                cls.user, cls.source,
+                dict(filename=f'{n}.jpg', width=50, height=50),
+            ))
+        cls.image_dimensions = (50, 50)
+
+    @staticmethod
+    def point_positions():
+        # 1 point per image
+        for column, row in [(25, 25)]:
+            yield column, row
+
+    @classmethod
+    def label_codes(cls):
+        # Label data which uses the whole labelset
+        labelset_codes = list(
+            cls.source.labelset.code_to_global_pk_dict().keys())
+        for i in range(20):
+            yield labelset_codes[i % len(labelset_codes)]
+
+
 # Abstract class
 class UploadAnnotationsTestMixin(ABC):
 
