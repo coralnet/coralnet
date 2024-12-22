@@ -47,12 +47,14 @@ class ReplaceLabelInSourceTest(
 
         # Verify annotation history
         response = self.view_history(user, img=img)
+        a_display = f"(Label of ID {label_a.pk})"
         self.assert_history_table_equals(
             response,
             [
                 ['Point 1: B<br/>Point 3: B',
                  f'{user.username}'],
-                ['Point 1: A<br/>Point 2: B<br/>Point 3: A'
+                [f'Point 1: {a_display}'
+                 f'<br/>Point 2: B<br/>Point 3: {a_display}'
                  '<br/>Point 4: C<br/>Point 5: B',
                  f'{user.username}'],
             ]

@@ -230,11 +230,38 @@ class BatchJob(models.Model):
 
 
 class ClassifyImageEvent(Event):
+    """
+    Machine classification of an image.
+
+    Details example:
+    {
+        1: dict(label=28, result='added'),
+        2: dict(label=12, result='updated'),
+        3: dict(label=28, result='no change'),
+    }
+    """
     class Meta:
         proxy = True
 
     type_for_subclass = 'classify_image'
     required_id_fields = ['source_id', 'image_id', 'classifier_id']
+
+    def annotation_history_entry(self, labelset_dict):
+        from annotations.models import Annotation
+        not_changed_code = (
+            Annotation.objects.UpdateResultsCodes.NOT_CHANGED.value)
+
+        point_events = []
+        for point_number, detail in self.details.items():
+            label_display = self.label_id_to_display(
+                detail['label'], labelset_dict)
+            if detail['result'] != not_changed_code:
+                point_events.append(f"Point {point_number}: {label_display}")
+        return dict(
+            date=self.date,
+            user=self.get_robot_display(self.classifier_id, self.date),
+            events=point_events,
+        )
 
     @property
     def summary_text(self):
@@ -245,14 +272,6 @@ class ClassifyImageEvent(Event):
 
     @property
     def details_text(self, image_context=False):
-        """
-        Details example:
-        {
-            1: dict(label=28, result='added'),
-            2: dict(label=12, result='updated'),
-            3: dict(label=28, result='no change'),
-        }
-        """
         from images.models import Image
 
         if image_context:

@@ -18,6 +18,7 @@ from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
 from accounts.utils import get_imported_user
+from events.models import Event
 from export.views import SourceCsvExportPrepView
 from images.model_utils import PointGen
 from images.models import Image, Point
@@ -28,7 +29,6 @@ from images.utils import (
     get_next_image,
     get_prev_image,
 )
-from labels.models import Label
 from lib.decorators import (
     image_annotation_area_must_be_editable,
     image_labelset_required,
@@ -56,13 +56,17 @@ from .forms import (
     ExportAnnotationsForm,
 )
 from .model_utils import AnnotationArea
-from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
+from .models import (
+    Annotation,
+    AnnotationToolAccess,
+    AnnotationToolSettings,
+    AnnotationUploadEvent,
+)
 from .utils import (
     annotations_csv_to_dict,
     annotations_preview,
     apply_alleviate,
     get_annotation_version_user_display,
-    get_robot_display,
 )
 
 
@@ -514,20 +518,11 @@ def annotation_history(request, image_id):
     # Get the Revisions associated with these annotation Versions.
     revisions = Revision.objects.filter(version__in=versions).distinct()
 
+    labelset_dict = source.labelset.global_pk_to_code_dict()
+
     def version_to_point_number(v_):
         # We name the arg v_ to avoid shadowing the outer scope's v.
         return Annotation.objects.get(pk=v_.object_id).point.point_number
-
-    def label_id_to_display(label_id_):
-        label_display_ = source.labelset.global_pk_to_code(label_id_)
-        if not label_display_:
-            # Label was removed from the labelset
-            try:
-                label_display_ = Label.objects.get(pk=label_id_).name
-            except Label.DoesNotExist:
-                # Label was deleted from the site
-                label_display_ = f"(Label of ID {label_id_})"
-        return label_display_
 
     event_log = []
 
@@ -544,7 +539,8 @@ def annotation_history(request, image_id):
         for v in rev_versions:
             point_number = version_to_point_number(v)
             global_label_pk = v.field_dict['label_id']
-            label_display = label_id_to_display(global_label_pk)
+            label_display = Event.label_id_to_display(
+                global_label_pk, labelset_dict)
             events.append("Point {num}: {label}".format(
                 num=point_number, label=label_display))
 
@@ -563,19 +559,14 @@ def annotation_history(request, image_id):
     # by ClassifyImageEvents instead.
     event_objs = ClassifyImageEvent.objects.filter(
         image_id=image_id, date__gt=settings.CORALNET_1_15_DATE)
-    not_changed_code = Annotation.objects.UpdateResultsCodes.NOT_CHANGED.value
-
     for event_obj in event_objs:
-        point_events = []
-        for point_number, detail in event_obj.details.items():
-            label_display = label_id_to_display(detail['label'])
-            if detail['result'] != not_changed_code:
-                point_events.append(f"Point {point_number}: {label_display}")
-        event_log.append(dict(
-            date=event_obj.date,
-            user=get_robot_display(event_obj.classifier_id, event_obj.date),
-            events=point_events,
-        ))
+        event_log.append(event_obj.annotation_history_entry(labelset_dict))
+
+    # From CoralNet 1.18 onward, we track annotation uploads with Events
+    # instead of django-reversion.
+    event_objs = AnnotationUploadEvent.objects.filter(image_id=image_id)
+    for event_obj in event_objs:
+        event_log.append(event_obj.annotation_history_entry(labelset_dict))
 
     for access in AnnotationToolAccess.objects.filter(image=image):
         # Create a log entry for each annotation tool access
@@ -714,6 +705,8 @@ class AnnotationsUploadConfirmView(View):
             # Mapping of newly-saved points.
             point_numbers_to_ids = dict(
                 (p.point_number, p.pk) for p in new_points)
+            point_ids_to_numbers = dict(
+                (p.pk, p.point_number) for p in new_points)
 
             for num, point_dict in enumerate(annotations_for_image, 1):
                 # The annotation-preview view should've processed annotation
@@ -725,11 +718,29 @@ class AnnotationsUploadConfirmView(View):
                         point_id=point_numbers_to_ids[num],
                         image=img, source=source,
                         label_id=label_id, user=get_imported_user()))
-            # Do NOT bulk-create the annotations so that the versioning signals
-            # (for annotation history) do not get bypassed.
-            # Create them one by one.
-            for annotation in new_annotations:
-                annotation.save()
+
+            # Bulk-create bypasses the django-reversion signals,
+            # which is what we want in this case (trying to obsolete
+            # reversion for annotations).
+            Annotation.objects.bulk_create(new_annotations)
+
+            # Instead of a django-reversion revision, we'll create our
+            # own Event.
+            event_details = dict(
+                point_count=len(new_points),
+                first_point_id=new_points[0].pk,
+                annotations=dict(
+                    (point_ids_to_numbers[ann.point_id], ann.label_id)
+                    for ann in new_annotations
+                ),
+            )
+            event = AnnotationUploadEvent(
+                source_id=source_id,
+                image_id=image_id,
+                creator_id=request.user.pk,
+                details=event_details,
+            )
+            event.save()
 
             # Update relevant image/metadata fields.
             self.update_image_and_metadata_fields(img, new_points)

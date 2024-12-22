@@ -1,5 +1,9 @@
+import datetime
+
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from .managers import EventManager
 
@@ -77,3 +81,35 @@ class Event(models.Model):
         if self.creator_id:
             s += f" - by User {self.creator_id}"
         return s
+
+    @staticmethod
+    def label_id_to_display(label_id, label_ids_to_codes):
+        try:
+            return label_ids_to_codes[label_id]
+        except KeyError:
+            # Label is not currently in the labelset or was deleted
+            return f"(Label of ID {label_id})"
+
+    @staticmethod
+    def get_user_display(user_id):
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return "(Unknown user)"
+        else:
+            return user.username
+
+    @staticmethod
+    def get_robot_display(robot_id, event_date):
+        # On this date/time in UTC, CoralNet alpha had ended and CoralNet beta
+        # robot runs had not yet started.
+        beta_start_dt_naive = datetime.datetime(2016, 11, 20, 2)
+        beta_start_dt = timezone.make_aware(
+            beta_start_dt_naive, datetime.timezone.utc)
+
+        if event_date < beta_start_dt:
+            # Alpha
+            return f"Robot alpha-{robot_id}"
+
+        # Beta (versions had reset, hence the need for alpha/beta distinction)
+        return f"Robot {robot_id}"

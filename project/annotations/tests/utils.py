@@ -8,7 +8,7 @@ from django.urls import reverse
 
 from accounts.utils import get_imported_user
 from annotations.model_utils import AnnotationArea
-from annotations.models import Annotation
+from annotations.models import Annotation, AnnotationUploadEvent
 from images.model_utils import PointGen
 from images.models import Point
 from lib.tests.utils import ClientTest
@@ -95,8 +95,8 @@ class UploadAnnotationsGeneralCasesTest(
 
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
-        labels = cls.create_labels(cls.user, ['A', 'B'], 'Group1')
-        cls.create_labelset(cls.user, cls.source, labels)
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'Group1')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
         cls.img1 = cls.upload_image(
             cls.user, cls.source,
             image_options=dict(filename='1.png', width=200, height=100))
@@ -482,6 +482,22 @@ class UploadAnnotationsGeneralCasesTest(
         })
 
     def check_annotation_history(self):
+
+        event = AnnotationUploadEvent.objects.get(image_id=self.img1.pk)
+        self.assertEqual(event.source_id, self.source.pk)
+        self.assertEqual(event.creator_id, self.user.pk)
+        self.assertEqual(event.details['point_count'], 3)
+        self.assertEqual(
+            event.details['first_point_id'],
+            self.img1.point_set.get(point_number=1).pk,
+        )
+        self.assertDictEqual(
+            event.details['annotations'],
+            {
+                '1': self.labels.get(name='A').pk,
+                '3': self.labels.get(name='B').pk,
+            },
+        )
 
         response = self.view_history(self.user, img=self.img1)
         self.assert_history_table_equals(

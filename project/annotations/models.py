@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from events.models import Event
 from images.models import Image, Point
 from labels.models import Label, LocalLabel
 from sources.models import Source
@@ -125,6 +127,52 @@ class ImageAnnotationInfo(models.Model):
     @property
     def status_display(self):
         return ImageAnnoStatuses(self.status).label
+
+
+class AnnotationUploadEvent(Event):
+    """
+    Uploading points/annotations for an image.
+
+    Details example:
+    {
+        'point_count': 5,
+        'first_point_id': 728593,
+        'annotations': {
+            1: 28,
+            2: 12,
+            4: 28,
+        },
+    }
+    """
+    class Meta:
+        proxy = True
+
+    type_for_subclass = 'annotation_upload'
+    required_id_fields = ['source_id', 'image_id', 'creator_id']
+
+    def annotation_history_entry(self, labelset_dict):
+        point_events = []
+        for point_number, label_id in self.details['annotations'].items():
+            label_display = self.label_id_to_display(
+                label_id, labelset_dict)
+            point_events.append(f"Point {point_number}: {label_display}")
+        return dict(
+            date=self.date,
+            user=settings.IMPORTED_USERNAME,
+            events=point_events,
+        )
+
+    @property
+    def summary_text(self):
+        return (
+            f"Points/annotations uploaded for Image {self.image_id}"
+        )
+
+    @property
+    def details_text(self, image_context=False):
+        # This should be implemented for the eventual image event log
+        # and source event log.
+        raise NotImplementedError
 
 
 class AnnotationToolAccess(models.Model):
