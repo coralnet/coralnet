@@ -2,7 +2,6 @@ import csv
 from io import BytesIO, StringIO
 from pathlib import PureWindowsPath
 import re
-from typing import List, Tuple
 
 from django.conf import settings
 
@@ -14,19 +13,21 @@ from upload.utils import csv_to_dicts
 
 
 def annotations_cpcs_to_dict(
-        cpc_names_and_streams: List[Tuple[str, StringIO]],
+        cpc_names_and_streams: list[tuple[str, StringIO]],
         source: Source,
-        label_mapping: str) -> List[dict]:
+        label_mapping_option: str) -> list[dict]:
 
     cpc_info = []
     image_names_to_cpc_filenames = dict()
 
     for cpc_filename, stream in cpc_names_and_streams:
 
+        label_codes_to_ids = source.labelset.code_to_global_pk_dict()
+
         try:
             cpc = CpcFileContent.from_stream(stream)
             image, annotations = cpc.get_image_and_annotations(
-                source, label_mapping)
+                source, label_mapping_option, label_codes_to_ids)
         except FileProcessError as error:
             raise FileProcessError(f"From file {cpc_filename}: {error}")
 
@@ -93,7 +94,7 @@ def labelset_has_plus_code(labelset):
 
 
 def cpc_editor_csv_to_dicts(
-        csv_stream: StringIO, fields_option: str) -> List[dict]:
+        csv_stream: StringIO, fields_option: str) -> list[dict]:
 
     # Two acceptable formats, with notes and without notes.
     if fields_option == 'id_and_notes':
@@ -136,7 +137,7 @@ def cpc_editor_csv_to_dicts(
 
 def cpc_edit_labels(
         cpc_stream: StringIO,
-        label_spec: List[dict],
+        label_spec: list[dict],
         fields_option: str,
 ) -> str:
 
@@ -268,7 +269,7 @@ class CpcFileContent:
         )
 
     @staticmethod
-    def read_line(reader, num_tokens_expected: int) -> List[str]:
+    def read_line(reader, num_tokens_expected: int) -> list[str]:
         """
         Basically like calling next(reader), but with more controlled
         error handling.
@@ -457,7 +458,13 @@ class CpcFileContent:
                 "Could not establish an integer scale factor from line 1.")
         return x_scale
 
-    def get_image_and_annotations(self, source, label_mapping):
+    def get_image_and_annotations(
+        self, source, label_mapping_option,
+        # We expect a label codes to IDs mapping to be passed in, because
+        # this method is run per-image, and the mapping should be computed
+        # per-source for performance.
+        label_codes_to_ids,
+    ):
         """
         Process the .cpc info as annotations for an image in the given source.
         """
@@ -528,7 +535,7 @@ class CpcFileContent:
             cpc_id = cpc_point.get('id')
             cpc_notes = cpc_point.get('notes')
             if cpc_id:
-                if cpc_notes and label_mapping == 'id_and_notes':
+                if cpc_notes and label_mapping_option == 'id_and_notes':
                     # Assumption: label code in CoralNet source's labelset
                     # == {ID}+{Notes} in the .cpc file (case insensitive).
                     label_code = \
@@ -540,13 +547,12 @@ class CpcFileContent:
 
             if label_code:
                 # Check that the label is in the labelset
-                global_label = source.labelset.get_global_by_code(label_code)
-                if not global_label:
+                if label_code.lower() not in label_codes_to_ids:
                     raise FileProcessError(
                         f"Point {point_number}:"
                         f" No label of code {label_code} found"
                         f" in this source's labelset")
-                point_dict['label'] = label_code
+                point_dict['label_id'] = label_codes_to_ids[label_code.lower()]
 
             annotations.append(point_dict)
 

@@ -1,14 +1,16 @@
 import datetime
+from typing import Any
 
 from django.core.files.base import ContentFile
 from django.test import override_settings
 from django.urls import reverse
 
-from annotations.models import Annotation
 from export.tests.utils import BaseExportTest
 from lib.tests.utils import BasePermissionTest
-from upload.tests.utils import UploadAnnotationsCsvTestMixin
-from visualization.tests.utils import BrowseActionsFormTest
+from visualization.tests.utils import (
+    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from ..models import Annotation
+from .utils import UploadAnnotationsCsvTestMixin
 
 
 class PermissionTest(BasePermissionTest):
@@ -36,6 +38,14 @@ class PermissionTest(BasePermissionTest):
 
 class BaseAnnotationExportTest(BaseExportTest):
 
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.default_post_params: dict[str, Any] = (
+            BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS | dict(label_format='code'))
+
     def export_annotations_prep(self, post_data):
         self.client.force_login(self.user)
         return self.client.post(
@@ -62,7 +72,7 @@ class NoLabelsetTest(BaseAnnotationExportTest):
         cls.source = cls.create_source(cls.user)
 
     def test(self):
-        response = self.export_annotations_prep(self.default_search_params)
+        response = self.export_annotations_prep(self.default_post_params)
 
         # Error in JSON instead of serving CSV.
         self.assertEqual(
@@ -119,11 +129,10 @@ class ImageSetTest(BaseAnnotationExportTest):
             dict(filename='1.jpg', width=400, height=300))
         self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
 
-        post_data = self.default_search_params.copy()
-        response = self.export_annotations(post_data)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,A',
             '1.jpg,149,299,B',
         ]
@@ -144,11 +153,10 @@ class ImageSetTest(BaseAnnotationExportTest):
         self.add_annotations(self.user, self.img2, {1: 'B', 2: 'A'})
         self.add_annotations(self.user, self.img3, {1: 'B', 2: 'B'})
 
-        post_data = self.default_search_params.copy()
-        response = self.export_annotations(post_data)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,A',
             '1.jpg,149,299,B',
             '2.jpg,199,99,B',
@@ -179,12 +187,12 @@ class ImageSetTest(BaseAnnotationExportTest):
         self.img3.metadata.aux1 = 'X'
         self.img3.metadata.save()
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['aux1'] = 'X'
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,A',
             '1.jpg,149,299,B',
             '3.jpg,99,99,B',
@@ -213,12 +221,12 @@ class ImageSetTest(BaseAnnotationExportTest):
         self.add_annotations(self.user, self.img2, {1: 'B', 2: 'A'})
         self.add_annotations(self.user, self.img3, {1: 'B', 2: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['annotation_status'] = 'confirmed'
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '2.jpg,199,99,B',
             '2.jpg,199,299,A',
             '3.jpg,99,99,B',
@@ -233,19 +241,19 @@ class ImageSetTest(BaseAnnotationExportTest):
             dict(filename='1.jpg', width=400, height=300))
         self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['image_name'] = '5.jpg'
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
 
     def test_invalid_image_set_params(self):
         self.upload_image(self.user, self.source)
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['photo_date_0'] = 'abc'
         response = self.export_annotations_prep(post_data)
 
@@ -269,12 +277,11 @@ class ImageSetTest(BaseAnnotationExportTest):
         img2 = self.upload_image(self.user, source2, dict(filename='2.jpg'))
         self.add_annotations(self.user, img2, {1: 'A', 2: 'B'})
 
-        post_data = self.default_search_params.copy()
-        response = self.export_annotations(post_data)
+        response = self.export_annotations(self.default_post_params)
 
         # Should have image 1, but not 2
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,A',
             '1.jpg,149,299,B',
         ]
@@ -303,29 +310,29 @@ class AnnotationStatusTest(BaseAnnotationExportTest):
             dict(filename='1.jpg', width=400, height=300))
 
     def test_not_annotated(self):
-        response = self.export_annotations(self.default_search_params)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
 
     def test_partially_annotated(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
-        response = self.export_annotations(self.default_search_params)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,B',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
 
     def test_fully_annotated(self):
         self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
-        response = self.export_annotations(self.default_search_params)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,B',
             '1.jpg,149,299,A',
         ]
@@ -334,10 +341,10 @@ class AnnotationStatusTest(BaseAnnotationExportTest):
     def test_machine_annotated(self):
         robot = self.create_robot(self.source)
         self.add_robot_annotations(robot, self.img1, {1: 'B', 2: 'A'})
-        response = self.export_annotations(self.default_search_params)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,B',
             '1.jpg,149,299,A',
         ]
@@ -347,12 +354,59 @@ class AnnotationStatusTest(BaseAnnotationExportTest):
         robot = self.create_robot(self.source)
         self.add_robot_annotations(robot, self.img1, {1: 'B', 2: 'A'})
         self.add_annotations(self.user, self.img1, {2: 'A'})
-        response = self.export_annotations(self.default_search_params)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,99,B',
             '1.jpg,149,299,A',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+
+class LabelFormatTest(BaseAnnotationExportTest):
+    """Test the choices for the label column's format."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(
+                type='uniform', cell_rows=1, cell_columns=2),
+        )
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source,
+            dict(filename='1.jpg', width=400, height=300))
+
+    def test_codes(self):
+        self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
+        post_data = self.default_post_params.copy()
+        post_data['label_format'] = ['code']
+        response = self.export_annotations(post_data)
+
+        expected_lines = [
+            'Name,Row,Column,Label code',
+            '1.jpg,149,99,B',
+            '1.jpg,149,299,A',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+    def test_ids(self):
+        self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
+        post_data = self.default_post_params.copy()
+        post_data['label_format'] = ['id']
+        response = self.export_annotations(post_data)
+
+        expected_lines = [
+            'Name,Row,Column,Label ID',
+            f'1.jpg,149,99,{self.labels.get(name="B").pk}',
+            f'1.jpg,149,299,{self.labels.get(name="A").pk}',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
 
@@ -380,7 +434,7 @@ class AnnotatorInfoColumnsTest(
 
     def test_user_annotation(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['annotator_info']
         response = self.export_annotations(post_data)
 
@@ -389,7 +443,7 @@ class AnnotatorInfoColumnsTest(
         date_str = annotation_date.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
         expected_lines = [
-            'Name,Row,Column,Label,Annotator,Date annotated',
+            'Name,Row,Column,Label code,Annotator,Date annotated',
             '1.jpg,149,199,B,{username},{date}'.format(
                 username=self.user.username, date=date_str),
         ]
@@ -406,7 +460,7 @@ class AnnotatorInfoColumnsTest(
             self.user, self.source, csv_file)
         self.upload_annotations(self.user, self.source)
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['annotator_info']
         response = self.export_annotations(post_data)
 
@@ -415,7 +469,7 @@ class AnnotatorInfoColumnsTest(
         date_str = annotation_date.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
         expected_lines = [
-            'Name,Row,Column,Label,Annotator,Date annotated',
+            'Name,Row,Column,Label code,Annotator,Date annotated',
             '1.jpg,50,70,B,Imported,{date}'.format(date=date_str),
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -423,7 +477,7 @@ class AnnotatorInfoColumnsTest(
     def test_machine_annotation(self):
         robot = self.create_robot(self.source)
         self.add_robot_annotations(robot, self.img1, {1: 'B'})
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['annotator_info']
         response = self.export_annotations(post_data)
 
@@ -432,7 +486,7 @@ class AnnotatorInfoColumnsTest(
         date_str = annotation_date.strftime('%Y-%m-%d %H:%M:%S+00:00')
 
         expected_lines = [
-            'Name,Row,Column,Label,Annotator,Date annotated',
+            'Name,Row,Column,Label code,Annotator,Date annotated',
             '1.jpg,149,199,B,robot,{date}'.format(date=date_str),
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -461,12 +515,12 @@ class MachineSuggestionColumnsTest(BaseAnnotationExportTest):
     @override_settings(NBR_SCORES_PER_ANNOTATION=2)
     def test_blank(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['machine_suggestions']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label'
+            'Name,Row,Column,Label code'
             ',Machine suggestion 1,Machine confidence 1'
             ',Machine suggestion 2,Machine confidence 2',
             '1.jpg,149,199,B,,,,',
@@ -482,12 +536,12 @@ class MachineSuggestionColumnsTest(BaseAnnotationExportTest):
         # 60 and 40 if we pass a top score of 60.
         self.add_robot_annotations(robot, self.img1, {1: ('B', 60)})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['machine_suggestions']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label'
+            'Name,Row,Column,Label code'
             ',Machine suggestion 1,Machine confidence 1'
             ',Machine suggestion 2,Machine confidence 2',
             '1.jpg,149,199,B,B,60,A,40',
@@ -500,12 +554,12 @@ class MachineSuggestionColumnsTest(BaseAnnotationExportTest):
         # As before, we're assuming this gets confidences of 60 and 40.
         self.add_robot_annotations(robot, self.img1, {1: ('B', 60)})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['machine_suggestions']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Row,Column,Label'
+            'Name,Row,Column,Label code'
             ',Machine suggestion 1,Machine confidence 1'
             ',Machine suggestion 2,Machine confidence 2'
             ',Machine suggestion 3,Machine confidence 3',
@@ -536,12 +590,12 @@ class MetadataAuxColumnsTest(BaseAnnotationExportTest):
 
     def test_blank(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_date_aux']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5,Row,Column,Label',
+            'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5,Row,Column,Label code',
             '1.jpg,,,,,,,149,199,B',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -554,12 +608,12 @@ class MetadataAuxColumnsTest(BaseAnnotationExportTest):
         self.img1.metadata.save()
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_date_aux']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5,Row,Column,Label',
+            'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5,Row,Column,Label code',
             '1.jpg,2001-02-03,Site A,Transect 1-2,Quadrant 5,,,149,199,B',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -576,12 +630,12 @@ class MetadataAuxColumnsTest(BaseAnnotationExportTest):
         self.img1.metadata.save()
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_date_aux']
         response = self.export_annotations(post_data)
 
         expected_lines = [
-            'Name,Date,Site,Transect,Quadrant,Aux4,Aux5,Row,Column,Label',
+            'Name,Date,Site,Transect,Quadrant,Aux4,Aux5,Row,Column,Label code',
             '1.jpg,2001-02-03,Site A,Transect 1-2,Quadrant 5,,,149,199,B',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -609,14 +663,14 @@ class MetadataOtherColumnsTest(BaseAnnotationExportTest):
 
     def test_blank(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_other']
         response = self.export_annotations(post_data)
 
         expected_lines = [
             'Name,Height (cm),Latitude,Longitude,Depth,Camera,Photographer'
             ',Water quality,Strobes,Framing gear used,White balance card'
-            ',Comments,Row,Column,Label',
+            ',Comments,Row,Column,Label code',
             '1.jpg,,,,,,,,,,,,149,199,B',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
@@ -636,14 +690,14 @@ class MetadataOtherColumnsTest(BaseAnnotationExportTest):
         self.img1.metadata.save()
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_other']
         response = self.export_annotations(post_data)
 
         expected_lines = [
             'Name,Height (cm),Latitude,Longitude,Depth,Camera,Photographer'
             ',Water quality,Strobes,Framing gear used,White balance card'
-            ',Comments,Row,Column,Label',
+            ',Comments,Row,Column,Label code',
             '1.jpg,40,5.789,-50,10m,Nikon,John Doe'
             ',Clear,White A,Framing set C,Card B'
             ',"Here are\nsome comments.",149,199,B',
@@ -694,7 +748,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
         self.img1.metadata.save()
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['metadata_date_aux', 'metadata_other']
         response = self.export_annotations(post_data)
 
@@ -702,7 +756,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
             'Name,Date,Site,Transect,Quadrant,Aux4,Aux5'
             ',Height (cm),Latitude,Longitude,Depth,Camera,Photographer'
             ',Water quality,Strobes,Framing gear used,White balance card'
-            ',Comments,Row,Column,Label',
+            ',Comments,Row,Column,Label code',
             '1.jpg,2001-02-03,Site A,Transect 1-2,Quadrant 5'
             ',,,40,5.789,-50,10m,Nikon,John Doe'
             ',Clear,White A,Framing set C,Card B'
@@ -722,7 +776,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
         self.img1.metadata.save()
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['annotator_info', 'metadata_date_aux']
         response = self.export_annotations(post_data)
 
@@ -732,7 +786,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
 
         expected_lines = [
             'Name,Date,Site,Transect,Quadrant,Aux4,Aux5'
-            ',Row,Column,Label,Annotator,Date annotated',
+            ',Row,Column,Label code,Annotator,Date annotated',
             '1.jpg,2001-02-03,Site A,Transect 1-2,Quadrant 5,,'
             ',149,199,B,{username},{date}'.format(
                 username=self.user.username, date=date_str),
@@ -766,7 +820,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
         self.add_robot_annotations(robot, self.img1, {1: ('B', 60)})
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = [
             'annotator_info', 'machine_suggestions',
             'metadata_date_aux', 'metadata_other']
@@ -780,7 +834,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
             'Name,Date,Site,Transect,Quadrant,Aux4,Aux5'
             ',Height (cm),Latitude,Longitude,Depth,Camera,Photographer'
             ',Water quality,Strobes,Framing gear used,White balance card'
-            ',Comments,Row,Column,Label'
+            ',Comments,Row,Column,Label code'
             ',Annotator,Date annotated'
             ',Machine suggestion 1,Machine confidence 1'
             ',Machine suggestion 2,Machine confidence 2',
@@ -796,7 +850,7 @@ class MoreOptionalColumnsCasesTest(BaseAnnotationExportTest):
     def test_invalid_column_name(self):
         self.add_annotations(self.user, self.img1, {1: 'B'})
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = ['jpg_files']
         response = self.export_annotations_prep(post_data)
 
@@ -835,11 +889,10 @@ class UnicodeTest(BaseAnnotationExportTest):
     def test(self):
         self.add_annotations(self.user, self.img1, {1: 'い'})
 
-        post_data = self.default_search_params.copy()
-        response = self.export_annotations(post_data)
+        response = self.export_annotations(self.default_post_params)
 
         expected_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             'あ.jpg,149,199,い',
         ]
         self.assert_csv_content_equal(
@@ -870,7 +923,7 @@ class UploadAndExportSameDataTest(BaseAnnotationExportTest):
         # Upload annotations
         content = ''
         csv_lines = [
-            'Name,Row,Column,Label',
+            'Name,Row,Column,Label code',
             '1.jpg,149,199,A',
         ]
         for line in csv_lines:
@@ -879,18 +932,15 @@ class UploadAndExportSameDataTest(BaseAnnotationExportTest):
 
         self.client.force_login(self.user)
         self.client.post(
-            reverse('upload_annotations_csv_preview_ajax',
-                    args=[self.source.pk]),
+            reverse('annotations_upload_preview', args=[self.source.pk]),
             {'csv_file': csv_file},
         )
         self.client.post(
-            reverse('upload_annotations_csv_confirm_ajax',
-                    args=[self.source.pk]),
+            reverse('annotations_upload_confirm', args=[self.source.pk]),
         )
 
         # Export annotations
-        post_data = self.default_search_params.copy()
-        response = self.export_annotations(post_data)
+        response = self.export_annotations(self.default_post_params)
 
         self.assert_csv_content_equal(response.content, csv_lines)
 
@@ -929,7 +979,7 @@ class QueriesPerPointTest(BaseAnnotationExportTest):
 
         # Number of queries should be less than the point count.
         with self.assert_queries_less_than(3*100):
-            response = self.export_annotations(self.default_search_params)
+            response = self.export_annotations(self.default_post_params)
 
         csv_content = response.content.decode()
         self.assertEqual(
@@ -960,7 +1010,7 @@ class QueriesPerPointTest(BaseAnnotationExportTest):
         self.img3.metadata.camera = "Nikon"
         self.img3.metadata.save()
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = [
             'annotator_info', 'machine_suggestions',
             'metadata_date_aux', 'metadata_other']
@@ -1017,7 +1067,7 @@ class QueriesPerImageTest(BaseAnnotationExportTest):
         # Number of queries should be linear in image count, but with
         # not too large of a constant factor.
         with self.assert_queries_less_than(40*5):
-            response = self.export_annotations(self.default_search_params)
+            response = self.export_annotations(self.default_post_params)
 
         csv_content = response.content.decode()
         self.assertEqual(
@@ -1037,7 +1087,7 @@ class QueriesPerImageTest(BaseAnnotationExportTest):
             image.metadata.camera = "Canon"
             image.metadata.save()
 
-        post_data = self.default_search_params.copy()
+        post_data = self.default_post_params.copy()
         post_data['optional_columns'] = [
             'annotator_info', 'machine_suggestions',
             'metadata_date_aux', 'metadata_other']

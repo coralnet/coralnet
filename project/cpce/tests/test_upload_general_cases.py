@@ -1,5 +1,5 @@
 # These tests should be one-to-one with
-# upload/tests/test_annotations_general_cases.py.
+# annotations/tests/test_annotations_general_cases.py.
 
 import codecs
 from unittest import mock
@@ -8,11 +8,15 @@ from django.core.files.base import ContentFile
 from django.test.utils import override_settings
 from django.urls import reverse
 
+from annotations.tests.utils import (
+    UploadAnnotationsFormatTest,
+    UploadAnnotationsGeneralCasesTest,
+    UploadAnnotationsMultipleSourcesTest,
+    UploadAnnotationsQueriesPerImageTest,
+    UploadAnnotationsQueriesPerPointTest,
+)
 from images.models import Point
 from lib.tests.utils import BasePermissionTest, ClientTest
-from upload.tests.utils import (
-    UploadAnnotationsFormatTest, UploadAnnotationsGeneralCasesTest,
-    UploadAnnotationsMultipleSourcesTest)
 from .utils import UploadAnnotationsCpcTestMixin
 
 
@@ -330,7 +334,7 @@ class GeneralCasesTest(
         def raise_error(self, *args, **kwargs):
             raise ValueError
 
-        with mock.patch('upload.views.reset_features', raise_error):
+        with mock.patch('annotations.views.reset_features', raise_error):
             with self.assertRaises(ValueError):
                 self.upload_annotations(self.user, self.source)
 
@@ -665,3 +669,86 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCpcTestMixin):
             preview_response.json(),
             dict(error="The submitted file is empty."),
         )
+
+
+class QueriesPerPointTest(
+    UploadAnnotationsQueriesPerPointTest, UploadAnnotationsCpcTestMixin
+):
+
+    def test(self):
+        point_data = [
+            [column, row]
+            # 100 points per image
+            for column, row in self.point_positions()
+        ]
+        label_codes = self.label_codes()
+
+        cpc_files = []
+        for stem in ['1', '2', '3']:
+            image_label_codes = [next(label_codes) for _ in range(100)]
+            annotation_data = [
+                entry + [label_code]
+                for entry, label_code in zip(point_data, image_label_codes)
+            ]
+            cpc_files.append(
+                self.make_annotations_file(
+                    self.image_dimensions,
+                    f'{stem}.cpc',
+                    fr'C:\Photos\{stem}.jpg',
+                    annotation_data,
+                )
+            )
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            self.preview_annotations(
+                self.user, self.source, cpc_files)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.img1, self.img2, self.img3]:
+            self.assertEqual(
+                image.annotation_set.count(), 100,
+                "Sanity check: should have 100 annotations per image")
+
+
+class QueriesPerImageTest(
+    UploadAnnotationsQueriesPerImageTest, UploadAnnotationsCpcTestMixin
+):
+
+    def test(self):
+        point_data = [
+            [column, row]
+            # 1 point per image
+            for column, row in self.point_positions()
+        ]
+        label_codes = self.label_codes()
+
+        cpc_files = []
+        for stem in [str(n) for n in range(1, 20+1)]:
+            image_label_codes = [next(label_codes)]
+            annotation_data = [
+                entry + [label_code]
+                for entry, label_code in zip(point_data, image_label_codes)
+            ]
+            cpc_files.append(
+                self.make_annotations_file(
+                    self.image_dimensions,
+                    f'{stem}.cpc',
+                    fr'C:\Photos\{stem}.jpg',
+                    annotation_data,
+                )
+            )
+
+        # Number of queries should be linear in image count, but with
+        # not TOO large of a constant factor.
+        # TODO: Improve this. At this time of writing, it can't get under
+        #  40 queries per image.
+        with self.assert_queries_less_than(20*50):
+            self.preview_annotations(
+                self.user, self.source, cpc_files)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.images[0], self.images[10], self.images[19]]:
+            self.assertEqual(
+                image.annotation_set.count(), 1,
+                "Sanity check: should have 1 annotation per image")

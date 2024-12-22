@@ -5,10 +5,10 @@ from abc import ABC
 from django.urls import reverse
 
 from annotations.model_utils import AnnotationArea
+from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.model_utils import PointGen
 from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest
-from upload.tests.utils import UploadAnnotationsCsvTestMixin
 from vision_backend.models import Features
 
 

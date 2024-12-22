@@ -12,8 +12,13 @@ from django.urls import reverse
 from images.models import Point
 from lib.tests.utils import BasePermissionTest, ClientTest
 from .utils import (
-    UploadAnnotationsCsvTestMixin, UploadAnnotationsFormatTest,
-    UploadAnnotationsGeneralCasesTest, UploadAnnotationsMultipleSourcesTest)
+    UploadAnnotationsCsvTestMixin,
+    UploadAnnotationsFormatTest,
+    UploadAnnotationsGeneralCasesTest,
+    UploadAnnotationsMultipleSourcesTest,
+    UploadAnnotationsQueriesPerImageTest,
+    UploadAnnotationsQueriesPerPointTest,
+)
 
 
 class PermissionTest(BasePermissionTest):
@@ -26,8 +31,8 @@ class PermissionTest(BasePermissionTest):
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
     def test_annotations_csv(self):
-        url = reverse('upload_annotations_csv', args=[self.source.pk])
-        template = 'upload/upload_annotations_csv.html'
+        url = reverse('annotations_upload_page', args=[self.source.pk])
+        template = 'annotations/upload.html'
 
         self.source_to_private()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
@@ -35,8 +40,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
     def test_annotations_csv_preview_ajax(self):
-        url = reverse(
-            'upload_annotations_csv_preview_ajax', args=[self.source.pk])
+        url = reverse('annotations_upload_preview', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
@@ -46,8 +50,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
     def test_annotations_csv_confirm_ajax(self):
-        url = reverse(
-            'upload_annotations_csv_confirm_ajax', args=[self.source.pk])
+        url = reverse('annotations_upload_confirm', args=[self.source.pk])
 
         self.source_to_private()
         self.assertPermissionLevel(
@@ -72,7 +75,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_page(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv', args=[self.source.pk]),
+            reverse('annotations_upload_page', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -82,8 +85,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_preview(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv_preview_ajax', args=[
-                self.source.pk]),
+            reverse('annotations_upload_preview', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -93,8 +95,7 @@ class UploadAnnotationsNoLabelsetTest(ClientTest):
     def test_confirm(self):
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('upload_annotations_csv_confirm_ajax', args=[
-                self.source.pk]),
+            reverse('annotations_upload_confirm', args=[self.source.pk]),
         )
         self.assertContains(
             response,
@@ -134,7 +135,7 @@ class GeneralCasesTest(
         Annotations on all specified points.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -152,7 +153,7 @@ class GeneralCasesTest(
         Annotations on some specified points, but not all.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -172,7 +173,7 @@ class GeneralCasesTest(
         Save some annotations, then overwrite those with other annotations.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['1.png', 60, 40, 'B'],
             ['2.png', 70, 30, 'A'],
@@ -185,7 +186,7 @@ class GeneralCasesTest(
         self.upload_annotations(self.user, self.source)
 
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, 'A'],
             ['2.png', 30, 30],
@@ -211,7 +212,7 @@ class GeneralCasesTest(
         self.create_labelset(self.user, self.source, labels)
 
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 60, 40, 'aBc'],
         ]
         csv_file = self.make_annotations_file('A.csv', rows)
@@ -228,7 +229,7 @@ class GeneralCasesTest(
         will just be ignored.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             ['4.png', 60, 40, 'B'],
         ]
@@ -244,7 +245,7 @@ class GeneralCasesTest(
         The upload should create an annotation history entry.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, ''],
             ['1.png', 30, 30, 'B'],
@@ -261,7 +262,7 @@ class GeneralCasesTest(
         then the saves should be rolled back.
         """
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'A'],
             ['1.png', 20, 20, ''],
             ['1.png', 30, 30, 'B'],
@@ -272,7 +273,7 @@ class GeneralCasesTest(
         def raise_error(self, *args, **kwargs):
             raise ValueError
 
-        with mock.patch('upload.views.reset_features', raise_error):
+        with mock.patch('annotations.views.reset_features', raise_error):
             with self.assertRaises(ValueError):
                 self.upload_annotations(self.user, self.source)
 
@@ -291,7 +292,7 @@ class MultipleSourcesTest(
         """
         # Upload to source 2
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 10, 10, 'B'],
             ['1.png', 20, 20, 'B'],
             ['2.png', 15, 15, 'A'],
@@ -303,7 +304,7 @@ class MultipleSourcesTest(
 
         # Upload to source 1
         rows = [
-            ['Name', 'Column', 'Row', 'Label'],
+            ['Name', 'Column', 'Row', 'Label code'],
             ['1.png', 50, 50, 'A'],
             # This image doesn't exist in source 1
             ['2.png', 60, 40, 'B'],
@@ -347,7 +348,7 @@ class UploadAnnotationsContentsTest(ClientTest, UploadAnnotationsCsvTestMixin):
         if len(rows[0]) == 3:
             header_row = ['Name', 'Column', 'Row']
         else:
-            header_row = ['Name', 'Column', 'Row', 'Label']
+            header_row = ['Name', 'Column', 'Row', 'Label code']
         csv_file = self.make_annotations_file('A.csv', [header_row] + rows)
         self.preview_annotations(self.user, self.source, csv_file)
         self.upload_annotations(self.user, self.source)
@@ -362,7 +363,7 @@ class UploadAnnotationsContentsTest(ClientTest, UploadAnnotationsCsvTestMixin):
         if len(rows[0]) == 3:
             header_row = ['Name', 'Column', 'Row']
         else:
-            header_row = ['Name', 'Column', 'Row', 'Label']
+            header_row = ['Name', 'Column', 'Row', 'Label code']
         csv_file = self.make_annotations_file('A.csv', [header_row] + rows)
         preview_response = self.preview_annotations(
             self.user, self.source, csv_file)
@@ -513,7 +514,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
     def test_unicode(self):
         """Test Unicode image filenames and label codes."""
         content = (
-            'Name,Column,Row,Label\n'
+            'Name,Column,Row,Label code\n'
             'あ.png,50,50,い\n'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -526,7 +527,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_crlf(self):
         content = (
-            'Name,Column,Row,Label\r\n'
+            'Name,Column,Row,Label code\r\n'
             '1.png,50,50,A\r\n'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -539,7 +540,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_cr(self):
         content = (
-            'Name,Column,Row,Label\r'
+            'Name,Column,Row,Label code\r'
             '1.png,50,50,A\r'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -552,7 +553,7 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
 
     def test_utf8_bom(self):
         content = (
-            codecs.BOM_UTF8.decode() + 'Name,Column,Row,Label\n'
+            codecs.BOM_UTF8.decode() + 'Name,Column,Row,Label code\n'
             '1.png,50,50,A\n'
         )
         csv_file = ContentFile(content, name='A.csv')
@@ -573,3 +574,72 @@ class FormatTest(UploadAnnotationsFormatTest, UploadAnnotationsCsvTestMixin):
             preview_response.json(),
             dict(error="The submitted file is empty."),
         )
+
+
+class QueriesPerPointTest(
+    UploadAnnotationsQueriesPerPointTest, UploadAnnotationsCsvTestMixin
+):
+
+    def test(self):
+        csv_data = [
+            [name, column, row]
+            # 3 images
+            for name in ['1.jpg', '2.jpg', '3.jpg']
+            # 100 points per image
+            for column, row in self.point_positions()
+        ]
+        csv_data = [
+            entry + [label_code]
+            for entry, label_code in zip(csv_data, self.label_codes())
+        ]
+
+        csv_file = self.make_annotations_file('A.csv', [
+            ['Name', 'Column', 'Row', 'Label code'],
+            *csv_data])
+
+        # Number of queries should be less than the point count.
+        with self.assert_queries_less_than(3*100):
+            self.preview_annotations(
+                self.user, self.source, csv_file)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.img1, self.img2, self.img3]:
+            self.assertEqual(
+                image.annotation_set.count(), 100,
+                "Sanity check: should have 100 annotations per image")
+
+
+class QueriesPerImageTest(
+    UploadAnnotationsQueriesPerImageTest, UploadAnnotationsCsvTestMixin
+):
+
+    def test(self):
+        csv_data = [
+            [name, column, row]
+            # 20 images
+            for name in [image.metadata.name for image in self.images]
+            # 1 point per image
+            for column, row in self.point_positions()
+        ]
+        csv_data = [
+            entry + [label_code]
+            for entry, label_code in zip(csv_data, self.label_codes())
+        ]
+
+        csv_file = self.make_annotations_file('A.csv', [
+            ['Name', 'Column', 'Row', 'Label code'],
+            *csv_data])
+
+        # Number of queries should be linear in image count, but with
+        # not TOO large of a constant factor.
+        # TODO: Improve this. At this time of writing, it can't get under
+        #  40 queries per image.
+        with self.assert_queries_less_than(20*50):
+            self.preview_annotations(
+                self.user, self.source, csv_file)
+            self.upload_annotations(self.user, self.source)
+
+        for image in [self.images[0], self.images[10], self.images[19]]:
+            self.assertEqual(
+                image.annotation_set.count(), 1,
+                "Sanity check: should have 1 annotation per image")

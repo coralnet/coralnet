@@ -7,6 +7,7 @@ from django.forms import Form
 from django.forms.fields import (
     BooleanField,
     CharField,
+    ChoiceField,
     DecimalField,
     IntegerField,
     MultipleChoiceField,
@@ -14,7 +15,7 @@ from django.forms.fields import (
 )
 from django.forms.models import ModelForm
 from django.forms.widgets import (
-    CheckboxSelectMultiple, HiddenInput, NumberInput, TextInput)
+    CheckboxSelectMultiple, HiddenInput, NumberInput, RadioSelect, TextInput)
 
 from accounts.utils import is_robot_user
 from images.models import Metadata, Point
@@ -308,6 +309,16 @@ class AnnotationAreaPixelsForm(Form):
 
 
 class ExportAnnotationsForm(Form):
+    label_format = ChoiceField(
+        label="Label format",
+        choices=(
+            ('code', "Short codes"),
+            ('id', "ID numbers"),
+        ),
+        initial='code',
+        widget=RadioSelect,
+    )
+
     optional_columns_choices = (
         ('annotator_info', "Annotator info"),
         ('machine_suggestions', "Machine suggestions"),

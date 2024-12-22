@@ -18,7 +18,7 @@
   <div class="tool-heading">
     <span>Upload Points and Annotations (CSV)</span>
     <div class="tutorial-message">
-      {% include 'upload/upload_annotations_csv_help.html' %}
+      {% include 'annotations/help_upload.html' %}
     </div>
   </div>
 
@@ -60,8 +60,8 @@
   <!-- Script in the body will run on page load. -->
   <script type="text/javascript">
     UploadAnnotationsHelper.initForm({
-        uploadPreviewUrl: "{% url 'upload_annotations_csv_preview_ajax' source.id %}",
-        uploadStartUrl: "{% url 'upload_annotations_csv_confirm_ajax' source.id %}"
+        uploadPreviewUrl: "{% url 'annotations_upload_preview' source.id %}",
+        uploadStartUrl: "{% url 'annotations_upload_confirm' source.id %}"
     });
   </script>
 

@@ -169,6 +169,18 @@ class LabelSet(models.Model):
             return None
         return local_label.code
 
+    def code_to_global_pk_dict(self):
+        """
+        This helps to reduce database queries compared to calling
+        get_global_by_code() once per label.
+
+        But, have to be careful to compare codes case-insensitively.
+        """
+        local_labels_values = self.get_labels().values('global_label', 'code')
+        return dict(
+            (v['code'].lower(), v['global_label'])
+            for v in local_labels_values)
+
     def global_pk_to_code_dict(self):
         """
         This helps to reduce database queries compared to calling
@@ -176,7 +188,8 @@ class LabelSet(models.Model):
         """
         local_labels_values = self.get_labels().values('global_label', 'code')
         return dict(
-            (v['global_label'], v['code']) for v in local_labels_values)
+            (v['global_label'], v['code'])
+            for v in local_labels_values)
 
     def save_copy(self) -> 'LabelSet':
         # Copy fields and save a new instance

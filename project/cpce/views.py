@@ -14,6 +14,8 @@ from django.views.decorators.http import require_POST
 
 from accounts.utils import get_robot_user
 from annotations.model_utils import AnnotationArea
+from annotations.utils import annotations_preview
+from annotations.views import AnnotationsUploadConfirmView
 from export.utils import file_to_session_data, get_request_images
 from export.views import ExportServeView
 from images.models import Image
@@ -26,8 +28,7 @@ from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from lib.sessions import save_session_data
 from sources.models import Source
-from upload.utils import annotations_preview, text_file_to_unicode_stream
-from upload.views import AnnotationsUploadConfirmView
+from upload.utils import text_file_to_unicode_stream
 from vision_backend.models import Score
 from .forms import (
     CpcBatchEditCpcsForm,

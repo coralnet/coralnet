@@ -1,6 +1,7 @@
 from django.shortcuts import resolve_url
 
 from lib.tests.utils import ClientTest
+from visualization.tests.utils import BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
 
 class BaseExportTest(ClientTest):
@@ -10,19 +11,7 @@ class BaseExportTest(ClientTest):
         super().setUpTestData()
 
         # Image search parameters
-        cls.default_search_params = dict(
-            image_form_type='search',
-            aux1='', aux2='', aux3='', aux4='', aux5='',
-            height_in_cm='', latitude='', longitude='', depth='',
-            photographer='', framing='', balance='',
-            photo_date_0='', photo_date_1='', photo_date_2='',
-            photo_date_3='', photo_date_4='',
-            image_name='', annotation_status='',
-            last_annotated_0='', last_annotated_1='', last_annotated_2='',
-            last_annotated_3='', last_annotated_4='',
-            last_annotator_0='', last_annotator_1='',
-            sort_method='name', sort_direction='asc',
-        )
+        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
     def export_metadata(self, post_data):
         """POST to export_metadata, and return the response."""

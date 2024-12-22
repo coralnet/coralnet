@@ -8,6 +8,8 @@ from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views import View
 from django.views.decorators.http import require_POST
 
 from easy_thumbnails.files import get_thumbnailer
@@ -15,7 +17,10 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
+from accounts.utils import get_imported_user
+from events.models import Event
 from export.views import SourceCsvExportPrepView
+from images.model_utils import PointGen
 from images.models import Image, Point
 from images.utils import (
     generate_points,
@@ -24,17 +29,19 @@ from images.utils import (
     get_next_image,
     get_prev_image,
 )
-from labels.models import Label
 from lib.decorators import (
     image_annotation_area_must_be_editable,
     image_labelset_required,
     image_permission_required,
     login_required_ajax,
+    source_labelset_required,
     source_permission_required,
 )
+from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
+from upload.forms import CSVImportForm
 from visualization.forms import HiddenForm, create_image_filter_form
 from vision_backend.models import ClassifyImageEvent, Score
 from vision_backend.utils import (
@@ -49,9 +56,18 @@ from .forms import (
     ExportAnnotationsForm,
 )
 from .model_utils import AnnotationArea
-from .models import Annotation, AnnotationToolAccess, AnnotationToolSettings
+from .models import (
+    Annotation,
+    AnnotationToolAccess,
+    AnnotationToolSettings,
+    AnnotationUploadEvent,
+)
 from .utils import (
-    apply_alleviate, get_annotation_version_user_display, get_robot_display)
+    annotations_csv_to_dict,
+    annotations_preview,
+    apply_alleviate,
+    get_annotation_version_user_display,
+)
 
 
 @image_permission_required('image_id', perm=Source.PermTypes.EDIT.code)
@@ -502,20 +518,11 @@ def annotation_history(request, image_id):
     # Get the Revisions associated with these annotation Versions.
     revisions = Revision.objects.filter(version__in=versions).distinct()
 
+    labelset_dict = source.labelset.global_pk_to_code_dict()
+
     def version_to_point_number(v_):
         # We name the arg v_ to avoid shadowing the outer scope's v.
         return Annotation.objects.get(pk=v_.object_id).point.point_number
-
-    def label_id_to_display(label_id_):
-        label_display_ = source.labelset.global_pk_to_code(label_id_)
-        if not label_display_:
-            # Label was removed from the labelset
-            try:
-                label_display_ = Label.objects.get(pk=label_id_).name
-            except Label.DoesNotExist:
-                # Label was deleted from the site
-                label_display_ = f"(Label of ID {label_id_})"
-        return label_display_
 
     event_log = []
 
@@ -532,7 +539,8 @@ def annotation_history(request, image_id):
         for v in rev_versions:
             point_number = version_to_point_number(v)
             global_label_pk = v.field_dict['label_id']
-            label_display = label_id_to_display(global_label_pk)
+            label_display = Event.label_id_to_display(
+                global_label_pk, labelset_dict)
             events.append("Point {num}: {label}".format(
                 num=point_number, label=label_display))
 
@@ -551,19 +559,14 @@ def annotation_history(request, image_id):
     # by ClassifyImageEvents instead.
     event_objs = ClassifyImageEvent.objects.filter(
         image_id=image_id, date__gt=settings.CORALNET_1_15_DATE)
-    not_changed_code = Annotation.objects.UpdateResultsCodes.NOT_CHANGED.value
-
     for event_obj in event_objs:
-        point_events = []
-        for point_number, detail in event_obj.details.items():
-            label_display = label_id_to_display(detail['label'])
-            if detail['result'] != not_changed_code:
-                point_events.append(f"Point {point_number}: {label_display}")
-        event_log.append(dict(
-            date=event_obj.date,
-            user=get_robot_display(event_obj.classifier_id, event_obj.date),
-            events=point_events,
-        ))
+        event_log.append(event_obj.annotation_history_entry(labelset_dict))
+
+    # From CoralNet 1.18 onward, we track annotation uploads with Events
+    # instead of django-reversion.
+    event_objs = AnnotationUploadEvent.objects.filter(image_id=image_id)
+    for event_obj in event_objs:
+        event_log.append(event_obj.annotation_history_entry(labelset_dict))
 
     for access in AnnotationToolAccess.objects.filter(image=image):
         # Create a log entry for each annotation tool access
@@ -587,8 +590,187 @@ def annotation_history(request, image_id):
     })
 
 
+@source_permission_required('source_id', perm=Source.PermTypes.EDIT.code)
+@source_labelset_required('source_id', message=(
+    "You must create a labelset before uploading annotations."))
+def upload_page(request, source_id):
+    source = get_object_or_404(Source, id=source_id)
+
+    csv_import_form = CSVImportForm()
+
+    return render(request, 'annotations/upload.html', {
+        'source': source,
+        'csv_import_form': csv_import_form,
+    })
+
+
+@source_permission_required(
+    'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
+@source_labelset_required('source_id', message=(
+    "You must create a labelset before uploading annotations."))
+def upload_preview(request, source_id):
+    """
+    Add points/annotations to images by uploading a CSV file.
+
+    This view takes the CSV file, processes it, saves the processed data
+    to the session, and returns a preview table of the data to be saved.
+    """
+    if request.method != 'POST':
+        return JsonResponse(dict(
+            error="Not a POST request",
+        ))
+
+    source = get_object_or_404(Source, id=source_id)
+
+    csv_import_form = CSVImportForm(request.POST, request.FILES)
+    if not csv_import_form.is_valid():
+        return JsonResponse(dict(
+            error=csv_import_form.errors['csv_file'][0],
+        ))
+
+    try:
+        csv_annotations = annotations_csv_to_dict(
+            csv_import_form.get_csv_stream(), source)
+    except FileProcessError as error:
+        return JsonResponse(dict(
+            error=str(error),
+        ))
+
+    preview_table, preview_details = \
+        annotations_preview(csv_annotations, source)
+
+    request.session['uploaded_annotations'] = csv_annotations
+
+    return JsonResponse(dict(
+        success=True,
+        previewTable=preview_table,
+        previewDetails=preview_details,
+    ))
+
+
+@method_decorator(
+    [
+        # Access control.
+        source_permission_required(
+            'source_id', perm=Source.PermTypes.EDIT.code, ajax=True),
+        source_labelset_required('source_id', message=(
+            "You must create a labelset before uploading annotations."))
+    ],
+    name='dispatch')
+class AnnotationsUploadConfirmView(View):
+    """
+    This view gets the annotation data that was previously saved to the
+    session by an upload-annotations-preview view. Then it saves the data
+    to the database, while deleting all previous points/annotations for the
+    images involved.
+    """
+    def post(self, request, source_id):
+        source = get_object_or_404(Source, id=source_id)
+
+        uploaded_annotations = request.session.pop('uploaded_annotations', None)
+        if not uploaded_annotations:
+            return JsonResponse(dict(
+                error=(
+                    "We couldn't find the expected data in your session."
+                    " Please try loading this page again. If the problem"
+                    " persists, let us know on the forum."
+                ),
+            ))
+
+        self.extra_source_level_actions(request, source)
+
+        for image_id, annotations_for_image in uploaded_annotations.items():
+
+            img = Image.objects.get(pk=image_id, source=source)
+
+            # Delete previous annotations and points for this image.
+            # Calling delete() on these querysets is more efficient
+            # than calling delete() on each of the individual objects.
+            Annotation.objects.filter(image=img).delete()
+            Point.objects.filter(image=img).delete()
+
+            # Create new points and annotations.
+            new_points = []
+            new_annotations = []
+
+            for num, point_dict in enumerate(annotations_for_image, 1):
+                # Create a Point.
+                point = Point(
+                    row=point_dict['row'], column=point_dict['column'],
+                    point_number=num, image=img)
+                new_points.append(point)
+            # Save to DB with an efficient bulk operation.
+            Point.objects.bulk_create(new_points)
+
+            # Mapping of newly-saved points.
+            point_numbers_to_ids = dict(
+                (p.point_number, p.pk) for p in new_points)
+            point_ids_to_numbers = dict(
+                (p.pk, p.point_number) for p in new_points)
+
+            for num, point_dict in enumerate(annotations_for_image, 1):
+                # The annotation-preview view should've processed annotation
+                # data to just label IDs, not codes.
+                label_id = point_dict.get('label_id')
+                # Create an Annotation if a label is specified.
+                if label_id:
+                    new_annotations.append(Annotation(
+                        point_id=point_numbers_to_ids[num],
+                        image=img, source=source,
+                        label_id=label_id, user=get_imported_user()))
+
+            # Bulk-create bypasses the django-reversion signals,
+            # which is what we want in this case (trying to obsolete
+            # reversion for annotations).
+            Annotation.objects.bulk_create(new_annotations)
+
+            # Instead of a django-reversion revision, we'll create our
+            # own Event.
+            event_details = dict(
+                point_count=len(new_points),
+                first_point_id=new_points[0].pk,
+                annotations=dict(
+                    (point_ids_to_numbers[ann.point_id], ann.label_id)
+                    for ann in new_annotations
+                ),
+            )
+            event = AnnotationUploadEvent(
+                source_id=source_id,
+                image_id=image_id,
+                creator_id=request.user.pk,
+                details=event_details,
+            )
+            event.save()
+
+            # Update relevant image/metadata fields.
+            self.update_image_and_metadata_fields(img, new_points)
+
+            reset_features(img)
+
+        return JsonResponse(dict(
+            success=True,
+        ))
+
+    def extra_source_level_actions(self, request, source):
+        pass
+
+    def update_image_and_metadata_fields(self, image, new_points):
+        image.point_generation_method = PointGen(
+            type=PointGen.Types.IMPORTED.value,
+            points=len(new_points)).db_value
+        # Clear previously-uploaded CPC info.
+        image.cpc_content = ''
+        image.cpc_filename = ''
+        image.save()
+
+        image.metadata.annotation_area = AnnotationArea(
+            type=AnnotationArea.TYPE_IMPORTED).db_value
+        image.metadata.save()
+
+
 class ExportPrepView(SourceCsvExportPrepView):
 
+    label_format: str
     labelset_dict: dict
     metadata_date_aux_fields: list
     metadata_field_labels: dict
@@ -651,7 +833,16 @@ class ExportPrepView(SourceCsvExportPrepView):
                 'name', 'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5']
         ]
 
-        fieldnames = ["Name", "Row", "Column", "Label"]
+        fieldnames = ["Name", "Row", "Column"]
+
+        self.label_format = export_form_data['label_format']
+        match self.label_format:
+            case 'code':
+                fieldnames.append("Label code")
+            case 'id':
+                fieldnames.append("Label ID")
+            case _:
+                assert f"Unsupported label format: {self.label_format}"
 
         self.labelset_dict = source.labelset.global_pk_to_code_dict()
 
@@ -720,14 +911,20 @@ class ExportPrepView(SourceCsvExportPrepView):
             return
 
         # One row per annotation.
-        label_code = (
-            self.labelset_dict[point_values['annotation__label']])
         row = {
             "Name": image.metadata.name,
             "Row": point_values['row'],
             "Column": point_values['column'],
-            "Label": label_code,
         }
+
+        match self.label_format:
+            case 'code':
+                row["Label code"] = (
+                    self.labelset_dict[point_values['annotation__label']])
+            case 'id':
+                row["Label ID"] = point_values['annotation__label']
+            case _:
+                assert f"Unsupported label format: {self.label_format}"
 
         if 'annotator_info' in self.optional_columns:
             # Truncate date precision at seconds

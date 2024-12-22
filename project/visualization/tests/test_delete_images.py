@@ -3,7 +3,7 @@ from django.urls import reverse
 from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.models import Features
-from .utils import BrowseActionsFormTest
+from .utils import BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
 
 class PermissionTest(BasePermissionTest):
@@ -31,19 +31,7 @@ class BaseDeleteTest(ClientTest):
 
         cls.url = reverse('browse_delete_ajax', args=[cls.source.pk])
 
-        cls.default_search_params = dict(
-            image_form_type='search',
-            aux1='', aux2='', aux3='', aux4='', aux5='',
-            height_in_cm='', latitude='', longitude='', depth='',
-            photographer='', framing='', balance='',
-            photo_date_0='', photo_date_1='', photo_date_2='',
-            photo_date_3='', photo_date_4='',
-            image_name='', annotation_status='',
-            last_annotated_0='', last_annotated_1='', last_annotated_2='',
-            last_annotated_3='', last_annotated_4='',
-            last_annotator_0='', last_annotator_1='',
-            sort_method='name', sort_direction='asc',
-        )
+        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
     def assert_image_deleted(self, image_id, name):
         msg = f"Image {name} should be deleted"

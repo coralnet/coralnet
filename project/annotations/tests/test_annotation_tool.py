@@ -11,6 +11,7 @@ from django.utils import timezone
 from accounts.utils import is_alleviate_user, is_robot_user
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
+from visualization.tests.utils import BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import AnnotationHistoryTestMixin
 
@@ -108,21 +109,6 @@ class LoadImageTest(ClientTest):
         self.assertStatusOK(response)
 
 
-default_search_params = dict(
-    image_form_type='search',
-    aux1='', aux2='', aux3='', aux4='', aux5='',
-    height_in_cm='', latitude='', longitude='', depth='',
-    photographer='', framing='', balance='',
-    photo_date_0='', photo_date_1='', photo_date_2='',
-    photo_date_3='', photo_date_4='',
-    image_name='', annotation_status='',
-    last_annotated_0='', last_annotated_1='', last_annotated_2='',
-    last_annotated_3='', last_annotated_4='',
-    last_annotator_0='', last_annotator_1='',
-    sort_method='name', sort_direction='asc',
-)
-
-
 class NavigationTest(ClientTest):
     """
     Test the annotation tool buttons that let you navigate to other images.
@@ -190,7 +176,7 @@ class NavigationTest(ClientTest):
         image.annoinfo.save()
 
     def enter_annotation_tool(self, search_kwargs, current_image):
-        data = default_search_params.copy()
+        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         data.update(**search_kwargs)
         self.client.force_login(self.user)
         response = self.client.post(
@@ -1450,7 +1436,7 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
 
         # Access the annotation tool through a Browse search
         self.client.force_login(self.user)
-        data = default_search_params.copy()
+        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         self.client.post(
             reverse('annotation_tool', args=[self.img.pk]), data)
 

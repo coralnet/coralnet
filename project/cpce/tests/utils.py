@@ -4,7 +4,7 @@ from io import StringIO
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
-from upload.tests.utils import UploadAnnotationsTestMixin
+from annotations.tests.utils import UploadAnnotationsTestMixin
 
 
 class UploadAnnotationsCpcTestMixin(UploadAnnotationsTestMixin, ABC):
