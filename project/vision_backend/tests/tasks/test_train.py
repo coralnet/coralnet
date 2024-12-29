@@ -18,7 +18,11 @@ from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_result
 from .utils import (
-    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
+    BaseTaskTest,
+    do_collect_spacer_jobs,
+    ensure_source_check_not_scheduled,
+    source_check_is_scheduled,
+)
 
 
 def mock_training_results(
@@ -527,9 +531,12 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         train_image = train_images[0]
         train_image.features.has_rowcols = False
         train_image.features.save()
+        # Ensure we can test for scheduling a new source check.
+        ensure_source_check_not_scheduled(self.source.pk)
 
         # Try to train.
-        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            do_job('train_classifier', self.source.pk, source_id=self.source.pk)
         self.assert_job_failure_message(
             'train_classifier',
             "This source has 1 feature vector(s) without rows/columns,"
@@ -538,6 +545,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         train_image.features.refresh_from_db()
         self.assertFalse(
             train_image.features.extracted, "Features should be reset")
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Should have scheduled a source check")
 
     def test_val_invalid_rowcol(self):
 
@@ -554,9 +564,12 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         for image in [val_images[0], val_images[1]]:
             image.features.has_rowcols = False
             image.features.save()
+        # Ensure we can test for scheduling a new source check.
+        ensure_source_check_not_scheduled(self.source.pk)
 
         # Try to train.
-        do_job('train_classifier', self.source.pk, source_id=self.source.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            do_job('train_classifier', self.source.pk, source_id=self.source.pk)
         self.assert_job_failure_message(
             'train_classifier',
             "This source has 2 feature vector(s) without rows/columns,"
@@ -566,6 +579,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             image.features.refresh_from_db()
             self.assertFalse(
                 image.features.extracted, "Features should be reset")
+        self.assertTrue(
+            source_check_is_scheduled(self.source.pk),
+            msg="Should have scheduled a source check")
 
     def test_feature_format_mismatch(self):
 

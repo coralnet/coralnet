@@ -6,6 +6,7 @@ from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tests.utils import do_job, JobUtilsMixin
+from jobs.utils import abort_job
 from lib.tests.utils import ClientTest
 from ...models import Classifier
 
@@ -24,6 +25,19 @@ def source_check_is_scheduled(source_id):
     except Job.DoesNotExist:
         return False
     return True
+
+
+def ensure_source_check_not_scheduled(source_id):
+    try:
+        job = Job.objects.get(
+            job_name='check_source',
+            source_id=source_id,
+            status=Job.Status.PENDING,
+        )
+    except Job.DoesNotExist:
+        pass
+    else:
+        abort_job(job.pk)
 
 
 @override_settings(
