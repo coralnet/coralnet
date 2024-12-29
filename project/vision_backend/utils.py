@@ -180,13 +180,20 @@ def reset_features_bulk(image_queryset):
     """
     Version of reset_features() that is performant for large sets of images.
     """
+    # Evaluate source IDs BEFORE resetting features, because image_queryset
+    # might evaluate differently after features are reset (e.g. if the passed
+    # queryset is "images with features AND <other condition>", which would
+    # be a very reasonable thing to pass in here).
+    source_ids = list(
+        image_queryset.values_list('source_id', flat=True).distinct())
+
     # QuerySet.update() is the key to performance, but it can't be used on
     # related models (e.g. `.update(features__extracted=False)`). So first, we
     # have to get a Features QuerySet from the Image QuerySet.
     features_queryset = Features.objects.filter(image__in=image_queryset)
+    # Then this resets features.
     features_queryset.update(extracted=False)
 
-    source_ids = image_queryset.values_list('source_id', flat=True).distinct()
     for source_id in source_ids:
         schedule_source_check_on_commit(source_id)
 
