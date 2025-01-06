@@ -7,10 +7,7 @@ from sources.models import Source
 from sources.utils import filter_out_test_sources
 
 
-def compute_map_sources() -> list[dict[str, str|int]]:
-    """
-    As of 2023.11.15, this may take 2-4 seconds to run in production.
-    """
+def map_sources_queryset():
     # Get all sources that have both latitude and longitude specified.
     # (In other words, leave out the sources that have either of them
     # blank, or both exactly 0.)
@@ -26,7 +23,14 @@ def compute_map_sources() -> list[dict[str, str|int]]:
     map_sources_qs = map_sources_qs.annotate(image_count=Count('image'))
     map_sources_qs = map_sources_qs.exclude(
         image_count__lt=settings.MAP_IMAGE_COUNT_TIERS[0])
+    return map_sources_qs
 
+
+def compute_map_sources() -> list[dict[str, str|int]]:
+    """
+    As of 2023.11.15, this may take 2-4 seconds to run in production.
+    """
+    map_sources_qs = map_sources_queryset()
     map_sources = []
 
     for source in map_sources_qs:
