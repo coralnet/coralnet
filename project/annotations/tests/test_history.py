@@ -3,6 +3,7 @@
 # This test module is for miscellaneous annotation history tests.
 
 from django.urls import reverse
+from django.utils.html import escape as html_escape
 
 from lib.tests.utils import BasePermissionTest, ClientTest
 from .utils import AnnotationHistoryTestMixin
@@ -28,6 +29,27 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
         self.source_to_public()
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
+
+
+class NoLabelsetTest(ClientTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.img = cls.upload_image(cls.user, cls.source)
+
+    def test(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('annotation_history', args=[self.img.pk]),
+        )
+        self.assertContains(
+            response, html_escape(
+                "This source doesn't have a labelset yet,"
+                " so it can't have any annotations yet."))
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
 class AnnotationHistoryAccessTest(ClientTest, AnnotationHistoryTestMixin):
