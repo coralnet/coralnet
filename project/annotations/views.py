@@ -489,6 +489,9 @@ def annotation_tool_settings_save(request):
 
 
 @image_permission_required('image_id', perm=Source.PermTypes.EDIT.code)
+@image_labelset_required('image_id', message=(
+    "This source doesn't have a labelset yet,"
+    " so it can't have any annotations yet."))
 # This is a potentially slow view that doesn't modify the database,
 # so don't open a transaction for the view.
 @transaction.non_atomic_requests
