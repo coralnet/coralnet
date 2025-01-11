@@ -7,6 +7,7 @@ from django.db import IntegrityError
 from django.shortcuts import resolve_url
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape as html_escape
 
 from accounts.utils import is_alleviate_user, is_robot_user
 from lib.tests.utils import BasePermissionTest, ClientTest
@@ -65,6 +66,27 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(
             url, self.SIGNED_IN, is_json=True, post_data={},
             deny_type=self.REQUIRE_LOGIN)
+
+
+class NoLabelsetTest(ClientTest):
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.img = cls.upload_image(cls.user, cls.source)
+
+    def test(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('annotation_tool', args=[self.img.pk]),
+        )
+        self.assertContains(
+            response, html_escape(
+                "You need to create a labelset for your source"
+                " before you can annotate images."))
+        self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
 class LoadImageTest(ClientTest):
