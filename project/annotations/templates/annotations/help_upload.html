@@ -121,6 +121,7 @@ CSV file. It's not much different from creating a typical Excel spreadsheet;
   <li>If your image is 1000 pixels wide, then the possible column numbers are 0 to 999. The same thing applies to row numbers and image height.</li>
   <li>Label codes or IDs in the CSV file must correspond to a label in your source's labelset.</li>
   <li>Label codes are case-insensitive. If your labelset has a label code <code>PORIT</code>, and the CSV file has <code>Porit</code>, then these codes will match.</li>
+  <li>If you have both Label codes and Label IDs in the CSV file (for example, because you exported annotations that way), then IDs will take precedence.</li>
   <li>You may include CSV rows with image names that aren't in your source. Those rows will just be ignored.</li>
   <li>You may include extra CSV columns with names outside of the recognized column names. Those columns will just be ignored.</li>
 </ul>

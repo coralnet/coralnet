@@ -269,40 +269,35 @@ class AnnotationsCSVFormatTest(ClientTest, UploadAnnotationsCsvTestMixin):
 
         self.check(preview_response, upload_response)
 
-    def test_multiple_label_columns(self):
+    def test_label_id_and_code(self):
         """
-        Multiple columns corresponding to the label.
+        ID takes precedence over code.
         """
         rows = [
             ['Name', 'Column', 'Row', 'Label code', 'Label ID'],
-            ['1.png', '', 50, 'A', self.labels.get(name='A').pk],
-            ['1.png', 60, 40, 'B', self.labels.get(name='B').pk],
+            ['1.png', 60, 40, 'B', self.labels.get(name='A').pk],
         ]
         csv_file = self.make_annotations_file('A.csv', rows)
         preview_response = self.preview_annotations(
             self.user, self.source, csv_file)
+        upload_response = self.upload_annotations(self.user, self.source)
 
-        self.assertDictEqual(
-            preview_response.json(),
-            dict(error="CSV cannot have multiple columns specifying the label"
-                       " (Label code, Label ID)"),
-        )
+        self.check(preview_response, upload_response)
 
-    def test_multiple_label_columns_case_insensitive_and_partly_blank(self):
+    def test_label_code_and_label_legacy(self):
+        """
+        Label code takes precedence over Label.
+        """
         rows = [
-            ['Name', 'Column', 'Row', 'LABEL', 'label code'],
-            ['1.png', '', 50, 'A', ''],
-            ['1.png', 60, 40, '', 'B'],
+            ['Name', 'Column', 'Row', 'Label code', 'Label'],
+            ['1.png', 60, 40, 'A', 'B'],
         ]
         csv_file = self.make_annotations_file('A.csv', rows)
         preview_response = self.preview_annotations(
             self.user, self.source, csv_file)
+        upload_response = self.upload_annotations(self.user, self.source)
 
-        self.assertDictEqual(
-            preview_response.json(),
-            dict(error="CSV cannot have multiple columns specifying the label"
-                       " (Label, Label code)"),
-        )
+        self.check(preview_response, upload_response)
 
     def test_field_with_newline(self):
         """Field value with a newline character in it (within quotation marks).

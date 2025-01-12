@@ -387,7 +387,7 @@ class LabelFormatTest(BaseAnnotationExportTest):
     def test_codes(self):
         self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
         post_data = self.default_post_params.copy()
-        post_data['label_format'] = ['code']
+        post_data['label_format'] = 'code'
         response = self.export_annotations(post_data)
 
         expected_lines = [
@@ -400,13 +400,26 @@ class LabelFormatTest(BaseAnnotationExportTest):
     def test_ids(self):
         self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
         post_data = self.default_post_params.copy()
-        post_data['label_format'] = ['id']
+        post_data['label_format'] = 'id'
         response = self.export_annotations(post_data)
 
         expected_lines = [
             'Name,Row,Column,Label ID',
             f'1.jpg,149,99,{self.labels.get(name="B").pk}',
             f'1.jpg,149,299,{self.labels.get(name="A").pk}',
+        ]
+        self.assert_csv_content_equal(response.content, expected_lines)
+
+    def test_both(self):
+        self.add_annotations(self.user, self.img1, {1: 'B', 2: 'A'})
+        post_data = self.default_post_params.copy()
+        post_data['label_format'] = 'both'
+        response = self.export_annotations(post_data)
+
+        expected_lines = [
+            'Name,Row,Column,Label code,Label ID',
+            f'1.jpg,149,99,B,{self.labels.get(name="B").pk}',
+            f'1.jpg,149,299,A,{self.labels.get(name="A").pk}',
         ]
         self.assert_csv_content_equal(response.content, expected_lines)
 

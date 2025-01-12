@@ -314,6 +314,7 @@ class ExportAnnotationsForm(Form):
         choices=(
             ('code', "Short codes"),
             ('id', "ID numbers"),
+            ('both', "Both"),
         ),
         initial='code',
         widget=RadioSelect,
