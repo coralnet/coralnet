@@ -131,16 +131,6 @@ def apply_alleviate(img, label_scores_all_points):
         img.annoinfo.refresh_from_db()
 
 
-def at_most_one_label_column(accepted_columns):
-    label_columns = [
-        c for c in accepted_columns
-        if c in ["Label code", "Label ID", "Label"]]
-    if len(label_columns) > 1:
-        raise FileProcessError(
-            f"CSV cannot have multiple columns specifying the label"
-            f" ({', '.join(label_columns)})")
-
-
 def annotations_csv_to_dict(
         csv_stream: StringIO, source: Source) -> dict[int, list[dict]]:
     """
@@ -164,16 +154,13 @@ def annotations_csv_to_dict(
         ),
         # Dupe point locations are allowed.
         unique_keys=[],
-        # Don't specify the labels in more than one way.
-        more_column_checks=at_most_one_label_column,
     )
 
     csv_annotations = defaultdict(list)
 
     for row_dict in row_dicts:
-        # If 'label' exists, replace that legacy column name with the
-        # current name 'label_code'.
-        if 'label' in row_dict:
+        # Treat the legacy column name 'label' as a fallback for 'label_code'.
+        if 'label_code' not in row_dict and 'label' in row_dict:
             row_dict['label_code'] = row_dict.pop('label')
 
         image_name = row_dict.pop('name')
@@ -255,6 +242,7 @@ def annotations_csv_verify_contents(csv_annotations, source):
                     f" the image is only {img.original_width} pixels wide"
                     f" (accepted values are 0~{img.max_column})")
 
+            # label_id takes precedence over label_code.
             if point_dict.get('label_id'):
                 try:
                     label_id = int(point_dict['label_id'])

@@ -839,13 +839,11 @@ class ExportPrepView(SourceCsvExportPrepView):
         fieldnames = ["Name", "Row", "Column"]
 
         self.label_format = export_form_data['label_format']
-        match self.label_format:
-            case 'code':
-                fieldnames.append("Label code")
-            case 'id':
-                fieldnames.append("Label ID")
-            case _:
-                assert f"Unsupported label format: {self.label_format}"
+
+        if self.label_format in ['code', 'both']:
+            fieldnames.append("Label code")
+        if self.label_format in ['id', 'both']:
+            fieldnames.append("Label ID")
 
         self.labelset_dict = source.labelset.global_pk_to_code_dict()
 
@@ -920,14 +918,11 @@ class ExportPrepView(SourceCsvExportPrepView):
             "Column": point_values['column'],
         }
 
-        match self.label_format:
-            case 'code':
-                row["Label code"] = (
-                    self.labelset_dict[point_values['annotation__label']])
-            case 'id':
-                row["Label ID"] = point_values['annotation__label']
-            case _:
-                assert f"Unsupported label format: {self.label_format}"
+        if self.label_format in ['code', 'both']:
+            row["Label code"] = (
+                self.labelset_dict[point_values['annotation__label']])
+        if self.label_format in ['id', 'both']:
+            row["Label ID"] = point_values['annotation__label']
 
         if 'annotator_info' in self.optional_columns:
             # Truncate date precision at seconds
