@@ -47,6 +47,7 @@ def backend_overview(request):
         images_unclassified.count() - need_features - need_classification
 
     def percent_display(numerator, denominator):
+        if denominator == 0: return "-%"
         return format(100*numerator / denominator, '.1f') + "%"
 
     image_stats = [
@@ -85,8 +86,10 @@ def backend_overview(request):
     all_sources = Source.objects.all()
     all_classifiers = Classifier.objects.all()
     accepted_classifiers = all_classifiers.filter(status=Classifier.ACCEPTED)
-    accepted_ratio = format(
-        accepted_classifiers.count() / all_sources.count(), '.1f')
+    if all_sources.count() != 0:
+        accepted_ratio = format(accepted_classifiers.count() / all_sources.count(), '.1f')
+    else:
+        accepted_ratio = "-"
     clf_stats = {
         'nclassifiers': all_classifiers.count(),
         'nacceptedclassifiers': accepted_classifiers.count(),
