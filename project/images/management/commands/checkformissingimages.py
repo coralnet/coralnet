@@ -33,7 +33,7 @@ class Command(BaseCommand):
         image_count = 0
         missing_count = 0
         csv_filepath = os.path.join(
-            settings.SITE_DIR, 'tmp', 'missing_images.csv')
+            settings.COMMAND_OUTPUT_DIR, 'missing_images.csv')
 
         with open(csv_filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)

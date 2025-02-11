@@ -15,7 +15,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
 
         csv_filepath = os.path.join(
-            settings.SITE_DIR, 'tmp', 'images_with_dupe_points.csv')
+            settings.COMMAND_OUTPUT_DIR, 'images_with_dupe_points.csv')
 
         with open(csv_filepath, 'w', newline='', encoding='utf-8') as f:
 
