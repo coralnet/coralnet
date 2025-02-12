@@ -4,7 +4,7 @@ import datetime
 from django.conf import settings
 from django.contrib.auth.decorators import (
     login_required, permission_required)
-from django.db.models import Aggregate, DurationField, F
+from django.db.models import F
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.utils import timezone
@@ -24,7 +24,12 @@ from .forms import (
     SourceJobSearchForm,
 )
 from .models import Job
-from .utils import get_job_details, get_job_names_by_task_queue
+from .utils import (
+    get_job_details,
+    get_job_names_by_task_queue,
+    Time10Percentile,
+    Time90Percentile,
+)
 
 
 class JobListView(View, ABC):
@@ -289,20 +294,6 @@ class JobSummaryView(View):
         )
 
         return render(request, self.template_name, context)
-
-
-class Time10Percentile(Aggregate):
-    function = 'PERCENTILE_CONT'
-    name = 'percentile10'
-    output_field = DurationField()
-    template = '%(function)s(0.1) WITHIN GROUP (ORDER BY %(expressions)s)'
-
-
-class Time90Percentile(Aggregate):
-    function = 'PERCENTILE_CONT'
-    name = 'percentile90'
-    output_field = DurationField()
-    template = '%(function)s(0.9) WITHIN GROUP (ORDER BY %(expressions)s)'
 
 
 @login_required

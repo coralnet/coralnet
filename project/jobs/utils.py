@@ -14,6 +14,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.mail import mail_admins
 from django.db import transaction
+from django.db.models import Aggregate, DurationField
 from django.utils.module_loading import autodiscover_modules
 from django.views.debug import ExceptionReporter
 from django_huey import db_periodic_task, db_task
@@ -660,3 +661,17 @@ def next_run_delay(interval: float, offset: float = 0) -> timedelta:
     next_run_timestamp = offset + (interval_count * interval)
     delay_in_seconds = max(next_run_timestamp - now_timestamp, 0)
     return timedelta(seconds=delay_in_seconds)
+
+
+class Time10Percentile(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile10'
+    output_field = DurationField()
+    template = '%(function)s(0.1) WITHIN GROUP (ORDER BY %(expressions)s)'
+
+
+class Time90Percentile(Aggregate):
+    function = 'PERCENTILE_CONT'
+    name = 'percentile90'
+    output_field = DurationField()
+    template = '%(function)s(0.9) WITHIN GROUP (ORDER BY %(expressions)s)'
