@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 from api_core.exceptions import ApiRequestDataError
-from api_core.models import ApiJob, ApiJobUnit
+from api_core.models import ApiJob, ApiJobUnit, UserApiLimits
 from jobs.models import Job
 from jobs.utils import schedule_job
 from vision_backend.models import Classifier
@@ -22,19 +22,28 @@ class Deploy(APIView):
     def post(self, request, classifier_id):
 
         # Check to see if we should throttle based on already-active jobs.
-        all_jobs = ApiJob.objects.filter(user=request.user).order_by('pk')
-        active_jobs = [
-            job for job in all_jobs
-            if job.status in [ApiJob.PENDING, ApiJob.IN_PROGRESS]]
-        max_job_count = settings.MAX_CONCURRENT_API_JOBS_PER_USER
 
-        if len(active_jobs) >= max_job_count:
-            ids = ', '.join([str(job.pk) for job in active_jobs[:5]])
+        active_job_ids = ApiJob.objects.active_ids_for_user(request.user)
+        # Evaluate.
+        active_job_ids = list(active_job_ids)
+
+        try:
+            # See if there's a user-specific limit.
+            max_active_jobs = UserApiLimits.objects.get(
+                user=request.user).max_active_jobs
+        except UserApiLimits.DoesNotExist:
+            # Else, use the default.
+            max_active_jobs = settings.USER_DEFAULT_MAX_ACTIVE_API_JOBS
+
+        if len(active_job_ids) >= max_active_jobs:
+            ids = ', '.join([
+                str(pk) for pk in active_job_ids[:max_active_jobs]])
             detail = (
-                "You already have {max} jobs active".format(max=max_job_count)
-                + " (IDs: {ids}).".format(ids=ids)
-                + " You must wait until one of them finishes"
-                + " before requesting another job.")
+                f"You already have {max_active_jobs} jobs active"
+                f" (IDs: {ids})."
+                f" You must wait until one of them finishes"
+                f" before requesting another job."
+            )
             return Response(
                 dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_429_TOO_MANY_REQUESTS)

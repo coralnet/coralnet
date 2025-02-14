@@ -1,15 +1,41 @@
 from collections import Counter
 
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from jobs.models import Job
+
+
+class ApiJobManager(models.Manager):
+
+    @staticmethod
+    def active_ids_for_user(user):
+        """
+        Return IDs of ApiJobs of the given user which haven't completed yet.
+        """
+        # Using the ApiJob.status property would run
+        # O(num active+inactive jobs) queries. We instead check for active job
+        # units using O(1) queries.
+        active_units_for_user = ApiJobUnit.objects.filter(
+            parent__user=user,
+            internal_job__status__in=[
+                Job.Status.PENDING, Job.Status.IN_PROGRESS],
+        )
+        return (
+            active_units_for_user
+            .order_by('parent')
+            .values_list('parent', flat=True)
+            .distinct()
+        )
 
 
 class ApiJob(models.Model):
     """
     Asynchronous jobs that were requested via the API.
     """
+    objects = ApiJobManager()
+
     # String specifying the type of job, e.g. deploy.
     type = models.CharField(max_length=30)
 
@@ -108,3 +134,16 @@ class ApiJobUnit(models.Model):
                 name="unique_order_within_parent",
                 fields=['parent', 'order_in_parent']),
         ]
+
+
+class UserApiLimits(models.Model):
+    """
+    User-specific API limits.
+    The default limits should be fine for most users, but we may want to
+    define special limits for a handful of users.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    max_active_jobs = models.IntegerField(validators=[MinValueValidator(0)])
+
+    class Meta:
+        verbose_name_plural = "User API Limits"

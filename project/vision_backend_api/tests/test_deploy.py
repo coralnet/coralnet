@@ -14,7 +14,7 @@ from rest_framework.request import Request
 from spacer.exceptions import (
     DataLimitError, RowColumnInvalidError, URLDownloadError)
 
-from api_core.models import ApiJob, ApiJobUnit
+from api_core.models import ApiJob, ApiJobUnit, UserApiLimits
 from api_core.tests.utils import BaseAPIPermissionTest
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.models import Job
@@ -90,6 +90,15 @@ class DeployAccessTest(BaseAPIPermissionTest):
         self.assertPermissionGranted(url, self.user_editor_request_kwargs)
         self.assertPermissionGranted(url, self.user_admin_request_kwargs)
 
+
+class DeployThrottleTest(BaseAPIPermissionTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        classifier = cls.create_robot(cls.public_source)
+        cls.url = reverse('api:deploy', args=[classifier.pk])
+
     # Alter throttle rates for the following test. Use deepcopy to avoid
     # altering the original setting, since it's a nested data structure.
     throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
@@ -97,24 +106,18 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
     @override_settings(REST_FRAMEWORK=throttle_test_settings)
     def test_request_rate_throttling(self):
-        classifier = self.create_robot(self.public_source)
-        url = reverse('api:deploy', args=[classifier.pk])
-
         for _ in range(3):
-            response = self.client.post(url, **self.user_request_kwargs)
+            response = self.client.post(self.url, **self.user_request_kwargs)
             self.assertNotEqual(
                 response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
                 "1st-3rd requests should not be throttled")
 
-        response = self.client.post(url, **self.user_request_kwargs)
+        response = self.client.post(self.url, **self.user_request_kwargs)
         self.assertThrottleResponse(
             response, msg="4th request should be denied by throttling")
 
-    @override_settings(MAX_CONCURRENT_API_JOBS_PER_USER=3)
-    def test_active_job_throttling(self):
-        classifier = self.create_robot(self.public_source)
-        url = reverse('api:deploy', args=[classifier.pk])
-
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_active_job_throttling_default(self):
         images = [
             dict(type='image', attributes=dict(
                 url='URL 1', points=[dict(row=10, column=10)]))]
@@ -122,7 +125,8 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
         # Submit 3 jobs
         for _ in range(3):
-            response = self.client.post(url, data, **self.user_request_kwargs)
+            response = self.client.post(
+                self.url, data, **self.user_request_kwargs)
             self.assertNotEqual(
                 response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
                 "1st-3rd requests should not be throttled")
@@ -131,7 +135,7 @@ class DeployAccessTest(BaseAPIPermissionTest):
             .values_list('pk', flat=True)
 
         # Submit another job with the other 3 still going
-        response = self.client.post(url, data, **self.user_request_kwargs)
+        response = self.client.post(self.url, data, **self.user_request_kwargs)
         detail = (
             "You already have 3 jobs active"
             + " (IDs: {id_0}, {id_1}, {id_2}).".format(
@@ -144,7 +148,7 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
         # Submit job as another user
         response = self.client.post(
-            url, data, **self.user_viewer_request_kwargs)
+            self.url, data, **self.user_viewer_request_kwargs)
         self.assertNotEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "Other users should not be throttled")
@@ -157,10 +161,44 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
         # Try submitting again as the original user
         response = self.client.post(
-            url, data, **self.user_request_kwargs)
+            self.url, data, **self.user_request_kwargs)
         self.assertNotEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "Shouldn't be denied now that one job has finished")
+
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_active_job_throttling_user_specific(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        # Set user specific limit of 4
+        limits = UserApiLimits(user=self.user, max_active_jobs=4)
+        limits.save()
+
+        # Submit 4 jobs
+        for _ in range(4):
+            response = self.client.post(
+                self.url, data, **self.user_request_kwargs)
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "1st-4th requests should not be throttled")
+
+        job_ids = ApiJob.objects.filter(user=self.user).order_by('pk') \
+            .values_list('pk', flat=True)
+
+        # Submit another job with the other 4 still going
+        response = self.client.post(
+            self.url, data, **self.user_request_kwargs)
+        detail = (
+            "You already have 4 jobs active"
+            + " (IDs: {}, {}, {}, {}).".format(*job_ids)
+            + " You must wait until one of them finishes"
+            + " before requesting another job.")
+        self.assertThrottleResponse(
+            response, detail_substring=detail,
+            msg="5th request should be denied by throttling")
 
 
 class DeployImagesParamErrorTest(DeployBaseTest):

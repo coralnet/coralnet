@@ -833,6 +833,10 @@ REST_FRAMEWORK = {
     },
     'EXCEPTION_HANDLER': 'api_core.exceptions.exception_handler',
 }
+# [CoralNet setting]
+# Additional API-throttling policy for async jobs.
+USER_DEFAULT_MAX_ACTIVE_API_JOBS = env.int(
+    'USER_DEFAULT_MAX_ACTIVE_API_JOBS', default=5)
 
 HUEY_IMMEDIATE = env.bool('HUEY_IMMEDIATE', default=DEBUG)
 
@@ -878,8 +882,6 @@ DJANGO_HUEY = {
 # Whether to periodically run CoralNet-managed (not huey-registered)
 # periodic jobs. Can be useful to disable for certain tests.
 ENABLE_PERIODIC_JOBS = True
-# Additional API-throttling policy for async jobs.
-MAX_CONCURRENT_API_JOBS_PER_USER = 5
 # Days until we purge old async jobs.
 JOB_MAX_DAYS = 30
 # Page size when listing async jobs.
