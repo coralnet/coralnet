@@ -98,6 +98,10 @@ class ApiJobUnit(models.Model):
     # on the type of job unit.
     result_json = models.JSONField(null=True)
 
+    # Size of the job unit, for profiling how much work this unit represents.
+    # Interpretation of this field differs depending on what the job type is.
+    size = models.IntegerField(null=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

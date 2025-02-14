@@ -7,7 +7,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db.models import Count, F
+from django.db.models import Avg, Count, F
 from django.db.models.functions import TruncDay, TruncHour
 from django.utils.timezone import (
     activate as activate_timezone, deactivate as deactivate_timezone)
@@ -185,6 +185,17 @@ class Command(BaseCommand):
         for d in count_by_slice_and_user_values:
             count_by_slice_and_user[
                 (d['date_to_slice'], d['parent__user__username'])] = d['count']
+
+        average_points_by_user_values = (
+            completed_api_job_units
+            .values('parent__user__username')
+            .annotate(average_points=Avg('size'))
+            .order_by('parent__user__username')
+        )
+        average_points_by_user = dict(
+            (d['parent__user__username'], d['average_points'])
+            for d in average_points_by_user_values
+        )
         deactivate_timezone()
 
         # Fill in 0s for missing slice+user combos to prevent potential
@@ -234,13 +245,26 @@ class Command(BaseCommand):
         for (slice_, user), count in count_by_slice_and_user.items():
             slices_count_by_user[slice_][user] = count
 
+        csv_data = [
+            {self.time_slice_name: self.slice_display(slice_)}
+            |
+            count_by_user
+            for slice_, count_by_user in slices_count_by_user.items()
+        ]
+        # These aren't time slices, but they're useful to include in the CSV.
+        csv_data.append(
+            {self.time_slice_name: "Total"}
+            |
+            span_total_completed_by_user
+        )
+        csv_data.append(
+            {self.time_slice_name: "Avg points per image"}
+            |
+            {user: format(avg, '.3f')
+             for user, avg in average_points_by_user.items()}
+        )
         self.save_csv(
-            csv_data=[
-                {self.time_slice_name: self.slice_display(slice_)}
-                |
-                count_by_user
-                for slice_, count_by_user in slices_count_by_user.items()
-            ],
+            csv_data=csv_data,
             fieldnames=[self.time_slice_name] + sorted(list(all_users)),
         )
 
@@ -260,7 +284,14 @@ class Command(BaseCommand):
         for category, data_series in plot_data.items():
             category_total = Counter(
                 categories_count_by_slice[category]).total()
-            label = f"{category} ({category_total} jobs)"
+            if category == "Others":
+                label = f"{category} ({category_total} jobs)"
+            else:
+                ppi = average_points_by_user[category]
+                label = (
+                    f"{category} ({category_total} jobs, {ppi:.1f} pts/img)"
+                )
+
             x = np.array([d['slice_tick_value'] for d in data_series])
             y = np.array([d['slice_value'] for d in data_series])
             ax.bar(
