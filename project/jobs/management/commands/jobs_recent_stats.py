@@ -116,7 +116,7 @@ class Command(BaseCommand):
         return data_series
 
     def save_csv(self, csv_data: list[dict], fieldnames=None):
-        csv_path = Path(settings.COMMAND_OUTPUT_DIR) / 'recent_stats.csv'
+        csv_path = Path(settings.COMMAND_OUTPUT_DIR) / 'jobs_recent_stats.csv'
 
         with open(csv_path, 'w', newline='', encoding='utf-8') as csv_f:
             if not fieldnames:
@@ -153,7 +153,7 @@ class Command(BaseCommand):
     def save_plot(self, fig):
         aspect_ratio = 3.0
         fig.set_size_inches(aspect_ratio*5, 5)
-        plot_path = Path(settings.COMMAND_OUTPUT_DIR) / 'recent_stats.png'
+        plot_path = Path(settings.COMMAND_OUTPUT_DIR) / 'jobs_recent_stats.png'
         plt.savefig(plot_path)
         self.stdout.write(f"Output: {plot_path}")
 
