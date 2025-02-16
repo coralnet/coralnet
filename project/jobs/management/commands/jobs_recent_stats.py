@@ -41,12 +41,19 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--span_end', type=str,
-            help=f"End date for the timespan. If not given, then now() is used."
+            help=f"End date for the timespan, in ISO format."
+                 f" If timezone not given, UTC is assumed."
+                 f" If this arg is absent, now() is used."
         )
 
     def handle(self, *args, **options):
-        self.span_end = options.get('span_end')
-        if not self.span_end:
+        span_end_str = options.get('span_end')
+        if span_end_str:
+            self.span_end = datetime.datetime.fromisoformat(span_end_str)
+            if not self.span_end.tzinfo:
+                self.span_end = self.span_end.replace(
+                    tzinfo=datetime.timezone.utc)
+        else:
             self.span_end = datetime.datetime.now(datetime.timezone.utc)
 
         self.span_days = options['span_days']
