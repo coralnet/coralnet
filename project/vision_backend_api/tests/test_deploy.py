@@ -527,7 +527,8 @@ class SuccessTest(DeployBaseTest):
         """
         images = [
             dict(type='image', attributes=dict(
-                url='URL 1', points=[dict(row=10, column=10)]))]
+                url='URL 1',
+                points=[dict(row=10, column=10), dict(row=40, column=20)]))]
         data = json.dumps(dict(data=images))
         # This should schedule a deploy job without running it yet.
         self.client.post(self.deploy_url, data, **self.request_kwargs)
@@ -561,9 +562,12 @@ class SuccessTest(DeployBaseTest):
             dict(
                 classifier_id=self.classifier.pk,
                 url='URL 1',
-                points=[dict(row=10, column=10)],
+                points=[dict(row=10, column=10), dict(row=40, column=20)],
             ),
             "Unit's request_json should be correct")
+        self.assertEqual(
+            job_unit.size, 2,
+            "Unit's size should equal the point count")
 
     def test_done(self):
         """

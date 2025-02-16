@@ -86,7 +86,9 @@ class Deploy(APIView):
                     classifier_id=int(classifier_id),
                     url=image_json['url'],
                     points=image_json['points'],
-                )
+                ),
+                # Size for deploy job units is the point count.
+                size=len(image_json['points']),
             )
             job_unit.save()
 

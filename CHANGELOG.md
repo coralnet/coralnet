@@ -8,6 +8,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.19 (WIP)
+
+- New package to install: matplotlib==3.10.0
+- New migrations to run for `api_core`.
+
 ## [1.18.1](https://github.com/coralnet/coralnet/tree/1.18.1)
 
 Production: 2025-01-12

@@ -110,6 +110,13 @@ SITE_DIR = env.path('SITE_DIR', default=REPO_DIR.parent)
 # Directory containing log files.
 LOG_DIR = SITE_DIR / 'log'
 
+# Directory containing other temporary files. The idea is that any file here
+# that's old enough (say, a couple months) should be safe to clean up.
+TMP_DIR = SITE_DIR / 'tmp'
+
+# Directory containing output files from management commands or scripts.
+COMMAND_OUTPUT_DIR = TMP_DIR / 'command_output'
+
 
 #
 # Debug
@@ -209,7 +216,7 @@ if SETTINGS_BASE == Bases.STAGING:
     # Instead of routing emails through a mail server,
     # just write emails to the filesystem.
     EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
-    EMAIL_FILE_PATH = SITE_DIR / 'tmp' / 'emails'
+    EMAIL_FILE_PATH = TMP_DIR / 'emails'
 elif SETTINGS_BASE in [Bases.DEV_LOCAL, Bases.DEV_S3]:
     # Instead of routing emails through a mail server,
     # just print emails to the console.
@@ -1036,7 +1043,7 @@ else:
     CACHES = {
         'default': {
             'BACKEND': 'diskcache.DjangoCache',
-            'LOCATION': SITE_DIR / 'tmp' / 'django_cache',
+            'LOCATION': TMP_DIR / 'django_cache',
             # DiskCache: Horizontal partitioning of cache entries. 8 is the
             # default, but we're setting it explicitly to emphasize that
             # culling and the cull_limit (see below) only applies within a
@@ -1294,7 +1301,7 @@ POINT_PATCH_FILE_PATTERN = \
     '{full_image_path}.pointpk{point_pk}.thumbnail.jpg'
 PROFILE_AVATAR_FILE_PATTERN = 'avatars/{name}{extension}'
 
-MAINTENANCE_STATUS_FILE_PATH = SITE_DIR / 'tmp' / 'maintenance.json'
+MAINTENANCE_STATUS_FILE_PATH = TMP_DIR / 'maintenance.json'
 
 # Special users
 IMPORTED_USERNAME = 'Imported'
