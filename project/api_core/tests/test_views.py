@@ -453,3 +453,59 @@ class UserShowContentTest(DeployBaseTest):
             self.get_endpoint_content()['meta'],
             dict(max_active_jobs=7),
         )
+
+
+class UserShowQueriesTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def get_endpoint_content(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        response = self.client.get(url, **self.request_kwargs)
+        self.assertStatusOK(response)
+        return response.json()
+
+    def schedule_deploy(self):
+        self.client.post(
+            self.deploy_url, self.deploy_data, **self.request_kwargs)
+
+        job = ApiJob.objects.latest('pk')
+        return job
+
+    # 3 units per ApiJob
+    deploy_data = json.dumps(dict(
+        data=3*[
+            dict(
+                type='image',
+                attributes=dict(
+                    url='URL 1',
+                    points=[
+                        dict(row=10, column=10),
+                        dict(row=20, column=5),
+                    ]))
+        ]
+    ))
+
+    def complete_api_jobs(self):
+        self.run_scheduled_jobs_including_deploy()
+        do_collect_spacer_jobs()
+
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=5)
+    def test_completed_jobs_over_max_shown(self):
+        jobs = []
+        for _ in range(4):
+            for __ in range(5):
+                jobs.append(self.schedule_deploy())
+            self.complete_api_jobs()
+        for _ in range(5):
+            jobs.append(self.schedule_deploy())
+
+        # 25 ApiJobs of 3 ApiJobUnits each.
+        # user_show should run less than 1 query per ApiJob.
+        with self.assert_queries_less_than(4*5 + 5):
+            data = self.get_endpoint_content()['data']
+        self.assertEqual(len(data['active_jobs']), 5)
+        self.assertEqual(len(data['recently_completed_jobs']), 5*2)
