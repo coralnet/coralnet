@@ -9,24 +9,27 @@ from jobs.models import Job
 
 class ApiJobManager(models.Manager):
 
-    @staticmethod
-    def active_ids_for_user(user):
+    def active_for_user(self, user):
         """
-        Return IDs of ApiJobs of the given user which haven't completed yet.
+        ApiJobs of the given user which haven't completed yet.
         """
         # Using the ApiJob.status property would run
-        # O(num active+inactive jobs) queries. We instead check for active job
-        # units using O(1) queries.
-        active_units_for_user = ApiJobUnit.objects.filter(
-            parent__user=user,
-            internal_job__status__in=[
-                Job.Status.PENDING, Job.Status.IN_PROGRESS],
-        )
+        # O(num active+inactive jobs) queries. We instead check with
+        # finish_date using O(1) queries.
         return (
-            active_units_for_user
-            .order_by('parent')
-            .values_list('parent', flat=True)
-            .distinct()
+            self.get_queryset()
+            .filter(user=user, finish_date__isnull=True)
+            .order_by('pk')
+        )
+
+    def recently_completed_for_user(self, user):
+        """
+        Completed ApiJobs of the given user, ordered by recency of completion.
+        """
+        return (
+            self.get_queryset()
+            .filter(user=user, finish_date__isnull=False)
+            .order_by('-finish_date')
         )
 
 
@@ -45,6 +48,10 @@ class ApiJob(models.Model):
 
     # This can be used to report how long the job took or is taking.
     create_date = models.DateTimeField("Date created", auto_now_add=True)
+
+    # Redundant field which helps to track the most recently completed
+    # API jobs.
+    finish_date = models.DateTimeField("Date finished", null=True)
 
     PENDING = "Pending"
     IN_PROGRESS = "In Progress"
@@ -134,6 +141,17 @@ class ApiJobUnit(models.Model):
                 name="unique_order_within_parent",
                 fields=['parent', 'order_in_parent']),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if self.result_json:
+            # Finished this unit.
+            incomplete_units = self.parent.apijobunit_set.filter(result_json__isnull=True)
+            if not incomplete_units.exists():
+                # All other units have finished too.
+                self.parent.finish_date = self.modify_date
+                self.parent.save()
 
 
 class UserApiLimits(models.Model):

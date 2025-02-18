@@ -246,7 +246,7 @@ class BatchQueueBasicTest(QueueBasicTest):
 class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
 
     def do_test_collect_classification(self):
-        self.train_classifier()
+        self.set_up_classifier(self.user)
         # Schedule classification
         images = [
             dict(type='image', attributes=dict(
@@ -265,7 +265,7 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         self.assertTrue(unit.result_json)
 
     def do_test_collect_multiple_classification(self):
-        self.train_classifier()
+        self.set_up_classifier(self.user)
         # Schedule classifications
         images = [
             dict(
@@ -331,7 +331,7 @@ class BatchQueueClassificationTest(QueueClassificationTest):
     def test_classification_fail(self):
         """A classification job can't be collected."""
         with mock_boto_client():
-            self.train_classifier()
+            self.set_up_classifier(self.user)
 
         # Schedule classification
         images = [

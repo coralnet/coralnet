@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.http import Http404, UnreadablePostError
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -8,7 +7,8 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 from api_core.exceptions import ApiRequestDataError
-from api_core.models import ApiJob, ApiJobUnit, UserApiLimits
+from api_core.models import ApiJob, ApiJobUnit
+from api_core.utils import get_max_active_jobs
 from jobs.models import Job
 from jobs.utils import schedule_job
 from vision_backend.models import Classifier
@@ -23,17 +23,12 @@ class Deploy(APIView):
 
         # Check to see if we should throttle based on already-active jobs.
 
-        active_job_ids = ApiJob.objects.active_ids_for_user(request.user)
+        active_job_ids = ApiJob.objects.active_for_user(
+            request.user).values_list('pk', flat=True)
         # Evaluate.
         active_job_ids = list(active_job_ids)
 
-        try:
-            # See if there's a user-specific limit.
-            max_active_jobs = UserApiLimits.objects.get(
-                user=request.user).max_active_jobs
-        except UserApiLimits.DoesNotExist:
-            # Else, use the default.
-            max_active_jobs = settings.USER_DEFAULT_MAX_ACTIVE_API_JOBS
+        max_active_jobs = get_max_active_jobs(request.user)
 
         if len(active_job_ids) >= max_active_jobs:
             ids = ', '.join([

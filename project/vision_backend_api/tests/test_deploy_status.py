@@ -99,31 +99,11 @@ class DeployStatusEndpointTest(DeployBaseTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-
-        cls.train_classifier()
-
-        images = [
-            dict(
-                type='image',
-                attributes=dict(
-                    url='URL 1',
-                    points=[
-                        dict(row=10, column=10),
-                        dict(row=20, column=5),
-                    ])),
-            dict(
-                type='image',
-                attributes=dict(
-                    url='URL 2',
-                    points=[
-                        dict(row=10, column=10),
-                    ])),
-        ]
-        cls.data = json.dumps(dict(data=images))
+        cls.set_up_classifier(cls.user)
 
     def schedule_deploy(self):
         self.client.post(
-            self.deploy_url, self.data, **self.request_kwargs)
+            self.deploy_url, self.deploy_data, **self.request_kwargs)
 
         job = ApiJob.objects.latest('pk')
         return job

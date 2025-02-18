@@ -42,8 +42,9 @@ def ensure_source_check_not_scheduled(source_id):
 
 @override_settings(
     SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue',
-    # Sometimes it helps to run certain periodic jobs (particularly
-    # collect_spacer_jobs) only when we explicitly want to.
+    # Setting this False allows us to:
+    # - Use run_scheduled_jobs_until_empty() without infinite looping.
+    # - Run jobs like collect_spacer_jobs only when we explicitly want to.
     ENABLE_PERIODIC_JOBS=False,
 )
 class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):

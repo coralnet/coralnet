@@ -101,7 +101,7 @@ class DeployResultEndpointTest(DeployBaseTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
         images = [
             dict(

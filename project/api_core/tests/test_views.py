@@ -1,18 +1,21 @@
 import copy
-import datetime
 import json
 
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.test import override_settings
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework import status
 
-from jobs.models import Job
-from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest
-from ..models import ApiJob, ApiJobUnit
-from .utils import BaseAPITest
+from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
+from vision_backend_api.tests.utils import DeployBaseTest
+from ..models import ApiJob, UserApiLimits
+from .utils import APITestMixin, BaseAPIPermissionTest
+
+
+class BaseAPITest(ClientTest, APITestMixin):
+    pass
 
 
 class AuthTest(BaseAPITest):
@@ -280,147 +283,173 @@ class ThrottleTest(BaseAPITest):
                 " first anon IP's requests")
 
 
-@override_settings(JOB_MAX_DAYS=30)
-class JobCleanupTest(ClientTest):
-    """
-    Test cleanup of old API jobs.
-    """
+class UserShowAccessTest(BaseAPIPermissionTest):
+
+    def assertNotFound(self, url, request_kwargs):
+        response = self.client.get(url, **request_kwargs)
+        self.assertEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should get 404")
+        detail = "You can only see details for the user you're logged in as"
+        self.assertDictEqual(
+            response.json(),
+            dict(errors=[dict(detail=detail)]),
+            "Response JSON should be as expected")
+
+    def assertPermissionGranted(self, url, request_kwargs):
+        response = self.client.get(url, **request_kwargs)
+        self.assertNotEqual(
+            response.status_code, status.HTTP_404_NOT_FOUND,
+            "Should not get 404")
+        self.assertNotEqual(
+            response.status_code, status.HTTP_403_FORBIDDEN,
+            "Should not get 403")
+
+    def test_nonexistent_user(self):
+        # To secure an ID which corresponds to no user, we
+        # delete a previously existing user.
+        user = User(username='to_delete')
+        user.save()
+        url = reverse('api:user_show', args=['to_delete'])
+        user.delete()
+
+        self.assertNotFound(url, self.user_request_kwargs)
+
+    def test_needs_auth(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        response = self.client.get(url)
+        self.assertForbiddenResponse(response)
+
+    def test_post_method_not_allowed(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        response = self.client.post(url, **self.user_request_kwargs)
+        self.assertMethodNotAllowedResponse(response)
+
+    def test_same_user(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        self.assertPermissionGranted(url, self.user_request_kwargs)
+
+    def test_other_user(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        self.assertNotFound(url, self.user_admin_request_kwargs)
+
+
+class UserShowContentTest(DeployBaseTest):
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        cls.other_user = cls.create_user(username='other', password='SamplePass')
+        cls.other_user_request_kwargs = cls.get_request_kwargs_for_user(
+            'other', 'SamplePass')
+        cls.set_up_classifier(cls.user)
 
-        cls.user = cls.create_user()
+    def get_endpoint_content(self):
+        url = reverse('api:user_show', args=[self.user.username])
+        response = self.client.get(url, **self.request_kwargs)
+        self.assertStatusOK(response)
+        return response.json()
 
-    @staticmethod
-    def create_unit(api_job, order):
-        internal_job = Job(
-            job_name='test', arg_identifier=f'{api_job.pk}_{order}')
-        internal_job.save()
-        unit = ApiJobUnit(
-            parent=api_job, internal_job=internal_job,
-            order_in_parent=order, request_json=[],
+    def schedule_deploy(self):
+        self.client.post(
+            self.deploy_url, self.deploy_data, **self.request_kwargs)
+
+        job = ApiJob.objects.latest('pk')
+        return job
+
+    def complete_api_jobs(self):
+        self.run_scheduled_jobs_including_deploy()
+        do_collect_spacer_jobs()
+
+    def test_no_jobs(self):
+        self.assertDictEqual(
+            self.get_endpoint_content()['data'],
+            dict(active_jobs=[], recently_completed_jobs=[]),
         )
-        unit.save()
-        return unit
 
-    @staticmethod
-    def run_and_get_result():
-        do_job('clean_up_old_api_jobs')
-        job = Job.objects.filter(
-            job_name='clean_up_old_api_jobs',
-            status=Job.Status.SUCCESS).latest('pk')
-        return job.result_message
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_active_jobs(self):
+        job_ids = [
+            self.schedule_deploy().pk,
+            self.schedule_deploy().pk,
+            self.schedule_deploy().pk,
+        ]
+        self.assertDictEqual(
+            self.get_endpoint_content()['data'],
+            dict(
+                active_jobs=[
+                    dict(id=str(job_ids[0]), type='jobs'),
+                    dict(id=str(job_ids[1]), type='jobs'),
+                    dict(id=str(job_ids[2]), type='jobs'),
+                ],
+                recently_completed_jobs=[],
+            ),
+        )
 
-    def test_zero_jobs_message(self):
-        """
-        Check the result message when there are no API jobs to clean up.
-        """
-        self.assertEqual(
-            self.run_and_get_result(), "No old API jobs to clean up")
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_completed_jobs(self):
+        jobs = []
+        jobs.append(self.schedule_deploy())
+        self.complete_api_jobs()
+        jobs.append(self.schedule_deploy())
+        self.complete_api_jobs()
+        jobs.append(self.schedule_deploy())
 
-    def test_job_selection(self):
-        """
-        Only jobs eligible for cleanup should be cleaned up.
-        """
-        thirty_one_days_ago = timezone.now() - datetime.timedelta(days=31)
+        self.assertDictEqual(
+            self.get_endpoint_content()['data'],
+            dict(
+                active_jobs=[
+                    dict(id=str(jobs[2].pk), type='jobs'),
+                ],
+                recently_completed_jobs=[
+                    dict(id=str(jobs[1].pk), type='jobs'),
+                    dict(id=str(jobs[0].pk), type='jobs'),
+                ],
+            ),
+        )
 
-        job = ApiJob(type='new job, no units', user=self.user)
-        job.save()
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_completed_jobs_over_max_shown(self):
+        jobs = []
+        for _ in range(8):
+            jobs.append(self.schedule_deploy())
+            # Running this after each added job, instead of once after
+            # adding all jobs, ensures a consistent completion order.
+            self.complete_api_jobs()
 
-        job = ApiJob(type='old job, no units', user=self.user)
-        job.save()
-        job.create_date = thirty_one_days_ago
-        job.save()
+        # Only the most recent max-active*2 = 6
+        self.assertDictEqual(
+            self.get_endpoint_content()['data'],
+            dict(
+                active_jobs=[],
+                recently_completed_jobs=[
+                    dict(id=str(jobs[7].pk), type='jobs'),
+                    dict(id=str(jobs[6].pk), type='jobs'),
+                    dict(id=str(jobs[5].pk), type='jobs'),
+                    dict(id=str(jobs[4].pk), type='jobs'),
+                    dict(id=str(jobs[3].pk), type='jobs'),
+                    dict(id=str(jobs[2].pk), type='jobs'),
+                ],
+            ),
+        )
 
-        job = ApiJob(type='new job, recent unit work', user=self.user)
-        job.save()
-        self.create_unit(job, 1)
-        self.create_unit(job, 2)
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_default_active_job_limit(self):
+        self.assertDictEqual(
+            self.get_endpoint_content()['meta'],
+            dict(max_active_jobs=3),
+        )
 
-        job = ApiJob(type='old job, recent unit work', user=self.user)
-        job.save()
-        job.create_date = thirty_one_days_ago
-        job.save()
-        self.create_unit(job, 1)
-        self.create_unit(job, 2)
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_custom_active_job_limit(self):
+        # Define limits for self.user as well as other users.
+        user2 = self.create_user('user2')
+        user3 = self.create_user('user3')
+        UserApiLimits(user=user2, max_active_jobs=2).save()
+        UserApiLimits(user=self.user, max_active_jobs=7).save()
+        UserApiLimits(user=user3, max_active_jobs=20).save()
 
-        job = ApiJob(
-            type='old job, mixed units', user=self.user)
-        job.save()
-        job.create_date = thirty_one_days_ago
-        job.save()
-        unit_1 = self.create_unit(job, 1)
-        self.create_unit(job, 2)
-        # Use QuerySet.update() instead of Model.save() so that the modify
-        # date doesn't get auto-updated to the current time.
-        Job.objects.filter(pk=unit_1.internal_job.pk).update(
-            modify_date=thirty_one_days_ago)
-
-        job = ApiJob(
-            type='old job, old units', user=self.user)
-        job.save()
-        job.create_date = thirty_one_days_ago
-        job.save()
-        unit_1 = self.create_unit(job, 1)
-        unit_2 = self.create_unit(job, 2)
-        Job.objects.filter(pk=unit_1.internal_job.pk).update(
-            modify_date=thirty_one_days_ago)
-        Job.objects.filter(pk=unit_2.internal_job.pk).update(
-            modify_date=thirty_one_days_ago)
-
-        self.assertEqual(
-            self.run_and_get_result(), "Cleaned up 2 old API job(s)")
-
-        self.assertTrue(
-            ApiJob.objects.filter(type='new job, no units').exists(),
-            "Shouldn't clean up new jobs with no units yet")
-        self.assertFalse(
-            ApiJob.objects.filter(type='old job, no units').exists(),
-            "Should clean up old jobs with no units")
-        self.assertTrue(
-            ApiJob.objects.filter(
-                type='new job, recent unit work').exists(),
-            "Shouldn't clean up new jobs with units")
-        self.assertTrue(
-            ApiJob.objects.filter(
-                type='old job, recent unit work').exists(),
-            "Shouldn't clean up old jobs if units were modified recently")
-        self.assertTrue(
-            ApiJob.objects.filter(
-                type='old job, mixed units').exists(),
-            "Shouldn't clean up old jobs if some units were modified recently")
-        self.assertFalse(
-            ApiJob.objects.filter(
-                type='old job, old units').exists(),
-            "Should clean up old jobs if no units were modified recently")
-
-    def test_unit_cleanup(self):
-        """
-        The cleanup task should also clean up associated job units.
-        """
-        thirty_one_days_ago = timezone.now() - datetime.timedelta(days=31)
-
-        job = ApiJob(type='new', user=self.user)
-        job.save()
-        for n in range(1, 5+1):
-            self.create_unit(job, n)
-
-        job = ApiJob(type='old', user=self.user)
-        job.save()
-        job.create_date = thirty_one_days_ago
-        job.save()
-        for n in range(1, 5+1):
-            unit = self.create_unit(job, n)
-            # Use QuerySet.update() instead of Model.save() so that the modify
-            # date doesn't get auto-updated to the current date.
-            Job.objects.filter(pk=unit.internal_job.pk).update(
-                modify_date=thirty_one_days_ago)
-
-        self.run_and_get_result()
-
-        self.assertTrue(
-            ApiJobUnit.objects.filter(parent__type='new').exists(),
-            "Shouldn't clean up the new job's units")
-        self.assertFalse(
-            ApiJobUnit.objects.filter(parent__type='old').exists(),
-            "Should clean up the old job's units")
+        self.assertDictEqual(
+            self.get_endpoint_content()['meta'],
+            dict(max_active_jobs=7),
+        )
