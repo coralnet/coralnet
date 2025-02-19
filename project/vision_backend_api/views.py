@@ -167,26 +167,35 @@ class DeployResult(APIView):
                 dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
 
-        if deploy_job.status == ApiJob.DONE:
+        if deploy_job.finish_date:
             images_json = []
 
             # Report images in the same order that they were originally given
             # in the deploy request.
-            for unit in deploy_job.apijobunit_set.order_by('order_in_parent'):
+            units_values = (
+                deploy_job.apijobunit_set
+                .order_by('order_in_parent')
+                .values(
+                    'internal_job__status', 'internal_job__result_message',
+                    'request_json', 'result_json',
+                )
+            )
 
-                if unit.status == Job.Status.SUCCESS:
+            for unit in units_values:
+
+                if unit['internal_job__status'] == Job.Status.SUCCESS:
                     # This has 'url' and 'points'
-                    attributes = unit.result_json
+                    attributes = unit['result_json']
                 else:
                     # Error
                     attributes = dict(
-                        url=unit.request_json['url'],
-                        errors=[unit.result_message],
+                        url=unit['request_json']['url'],
+                        errors=[unit['internal_job__result_message']],
                     )
 
                 images_json.append(dict(
                     type='image',
-                    id=unit.request_json['url'],
+                    id=unit['request_json']['url'],
                     attributes=attributes,
                 ))
 
