@@ -10,7 +10,7 @@ from api_core.exceptions import ApiRequestDataError
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.utils import get_max_active_jobs
 from jobs.models import Job
-from jobs.utils import schedule_job
+from jobs.utils import bulk_create_jobs
 from vision_backend.models import Classifier
 from .forms import validate_deploy
 
@@ -78,14 +78,20 @@ class Deploy(APIView):
 
         # Create job units to make it easier to track all the separate deploy
         # operations (one per image).
-        for image_number, image_json in enumerate(images_data, 1):
 
-            internal_job, _ = schedule_job(
-                'classify_image', deploy_job.pk, image_number)
-            job_unit = ApiJobUnit(
+        # First bulk-create the internal Jobs.
+        classify_image_tasks_args = [
+            [deploy_job.pk, image_number]
+            for image_number in range(1, len(images_data) + 1)
+        ]
+        internal_jobs = bulk_create_jobs('classify_image', classify_image_tasks_args)
+
+        # Then set up and bulk-create the ApiJobUnits.
+        job_units = [
+            ApiJobUnit(
                 parent=deploy_job,
                 order_in_parent=image_number,
-                internal_job=internal_job,
+                internal_job=internal_jobs[image_number - 1],
                 request_json=dict(
                     classifier_id=int(classifier_id),
                     url=image_json['url'],
@@ -94,7 +100,9 @@ class Deploy(APIView):
                 # Size for deploy job units is the point count.
                 size=len(image_json['points']),
             )
-            job_unit.save()
+            for image_number, image_json in enumerate(images_data, 1)
+        ]
+        ApiJobUnit.objects.bulk_create(job_units)
 
         # Respond with the status endpoint's URL.
         return Response(

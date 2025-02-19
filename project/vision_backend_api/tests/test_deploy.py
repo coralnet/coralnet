@@ -846,3 +846,35 @@ class TaskErrorsTest(
 
         self.assert_no_error_log_saved()
         self.assert_no_email()
+
+
+class QueriesTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def test(self):
+        image_count = 30
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            for index in range(image_count)
+        ]
+
+        data = json.dumps(dict(data=images))
+
+        # Should run less than 1 query per image.
+        with self.assert_queries_less_than(image_count):
+            response = self.client.post(
+                self.deploy_url, data, **self.request_kwargs)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_202_ACCEPTED,
+            msg="Should get 202")
+
+        deploy_job = ApiJob.objects.latest('pk')
+        self.assertEqual(
+            deploy_job.apijobunit_set.count(), image_count,
+            msg=f"Should have {image_count} job units")

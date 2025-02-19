@@ -164,6 +164,32 @@ def schedule_job_on_commit(name: str, *args, **kwargs) -> None:
         functools.partial(schedule_job, name, *args, **kwargs))
 
 
+def bulk_create_jobs(
+    name: str,
+    tasks_args: list[list],
+) -> list[Job]:
+    """
+    Create many pending Jobs efficiently.
+    NOTE: This does not watch for job-existence race conditions.
+    ONLY use this when the Jobs don't have any possibility of
+    conflicting with other existing Jobs. For example, deploy API
+    classify-image Jobs.
+    Non-example: classification Jobs for sources, since it's possible
+    for multiple threads to "know" about a given image in a source, so
+    multiple threads might try to queue classification for that image
+    at the same time.
+    """
+    jobs = [
+        Job(
+            job_name=name,
+            arg_identifier=Job.args_to_identifier(task_args),
+        )
+        for task_args in tasks_args
+    ]
+    Job.objects.bulk_create(jobs)
+    return jobs
+
+
 def start_job(job: Job) -> bool:
     """
     Immediately add an existing Job to huey's queue.

@@ -494,7 +494,7 @@ class UserShowQueriesTest(DeployBaseTest):
         do_collect_spacer_jobs()
 
     @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=5)
-    def test_completed_jobs_over_max_shown(self):
+    def test(self):
         jobs = []
         for _ in range(4):
             for __ in range(5):
