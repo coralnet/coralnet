@@ -828,8 +828,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         # Each of these rates are tracked per user. That means per registered
         # user, or per IP address if not logged in.
-        'burst': '50/min',
-        'sustained': '500/hour',
+        'burst': '60/min',
+        'sustained': '1000/hour',
     },
     'EXCEPTION_HANDLER': 'api_core.exceptions.exception_handler',
 }
