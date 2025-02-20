@@ -1,20 +1,65 @@
 # Unique per environment
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
 # Generated as needed by maintenanceon command
 project/templates/maintenance_notice.html
 
-# Coverage output files
+# Unit tests/Coverage output files
+htmlcov/
+.tox/
+.nox/
 .coverage
-htmlcov
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
 # Sphinx output files
 docs/_build
 docs/_static
 docs/_templates
 
-# Compiled Python
-*.pyc
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Python distribution/packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
 
 # Jupyter
 *.ipynb

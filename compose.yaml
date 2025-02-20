@@ -1,0 +1,46 @@
+---
+name: coralnet
+
+services:
+  server:
+    build:
+      context: .
+    ports:
+      - 8000:8000
+    environment:
+      - CORALNET_SETTINGS_BASE=${SETTINGS_BASE}
+      - CORALNET_DATABASE_NAME=${DATABASE_NAME}
+      - CORALNET_DATABASE_USER=${DATABASE_USER}
+      - CORALNET_DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - CORALNET_SECRET_KEY=${SECRET_KEY}
+      - CORALNET_DATABASE_HOST=db         # Name of the `db` container below
+    tmpfs:
+      - /log/:exec,mode=777
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres
+    restart: always
+    user: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_DB=${DATABASE_NAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+    expose:
+      - 5432
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
