@@ -1,4 +1,7 @@
+from collections import Counter
+
 from django.contrib.auth.decorators import permission_required
+from django.db.models import Case, Count, Q, Value, When
 from django.shortcuts import get_object_or_404, render
 
 from api_core.models import ApiJob
@@ -11,30 +14,69 @@ def job_list(request):
     """
     Display a list of all API jobs.
     """
-    pending_jobs = []
-    in_progress_jobs = []
-    done_jobs = []
+    jobs_values = (
+        ApiJob.objects.all()
+        .values('id', 'create_date', 'user__username', 'type')
+        .annotate(
+            total_units=Count('apijobunit'),
+            pending_units=Count(
+                'apijobunit',
+                filter=Q(apijobunit__internal_job__status=Job.Status.PENDING)),
+            in_progress_units=Count(
+                'apijobunit',
+                filter=Q(
+                    apijobunit__internal_job__status=Job.Status.IN_PROGRESS)),
+            failure_units=Count(
+                'apijobunit',
+                filter=Q(apijobunit__internal_job__status=Job.Status.FAILURE)),
+            success_units=Count(
+                'apijobunit',
+                filter=Q(apijobunit__internal_job__status=Job.Status.SUCCESS)),
+        )
+        .annotate(
+            overall_status=Case(
+                # Done (all units success/failure).
+                When(
+                    pending_units=0,
+                    in_progress_units=0,
+                    then=Value(ApiJob.DONE),
+                ),
+                # Pending (all units pending).
+                When(
+                    in_progress_units=0,
+                    then=Value(ApiJob.PENDING),
+                ),
+                # In progress (some other mix of statuses).
+                default=Value(ApiJob.IN_PROGRESS),
+            ),
+        )
+        .annotate(
+            # How the job list should order jobs based on status.
+            overall_status_order=Case(
+                When(
+                    overall_status=ApiJob.IN_PROGRESS,
+                    then=1,
+                ),
+                When(
+                    overall_status=ApiJob.PENDING,
+                    then=2,
+                ),
+                default=3,
+            ),
+        )
+        # Order by status, then latest first.
+        .order_by('overall_status_order', '-id')
+    )
 
     # Order jobs by progress status, then by decreasing primary key.
-    for job in ApiJob.objects.all().order_by('-pk'):
-        job_info = job.full_status()
-        job_info['id'] = job.pk
-        job_info['create_date'] = job.create_date
-        job_info['user'] = job.user
-        job_info['type'] = job.type
-
-        if job_info['overall_status'] == ApiJob.PENDING:
-            pending_jobs.append(job_info)
-        elif job_info['overall_status'] == ApiJob.IN_PROGRESS:
-            in_progress_jobs.append(job_info)
-        else:
-            done_jobs.append(job_info)
+    status_counter = Counter([
+        job_values['overall_status'] for job_values in jobs_values])
 
     return render(request, 'api_management/job_list.html', {
-        'jobs': in_progress_jobs + pending_jobs + done_jobs,
-        'in_progress_count': len(in_progress_jobs),
-        'pending_count': len(pending_jobs),
-        'done_count': len(done_jobs),
+        'jobs': jobs_values,
+        'in_progress_count': status_counter[ApiJob.IN_PROGRESS],
+        'pending_count': status_counter[ApiJob.PENDING],
+        'done_count': status_counter[ApiJob.DONE],
         'PENDING': ApiJob.PENDING,
         'IN_PROGRESS': ApiJob.IN_PROGRESS,
         'DONE': ApiJob.DONE,

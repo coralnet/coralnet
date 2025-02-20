@@ -49,7 +49,7 @@ td.failure {
           </a>
         </td>
         <td>{{ job.create_date }}</td>
-        <td>{{ job.user }}</td>
+        <td>{{ job.user__username }}</td>
         <td>{{ job.type }}</td>
         <td>{{ job.overall_status }}</td>
         <td>{{ job.pending_units|add:job.in_progress_units }}</td>
