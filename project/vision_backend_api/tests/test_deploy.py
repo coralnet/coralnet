@@ -14,7 +14,7 @@ from rest_framework.request import Request
 from spacer.exceptions import (
     DataLimitError, RowColumnInvalidError, URLDownloadError)
 
-from api_core.models import ApiJob, ApiJobUnit
+from api_core.models import ApiJob, ApiJobUnit, UserApiLimits
 from api_core.tests.utils import BaseAPIPermissionTest
 from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.models import Job
@@ -22,6 +22,7 @@ from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import JobUtilsMixin
 from jobs.utils import schedule_job
 from lib.tests.utils import EmailAssertionsMixin
+from sources.models import Source
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
@@ -90,6 +91,27 @@ class DeployAccessTest(BaseAPIPermissionTest):
         self.assertPermissionGranted(url, self.user_editor_request_kwargs)
         self.assertPermissionGranted(url, self.user_admin_request_kwargs)
 
+
+class DeployThrottleTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+        # Second user
+        cls.user_viewer = cls.create_user(
+            username='user_viewer', password='SamplePass')
+        cls.user_viewer_request_kwargs = cls.get_request_kwargs_for_user(
+            'user_viewer', 'SamplePass')
+        cls.add_source_member(
+            cls.user, cls.source,
+            cls.user_viewer, Source.PermTypes.VIEW.code)
+
+    def submit_deploy(self):
+        return self.client.post(
+            self.deploy_url, self.deploy_data, **self.request_kwargs)
+
     # Alter throttle rates for the following test. Use deepcopy to avoid
     # altering the original setting, since it's a nested data structure.
     throttle_test_settings = copy.deepcopy(settings.REST_FRAMEWORK)
@@ -97,32 +119,21 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
     @override_settings(REST_FRAMEWORK=throttle_test_settings)
     def test_request_rate_throttling(self):
-        classifier = self.create_robot(self.public_source)
-        url = reverse('api:deploy', args=[classifier.pk])
-
         for _ in range(3):
-            response = self.client.post(url, **self.user_request_kwargs)
+            response = self.submit_deploy()
             self.assertNotEqual(
                 response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
                 "1st-3rd requests should not be throttled")
 
-        response = self.client.post(url, **self.user_request_kwargs)
+        response = self.submit_deploy()
         self.assertThrottleResponse(
             response, msg="4th request should be denied by throttling")
 
-    @override_settings(MAX_CONCURRENT_API_JOBS_PER_USER=3)
-    def test_active_job_throttling(self):
-        classifier = self.create_robot(self.public_source)
-        url = reverse('api:deploy', args=[classifier.pk])
-
-        images = [
-            dict(type='image', attributes=dict(
-                url='URL 1', points=[dict(row=10, column=10)]))]
-        data = json.dumps(dict(data=images))
-
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_active_job_throttling_default(self):
         # Submit 3 jobs
         for _ in range(3):
-            response = self.client.post(url, data, **self.user_request_kwargs)
+            response = self.submit_deploy()
             self.assertNotEqual(
                 response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
                 "1st-3rd requests should not be throttled")
@@ -131,7 +142,7 @@ class DeployAccessTest(BaseAPIPermissionTest):
             .values_list('pk', flat=True)
 
         # Submit another job with the other 3 still going
-        response = self.client.post(url, data, **self.user_request_kwargs)
+        response = self.submit_deploy()
         detail = (
             "You already have 3 jobs active"
             + " (IDs: {id_0}, {id_1}, {id_2}).".format(
@@ -144,23 +155,49 @@ class DeployAccessTest(BaseAPIPermissionTest):
 
         # Submit job as another user
         response = self.client.post(
-            url, data, **self.user_viewer_request_kwargs)
+            self.deploy_url, self.deploy_data,
+            **self.user_viewer_request_kwargs)
         self.assertNotEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "Other users should not be throttled")
 
         # Finish one of the original user's jobs
         job = ApiJob.objects.get(pk=job_ids[0])
-        for unit in job.apijobunit_set.all():
-            unit.internal_job.status = Job.Status.SUCCESS
-            unit.internal_job.save()
+        self.run_deploy_api_job(job)
+        do_collect_spacer_jobs()
 
         # Try submitting again as the original user
-        response = self.client.post(
-            url, data, **self.user_request_kwargs)
+        response = self.submit_deploy()
         self.assertNotEqual(
             response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
             "Shouldn't be denied now that one job has finished")
+
+    @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=3)
+    def test_active_job_throttling_user_specific(self):
+        # Set user specific limit of 4
+        limits = UserApiLimits(user=self.user, max_active_jobs=4)
+        limits.save()
+
+        # Submit 4 jobs
+        for _ in range(4):
+            response = self.submit_deploy()
+            self.assertNotEqual(
+                response.status_code, status.HTTP_429_TOO_MANY_REQUESTS,
+                "1st-4th requests should not be throttled")
+
+        job_ids = ApiJob.objects.filter(user=self.user).order_by('pk') \
+            .values_list('pk', flat=True)
+
+        # Submit another job with the other 4 still going
+        response = self.submit_deploy()
+        detail = (
+            "You already have 4 jobs active"
+            + " (IDs: {}, {}, {}, {}).".format(*job_ids)
+            + " You must wait until one of them finishes"
+            + " before requesting another job.")
+        self.assertThrottleResponse(
+            response, detail_substring=detail,
+            msg="5th request should be denied by throttling")
 
 
 class DeployImagesParamErrorTest(DeployBaseTest):
@@ -168,7 +205,7 @@ class DeployImagesParamErrorTest(DeployBaseTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
     def test_not_valid_json(self):
         data = '[abc'
@@ -446,7 +483,7 @@ class RequestDataErrorTest(DeployBaseTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
     def test_parse_error(self):
         def raise_parse_error(self, *args, **kwargs):
@@ -495,7 +532,7 @@ class SuccessTest(DeployBaseTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
     def test_deploy_response(self):
         """Test the response of a valid deploy request."""
@@ -656,7 +693,7 @@ class TaskErrorsTest(
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
     def test_nonexistent_job_unit(self):
         # Create a job but don't create the unit.
@@ -809,3 +846,35 @@ class TaskErrorsTest(
 
         self.assert_no_error_log_saved()
         self.assert_no_email()
+
+
+class QueriesTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def test(self):
+        image_count = 30
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            for index in range(image_count)
+        ]
+
+        data = json.dumps(dict(data=images))
+
+        # Should run less than 1 query per image.
+        with self.assert_queries_less_than(image_count):
+            response = self.client.post(
+                self.deploy_url, data, **self.request_kwargs)
+
+        self.assertEqual(
+            response.status_code, status.HTTP_202_ACCEPTED,
+            msg="Should get 202")
+
+        deploy_job = ApiJob.objects.latest('pk')
+        self.assertEqual(
+            deploy_job.apijobunit_set.count(), image_count,
+            msg=f"Should have {image_count} job units")

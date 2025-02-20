@@ -1,6 +1,6 @@
 import json
 
-from django.core.cache import cache
+from django.test.client import Client
 from django.urls import reverse
 from rest_framework import status
 
@@ -8,16 +8,35 @@ from lib.tests.utils import ClientTest
 from sources.models import Source
 
 
-class BaseAPITest(ClientTest):
+class APITestMixin:
+
+    client: Client
 
     @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
+    def get_request_kwargs_for_user(cls, username, password):
+        """
+        Get request kwargs required for the given user to make API requests.
+        These kwargs go in a test client's post() or get() methods.
 
-        # DRF implements throttling by tracking usage counts in the cache.
-        # We don't want usages during class setup to affect throttling in
-        # the actual test.
-        cache.clear()
+        For the purposes of most tests that might use this, this
+        should be called during the test class's setUpTestData(),
+        so that it doesn't count toward DRF throttling during the test
+        (we do a cache.clear(), which resets the throttle tracking, in the
+        setUp() of every test, which runs after setUpTestData()).
+        """
+        response = cls.client.post(
+            reverse('api:token_auth'),
+            data=json.dumps(dict(username=username, password=password)),
+            content_type='application/vnd.api+json',
+        )
+        token = response.json()['token']
+        return dict(
+            # Authorization header.
+            HTTP_AUTHORIZATION='Token {token}'.format(token=token),
+            # Content type. Particularly needed for POST requests,
+            # but doesn't hurt for other requests either.
+            content_type='application/vnd.api+json',
+        )
 
     def assertForbiddenResponse(
             self, response,
@@ -62,7 +81,7 @@ class BaseAPITest(ClientTest):
             "Response error detail should be as expected")
 
 
-class BaseAPIPermissionTest(BaseAPITest):
+class BaseAPIPermissionTest(ClientTest, APITestMixin):
     """
     Test view permissions.
 
@@ -70,29 +89,6 @@ class BaseAPIPermissionTest(BaseAPITest):
     flexibility on what is created with each source (or just create the minimum
     and leave further customization to subclasses).
     """
-    @classmethod
-    def get_request_kwargs_for_user(cls, username, password):
-        """
-        Get request kwargs required for the given user to make API requests.
-        These kwargs go in a test client's post() or get() methods.
-        """
-        # Don't want DRF throttling to be a factor here, either.
-        cache.clear()
-
-        response = cls.client.post(
-            reverse('api:token_auth'),
-            data=json.dumps(dict(username=username, password=password)),
-            content_type='application/vnd.api+json',
-        )
-        token = response.json()['token']
-        return dict(
-            # Authorization header.
-            HTTP_AUTHORIZATION='Token {token}'.format(token=token),
-            # Content type. Particularly needed for POST requests,
-            # but doesn't hurt for other requests either.
-            content_type='application/vnd.api+json',
-        )
-
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()

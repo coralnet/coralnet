@@ -1,15 +1,44 @@
 from collections import Counter
 
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from jobs.models import Job
+
+
+class ApiJobManager(models.Manager):
+
+    def active_for_user(self, user):
+        """
+        ApiJobs of the given user which haven't completed yet.
+        """
+        # Using the ApiJob.status property would run
+        # O(num active+inactive jobs) queries. We instead check with
+        # finish_date using O(1) queries.
+        return (
+            self.get_queryset()
+            .filter(user=user, finish_date__isnull=True)
+            .order_by('pk')
+        )
+
+    def recently_completed_for_user(self, user):
+        """
+        Completed ApiJobs of the given user, ordered by recency of completion.
+        """
+        return (
+            self.get_queryset()
+            .filter(user=user, finish_date__isnull=False)
+            .order_by('-finish_date')
+        )
 
 
 class ApiJob(models.Model):
     """
     Asynchronous jobs that were requested via the API.
     """
+    objects = ApiJobManager()
+
     # String specifying the type of job, e.g. deploy.
     type = models.CharField(max_length=30)
 
@@ -19,6 +48,10 @@ class ApiJob(models.Model):
 
     # This can be used to report how long the job took or is taking.
     create_date = models.DateTimeField("Date created", auto_now_add=True)
+
+    # Redundant field which helps to track the most recently completed
+    # API jobs.
+    finish_date = models.DateTimeField("Date finished", null=True)
 
     PENDING = "Pending"
     IN_PROGRESS = "In Progress"
@@ -108,3 +141,27 @@ class ApiJobUnit(models.Model):
                 name="unique_order_within_parent",
                 fields=['parent', 'order_in_parent']),
         ]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        if self.result_json:
+            # Finished this unit.
+            incomplete_units = self.parent.apijobunit_set.filter(result_json__isnull=True)
+            if not incomplete_units.exists():
+                # All other units have finished too.
+                self.parent.finish_date = self.modify_date
+                self.parent.save()
+
+
+class UserApiLimits(models.Model):
+    """
+    User-specific API limits.
+    The default limits should be fine for most users, but we may want to
+    define special limits for a handful of users.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    max_active_jobs = models.IntegerField(validators=[MinValueValidator(0)])
+
+    class Meta:
+        verbose_name_plural = "User API Limits"

@@ -151,6 +151,45 @@ class JobListTest(ClientTest):
         self.assertEqual(cells_text[3][4], ApiJob.DONE)
 
 
+class JobListQueriesTest(ClientTest):
+
+    def test(self):
+        api_job_count = 20
+        unit_count = 3
+
+        api_jobs = []
+        internal_jobs = []
+        units = []
+
+        for api_job_i in range(api_job_count):
+            api_job = ApiJob(type='test_job_type', user=self.superuser)
+            api_jobs.append(api_job)
+            for unit_i in range(unit_count):
+                internal_job = Job(
+                    job_name='test', arg_identifier=f'{api_job_i}_{unit_i}')
+                internal_jobs.append(internal_job)
+                units.append(ApiJobUnit(
+                    parent=api_job, order_in_parent=unit_i+1,
+                    internal_job=internal_job,
+                    request_json={},
+                ))
+        ApiJob.objects.bulk_create(api_jobs)
+        Job.objects.bulk_create(internal_jobs)
+        ApiJobUnit.objects.bulk_create(units)
+
+        self.client.force_login(self.superuser)
+
+        # Should run less than 1 query per ApiJob.
+        with self.assert_queries_less_than(api_job_count):
+            response = self.client.get(reverse('api_management:job_list'))
+
+        self.assertStatusOK(response)
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        job_rows = response_soup.find('tbody').find_all('tr')
+        self.assertEqual(len(job_rows), api_job_count)
+
+
 class JobDetailTest(ClientTest):
 
     @classmethod

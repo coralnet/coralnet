@@ -7,7 +7,13 @@ from lib.tests.utils import BaseTest, EmailAssertionsMixin
 from ..exceptions import JobError
 from ..models import Job
 from ..utils import (
-    finish_job, full_job, job_runner, job_starter, schedule_job)
+    bulk_create_jobs,
+    finish_job,
+    full_job,
+    job_runner,
+    job_starter,
+    schedule_job,
+)
 from .utils import fabricate_job
 
 
@@ -186,6 +192,24 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
             delta=timedelta(minutes=10),
             msg="Start date shouldn't have been expedited",
         )
+
+
+class BulkCreateJobsTest(BaseTest):
+
+    def test(self):
+        jobs = bulk_create_jobs(
+            'name',
+            [
+                ['arg1a', 'arg2a'],
+                ['arg1b', 'arg2b'],
+                ['arg1c', 'arg2c'],
+            ],
+        )
+
+        for job in jobs:
+            self.assertEqual(job.status, Job.Status.PENDING)
+            self.assertIsNotNone(job.scheduled_start_date)
+        self.assertEqual(len(jobs), 3)
 
 
 class FinishJobTest(BaseTest):

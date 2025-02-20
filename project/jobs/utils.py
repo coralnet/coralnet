@@ -102,6 +102,12 @@ def get_or_create_job(
     return job, created
 
 
+def random_job_delay():
+    # Use a random amount of jitter to slightly space out jobs that are
+    # being submitted in quick succession.
+    return timedelta(seconds=random.randrange(5, 30))
+
+
 def schedule_job(
     name: str,
     *task_args,
@@ -119,9 +125,7 @@ def schedule_job(
         name, *task_args, source_id=source_id, user=user)
 
     if delay is None:
-        # Use a random amount of jitter to slightly space out jobs that are
-        # being submitted in quick succession.
-        delay = timedelta(seconds=random.randrange(5, 30))
+        delay = random_job_delay()
     now = datetime.now(timezone.utc)
     scheduled_start_date = now + delay
 
@@ -162,6 +166,35 @@ def schedule_job_on_commit(name: str, *args, **kwargs) -> None:
     """
     transaction.on_commit(
         functools.partial(schedule_job, name, *args, **kwargs))
+
+
+def bulk_create_jobs(
+    name: str,
+    tasks_args: list[list],
+) -> list[Job]:
+    """
+    Create many pending Jobs efficiently.
+    NOTE: This does not watch for job-existence race conditions.
+    ONLY use this when the Jobs don't have any possibility of
+    conflicting with other existing Jobs. For example, deploy API
+    classify-image Jobs.
+    Non-example: classification Jobs for sources, since it's possible
+    for multiple threads to "know" about a given image in a source, so
+    multiple threads might try to queue classification for that image
+    at the same time.
+    """
+    now = datetime.now(timezone.utc)
+
+    jobs = [
+        Job(
+            job_name=name,
+            arg_identifier=Job.args_to_identifier(task_args),
+            scheduled_start_date=now+random_job_delay(),
+        )
+        for task_args in tasks_args
+    ]
+    Job.objects.bulk_create(jobs)
+    return jobs
 
 
 def start_job(job: Job) -> bool:

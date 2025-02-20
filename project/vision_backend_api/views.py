@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.http import Http404, UnreadablePostError
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -9,8 +8,9 @@ from rest_framework.views import APIView
 
 from api_core.exceptions import ApiRequestDataError
 from api_core.models import ApiJob, ApiJobUnit
+from api_core.utils import get_max_active_jobs
 from jobs.models import Job
-from jobs.utils import schedule_job
+from jobs.utils import bulk_create_jobs
 from vision_backend.models import Classifier
 from .forms import validate_deploy
 
@@ -22,19 +22,23 @@ class Deploy(APIView):
     def post(self, request, classifier_id):
 
         # Check to see if we should throttle based on already-active jobs.
-        all_jobs = ApiJob.objects.filter(user=request.user).order_by('pk')
-        active_jobs = [
-            job for job in all_jobs
-            if job.status in [ApiJob.PENDING, ApiJob.IN_PROGRESS]]
-        max_job_count = settings.MAX_CONCURRENT_API_JOBS_PER_USER
 
-        if len(active_jobs) >= max_job_count:
-            ids = ', '.join([str(job.pk) for job in active_jobs[:5]])
+        active_job_ids = ApiJob.objects.active_for_user(
+            request.user).values_list('pk', flat=True)
+        # Evaluate.
+        active_job_ids = list(active_job_ids)
+
+        max_active_jobs = get_max_active_jobs(request.user)
+
+        if len(active_job_ids) >= max_active_jobs:
+            ids = ', '.join([
+                str(pk) for pk in active_job_ids[:max_active_jobs]])
             detail = (
-                "You already have {max} jobs active".format(max=max_job_count)
-                + " (IDs: {ids}).".format(ids=ids)
-                + " You must wait until one of them finishes"
-                + " before requesting another job.")
+                f"You already have {max_active_jobs} jobs active"
+                f" (IDs: {ids})."
+                f" You must wait until one of them finishes"
+                f" before requesting another job."
+            )
             return Response(
                 dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_429_TOO_MANY_REQUESTS)
@@ -74,14 +78,21 @@ class Deploy(APIView):
 
         # Create job units to make it easier to track all the separate deploy
         # operations (one per image).
-        for image_number, image_json in enumerate(images_data, 1):
 
-            internal_job, _ = schedule_job(
-                'classify_image', deploy_job.pk, image_number)
-            job_unit = ApiJobUnit(
+        # First bulk-create the internal Jobs.
+        classify_image_tasks_args = [
+            [deploy_job.pk, image_number]
+            for image_number in range(1, len(images_data) + 1)
+        ]
+        internal_jobs = bulk_create_jobs(
+            'classify_image', classify_image_tasks_args)
+
+        # Then set up and bulk-create the ApiJobUnits.
+        job_units = [
+            ApiJobUnit(
                 parent=deploy_job,
                 order_in_parent=image_number,
-                internal_job=internal_job,
+                internal_job=internal_jobs[image_number - 1],
                 request_json=dict(
                     classifier_id=int(classifier_id),
                     url=image_json['url'],
@@ -90,7 +101,9 @@ class Deploy(APIView):
                 # Size for deploy job units is the point count.
                 size=len(image_json['points']),
             )
-            job_unit.save()
+            for image_number, image_json in enumerate(images_data, 1)
+        ]
+        ApiJobUnit.objects.bulk_create(job_units)
 
         # Respond with the status endpoint's URL.
         return Response(
@@ -155,26 +168,35 @@ class DeployResult(APIView):
                 dict(errors=[dict(detail=detail)]),
                 status=status.HTTP_404_NOT_FOUND)
 
-        if deploy_job.status == ApiJob.DONE:
+        if deploy_job.finish_date:
             images_json = []
 
             # Report images in the same order that they were originally given
             # in the deploy request.
-            for unit in deploy_job.apijobunit_set.order_by('order_in_parent'):
+            units_values = (
+                deploy_job.apijobunit_set
+                .order_by('order_in_parent')
+                .values(
+                    'internal_job__status', 'internal_job__result_message',
+                    'request_json', 'result_json',
+                )
+            )
 
-                if unit.status == Job.Status.SUCCESS:
+            for unit in units_values:
+
+                if unit['internal_job__status'] == Job.Status.SUCCESS:
                     # This has 'url' and 'points'
-                    attributes = unit.result_json
+                    attributes = unit['result_json']
                 else:
                     # Error
                     attributes = dict(
-                        url=unit.request_json['url'],
-                        errors=[unit.result_message],
+                        url=unit['request_json']['url'],
+                        errors=[unit['internal_job__result_message']],
                     )
 
                 images_json.append(dict(
                     type='image',
-                    id=unit.request_json['url'],
+                    id=unit['request_json']['url'],
                     attributes=attributes,
                 ))
 

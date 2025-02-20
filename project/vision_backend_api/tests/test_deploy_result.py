@@ -1,6 +1,6 @@
 import copy
 import json
-import operator
+from unittest import mock
 
 from django.conf import settings
 from django.test import override_settings
@@ -101,7 +101,7 @@ class DeployResultEndpointTest(DeployBaseTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.train_classifier()
+        cls.set_up_classifier(cls.user)
 
         images = [
             dict(
@@ -199,37 +199,37 @@ class DeployResultEndpointTest(DeployBaseTest):
 
     def test_success(self):
         job = self.schedule_deploy()
-        self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        label_a_id = self.labels_by_name['A'].pk
+        label_b_id = self.labels_by_name['B'].pk
+
+        def mock_classify_return_msg(
+                self_, runtime, scores, classes, valid_rowcol):
+            self_.runtime = runtime
+            self_.classes = [label_a_id, label_b_id]
+            self_.valid_rowcol = valid_rowcol
+
+            # First point per image gets A=0.6, B=0.4.
+            # Second point (if any) per image gets A=0.3, B=0.7.
+            scores_simple = [
+                [0.6, 0.4],
+                [0.3, 0.7],
+            ]
+            self_.scores = []
+            for i, (row, column, _) in enumerate(scores):
+                self_.scores.append((row, column, scores_simple[i]))
+
+        with mock.patch(
+            'spacer.messages.ClassifyReturnMsg.__init__', mock_classify_return_msg
+        ):
+            self.run_scheduled_jobs_including_deploy()
+            do_collect_spacer_jobs()
 
         response = self.get_job_result(job)
 
         self.assertStatusOK(response)
 
-        # Check the response content. The classifications can vary, so this
-        # will take some doing.
-
-        points_1_without_classifications = [
-            dict(row=10, column=10),
-            dict(row=20, column=5),
-        ]
-        points_2_without_classifications = [
-            dict(row=10, column=10),
-        ]
-
-        response_json = response.json()
-        point_classifications = [
-            response_json['data'][0]['attributes']['points'][0]
-                .pop('classifications'),
-            response_json['data'][0]['attributes']['points'][1]
-                .pop('classifications'),
-            response_json['data'][1]['attributes']['points'][0]
-                .pop('classifications'),
-        ]
-        response_json_without_classifications = response_json
-
         self.assertDictEqual(
-            response_json_without_classifications,
+            response.json(),
             dict(
                 data=[
                     dict(
@@ -237,78 +237,108 @@ class DeployResultEndpointTest(DeployBaseTest):
                         id='URL 1',
                         attributes=dict(
                             url='URL 1',
-                            points=points_1_without_classifications),
+                            points=[
+                                dict(
+                                    row=10,
+                                    column=10,
+                                    classifications=[
+                                        dict(
+                                            label_id=label_a_id,
+                                            label_name='A',
+                                            label_code='A_mycode',
+                                            score=0.6,
+                                        ),
+                                        dict(
+                                            label_id=label_b_id,
+                                            label_name='B',
+                                            label_code='B_mycode',
+                                            score=0.4,
+                                        ),
+                                    ]),
+                                dict(
+                                    row=20,
+                                    column=5,
+                                    # In order of descending scores,
+                                    # regardless of classes order.
+                                    classifications=[
+                                        dict(
+                                            label_id=label_b_id,
+                                            label_name='B',
+                                            label_code='B_mycode',
+                                            score=0.7,
+                                        ),
+                                        dict(
+                                            label_id=label_a_id,
+                                            label_name='A',
+                                            label_code='A_mycode',
+                                            score=0.3,
+                                        ),
+                                    ]),
+                            ]),
                     ),
                     dict(
                         type='image',
                         id='URL 2',
                         attributes=dict(
                             url='URL 2',
-                            points=points_2_without_classifications),
+                            points=[
+                                dict(
+                                    row=10,
+                                    column=10,
+                                    classifications=[
+                                        dict(
+                                            label_id=label_a_id,
+                                            label_name='A',
+                                            label_code='A_mycode',
+                                            score=0.6,
+                                        ),
+                                        dict(
+                                            label_id=label_b_id,
+                                            label_name='B',
+                                            label_code='B_mycode',
+                                            score=0.4,
+                                        ),
+                                    ]),
+                            ]),
                     ),
                 ]),
-            "Response JSON besides classifications should be as expected")
+            msg="Response JSON should be as expected")
 
-        # The following is an example of what a point's classifications may
-        # look like, but the label order or scores may vary.
-        # [
-        #     dict(
-        #         label_id=self.labels_by_name['B'].pk, label_name='B',
-        #         label_code='B_mycode', score=0.5),
-        #     dict(
-        #         label_id=self.labels_by_name['A'].pk, label_name='A',
-        #         label_code='A_mycode', score=0.5),
-        # ]
-
-        for point_classification in point_classifications:
-            scores = [
-                label_dict.pop('score') for label_dict in point_classification]
-            self.assertAlmostEqual(
-                1.0, sum(scores), places=3,
-                msg="Scores for each point should add up to 1")
-            self.assertGreaterEqual(
-                scores[0], scores[1], "Scores should be in descending order")
-
-            point_classification_without_scores = point_classification
-            point_classification_without_scores.sort(
-                key=operator.itemgetter('label_name'))
-            self.assertListEqual(
-                [
-                    dict(
-                        label_id=self.labels_by_name['A'].pk, label_name='A',
-                        label_code='A_mycode'),
-                    dict(
-                        label_id=self.labels_by_name['B'].pk, label_name='B',
-                        label_code='B_mycode'),
-                ],
-                point_classification_without_scores,
-                "Classifications JSON besides scores should be as expected")
+        self.assertEqual(
+            'application/vnd.api+json', response.get('content-type'),
+            "Content type should be as expected")
 
     def test_failure(self):
         job = self.schedule_deploy()
+        label_a_id = self.labels_by_name['A'].pk
+        label_b_id = self.labels_by_name['B'].pk
 
-        # Mark both units' status as done: one success, one failure.
+        def mock_classify_return_msg(
+                self_, runtime, scores, classes, valid_rowcol):
+            self_.runtime = runtime
+            self_.classes = [label_a_id, label_b_id]
+            self_.valid_rowcol = valid_rowcol
+
+            # First point per image gets A=0.6, B=0.4.
+            # Second point (if any) per image gets A=0.3, B=0.7.
+            scores_simple = [
+                [0.6, 0.4],
+                [0.3, 0.7],
+            ]
+            self_.scores = []
+            for i, (row, column, _) in enumerate(scores):
+                self_.scores.append((row, column, scores_simple[i]))
+
+        with mock.patch(
+            'spacer.messages.ClassifyReturnMsg.__init__', mock_classify_return_msg
+        ):
+            # Complete both units.
+            self.run_scheduled_jobs_including_deploy()
+            do_collect_spacer_jobs()
+
+        # But go back and mark one as failed.
         unit_1, unit_2 = ApiJobUnit.objects.filter(
             parent=job).order_by('order_in_parent')
-
-        unit_1.internal_job.status = Job.Status.SUCCESS
-        unit_1.internal_job.save()
-        classifications = [dict(
-            label_id=self.labels_by_name['A'].pk, label_name='A',
-            label_code='A_mycode', score=1.0)]
-        points_1 = [
-            dict(
-                row=10, column=10,
-                classifications=classifications,
-            ),
-            dict(
-                row=20, column=5,
-                classifications=classifications,
-            ),
-        ]
-        unit_1.result_json = dict(
-            url='URL 1', points=points_1)
-        unit_1.save()
 
         unit_2.internal_job.status = Job.Status.FAILURE
         unit_2.internal_job.result_message = (
@@ -326,7 +356,46 @@ class DeployResultEndpointTest(DeployBaseTest):
                     dict(
                         type='image',
                         id='URL 1',
-                        attributes=dict(url='URL 1', points=points_1),
+                        attributes=dict(
+                            url='URL 1',
+                            points=[
+                                dict(
+                                    row=10,
+                                    column=10,
+                                    classifications=[
+                                        dict(
+                                            label_id=label_a_id,
+                                            label_name='A',
+                                            label_code='A_mycode',
+                                            score=0.6,
+                                        ),
+                                        dict(
+                                            label_id=label_b_id,
+                                            label_name='B',
+                                            label_code='B_mycode',
+                                            score=0.4,
+                                        ),
+                                    ]),
+                                dict(
+                                    row=20,
+                                    column=5,
+                                    # In order of descending scores,
+                                    # regardless of classes order.
+                                    classifications=[
+                                        dict(
+                                            label_id=label_b_id,
+                                            label_name='B',
+                                            label_code='B_mycode',
+                                            score=0.7,
+                                        ),
+                                        dict(
+                                            label_id=label_a_id,
+                                            label_name='A',
+                                            label_code='A_mycode',
+                                            score=0.3,
+                                        ),
+                                    ]),
+                            ]),
                     ),
                     dict(
                         type='image',
@@ -339,6 +408,37 @@ class DeployResultEndpointTest(DeployBaseTest):
                 ]),
             "Response JSON should be as expected")
 
-        self.assertEqual(
-            'application/vnd.api+json', response.get('content-type'),
-            "Content type should be as expected")
+
+class QueriesTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def test(self):
+        image_count = 30
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            for index in range(image_count)
+        ]
+
+        data = json.dumps(dict(data=images))
+        # Submit job
+        self.client.post(
+            self.deploy_url, data, **self.request_kwargs)
+        # Complete job
+        self.run_scheduled_jobs_including_deploy()
+        do_collect_spacer_jobs()
+
+        job = ApiJob.objects.latest('pk')
+        url = reverse('api:deploy_result', args=[job.pk])
+
+        # Should run less than 1 query per image.
+        with self.assert_queries_less_than(image_count):
+            response = self.client.get(url, **self.request_kwargs)
+
+        self.assertStatusOK(response)
+        result_data = response.json()['data']
+        self.assertEqual(len(result_data), image_count)

@@ -147,7 +147,9 @@ class BaseTest(StorageDirTest):
     def setUp(self):
         # Some site functionality uses the cache for performance, but leaving
         # the cache uncleared between cache-using tests can mess up test
-        # results.
+        # behavior/results.
+        # This includes tests involving Django REST Framework, which uses the
+        # cache to track throttling stats.
         cache.clear()
 
         super().setUp()

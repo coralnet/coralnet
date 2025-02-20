@@ -1,5 +1,6 @@
 from abc import ABCMeta
 from io import BytesIO
+import json
 import math
 from unittest import mock
 
@@ -8,15 +9,17 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 
-from api_core.tests.utils import BaseAPITest
+from api_core.tests.utils import APITestMixin
 from jobs.tasks import run_scheduled_jobs_until_empty
+from jobs.utils import start_job
+from lib.tests.utils import ClientTest
 from lib.tests.utils_data import create_sample_image
 from sources.models import Source
 from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 
 
 @override_settings(ENABLE_PERIODIC_JOBS=False)
-class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
+class DeployBaseTest(ClientTest, APITestMixin, metaclass=ABCMeta):
 
     @classmethod
     def setUpTestData(cls):
@@ -24,15 +27,30 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
 
         cls.user = cls.create_user(
             username='testuser', password='SamplePassword')
+        cls.set_up_source(cls.user)
+        # Kwargs for test client post() and get().
+        cls.request_kwargs = cls.get_request_kwargs_for_user(
+            'testuser', 'SamplePassword')
+
+        # We leave the cls.set_up_classifier() call up to the subclass.
+        # Sometimes we'd want to apply subclass-specific mocks to the
+        # extraction and/or training, and that only appears to be
+        # possible if the method is called from that subclass's
+        # definition, not this class's definition.
+
+    @classmethod
+    def set_up_source(cls, user, points_per_image=2, label_names=None):
         cls.source = cls.create_source(
-            cls.user,
+            user,
             visibility=Source.VisibilityTypes.PUBLIC,
-            default_point_generation_method=dict(type='simple', points=2),
+            default_point_generation_method=dict(
+                type='simple', points=points_per_image),
         )
 
-        label_names = ['A', 'B']
-        labels = cls.create_labels(cls.user, label_names, 'GroupA')
-        labelset = cls.create_labelset(cls.user, cls.source, labels)
+        if not label_names:
+            label_names = ['A', 'B']
+        labels = cls.create_labels(user, label_names, 'GroupA')
+        labelset = cls.create_labelset(user, cls.source, labels)
         cls.labels_by_name = dict(
             zip(label_names, labelset.get_globals_ordered_by_name()))
 
@@ -45,23 +63,6 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
             local_label.code = label_name + '_mycode'
             local_label.save()
 
-        # Get a token
-        response = cls.client.post(
-            reverse('api:token_auth'),
-            data='{"username": "testuser", "password": "SamplePassword"}',
-            content_type='application/vnd.api+json',
-        )
-        token = response.json()['token']
-
-        # Kwargs for test client post() and get().
-        cls.request_kwargs = dict(
-            # Authorization header.
-            HTTP_AUTHORIZATION='Token {token}'.format(token=token),
-            # Content type. Particularly needed for POST requests,
-            # but doesn't hurt for other requests either.
-            content_type='application/vnd.api+json',
-        )
-
     def assert_expected_400_error(self, response, error_dict):
         self.assertEqual(
             response.status_code, status.HTTP_400_BAD_REQUEST,
@@ -72,32 +73,25 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
             "Response JSON should be as expected")
 
     @classmethod
-    def train_classifier(cls):
-        """
-        This convenience function is almost always useful for deploy-related
-        tests, but we don't call it in this class's setUpTestData().
-
-        The reason is that sometimes we want to apply subclass-specific
-        mocks to the extraction and/or training, and this only appears to
-        be possible if this method is called from that subclass's
-        definition, not this class's definition.
-        """
+    def set_up_classifier(cls, user, annotations=None):
         # Add enough annotated images to train a classifier.
         #
         # Must have at least 2 unique labels in training data in order to
         # be accepted by spacer.
-        annotations = {1: 'A_mycode', 2: 'B_mycode'}
+        if not annotations:
+            annotations = {1: 'A_mycode', 2: 'B_mycode'}
+
         num_validation_images = math.ceil(settings.TRAINING_MIN_IMAGES / 8)
         for i in range(settings.TRAINING_MIN_IMAGES):
             img = cls.upload_image(
-                cls.user, cls.source, dict(filename=f'train{i}.png'))
-            cls.add_annotations(cls.user, img, annotations)
+                user, cls.source, dict(filename=f'train{i}.png'))
+            cls.add_annotations(user, img, annotations)
         for i in range(num_validation_images):
             # Unit tests use the image filename to designate what goes into
             # the validation set.
             img = cls.upload_image(
-                cls.user, cls.source, dict(filename=f'val{i}.png'))
-            cls.add_annotations(cls.user, img, annotations)
+                user, cls.source, dict(filename=f'val{i}.png'))
+            cls.add_annotations(user, img, annotations)
 
         # Extract features.
         run_scheduled_jobs_until_empty()
@@ -108,6 +102,25 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
         cls.classifier = cls.source.last_accepted_classifier
 
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])
+
+    # Subclasses can override this as needed.
+    deploy_data = json.dumps(dict(data=[
+        dict(
+            type='image',
+            attributes=dict(
+                url='URL 1',
+                points=[
+                    dict(row=10, column=10),
+                    dict(row=20, column=5),
+                ])),
+        dict(
+            type='image',
+            attributes=dict(
+                url='URL 2',
+                points=[
+                    dict(row=10, column=10),
+                ])),
+    ]))
 
     @staticmethod
     def run_scheduled_jobs_including_deploy():
@@ -124,6 +137,14 @@ class DeployBaseTest(BaseAPITest, metaclass=ABCMeta):
             'spacer.storage.URLStorage.load', mock_url_storage_load
         ):
             run_scheduled_jobs_until_empty()
+
+    @staticmethod
+    def run_deploy_api_job(api_job):
+        with mock.patch(
+            'spacer.storage.URLStorage.load', mock_url_storage_load
+        ):
+            for unit in api_job.apijobunit_set.all():
+                start_job(unit.internal_job)
 
 
 def mock_url_storage_load(*args) -> BytesIO:
