@@ -41,7 +41,7 @@ td.failure {
     </tr>
   </thead>
   <tbody>
-    {% for job in jobs %}
+    {% for job in page_results.object_list %}
       <tr data-status="{{ job.overall_status }}">
         <td>
           <a href="{% url 'api_management:job_detail' job.id %}">
@@ -61,5 +61,7 @@ td.failure {
     {% endfor %}
   </tbody>
 </table>
+
+{% include 'pagination_links.html' with page_results=page_results %}
 
 {% endblock %}

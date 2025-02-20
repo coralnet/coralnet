@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, render
 
 from api_core.models import ApiJob
 from jobs.models import Job
+from lib.utils import paginate
 from vision_backend_api.utils import deploy_request_json_as_strings
 
 
@@ -72,8 +73,14 @@ def job_list(request):
     status_counter = Counter([
         job_values['overall_status'] for job_values in jobs_values])
 
+    page_results, _ = paginate(
+        results=jobs_values,
+        items_per_page=1000,
+        request_args=request.GET,
+    )
+
     return render(request, 'api_management/job_list.html', {
-        'jobs': jobs_values,
+        'page_results': page_results,
         'in_progress_count': status_counter[ApiJob.IN_PROGRESS],
         'pending_count': status_counter[ApiJob.PENDING],
         'done_count': status_counter[ApiJob.DONE],
