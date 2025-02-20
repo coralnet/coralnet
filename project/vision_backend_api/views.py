@@ -84,7 +84,8 @@ class Deploy(APIView):
             [deploy_job.pk, image_number]
             for image_number in range(1, len(images_data) + 1)
         ]
-        internal_jobs = bulk_create_jobs('classify_image', classify_image_tasks_args)
+        internal_jobs = bulk_create_jobs(
+            'classify_image', classify_image_tasks_args)
 
         # Then set up and bulk-create the ApiJobUnits.
         job_units = [

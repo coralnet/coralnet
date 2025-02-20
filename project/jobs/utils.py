@@ -102,6 +102,12 @@ def get_or_create_job(
     return job, created
 
 
+def random_job_delay():
+    # Use a random amount of jitter to slightly space out jobs that are
+    # being submitted in quick succession.
+    return timedelta(seconds=random.randrange(5, 30))
+
+
 def schedule_job(
     name: str,
     *task_args,
@@ -119,9 +125,7 @@ def schedule_job(
         name, *task_args, source_id=source_id, user=user)
 
     if delay is None:
-        # Use a random amount of jitter to slightly space out jobs that are
-        # being submitted in quick succession.
-        delay = timedelta(seconds=random.randrange(5, 30))
+        delay = random_job_delay()
     now = datetime.now(timezone.utc)
     scheduled_start_date = now + delay
 
@@ -179,10 +183,13 @@ def bulk_create_jobs(
     multiple threads might try to queue classification for that image
     at the same time.
     """
+    now = datetime.now(timezone.utc)
+
     jobs = [
         Job(
             job_name=name,
             arg_identifier=Job.args_to_identifier(task_args),
+            scheduled_start_date=now+random_job_delay(),
         )
         for task_args in tasks_args
     ]
