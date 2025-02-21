@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.19.1 (WIP)
+
+- Migration 0013 for `api_core` has been fixed, so that finished API jobs with one or more failed units still get finish dates like they're supposed to. To update from 1.19, unapply and then reapply migration 0013.
+
 ## [1.19](https://github.com/coralnet/coralnet/tree/1.19)
 
 Production: 2025-02-20

@@ -7,8 +7,10 @@ def populate(apps, schema_editor):
     ApiJob = apps.get_model('api_core', 'ApiJob')
 
     for api_job in ApiJob.objects.all():
-        units = api_job.apijobunit_set.all()
-        if not units.filter(result_json__isnull=True).exists():
+        units = api_job.apijobunit_set
+        unfinished_units = units.filter(
+            internal_job__status__in=['pending', 'in_progress'])
+        if not unfinished_units.exists():
             api_job.finish_date = units.order_by(
                 '-internal_job__modify_date').first().internal_job.modify_date
             api_job.save()
