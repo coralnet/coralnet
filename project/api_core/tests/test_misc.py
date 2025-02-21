@@ -167,7 +167,14 @@ class FinishDatePopulateMigrationTest(MigrationTest):
         ('api_core', '0013_apijob_finish_date_populate'),
     ]
 
-    def create_unit(self, **kwargs):
+    # This test defines its own status constants so that they stay consistent
+    # even if the model classes' statuses change later.
+    PENDING = 'pending'
+    IN_PROGRESS = 'in_progress'
+    SUCCESS = 'success'
+    FAILURE = 'failure'
+
+    def create_unit(self, status, **kwargs):
         ApiJobUnit = self.get_model_before('api_core.ApiJobUnit')
         Job = self.get_model_before('jobs.Job')
 
@@ -175,64 +182,72 @@ class FinishDatePopulateMigrationTest(MigrationTest):
             job_name='name',
             arg_identifier=
                 f'{kwargs["parent"].pk}_{kwargs["order_in_parent"]}',
+            status=status,
         )
         job.save()
-        unit = ApiJobUnit(internal_job=job, **kwargs)
+        unit = ApiJobUnit(internal_job=job, request_json={}, **kwargs)
         unit.save()
         return unit
 
-    @staticmethod
-    def finish_unit(unit):
-        unit.result_json = {}
-        unit.save()
-        unit.internal_job.result_message = "message"
-        unit.internal_job.save()
+    def create_api_job(self, user, unit_statuses, latest_unit=1):
+        ApiJob = self.get_model_before('api_core.ApiJob')
+        api_job = ApiJob(type='type', user=user)
+        api_job.save()
+
+        unit_nums_to_statuses = dict(
+            (unit_num, unit_status)
+            for unit_num, unit_status in enumerate(unit_statuses, 1))
+
+        # The latest_unit-th unit should be created latest.
+        creation_order = list(range(1, len(unit_statuses) + 1))
+        latest_unit_num = creation_order.pop(latest_unit - 1)
+        creation_order = creation_order + [latest_unit_num]
+
+        for unit_num in creation_order:
+            self.create_unit(
+                status=unit_nums_to_statuses[unit_num],
+                parent=api_job, order_in_parent=unit_num)
+
+        return api_job
 
     def test(self):
-        ApiJob = self.get_model_before('api_core.ApiJob')
         User = self.get_model_before('auth.User')
 
         user = User(username='username')
         user.save()
-        unfinished_api_job = ApiJob(type='type', user=user)
-        unfinished_api_job.save()
-        finished_api_job = ApiJob(type='type', user=user)
-        finished_api_job.save()
 
-        self.create_unit(
-            parent=unfinished_api_job, order_in_parent=1,
-            request_json={}, result_json={})
-        # This unit is unfinished, rendering the whole API job unfinished.
-        self.create_unit(
-            parent=unfinished_api_job, order_in_parent=2,
-            request_json={})
-
-        # These units start off unfinished, but we then finish them all,
-        # in a different order from the creation order (so that we can tell
-        # the logic later in this test is based on modify date).
-
-        finished_api_job_unit_1 = self.create_unit(
-            parent=finished_api_job, order_in_parent=1,
-            request_json={})
-        finished_api_job_unit_2 = self.create_unit(
-            parent=finished_api_job, order_in_parent=2,
-            request_json={})
-        finished_api_job_unit_3 = self.create_unit(
-            parent=finished_api_job, order_in_parent=3,
-            request_json={})
-        self.finish_unit(finished_api_job_unit_1)
-        self.finish_unit(finished_api_job_unit_3)
-        self.finish_unit(finished_api_job_unit_2)
+        api_job_1 = self.create_api_job(
+            user, [self.PENDING, self.PENDING, self.PENDING])
+        api_job_2 = self.create_api_job(
+            user, [self.PENDING, self.IN_PROGRESS, self.SUCCESS])
+        api_job_3 = self.create_api_job(
+            user, [self.FAILURE, self.SUCCESS, self.SUCCESS], latest_unit=3)
+        api_job_4 = self.create_api_job(
+            user, [self.SUCCESS, self.SUCCESS, self.SUCCESS], latest_unit=2)
 
         self.run_migration()
 
         ApiJob = self.get_model_after('api_core.ApiJob')
+        ApiJobUnit = self.get_model_after('api_core.ApiJobUnit')
 
-        unfinished_api_job = ApiJob.objects.get(pk=unfinished_api_job.pk)
-        self.assertIsNone(unfinished_api_job.finish_date)
-        finished_api_job = ApiJob.objects.get(pk=finished_api_job.pk)
+        api_job_1 = ApiJob.objects.get(pk=api_job_1.pk)
+        self.assertIsNone(api_job_1.finish_date)
+
+        api_job_2 = ApiJob.objects.get(pk=api_job_2.pk)
+        self.assertIsNone(api_job_2.finish_date)
+
+        api_job_3 = ApiJob.objects.get(pk=api_job_3.pk)
         self.assertEqual(
-            finished_api_job.finish_date,
-            finished_api_job_unit_2.internal_job.modify_date,
+            api_job_3.finish_date,
+            ApiJobUnit.objects.get(parent=api_job_3, order_in_parent=3)
+                .internal_job.modify_date,
+            msg="Should be equal to the latest modify date among the units",
+        )
+
+        api_job_4 = ApiJob.objects.get(pk=api_job_4.pk)
+        self.assertEqual(
+            api_job_4.finish_date,
+            ApiJobUnit.objects.get(parent=api_job_4, order_in_parent=2)
+                .internal_job.modify_date,
             msg="Should be equal to the latest modify date among the units",
         )
