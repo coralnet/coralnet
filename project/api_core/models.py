@@ -142,17 +142,6 @@ class ApiJobUnit(models.Model):
                 fields=['parent', 'order_in_parent']),
         ]
 
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-
-        if self.result_json:
-            # Finished this unit.
-            incomplete_units = self.parent.apijobunit_set.filter(result_json__isnull=True)
-            if not incomplete_units.exists():
-                # All other units have finished too.
-                self.parent.finish_date = self.modify_date
-                self.parent.save()
-
 
 class UserApiLimits(models.Model):
     """
