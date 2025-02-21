@@ -628,6 +628,21 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
                         )
         return data
 
+    @classmethod
+    def after_finishing_job(cls, job_id):
+        job = Job.objects.get(pk=job_id)
+
+        if job.status in [Job.Status.SUCCESS, Job.Status.FAILURE]:
+            # Finished this API job unit.
+            api_job = job.apijobunit.parent
+            unfinished_units = api_job.apijobunit_set.filter(
+                internal_job__status__in=[
+                    Job.Status.PENDING, Job.Status.IN_PROGRESS])
+            if not unfinished_units.exists():
+                # All other units of the API job have finished too.
+                api_job.finish_date = job.modify_date
+                api_job.save()
+
 
 handler_classes = [
     SpacerFeatureResultHandler,
