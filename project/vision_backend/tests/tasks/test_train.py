@@ -16,7 +16,7 @@ from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
-from ...task_helpers import handle_spacer_result
+from ...task_helpers import handle_spacer_results
 from .utils import (
     BaseTaskTest,
     do_collect_spacer_jobs,
@@ -267,8 +267,11 @@ class TrainClassifierTest(BaseTaskTest):
         # get access to the job return msg.
         run_scheduled_jobs_until_empty()
         queue = get_queue_class()()
-        job_return_msg = queue.collect_job(queue.get_collectable_jobs()[0])[0]
-        handle_spacer_result(job_return_msg)
+        # collect_jobs() returns tuple of job results and statuses. So
+        # we get the results, and then the first result.
+        job_return_msg = queue.collect_jobs(
+            queue.get_collectable_jobs())[0][0]
+        handle_spacer_results([job_return_msg])
         spacer_task = job_return_msg.original_job.tasks[0]
 
         # Check each data set
@@ -786,7 +789,29 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
                 image.features.extracted,
                 msg="Features should still be valid for unchanged images")
 
-    def test_classifier_deleted_before_collection(self):
+    def test_internal_job_deleted_before_collect(self):
+        self.upload_images_for_training()
+        # Extract features.
+        run_scheduled_jobs_until_empty()
+        do_collect_spacer_jobs()
+        # Train classifier.
+        run_scheduled_jobs_until_empty()
+
+        # Delete Job.
+        job = Job.objects.incomplete().get(
+            job_name='train_classifier', arg_identifier=self.source.pk)
+        job.delete()
+
+        # Collect. The deleted Job shouldn't cause particular issues.
+        # The corresponding BatchJob is considered successful, and besides
+        # that there's no Job to mark the status of.
+        do_collect_spacer_jobs()
+        self.assert_job_result_message(
+            'collect_spacer_jobs',
+            "Jobs checked/collected: 1 SUCCEEDED",
+        )
+
+    def test_classifier_deleted_before_collect(self):
         """
         Run the train task, then delete the classifier from the DB, then
         try to collect the train result.
@@ -975,7 +1000,8 @@ class LabelFilteringTest(BaseTaskTest):
         # Call internal job-collection methods to
         # get access to the job return msg.
         queue = get_queue_class()()
-        job_return_msg = queue.collect_job(queue.get_collectable_jobs()[0])[0]
+        job_return_msg = queue.collect_jobs(
+            queue.get_collectable_jobs())[0][0]
         training_task_labels = job_return_msg.original_job.tasks[0].labels
         self.assertEqual(len(training_task_labels.ref), 1)
         self.assertEqual(
@@ -987,7 +1013,7 @@ class LabelFilteringTest(BaseTaskTest):
             training_task_labels.train.label_count, 2,
             msg="Train should have one annotation filtered out"
         )
-        handle_spacer_result(job_return_msg)
+        handle_spacer_results([job_return_msg])
 
         job.refresh_from_db()
         self.assertEqual(

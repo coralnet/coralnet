@@ -20,7 +20,6 @@ from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import JobUtilsMixin
-from jobs.utils import schedule_job
 from lib.tests.utils import EmailAssertionsMixin
 from sources.models import Source
 from vision_backend.models import Classifier
@@ -695,18 +694,31 @@ class TaskErrorsTest(
         super().setUpTestData()
         cls.set_up_classifier(cls.user)
 
-    def test_nonexistent_job_unit(self):
-        # Create a job but don't create the unit.
-        job = ApiJob(type='', user=self.user)
-        job.save()
-        schedule_job('classify_image', job.pk, 1)
+    def test_job_unit_deleted_before_run(self):
+        """
+        Try to run a deploy job when the API job unit
+        has been deleted.
+        """
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
 
+        # Schedule deploy job
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+
+        # Delete the job unit.
+        job_unit = ApiJobUnit.objects.latest('pk')
+        api_job = job_unit.parent
+        job_unit.delete()
+
+        # Deploy. It should fail since the unit was deleted.
         run_scheduled_jobs()
-        self.assert_job_result_message(
+        self.assert_job_failure_message(
             'classify_image',
-            f"Job unit [{job.pk} / 1] does not exist.")
+            f"Job unit [{api_job.pk} / 1] does not exist.")
 
-    def test_classifier_deleted(self):
+    def test_classifier_deleted_before_run(self):
         """
         Try to run a deploy job when the classifier associated with the job
         has been deleted.
@@ -738,6 +750,52 @@ class TaskErrorsTest(
             job_unit.internal_job.result_message,
             f"Classifier of id {classifier_id} does not exist."
             f" Maybe it was deleted.")
+
+    def test_internal_job_deleted_before_collect(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        # Schedule deploy job
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+        # Deploy
+        run_scheduled_jobs()
+        # Delete Job (which requires deleting the job unit first due to
+        # protected foreign keys).
+        unit = ApiJobUnit.objects.latest('pk')
+        job = unit.internal_job
+        unit.delete()
+        job.delete()
+        # Collect. The deleted Job shouldn't cause particular issues.
+        # The corresponding BatchJob is considered successful, and besides
+        # that there's no Job to mark the status of.
+        do_collect_spacer_jobs()
+        self.assert_job_result_message(
+            'collect_spacer_jobs',
+            "Jobs checked/collected: 1 SUCCEEDED",
+        )
+
+    def test_job_unit_deleted_before_collect(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
+
+        # Schedule deploy job
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+        # Deploy
+        run_scheduled_jobs()
+        # Delete job unit.
+        unit = ApiJobUnit.objects.latest('pk')
+        job_id = unit.internal_job_id
+        unit.delete()
+        # Collect.
+        do_collect_spacer_jobs()
+        self.assert_job_failure_message(
+            'classify_image',
+            f"API job unit for internal-job {job_id} does not exist.",
+        )
 
     def do_test_spacer_error(self, error):
         images = [
@@ -847,8 +905,29 @@ class TaskErrorsTest(
         self.assert_no_error_log_saved()
         self.assert_no_email()
 
+    def test_classifier_deleted_before_collect(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url='URL 1', points=[dict(row=10, column=10)]))]
+        data = json.dumps(dict(data=images))
 
-class QueriesTest(DeployBaseTest):
+        # Schedule deploy job
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+        # Deploy
+        self.run_scheduled_jobs_including_deploy()
+        # Delete classifier.
+        unit = ApiJobUnit.objects.latest('pk')
+        classifier_id = unit.request_json['classifier_id']
+        Classifier.objects.get(pk=classifier_id).delete()
+        # Collect.
+        do_collect_spacer_jobs()
+        self.assert_job_failure_message(
+            'classify_image',
+            f"Classifier of id {classifier_id} does not exist.",
+        )
+
+
+class ApiRequestsQueriesTest(DeployBaseTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -878,3 +957,40 @@ class QueriesTest(DeployBaseTest):
         self.assertEqual(
             deploy_job.apijobunit_set.count(), image_count,
             msg=f"Should have {image_count} job units")
+
+
+# TODO: Also query-optimize and test the task which starts the deploy job.
+
+
+class CollectJobsQueriesTest(DeployBaseTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def test(self):
+        image_count = 30
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            for index in range(image_count)
+        ]
+
+        data = json.dumps(dict(data=images))
+
+        # Schedule deploy
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+        # Deploy run
+        self.run_scheduled_jobs_including_deploy()
+        # Deploy collect; should run less than 1 query per image.
+        with self.assert_queries_less_than(image_count):
+            do_collect_spacer_jobs()
+
+        deploy_job = ApiJob.objects.latest('pk')
+        self.assertEqual(
+            deploy_job.apijobunit_set.filter(
+                internal_job__status=Job.Status.SUCCESS).count(),
+            image_count,
+            msg=f"All {image_count} job units should have finished",
+        )

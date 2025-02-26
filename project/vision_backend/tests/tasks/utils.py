@@ -90,11 +90,13 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
     @classmethod
     def upload_image_with_annotations(
         cls, filename,
-        source=None, annotation_scheme='cycle', label_codes=None,
+        source=None, user=None,
+        annotation_scheme='cycle', label_codes=None,
     ):
         source = source or cls.source
+        user = user or cls.user
         img = cls.upload_image(
-            cls.user, source, image_options=dict(filename=filename))
+            user, source, image_options=dict(filename=filename))
         label_codes = label_codes or ['A', 'B']
 
         match annotation_scheme:
@@ -114,15 +116,17 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
             case _:
                 assert False, "label_choices should be a valid option"
 
-        cls.add_annotations(cls.user, img, annotations)
+        cls.add_annotations(user, img, annotations)
         return img
 
     @classmethod
     def upload_images_for_training(
-        cls, source=None, train_image_count=None, val_image_count=1,
+        cls, source=None, user=None,
+        train_image_count=None, val_image_count=1,
         annotation_scheme='cycle', label_codes=None,
     ):
         source = source or cls.source
+        user = user or cls.user
 
         if train_image_count is None:
             # Provide enough data for initial training
@@ -136,6 +140,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
                 cls.upload_image_with_annotations(
                     'train{}.png'.format(cls.image_count),
                     source=source,
+                    user=user,
                     annotation_scheme=annotation_scheme,
                     label_codes=label_codes,
                 )
@@ -145,6 +150,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
                 cls.upload_image_with_annotations(
                     'val{}.png'.format(cls.image_count),
                     source=source,
+                    user=user,
                     annotation_scheme=annotation_scheme,
                     label_codes=label_codes,
                 )
@@ -154,11 +160,13 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
 
     @classmethod
     def upload_data_and_train_classifier(
-        cls, source=None, new_train_images_count=None,
+        cls, source=None, user=None, new_train_images_count=None,
     ):
         source = source or cls.source
+        user = user or cls.user
         train_images, val_images = cls.upload_images_for_training(
             source=source,
+            user=user,
             train_image_count=new_train_images_count,
             val_image_count=1,
         )

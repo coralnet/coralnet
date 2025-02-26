@@ -1,11 +1,17 @@
-from spacer.messages import ClassifyImageMsg, JobMsg, JobReturnMsg, \
-    ClassifyReturnMsg, DataLocation
+from spacer.messages import (
+    ClassifyImageMsg,
+    ClassifyReturnMsg,
+    DataLocation,
+    JobMsg,
+    JobReturnMsg,
+)
 
 from annotations.models import Label
 from api_core.models import ApiJob, ApiJobUnit
 from jobs.models import Job
 from jobs.tests.utils import fabricate_job
 from lib.tests.utils import ClientTest
+from ..common import Extractors
 from ..task_helpers import SpacerClassifyResultHandler
 from ..utils import get_extractor
 
@@ -57,7 +63,7 @@ class TestDeployCollector(ClientTest):
         cls.task = ClassifyImageMsg(
             job_token=str(internal_job.pk),
             image_loc=DataLocation(storage_type='url', key=''),
-            extractor=get_extractor('dummy'),
+            extractor=get_extractor(Extractors.DUMMY.value),
             rowcols=[(100, 100), (200, 200)],
             classifier_loc=DataLocation(storage_type='memory', key=''),
         )
@@ -81,7 +87,7 @@ class TestDeployCollector(ClientTest):
             error_message=None,
         )
 
-        SpacerClassifyResultHandler.handle(job_res)
+        SpacerClassifyResultHandler().handle_job_results([job_res])
 
         api_job_unit = ApiJobUnit.objects.get(pk=self.api_job_unit_pk)
         self.assertEqual(api_job_unit.status, Job.Status.SUCCESS)
@@ -118,7 +124,7 @@ class TestDeployCollector(ClientTest):
             error_message='SomeError: File not found'
         )
 
-        SpacerClassifyResultHandler.handle(job_res)
+        SpacerClassifyResultHandler().handle_job_results([job_res])
 
         api_job_unit = ApiJobUnit.objects.get(pk=self.api_job_unit_pk)
         self.assertEqual(api_job_unit.status, Job.Status.FAILURE)

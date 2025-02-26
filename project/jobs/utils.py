@@ -246,6 +246,21 @@ def abort_job(job_id: int):
     finish_job(job, success=False, result_message="Aborted manually")
 
 
+def finish_jobs(jobs_details: list[dict]):
+    jobs = []
+
+    for job_details in jobs_details:
+        job = job_details['job']
+        job.result_message = job_details['result_message'] or ""
+        job.status = (
+            Job.Status.SUCCESS if job_details['success']
+            else Job.Status.FAILURE)
+        jobs.append(job)
+    Job.objects.bulk_update(jobs, ['result_message', 'status'])
+
+    # No periodic-job case. Periodic jobs should use finish_job() instead.
+
+
 class JobDecorator:
     def __init__(
         self, job_name: str = None, job_display_name: str = None,

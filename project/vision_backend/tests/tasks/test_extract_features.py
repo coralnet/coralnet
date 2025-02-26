@@ -5,6 +5,8 @@ from django.test import override_settings
 from spacer.exceptions import RowColumnMismatchError
 
 from errorlogs.tests.utils import ErrorReportTestMixin
+from images.model_utils import PointGen
+from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job
 from lib.tests.utils import EmailAssertionsMixin
@@ -280,7 +282,26 @@ class AbortCasesTest(
             'extract_features',
             "No feature extractor configured for this source.")
 
-    def test_image_deleted_during_extract(self):
+    def test_internal_job_deleted_before_collect(self):
+        # Upload image.
+        img = self.upload_image(self.user, self.source)
+        # Submit feature extraction.
+        run_scheduled_jobs_until_empty()
+        # Delete Job.
+        job = Job.objects.incomplete().get(
+            job_name='extract_features', arg_identifier=img.pk)
+        job.delete()
+
+        # Collect. The deleted Job shouldn't cause particular issues.
+        # The corresponding BatchJob is considered successful, and besides
+        # that there's no Job to mark the status of.
+        do_collect_spacer_jobs()
+        self.assert_job_result_message(
+            'collect_spacer_jobs',
+            "Jobs checked/collected: 1 SUCCEEDED",
+        )
+
+    def test_image_deleted_before_collect(self):
         # Upload image.
         img = self.upload_image(self.user, self.source)
         # Submit feature extraction.
@@ -413,7 +434,7 @@ class AbortCasesTest(
         self.assert_no_error_log_saved()
         self.assert_no_email()
 
-    def test_rowcols_changed_during_extract(self):
+    def test_rowcols_changed_before_collect(self):
         # Upload image.
         img = self.upload_image(self.user, self.source)
         # Ensure we know one of the point's row and column.
@@ -437,7 +458,7 @@ class AbortCasesTest(
             f"Row-col data for {img} has changed"
             f" since this task was submitted.")
 
-    def test_extractor_changed_during_extract(self):
+    def test_extractor_changed_before_collect(self):
         # Upload image.
         self.upload_image(self.user, self.source)
         # Submit feature extraction.
@@ -454,3 +475,33 @@ class AbortCasesTest(
             'extract_features',
             f"Feature extractor selection has changed since this task"
             f" was submitted.")
+
+
+class CollectJobsQueriesTest(BaseTaskTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.source.default_point_generation_method = PointGen(
+            type=PointGen.Types.SIMPLE.value, points=20).db_value
+        cls.source.save()
+
+    def test(self):
+        image_count = 25
+
+        # Upload images.
+        images = []
+        for _ in range(image_count):
+            images.append(self.upload_image(self.user, self.source))
+        # Submit feature extraction.
+        run_scheduled_jobs_until_empty()
+
+        # Should run less than 4 queries per image.
+        # (Expecting 3: points, source extractor-options, and source-checks)
+        with self.assert_queries_less_than(image_count*4):
+            do_collect_spacer_jobs()
+
+        for image in images:
+            image.features.refresh_from_db()
+            self.assertTrue(image.features.extracted)

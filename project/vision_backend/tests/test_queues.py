@@ -94,7 +94,10 @@ class MockBotoClient:
         for batch_token in jobs:
             if batch_token not in self.jobs:
                 continue
-            jobs_to_return.append(dict(status=self.jobs[batch_token]))
+            jobs_to_return.append(dict(
+                jobId=batch_token,
+                status=self.jobs[batch_token],
+            ))
 
         return dict(jobs=jobs_to_return)
 
