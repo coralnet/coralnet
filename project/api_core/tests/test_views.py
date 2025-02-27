@@ -8,7 +8,6 @@ from django.urls import reverse
 from rest_framework import status
 
 from lib.tests.utils import ClientTest
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from vision_backend_api.tests.utils import DeployBaseTest
 from ..models import ApiJob, UserApiLimits
 from .utils import APITestMixin, BaseAPIPermissionTest
@@ -359,7 +358,7 @@ class UserShowContentTest(DeployBaseTest):
 
     def complete_api_jobs(self):
         self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
     def test_no_jobs(self):
         self.assertDictEqual(
@@ -491,7 +490,7 @@ class UserShowQueriesTest(DeployBaseTest):
 
     def complete_api_jobs(self):
         self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
     @override_settings(USER_DEFAULT_MAX_ACTIVE_API_JOBS=5)
     def test(self):

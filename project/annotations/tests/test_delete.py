@@ -5,8 +5,7 @@ from django.urls import reverse
 
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest, spy_decorator
-from vision_backend.tests.tasks.utils import (
-    BaseTaskTest, do_collect_spacer_jobs)
+from vision_backend.tests.tasks.utils import BaseTaskTest
 from visualization.tests.utils import (
     BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
 from ..managers import AnnotationQuerySet
@@ -236,7 +235,7 @@ class ClassifyAfterDeleteTest(BaseTaskTest):
             image_options=dict(filename='unconfirmed.png'))
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 

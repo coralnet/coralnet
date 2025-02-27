@@ -615,6 +615,14 @@ def after_collect(job_id):
         job.save()
 
 
+# This could be replaced with itertools.batched() in Python 3.12+.
+def batch_generator(items: list, batch_size: int):
+    index = 0
+    while index < len(items):
+        yield items[index:index+batch_size]
+        index += batch_size
+
+
 @job_runner(interval=timedelta(minutes=1), after_finishing_job=after_collect)
 def collect_spacer_jobs():
     """
@@ -631,14 +639,21 @@ def collect_spacer_jobs():
     queue = get_queue_class()()
     job_statuses = []
 
-    for job in queue.get_collectable_jobs():
-        job_res, job_status = queue.collect_job(job)
-        job_statuses.append(job_status)
-        if job_res:
-            th.handle_spacer_result(job_res)
+    collectable_jobs = list(queue.get_collectable_jobs())
+
+    # Collect jobs in batches for performance.
+    # boto's Batch.Client.describe_jobs() takes up to 100 job IDs.
+    # So by sending at most 100 at a time from here, we don't have to worry
+    # about splitting up at the describe_jobs() step.
+    for batch_of_jobs in batch_generator(collectable_jobs, batch_size=100):
+
+        batch_results, batch_statuses = queue.collect_jobs(batch_of_jobs)
+        job_statuses.extend(batch_statuses)
+        th.handle_spacer_results(batch_results)
 
         if timezone.now() > wrap_up_time:
-            # As long as collect_jobs() is implemented with `yield`,
+            # As long as job results are collected in queue.collect_jobs(),
+            # rather than in queue.get_collectable_jobs(),
             # this loop-break won't abandon any job results.
             timed_out = True
             break

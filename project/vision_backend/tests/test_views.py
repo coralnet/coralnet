@@ -11,7 +11,7 @@ from labels.models import Label
 from lib.tests.utils import (
     BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run)
 from ..models import SourceCheckRequestEvent
-from .tasks.utils import do_collect_spacer_jobs, source_check_is_scheduled
+from .tasks.utils import source_check_is_scheduled, TaskTestMixin
 
 
 class PermissionTest(BasePermissionTest):
@@ -496,7 +496,7 @@ class RequestSourceCheckTest(ClientTest, HtmlAssertionsMixin, JobUtilsMixin):
         self.assertTrue(source_check_is_scheduled(self.source.pk))
 
 
-class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
+class BackendOverviewTest(ClientTest, HtmlAssertionsMixin, TaskTestMixin):
 
     @classmethod
     def setUpTestData(cls):
@@ -524,7 +524,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         self.add_annotations(self.user, image1a)
         self.add_annotations(self.user, image1b)
         do_job('extract_features', image1c.pk, source_id=source1.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         classifier2 = self.create_robot(source2)
         image2a = self.upload_image(self.user, source2)
@@ -536,7 +536,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin):
         self.add_robot_annotations(classifier2, image2b)
         self.add_robot_annotations(classifier2, image2c)
         do_job('extract_features', image2d.pk, source_id=source2.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.client.force_login(self.superuser)
         response = self.client.get(self.url)

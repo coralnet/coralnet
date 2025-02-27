@@ -16,10 +16,9 @@ from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
-from ...task_helpers import handle_spacer_result
+from ...task_helpers import handle_spacer_results
 from .utils import (
     BaseTaskTest,
-    do_collect_spacer_jobs,
     ensure_source_check_not_scheduled,
     source_check_is_scheduled,
 )
@@ -44,7 +43,7 @@ class TrainClassifierTest(BaseTaskTest):
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertTrue(
             source_check_is_scheduled(self.source.pk),
@@ -61,7 +60,7 @@ class TrainClassifierTest(BaseTaskTest):
         self.upload_images_for_training(
             train_image_count=3, val_image_count=val_image_count)
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Train a classifier
         run_scheduled_jobs_until_empty()
@@ -80,7 +79,7 @@ class TrainClassifierTest(BaseTaskTest):
             ],
             runtime_custom=90,
         ):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         # Now we should have a trained classifier whose accuracy is the best so
         # far (due to having no previous classifiers), and thus it should have
@@ -142,12 +141,12 @@ class TrainClassifierTest(BaseTaskTest):
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
         # Collect classifier.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         clf_1 = self.source.last_accepted_classifier
 
@@ -156,7 +155,7 @@ class TrainClassifierTest(BaseTaskTest):
             train_image_count=2, val_image_count=0)
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
@@ -166,7 +165,7 @@ class TrainClassifierTest(BaseTaskTest):
             acc_custom=0.57,
             pc_accs_custom=[0.5],
         ):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         clf_2 = self.source.last_accepted_classifier
 
@@ -215,7 +214,7 @@ class TrainClassifierTest(BaseTaskTest):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
@@ -228,14 +227,14 @@ class TrainClassifierTest(BaseTaskTest):
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Submit classifier.
         run_scheduled_jobs_until_empty()
 
         self.assertFalse(source_check_is_scheduled(self.source.pk))
 
         # Collect classifier.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertTrue(
             source_check_is_scheduled(self.source.pk),
@@ -262,13 +261,16 @@ class TrainClassifierTest(BaseTaskTest):
 
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Train classifier; call internal job-collection methods to
         # get access to the job return msg.
         run_scheduled_jobs_until_empty()
         queue = get_queue_class()()
-        job_return_msg = queue.collect_job(queue.get_collectable_jobs()[0])[0]
-        handle_spacer_result(job_return_msg)
+        # collect_jobs() returns tuple of job results and statuses. So
+        # we get the results, and then the first result.
+        job_return_msg = queue.collect_jobs(
+            queue.get_collectable_jobs())[0][0]
+        handle_spacer_results([job_return_msg])
         spacer_task = job_return_msg.original_job.tasks[0]
 
         # Check each data set
@@ -318,9 +320,9 @@ class RetrainLogicTest(BaseTaskTest):
         # accepted during this class's tests.
         cls.upload_images_for_training(train_image_count=2, val_image_count=1)
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         first_classifier = cls.source.last_accepted_classifier
         assert first_classifier.status == Classifier.ACCEPTED
 
@@ -328,13 +330,13 @@ class RetrainLogicTest(BaseTaskTest):
         # different 'previous classifier status' cases.
         cls.upload_images_for_training(train_image_count=1, val_image_count=0)
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         with mock_training_results(
             acc_custom=0.57,
             pc_accs_custom=[0.5],
         ):
-            do_collect_spacer_jobs()
+            cls.do_collect_spacer_jobs()
 
         cls.previous_classifier = cls.source.last_accepted_classifier
         assert cls.previous_classifier.status == Classifier.ACCEPTED
@@ -356,7 +358,7 @@ class RetrainLogicTest(BaseTaskTest):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Check source.
         run_scheduled_jobs()
         # Submit classifier.
@@ -450,7 +452,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         self.upload_images_for_training()
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Create a classifier in another source.
         other_source = self.create_source(self.user)
@@ -476,7 +478,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         # Prepare some training images + features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # But set CoralNet's requirement 1 higher than that image count.
         min_images = self.source.image_set.count() + 1
@@ -496,7 +498,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         self.upload_images_for_training()
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Create a classifier in another source.
         other_source = self.create_source(self.user)
@@ -525,7 +527,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Say one training image's features are legacy format.
         train_image = train_images[0]
@@ -558,7 +560,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Say at least one validation image's features are legacy format.
         for image in [val_images[0], val_images[1]]:
@@ -592,7 +594,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Say at least one image's features are a different extractor format.
         for image in [train_images[0], val_images[0]]:
@@ -619,7 +621,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
                 self.user, img, annotations)
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Try to train classifier.
         run_scheduled_jobs_until_empty()
@@ -677,7 +679,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         # Prepare training images + features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Submit training, with a spacer function mocked to
         # throw an error.
@@ -687,7 +689,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             run_scheduled_jobs_until_empty()
 
         # Collect training.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assert_job_failure_message(
             'train_classifier',
@@ -725,7 +727,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
         # Prepare features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         for image in all_images:
             image.features.refresh_from_db()
             self.assertTrue(
@@ -766,7 +768,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             msg="Sanity check: points should have actually changed")
 
         # Collect training.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assert_job_failure_message(
             'train_classifier',
@@ -786,7 +788,29 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
                 image.features.extracted,
                 msg="Features should still be valid for unchanged images")
 
-    def test_classifier_deleted_before_collection(self):
+    def test_internal_job_deleted_before_collect(self):
+        self.upload_images_for_training()
+        # Extract features.
+        run_scheduled_jobs_until_empty()
+        self.do_collect_spacer_jobs()
+        # Train classifier.
+        run_scheduled_jobs_until_empty()
+
+        # Delete Job.
+        job = Job.objects.incomplete().get(
+            job_name='train_classifier', arg_identifier=self.source.pk)
+        job.delete()
+
+        # Collect. The deleted Job shouldn't cause particular issues.
+        # The corresponding BatchJob is considered successful, and besides
+        # that there's no Job to mark the status of.
+        self.do_collect_spacer_jobs()
+        self.assert_job_result_message(
+            'collect_spacer_jobs',
+            "Jobs checked/collected: 1 SUCCEEDED",
+        )
+
+    def test_classifier_deleted_before_collect(self):
         """
         Run the train task, then delete the classifier from the DB, then
         try to collect the train result.
@@ -794,7 +818,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         self.upload_images_for_training()
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Train classifier.
         run_scheduled_jobs_until_empty()
 
@@ -804,7 +828,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         classifier.delete()
 
         # Collect training.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assert_job_failure_message(
             'train_classifier',
@@ -824,19 +848,19 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         # Train one classifier.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
         with mock_training_results(
             acc_custom=0.5,
             pc_accs_custom=[],
         ):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         # Upload enough additional images for the next training to happen.
         self.upload_images_for_training(
             train_image_count=2, val_image_count=0)
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         run_scheduled_jobs_until_empty()
 
         # Collect classifier. Use mock to ensure a low enough accuracy
@@ -845,7 +869,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             acc_custom=0.74,
             pc_accs_custom=[0.5],
         ):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         classifier = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier.status, Classifier.REJECTED_ACCURACY)
@@ -880,7 +904,7 @@ class TrainRefValSetsTest(BaseTaskTest):
     def do_test(self, expected_set_sizes):
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Train classifier.
         with mock.patch(
@@ -966,7 +990,7 @@ class LabelFilteringTest(BaseTaskTest):
 
         # Extract features normally.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Try to train.
         job = do_job(
@@ -975,7 +999,8 @@ class LabelFilteringTest(BaseTaskTest):
         # Call internal job-collection methods to
         # get access to the job return msg.
         queue = get_queue_class()()
-        job_return_msg = queue.collect_job(queue.get_collectable_jobs()[0])[0]
+        job_return_msg = queue.collect_jobs(
+            queue.get_collectable_jobs())[0][0]
         training_task_labels = job_return_msg.original_job.tasks[0].labels
         self.assertEqual(len(training_task_labels.ref), 1)
         self.assertEqual(
@@ -987,7 +1012,7 @@ class LabelFilteringTest(BaseTaskTest):
             training_task_labels.train.label_count, 2,
             msg="Train should have one annotation filtered out"
         )
-        handle_spacer_result(job_return_msg)
+        handle_spacer_results([job_return_msg])
 
         job.refresh_from_db()
         self.assertEqual(

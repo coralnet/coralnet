@@ -22,8 +22,7 @@ from ...common import Extractors
 from ...exceptions import RowColumnMismatchError
 from ...models import Classifier, ClassifyImageEvent, Score
 from ...utils import clear_features
-from .utils import (
-    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
+from .utils import BaseTaskTest, source_check_is_scheduled
 
 
 def noop(*args, **kwargs):
@@ -139,7 +138,7 @@ class SourceCheckTest(BaseTaskTest):
         image = self.upload_image(self.user, other_source)
         # Extract features
         do_job('extract_features', image.pk, source_id=other_source.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertIsNone(other_source.last_accepted_classifier)
         self.source_check_and_assert(
@@ -609,7 +608,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         self.add_annotations(self.user, img, {1: 'A'})
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -650,7 +649,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         img = self.upload_image_with_annotations('confirmed.png')
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Attempt to classify
         run_scheduled_jobs_until_empty()
 
@@ -731,7 +730,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         image = self.upload_image(self.user, other_source)
         # Extract features
         do_job('extract_features', image.pk, source_id=other_source.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify image
         do_job('classify_features', image.pk, source_id=other_source.pk)
         image.refresh_from_db()
@@ -754,10 +753,10 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         img = self.upload_image_with_dupe_points('has_dupe.png')
         # Extract features
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Train
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 

@@ -15,11 +15,54 @@ from jobs.utils import start_job
 from lib.tests.utils import ClientTest
 from lib.tests.utils_data import create_sample_image
 from sources.models import Source
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
+from vision_backend.tests.tasks.utils import TaskTestMixin
+
+
+def mock_url_storage_load(*args) -> BytesIO:
+    """
+    Returns a Pillow image as a stream. This can be used to mock
+    spacer.storage.URLStorage.load()
+    to bypass image-downloading from URL.
+    """
+    im = create_sample_image()
+    # Save the PIL image to an IO stream
+    stream = BytesIO()
+    im.save(stream, 'PNG')
+    # Return the (not yet closed) IO stream
+    return stream
+
+
+class DeployTestMixin(APITestMixin, TaskTestMixin):
+
+    @staticmethod
+    def run_scheduled_jobs_including_deploy():
+        """
+        When running scheduled jobs which include deploy jobs, call this
+        method instead of run_scheduled_jobs_until_empty(), so that the
+        test doesn't have to download from any URLs.
+
+        Note that mock.patch() doesn't seem to reliably carry over with
+        test-subclassing, so this seems to be the better way to 'DRY' a
+        mock.patch().
+        """
+        with mock.patch(
+            'spacer.storage.URLStorage.load', mock_url_storage_load
+        ):
+            # Ensure the test class has a ENABLE_PERIODIC_JOBS=False
+            # settings override, for a call of this function to work.
+            run_scheduled_jobs_until_empty()
+
+    @staticmethod
+    def run_deploy_api_job(api_job):
+        with mock.patch(
+            'spacer.storage.URLStorage.load', mock_url_storage_load
+        ):
+            for unit in api_job.apijobunit_set.all():
+                start_job(unit.internal_job)
 
 
 @override_settings(ENABLE_PERIODIC_JOBS=False)
-class DeployBaseTest(ClientTest, APITestMixin, metaclass=ABCMeta):
+class DeployBaseTest(ClientTest, DeployTestMixin, metaclass=ABCMeta):
 
     @classmethod
     def setUpTestData(cls):
@@ -95,10 +138,10 @@ class DeployBaseTest(ClientTest, APITestMixin, metaclass=ABCMeta):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         # Train a classifier.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         cls.classifier = cls.source.last_accepted_classifier
 
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])
@@ -121,41 +164,3 @@ class DeployBaseTest(ClientTest, APITestMixin, metaclass=ABCMeta):
                     dict(row=10, column=10),
                 ])),
     ]))
-
-    @staticmethod
-    def run_scheduled_jobs_including_deploy():
-        """
-        When running scheduled jobs which include deploy jobs, call this
-        method instead of run_scheduled_jobs_until_empty(), so that the
-        test doesn't have to download from any URLs.
-
-        Note that mock.patch() doesn't seem to reliably carry over with
-        test-subclassing, so this seems to be the better way to 'DRY' a
-        mock.patch().
-        """
-        with mock.patch(
-            'spacer.storage.URLStorage.load', mock_url_storage_load
-        ):
-            run_scheduled_jobs_until_empty()
-
-    @staticmethod
-    def run_deploy_api_job(api_job):
-        with mock.patch(
-            'spacer.storage.URLStorage.load', mock_url_storage_load
-        ):
-            for unit in api_job.apijobunit_set.all():
-                start_job(unit.internal_job)
-
-
-def mock_url_storage_load(*args) -> BytesIO:
-    """
-    Returns a Pillow image as a stream. This can be used to mock
-    spacer.storage.URLStorage.load()
-    to bypass image-downloading from URL.
-    """
-    im = create_sample_image()
-    # Save the PIL image to an IO stream
-    stream = BytesIO()
-    im.save(stream, 'PNG')
-    # Return the (not yet closed) IO stream
-    return stream

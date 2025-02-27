@@ -779,3 +779,26 @@ def spy_decorator(method_to_decorate):
         return method_to_decorate(self, *args, **kwargs)
     wrapper.mock_obj = mock_obj
     return wrapper
+
+
+class DecoratorMock:
+    """
+    A way to mock a method with a version which runs code before
+    and/or after.
+    """
+    @classmethod
+    def get_mock(cls, method_to_decorate):
+        def wrapper(self, *args, **kwargs):
+            cls.before(self, *args, **kwargs)
+            result = method_to_decorate(self, *args, **kwargs)
+            cls.after(self, *args, **kwargs)
+            return result
+        return wrapper
+
+    @classmethod
+    def before(cls, obj, *args, **kwargs):
+        pass
+
+    @classmethod
+    def after(cls, obj, *args, **kwargs):
+        pass

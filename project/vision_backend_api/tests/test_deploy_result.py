@@ -10,7 +10,6 @@ from rest_framework import status
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
 from jobs.models import Job
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
 
 
@@ -222,7 +221,7 @@ class DeployResultEndpointTest(DeployBaseTest):
             'spacer.messages.ClassifyReturnMsg.__init__', mock_classify_return_msg
         ):
             self.run_scheduled_jobs_including_deploy()
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         response = self.get_job_result(job)
 
@@ -334,7 +333,7 @@ class DeployResultEndpointTest(DeployBaseTest):
         ):
             # Complete both units.
             self.run_scheduled_jobs_including_deploy()
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         # But go back and mark one as failed.
         unit_1, unit_2 = ApiJobUnit.objects.filter(
@@ -430,7 +429,7 @@ class QueriesTest(DeployBaseTest):
             self.deploy_url, data, **self.request_kwargs)
         # Complete job
         self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         job = ApiJob.objects.latest('pk')
         url = reverse('api:deploy_result', args=[job.pk])

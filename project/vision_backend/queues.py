@@ -3,7 +3,7 @@ from datetime import timedelta
 from io import BytesIO
 import json
 from logging import getLogger
-from typing import Optional, Type
+from typing import Type
 
 import boto3
 from botocore.exceptions import ClientError
@@ -15,7 +15,8 @@ from spacer.messages import JobMsg, JobReturnMsg
 from spacer.tasks import process_job
 
 from config.constants import SpacerJobSpec
-from jobs.utils import finish_job
+from jobs.models import Job
+from jobs.utils import finish_jobs
 from .models import BatchJob
 
 logger = getLogger(__name__)
@@ -32,7 +33,7 @@ class BaseQueue(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def collect_job(self, job) -> tuple[Optional[JobReturnMsg], str]:
+    def collect_jobs(self, jobs: list) -> tuple[list[JobReturnMsg], list[str]]:
         raise NotImplementedError
 
 
@@ -91,12 +92,23 @@ class BatchQueue(BaseQueue):
         batch_job.save()
 
     @staticmethod
-    def handle_job_failure(batch_job, error_message):
-        batch_job.status = 'FAILED'
-        batch_job.save()
+    def handle_job_failures(failures):
+        if not failures:
+            return
 
-        finish_job(
-            batch_job.internal_job, success=False, result_message=error_message)
+        internal_jobs_by_id = Job.objects.in_bulk(
+            [batch_job.internal_job_id for batch_job, _ in failures])
+
+        finish_jobs_args = []
+        for batch_job, error_message in failures:
+            batch_job.status = 'FAILED'
+            finish_jobs_args.append(dict(
+                job=internal_jobs_by_id[batch_job.internal_job_id],
+                success=False,
+                result_message=error_message,
+            ))
+
+        finish_jobs(finish_jobs_args)
 
     def get_collectable_jobs(self):
         # Not-yet-collected BatchJobs.
@@ -106,39 +118,22 @@ class BatchQueue(BaseQueue):
             .order_by('pk')
         )
 
-    def collect_job(self, job: BatchJob) -> tuple[Optional[JobReturnMsg], str]:
-        if job.batch_token is None:
-            # Didn't get a batch token from AWS Batch. May indicate AWS
-            # service problems (see coralnet issue 458) or it may just be
-            # unlucky timing between submit and collect. Check the
-            # create_date to be sure.
-            if timezone.now() - job.create_date > timedelta(minutes=30):
-                # Likely an AWS service problem.
-                self.handle_job_failure(
-                    job, "Failed to get AWS Batch token.")
-                return None, 'DROPPED'
-            else:
-                # Let's wait a bit longer.
-                return None, 'NOT SUBMITTED'
+    @staticmethod
+    def process_response_for_job(job, response_for_job):
 
-        resp = self.batch_client.describe_jobs(jobs=[job.batch_token])
-
-        if len(resp['jobs']) == 0:
-            self.handle_job_failure(
-                job, f"Batch job [{job}] not found in AWS.")
-            return None, 'DROPPED'
-
-        job.status = resp['jobs'][0]['status']
-        job.save()
+        job.status = response_for_job['status']
 
         if job.status == 'FAILED':
-            self.handle_job_failure(
-                job, f"Batch job [{job}] marked as FAILED by AWS.")
-            return None, job.status
+            return dict(
+                failure=(job, f"Batch job [{job}] marked as FAILED by AWS."),
+                status=job.status,
+            )
 
         if job.status != 'SUCCEEDED':
             # Not done yet, e.g. RUNNING
-            return None, job.status
+            return dict(
+                status=job.status,
+            )
 
         # Else: 'SUCCEEDED'
         job_res_loc = default_storage.spacer_data_loc(job.res_key)
@@ -147,15 +142,89 @@ class BatchQueue(BaseQueue):
             return_msg = JobReturnMsg.load(job_res_loc)
         except (ClientError, IOError) as e:
             # IOError for local storage, ClientError for S3 storage
-            self.handle_job_failure(
-                job,
-                f"Batch job [{job}] succeeded,"
-                f" but couldn't get output at the expected location."
-                f" ({e})")
-            return None, job.status
+            message = (
+                f"Batch job [{job}] succeeded, but couldn't get"
+                f" output at the expected location. ({e})"
+            )
+            return dict(
+                failure=(job, message),
+                status='FAILED',
+            )
 
-        # All went well
-        return return_msg, job.status
+        # All went well.
+        return dict(
+            result=return_msg,
+            status=job.status,
+        )
+
+    def collect_jobs(
+        self, jobs: list[BatchJob]
+    ) -> tuple[list[JobReturnMsg], list[str]]:
+
+        now = timezone.now()
+        failures = []
+        results = []
+        statuses = []
+        batch_tokens = []
+        job_ids_without_tokens = []
+
+        for job in jobs:
+            if job.batch_token:
+                batch_tokens.append(job.batch_token)
+            else:
+                # Didn't get a batch token from AWS Batch. May indicate AWS
+                # service problems (see coralnet issue 458) or it may just be
+                # unlucky timing between submit and collect. Check the
+                # create_date to be sure.
+                if now - job.create_date > timedelta(minutes=30):
+                    # Likely an AWS service problem.
+                    failures.append((
+                        job, "Failed to get AWS Batch token."))
+                    statuses.append('DROPPED')
+                else:
+                    # Let's wait a bit longer.
+                    statuses.append('NOT SUBMITTED')
+                job_ids_without_tokens.append(job.pk)
+
+        if batch_tokens:
+            # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/batch/client/describe_jobs.html
+            # jobs is "A list of up to 100 job IDs."
+            boto_response = self.batch_client.describe_jobs(jobs=batch_tokens)
+
+            batch_tokens_to_responses = dict(
+                (response_job['jobId'], response_job)
+                for response_job in boto_response['jobs']
+            )
+        else:
+            batch_tokens_to_responses = dict()
+
+        for job in jobs:
+
+            if job.pk in job_ids_without_tokens:
+                # Nothing more to do right now without a token.
+                continue
+
+            if job.batch_token not in batch_tokens_to_responses:
+                failures.append((
+                    job, f"Batch job [{job}] not found in AWS."))
+                statuses.append('DROPPED')
+                continue
+
+            response_for_job = batch_tokens_to_responses[job.batch_token]
+
+            d = self.process_response_for_job(job, response_for_job)
+            if 'failure' in d:
+                failures.append(d['failure'])
+            if 'status' in d:
+                statuses.append(d['status'])
+            if 'result' in d:
+                results.append(d['result'])
+
+        self.handle_job_failures(failures)
+
+        BatchJob.objects.bulk_update(jobs, ['status'])
+
+        return results, statuses
 
 
 class LocalQueue(BaseQueue):
@@ -186,16 +255,25 @@ class LocalQueue(BaseQueue):
         filenames.sort()
         return filenames
 
-    def collect_job(
-            self, job_filename: str) -> tuple[Optional[JobReturnMsg], str]:
+    def collect_jobs(
+        self, job_filenames: list[str]
+    ) -> tuple[list[JobReturnMsg], list[str]]:
 
-        # Read the job result message
-        filepath = default_storage.path_join('backend_job_res', job_filename)
-        with default_storage.open(filepath) as results_file:
-            return_msg = JobReturnMsg.deserialize(json.load(results_file))
-        # Delete the job result file
-        default_storage.delete(filepath)
+        results = []
+        statuses = []
 
-        # Unlike BatchQueue, LocalQueue is only aware of the
-        # jobs that successfully output their results.
-        return return_msg, 'SUCCEEDED'
+        for job_filename in job_filenames:
+            # Read the job result message
+            filepath = default_storage.path_join(
+                'backend_job_res', job_filename)
+            with default_storage.open(filepath) as results_file:
+                return_msg = JobReturnMsg.deserialize(json.load(results_file))
+            # Delete the job result file
+            default_storage.delete(filepath)
+
+            # Unlike BatchQueue, LocalQueue is only aware of the
+            # jobs that successfully output their results.
+            results.append(return_msg)
+            statuses.append('SUCCEEDED')
+
+        return results, statuses

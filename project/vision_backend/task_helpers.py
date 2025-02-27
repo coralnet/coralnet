@@ -1,8 +1,8 @@
 """
 This file contains helper functions to vision_backend.tasks.
 """
-from abc import ABC
-from collections import Counter
+import abc
+from collections import Counter, defaultdict
 from logging import getLogger
 import re
 
@@ -10,31 +10,32 @@ import numpy as np
 from django.conf import settings
 from django.core.mail import mail_admins
 from django.db import transaction
-from django.db.models import F
-from django.utils.timezone import now
+from django.db.models import Count, F, Q
+from django.utils import timezone
 from spacer.data_classes import ImageLabels
-from spacer.messages import \
-    ExtractFeaturesMsg, \
-    TrainClassifierMsg, \
-    ClassifyImageMsg, \
-    ClassifyReturnMsg, \
-    JobReturnMsg
+from spacer.messages import (
+    ClassifyImageMsg,
+    ClassifyReturnMsg,
+    ExtractFeaturesMsg,
+    JobReturnMsg,
+    TrainClassifierMsg,
+)
 
 from accounts.utils import get_robot_user
 from annotations.models import Annotation
-from api_core.models import ApiJobUnit
+from api_core.models import ApiJob, ApiJobUnit
 from errorlogs.utils import instantiate_error_log
 from images.models import Image, Point
 from jobs.exceptions import JobError
 from jobs.models import Job
-from jobs.utils import finish_job
-from labels.models import Label, LabelSet
+from jobs.utils import finish_jobs
+from labels.models import Label
 from .exceptions import RowColumnMismatchError
-from .models import Classifier, ClassifyImageEvent, Score
+from .models import Classifier, ClassifyImageEvent, Features, Score
 from .utils import (
     extractor_to_name,
     reset_invalid_features_bulk,
-    schedule_source_check,
+    schedule_source_check_on_commit,
     source_is_finished_with_core_jobs,
 )
 
@@ -215,7 +216,7 @@ def make_dataset(images: list[Image]) -> ImageLabels:
     return ImageLabels(data)
 
 
-class SpacerResultHandler(ABC):
+class SpacerResultHandler(abc.ABC):
     """
     Each type of collectable spacer job should define a subclass
     of this base class.
@@ -228,95 +229,132 @@ class SpacerResultHandler(ABC):
     # rather than errors demanding attention of coralnet / pyspacer devs.
     non_priority_error_classes = []
 
-    @classmethod
-    def handle(cls, job_res: JobReturnMsg):
-        if not job_res.ok:
-            # Spacer got an uncaught error.
-            error_traceback = job_res.error_message
-            # Last line of the traceback should serve as a decent
-            # one-line summary. Has the error class and message.
-            error_message = error_traceback.splitlines()[-1]
-            # The error message should be either like:
-            # 1) `somemodule.SomeError: some error info`.
-            # We extract the error class/info as the part before/after
-            # the first colon.
-            # 2) `AssertionError`. Just a class, no colon, no detail.
-            if ':' in error_message:
-                error_class, error_info = error_message.split(':', maxsplit=1)
-                error_info = error_info.strip()
+    def handle_job_results(self, job_results: list[JobReturnMsg]):
+        """
+        The job_results must all have the same task name.
+        """
+        spacer_task_results = []
+
+        for job_res in job_results:
+            if not job_res.ok:
+                spacer_error = self.handle_job_result_error(job_res)
             else:
-                error_class = error_message
-                error_info = ""
+                spacer_error = None
 
-            if error_class not in cls.non_priority_error_classes:
-                # Priority error; treat like an internal server error.
+            # CoralNet currently only submits spacer jobs containing a single
+            # task.
+            task = job_res.original_job.tasks[0]
+            spacer_task_results.append(dict(
+                task=task,
+                job_res=job_res,
+                spacer_error=spacer_error,
+            ))
 
-                job_res_repr = repr(job_res)
-                if len(job_res_repr) > settings.EMAIL_SIZE_SOFT_LIMIT:
-                    job_res_repr = (
-                        job_res_repr[:settings.EMAIL_SIZE_SOFT_LIMIT]
-                        + " ...(truncated)"
-                    )
+        self.jobs_by_id = self.get_internal_jobs(
+            [result['task'] for result in spacer_task_results])
 
-                mail_admins(
-                    f"Spacer job failed: {cls.job_name}",
-                    job_res_repr,
-                )
+        self.handle_spacer_task_results(spacer_task_results)
 
-                # Just the class name, not the whole dotted path.
-                error_class_name = error_class.split('.')[-1]
-
-                error_html = f'<pre>{error_traceback}</pre>'
-                error_log = instantiate_error_log(
-                    kind=error_class_name,
-                    html=error_html,
-                    path=f"Spacer - {cls.job_name}",
-                    info=error_info,
-                    data=job_res_repr,
-                )
-                error_log.save()
-
-            spacer_error = error_class, error_message
+    @classmethod
+    def handle_job_result_error(cls, job_res):
+        # Spacer got an uncaught error.
+        error_traceback = job_res.error_message
+        # Last line of the traceback should serve as a decent
+        # one-line summary. Has the error class and message.
+        error_message = error_traceback.splitlines()[-1]
+        # The error message should be either like:
+        # 1) `somemodule.SomeError: some error info`.
+        # We extract the error class/info as the part before/after
+        # the first colon.
+        # 2) `AssertionError`. Just a class, no colon, no detail.
+        if ':' in error_message:
+            error_class, error_info = error_message.split(':', maxsplit=1)
+            error_info = error_info.strip()
         else:
-            spacer_error = None
+            error_class = error_message
+            error_info = ""
 
-        # CoralNet currently only submits spacer jobs containing a single
-        # task.
-        task = job_res.original_job.tasks[0]
+        if error_class not in cls.non_priority_error_classes:
+            # Priority error; treat like an internal server error.
 
-        success = False
-        result_message = None
-        try:
-            result_message = cls.handle_spacer_task_result(
-                task, job_res, spacer_error)
-            success = True
-        except JobError as e:
-            result_message = str(e)
-        finally:
-            internal_job_id = task.job_token
+            job_res_repr = repr(job_res)
+            if len(job_res_repr) > settings.EMAIL_SIZE_SOFT_LIMIT:
+                job_res_repr = (
+                    job_res_repr[:settings.EMAIL_SIZE_SOFT_LIMIT]
+                    + " ...(truncated)"
+                )
 
-            job = Job.objects.get(pk=internal_job_id)
-            finish_job(job, success=success, result_message=result_message)
+            mail_admins(
+                f"Spacer job failed: {cls.job_name}",
+                job_res_repr,
+            )
 
-            cls.after_finishing_job(job.pk)
+            # Just the class name, not the whole dotted path.
+            error_class_name = error_class.split('.')[-1]
+
+            error_html = f'<pre>{error_traceback}</pre>'
+            error_log = instantiate_error_log(
+                kind=error_class_name,
+                html=error_html,
+                path=f"Spacer - {cls.job_name}",
+                info=error_info,
+                data=job_res_repr,
+            )
+            error_log.save()
+
+        return error_class, error_message
+
+    @staticmethod
+    def get_internal_job_id(spacer_task):
+        return int(spacer_task.job_token)
 
     @classmethod
-    def after_finishing_job(cls, job_id):
-        pass
+    def get_internal_jobs(cls, spacer_tasks):
+        job_ids = [cls.get_internal_job_id(task) for task in spacer_tasks]
+        jobs_by_id = Job.objects.in_bulk(job_ids)
+        return jobs_by_id
 
-    @classmethod
-    def get_internal_job(cls, task):
-        internal_job_id = task.job_token
-        try:
-            return Job.objects.get(pk=internal_job_id)
-        except Job.DoesNotExist:
-            raise JobError(f"Job {internal_job_id} doesn't exist anymore.")
+    @abc.abstractmethod
+    def handle_spacer_task_results(self, spacer_task_results: list[dict]):
+        raise NotImplementedError
+
+    def handle_task_results_main_loop(self, spacer_task_results):
+        finish_jobs_args = []
+
+        for spacer_task_result in spacer_task_results:
+            task = spacer_task_result['task']
+            success = False
+            result_message = None
+
+            job_id = self.get_internal_job_id(task)
+            try:
+                job = self.jobs_by_id[job_id]
+            except KeyError:
+                # Job doesn't exist anymore. There shouldn't be anything
+                # else to do regarding this result.
+                continue
+
+            try:
+                result_message = self.handle_spacer_task_result(
+                    **spacer_task_result)
+                success = True
+            except JobError as e:
+                result_message = str(e)
+            finally:
+                finish_jobs_args.append(dict(
+                    job=job,
+                    success=success,
+                    result_message=result_message,
+                ))
+
+        finish_jobs(finish_jobs_args)
 
     @classmethod
     def handle_spacer_task_result(cls, task, job_res, spacer_error):
         """
         Handles the result of a spacer task (a sub-unit within a spacer job)
         and raises a JobError if an error is found.
+        Optionally returns a string result-message.
         """
         raise NotImplementedError
 
@@ -333,19 +371,50 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
         'spacer.exceptions.RowColumnMismatchError',
     ]
 
-    @classmethod
+    def handle_spacer_task_results(self, spacer_task_results: list[dict]):
+        jobs = list(self.jobs_by_id.values())
+        image_ids = [int(job.arg_identifier) for job in jobs]
+
+        self.images_by_id = Image.objects.in_bulk(image_ids)
+        self.features_by_image_id = Features.objects.in_bulk(
+            image_ids, field_name='image_id')
+        self.now = timezone.now()
+        # TODO: Retrieving points and feature-extractor settings for all
+        #  images in bulk here could result in more DB optimization.
+
+        self.handle_task_results_main_loop(spacer_task_results)
+
+        features = list(self.features_by_image_id.values())
+        Features.objects.bulk_update(
+            features,
+            ['extracted', 'extractor', 'runtime_total',
+             'extractor_loaded_remotely', 'extracted_date', 'has_rowcols'],
+        )
+
+        source_ids = set(job.source_id for job in jobs)
+        for source_id in source_ids:
+            if source_is_finished_with_core_jobs(source_id):
+                # If not waiting for other 'core' jobs,
+                # check if the source has any next steps.
+                schedule_source_check_on_commit(source_id)
+
     def handle_spacer_task_result(
-            cls,
+            self,
             task: ExtractFeaturesMsg,
             job_res: JobReturnMsg,
             spacer_error: tuple[str, str] | None) -> None:
 
-        internal_job = cls.get_internal_job(task)
-        image_id = internal_job.arg_identifier
+        internal_job = self.jobs_by_id[self.get_internal_job_id(task)]
+        image_id = int(internal_job.arg_identifier)
+
         try:
-            img = Image.objects.get(pk=image_id)
-        except Image.DoesNotExist:
+            image = self.images_by_id[image_id]
+        except KeyError:
             raise JobError(f"Image {image_id} doesn't exist anymore.")
+
+        # This should always exist, so we'll let it be an uncaught
+        # exception if it's missing.
+        features = self.features_by_image_id[image_id]
 
         if spacer_error:
             # Error from spacer when running the spacer job.
@@ -356,37 +425,30 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
         task_res = job_res.results[0]
 
         # Check that the row-col information hasn't changed.
-        rowcols = [(p.row, p.column) for p in Point.objects.filter(image=img)]
+        rowcols = [
+            (p['row'], p['column']) for p
+            in image.point_set.values('row', 'column')]
         if not set(rowcols) == set(task.rowcols):
             raise JobError(
-                f"Row-col data for {img} has changed"
+                f"Row-col data for {image} has changed"
                 f" since this task was submitted.")
 
         # Check that the active feature-extractor hasn't changed.
         task_extractor = extractor_to_name(task.extractor)
-        if task_extractor != img.source.feature_extractor:
+        if task_extractor != image.source.feature_extractor:
             raise JobError(
                 f"Feature extractor selection has changed"
                 f" since this task was submitted.")
 
         # If all is ok store meta-data.
-        img.features.extracted = True
-        img.features.extractor = task_extractor
-        img.features.runtime_total = task_res.runtime
+        features.extracted = True
+        features.extractor = task_extractor
+        features.runtime_total = task_res.runtime
 
-        img.features.extractor_loaded_remotely = \
+        features.extractor_loaded_remotely = \
             task_res.extractor_loaded_remotely
-        img.features.extracted_date = now()
-        img.features.has_rowcols = True
-        img.features.save()
-
-    @classmethod
-    def after_finishing_job(cls, job_id):
-        job = Job.objects.get(pk=job_id)
-        if source_is_finished_with_core_jobs(job.source_id):
-            # If not waiting for other 'core' jobs,
-            # check if the source has any next steps.
-            schedule_source_check(job.source_id)
+        features.extracted_date = self.now
+        features.has_rowcols = True
 
 
 class SpacerTrainResultHandler(SpacerResultHandler):
@@ -400,6 +462,26 @@ class SpacerTrainResultHandler(SpacerResultHandler):
         # shouldn't be needed.
         'spacer.exceptions.RowColumnMismatchError',
     ]
+
+    def handle_spacer_task_results(self, spacer_task_results: list[dict]):
+        """
+        This delegates almost everything to the main loop because we don't
+        expect to batch many training jobs together, and thus bulk actions
+        won't help much.
+        """
+        self.handle_task_results_main_loop(spacer_task_results)
+
+        for job in self.jobs_by_id.values():
+            # Successful jobs related to classifier history should persist
+            # in the DB.
+            if job.status == Job.Status.SUCCESS:
+                job.persist = True
+                job.save()
+
+            if source_is_finished_with_core_jobs(job.source_id):
+                # If not waiting for other 'core' jobs,
+                # check if the source has any next steps.
+                schedule_source_check_on_commit(job.source_id)
 
     @classmethod
     def handle_spacer_task_result(
@@ -515,21 +597,6 @@ class SpacerTrainResultHandler(SpacerResultHandler):
 
         return f"New classifier accepted: {classifier.pk}"
 
-    @classmethod
-    def after_finishing_job(cls, job_id):
-        job = Job.objects.get(pk=job_id)
-
-        # Successful jobs related to classifier history should persist
-        # in the DB.
-        if job.status == Job.Status.SUCCESS:
-            job.persist = True
-            job.save()
-
-        if source_is_finished_with_core_jobs(job.source_id):
-            # If not waiting for other 'core' jobs,
-            # check if the source has any next steps.
-            schedule_source_check(job.source_id)
-
 
 class SpacerClassifyResultHandler(SpacerResultHandler):
     job_name = 'classify_image'
@@ -556,19 +623,72 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
         'spacer.exceptions.URLDownloadError',
     ]
 
-    @classmethod
+    @staticmethod
+    def get_classifier_labelset(classifier_id):
+        classifier = Classifier.objects.get(pk=classifier_id)
+        labelset = classifier.source.labelset
+        labels_values = list(labelset.locallabel_set.values(
+            'global_label_id',
+            'global_label__name',
+            'code',
+        ))
+        return {
+            label_values['global_label_id']: label_values
+            for label_values in labels_values
+        }
+
+    def handle_spacer_task_results(self, spacer_task_results: list[dict]):
+        job_ids = list(self.jobs_by_id.keys())
+        self.job_units_by_job_id = ApiJobUnit.objects.in_bulk(
+            job_ids, field_name='internal_job_id')
+        self.labelsets_by_classifier = dict()
+
+        self.handle_task_results_main_loop(spacer_task_results)
+
+        job_units = list(self.job_units_by_job_id.values())
+        ApiJobUnit.objects.bulk_update(job_units, ['result_json'])
+
+        api_jobs = (
+            ApiJob.objects
+            .filter(apijobunit__in=[unit.pk for unit in job_units])
+            .annotate(
+                pending_units=Count(
+                    'apijobunit',
+                    filter=Q(
+                        apijobunit__internal_job__status
+                        =Job.Status.PENDING)),
+                in_progress_units=Count(
+                    'apijobunit',
+                    filter=Q(
+                        apijobunit__internal_job__status
+                        =Job.Status.IN_PROGRESS)),
+            )
+        )
+        api_jobs_to_update = []
+        for api_job in api_jobs:
+            if (
+                api_job.pending_units == 0
+                and api_job.in_progress_units == 0
+                and not api_job.finish_date
+            ):
+                # All other units of the API job have finished too.
+                api_job.finish_date = timezone.now()
+                api_jobs_to_update.append(api_job)
+        ApiJob.objects.bulk_update(api_jobs_to_update, ['finish_date'])
+
     def handle_spacer_task_result(
-            cls,
+            self,
             task: ClassifyImageMsg,
             job_res: JobReturnMsg,
             spacer_error: tuple[str, str] | None) -> None:
 
-        internal_job = cls.get_internal_job(task)
+        job_id = self.get_internal_job_id(task)
+
         try:
-            job_unit = ApiJobUnit.objects.get(internal_job=internal_job)
-        except ApiJobUnit.DoesNotExist:
+            job_unit = self.job_units_by_job_id[job_id]
+        except KeyError:
             raise JobError(
-                f"API job unit for internal-job {internal_job.pk}"
+                f"API job unit for internal-job {job_id}"
                 f" does not exist.")
 
         if spacer_error:
@@ -580,19 +700,23 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
         task_res = job_res.results[0]
 
         classifier_id = job_unit.request_json['classifier_id']
-        try:
-            classifier = Classifier.objects.get(pk=classifier_id)
-        except Classifier.DoesNotExist:
-            raise JobError(f"Classifier of id {classifier_id} does not exist.")
+        if classifier_id not in self.labelsets_by_classifier:
+            try:
+                self.labelsets_by_classifier[classifier_id] = (
+                    self.get_classifier_labelset(classifier_id))
+            except Classifier.DoesNotExist:
+                raise JobError(
+                    f"Classifier of id {classifier_id} does not exist.")
 
         job_unit.result_json = dict(
             url=job_unit.request_json['url'],
-            points=cls.build_points_dicts(task_res, classifier.source.labelset)
+            points=self.build_points_dicts(
+                task_res, self.labelsets_by_classifier[classifier_id]),
         )
-        job_unit.save()
 
     @staticmethod
-    def build_points_dicts(res: ClassifyReturnMsg, labelset: LabelSet):
+    def build_points_dicts(
+            res: ClassifyReturnMsg, labels: dict[int, dict]):
         """
         Converts scores from the deploy call to the dictionary returned
         by the API
@@ -602,46 +726,28 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
         nbr_scores = min(settings.NBR_SCORES_PER_ANNOTATION,
                          len(res.classes))
 
-        # Pre-fetch label objects. The local labels let us reach all the
-        # fields we want.
-        local_labels = []
-        for class_ in res.classes:
-            local_label = labelset.locallabel_set.get(global_label__pk=class_)
-            local_labels.append(local_label)
+        classes_info = [
+            labels[global_label_id]
+            for global_label_id in res.classes
+        ]
 
         data = []
         for row, col, scores in res.scores:
-            # grab the index of the highest indices
-            inds = np.argsort(scores)[::-1][:nbr_scores]
+            # Grab the indices of the highest-scoring labels.
+            best_scoring_indices = np.argsort(scores)[::-1][:nbr_scores]
             classifications = []
-            for ind in inds:
-                local_label = local_labels[ind]
+            for ind in best_scoring_indices:
+                class_info = classes_info[ind]
                 classifications.append(dict(
-                    label_id=local_label.global_label.pk,
-                    label_name=local_label.global_label.name,
-                    label_code=local_label.code,
-                    score=scores[ind]))
-            data.append(dict(row=row,
-                             column=col,
-                             classifications=classifications
-                             )
-                        )
+                    label_id=class_info['global_label_id'],
+                    label_name=class_info['global_label__name'],
+                    label_code=class_info['code'],
+                    score=scores[ind],
+                ))
+            data.append(dict(
+                row=row, column=col, classifications=classifications,
+            ))
         return data
-
-    @classmethod
-    def after_finishing_job(cls, job_id):
-        job = Job.objects.get(pk=job_id)
-
-        if job.status in [Job.Status.SUCCESS, Job.Status.FAILURE]:
-            # Finished this API job unit.
-            api_job = job.apijobunit.parent
-            unfinished_units = api_job.apijobunit_set.filter(
-                internal_job__status__in=[
-                    Job.Status.PENDING, Job.Status.IN_PROGRESS])
-            if not unfinished_units.exists():
-                # All other units of the API job have finished too.
-                api_job.finish_date = job.modify_date
-                api_job.save()
 
 
 handler_classes = [
@@ -651,12 +757,24 @@ handler_classes = [
 ]
 
 
-def handle_spacer_result(job_res: JobReturnMsg):
-    """Handles the job results found in queue. """
+def handle_spacer_results(job_results: list[JobReturnMsg]):
+    task_names_to_handler_classes = dict(
+        (handler_class.job_name, handler_class)
+        for handler_class in handler_classes
+    )
 
-    task_name = job_res.original_job.task_name
-    for HandlerClass in handler_classes:
-        if task_name == HandlerClass.job_name:
-            HandlerClass.handle(job_res)
-            return
-    logger.error(f"Spacer task name [{task_name}] not recognized")
+    job_results_by_task_name = defaultdict(list)
+    for job_res in job_results:
+        job_results_by_task_name[
+            job_res.original_job.task_name].append(job_res)
+
+    for task_name, task_name_job_results in job_results_by_task_name.items():
+        if task_name in task_names_to_handler_classes:
+            handler_class = task_names_to_handler_classes[task_name]
+            # Ensure that job statuses and other DB objects tied to them
+            # (such as Features objects, for extract-features jobs) get
+            # updated at the same time from the perspective of other threads.
+            with transaction.atomic():
+                handler_class().handle_job_results(task_name_job_results)
+        else:
+            logger.error(f"Spacer task name [{task_name}] not recognized")
