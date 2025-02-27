@@ -23,7 +23,6 @@ from jobs.tests.utils import JobUtilsMixin
 from lib.tests.utils import EmailAssertionsMixin
 from sources.models import Source
 from vision_backend.models import Classifier
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
 
 
@@ -163,7 +162,7 @@ class DeployThrottleTest(DeployBaseTest):
         # Finish one of the original user's jobs
         job = ApiJob.objects.get(pk=job_ids[0])
         self.run_deploy_api_job(job)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Try submitting again as the original user
         response = self.submit_deploy()
@@ -618,7 +617,7 @@ class SuccessTest(DeployBaseTest):
         self.client.post(self.deploy_url, data, **self.request_kwargs)
         # Deploy
         self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         deploy_job = ApiJob.objects.latest('pk')
 
@@ -770,7 +769,7 @@ class TaskErrorsTest(
         # Collect. The deleted Job shouldn't cause particular issues.
         # The corresponding BatchJob is considered successful, and besides
         # that there's no Job to mark the status of.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs',
             "Jobs checked/collected: 1 SUCCEEDED",
@@ -791,7 +790,7 @@ class TaskErrorsTest(
         job_id = unit.internal_job_id
         unit.delete()
         # Collect.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assert_job_failure_message(
             'classify_image',
             f"API job unit for internal-job {job_id} does not exist.",
@@ -813,7 +812,7 @@ class TaskErrorsTest(
             raise error
         with mock.patch('spacer.tasks.classify_image', raise_error):
             run_scheduled_jobs()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         return ApiJobUnit.objects.latest('pk')
 
@@ -920,7 +919,7 @@ class TaskErrorsTest(
         classifier_id = unit.request_json['classifier_id']
         Classifier.objects.get(pk=classifier_id).delete()
         # Collect.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assert_job_failure_message(
             'classify_image',
             f"Classifier of id {classifier_id} does not exist.",
@@ -985,7 +984,7 @@ class CollectJobsQueriesTest(DeployBaseTest):
         self.run_scheduled_jobs_including_deploy()
         # Deploy collect; should run less than 1 query per image.
         with self.assert_queries_less_than(image_count):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         deploy_job = ApiJob.objects.latest('pk')
         self.assertEqual(

@@ -13,8 +13,7 @@ from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
 from vision_backend.common import Extractors
 from vision_backend.models import Classifier
-from vision_backend.tests.tasks.utils import (
-    BaseTaskTest, do_collect_spacer_jobs)
+from vision_backend.tests.tasks.utils import BaseTaskTest
 from vision_backend.utils import schedule_source_check
 from ..models import Source
 
@@ -294,7 +293,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             schedule_source_check(self.source.pk)
             # Train
             run_scheduled_jobs_until_empty()
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         classifier_2 = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)

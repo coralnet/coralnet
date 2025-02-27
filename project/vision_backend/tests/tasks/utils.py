@@ -8,11 +8,8 @@ from jobs.models import Job
 from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import abort_job
 from lib.tests.utils import ClientTest
+from lib.tests.utils_data import DataTestMixin
 from ...models import Classifier
-
-
-def do_collect_spacer_jobs():
-    return do_job('collect_spacer_jobs')
 
 
 def source_check_is_scheduled(source_id):
@@ -40,30 +37,20 @@ def ensure_source_check_not_scheduled(source_id):
         abort_job(job.pk)
 
 
-@override_settings(
-    SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue',
-    # Setting this False allows us to:
-    # - Use run_scheduled_jobs_until_empty() without infinite looping.
-    # - Run jobs like collect_spacer_jobs only when we explicitly want to.
-    ENABLE_PERIODIC_JOBS=False,
-)
-class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
-    """Base test class for testing the backend's 'main' tasks."""
+class TaskTestMixin(
+    DataTestMixin, JobUtilsMixin, UploadAnnotationsCsvTestMixin
+):
+    """Mixin for testing the backend's 'main' tasks."""
+
+    source: 'Source'
+    user: 'User'
 
     @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(
-            cls.user,
-            default_point_generation_method=dict(type='simple', points=5))
-        cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
-        cls.create_labelset(cls.user, cls.source, cls.labels)
-
-    def setUp(self):
-        super().setUp()
-        self.source.refresh_from_db()
+    def do_collect_spacer_jobs(cls):
+        # This job schedules source checks on commit, and so this
+        # context manager ensures those checks run during the tests.
+        with cls.captureOnCommitCallbacks(execute=True):
+            return do_job('collect_spacer_jobs')
 
     def assertExistsInStorage(self, filepath):
         self.assertTrue(default_storage.exists(filepath))
@@ -176,11 +163,11 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
         # other job runs in the meantime.
         for image in [*train_images, *val_images]:
             do_job('extract_features', image.pk, source_id=source.pk)
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         # Train classifier
         job = do_job(
             'train_classifier', source.pk, source_id=source.pk)
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
 
         return Classifier.objects.get(train_job_id=job.pk)
 
@@ -192,7 +179,7 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
         image = cls.upload_image(cls.user, source)
         # Extract features
         do_job('extract_features', image.pk, source_id=source.pk)
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
 
         image.refresh_from_db()
         return image
@@ -242,3 +229,29 @@ class BaseTaskTest(ClientTest, UploadAnnotationsCsvTestMixin, JobUtilsMixin):
         return img
 
     rowcols_with_dupes_included = [(40, 60), (50, 50), (50, 50)]
+
+
+@override_settings(
+    SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue',
+    # Setting this False allows us to:
+    # - Use run_scheduled_jobs_until_empty() without infinite looping.
+    # - Run jobs like collect_spacer_jobs only when we explicitly want to.
+    ENABLE_PERIODIC_JOBS=False,
+)
+class BaseTaskTest(ClientTest, TaskTestMixin):
+    """This is more 'batteries included' than TaskTestMixin."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=5))
+        cls.labels = cls.create_labels(cls.user, ['A', 'B', 'C'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+    def setUp(self):
+        super().setUp()
+        self.source.refresh_from_db()

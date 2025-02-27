@@ -10,11 +10,11 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job, fabricate_job
 from jobs.utils import abort_job, schedule_job
-from lib.tests.utils import spy_decorator
+from lib.tests.utils import DecoratorMock, spy_decorator
 from vision_backend_api.tests.utils import DeployTestMixin
 from ...models import Score, Classifier
-from .utils import (
-    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
+from ...task_helpers import SpacerResultHandler
+from .utils import BaseTaskTest, source_check_is_scheduled
 
 
 class ResetClassifiersForSourceTest(BaseTaskTest):
@@ -77,7 +77,7 @@ class ResetClassifiersForSourceTest(BaseTaskTest):
 
         # Train
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify
         run_scheduled_jobs_until_empty()
 
@@ -214,7 +214,7 @@ class ResetFeaturesForSourceTest(BaseTaskTest):
 
         img = self.upload_image(self.user, self.source)
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assertTrue(img.features.extracted, "img should have features")
 
         # Abort the scheduled source check.
@@ -287,6 +287,15 @@ def schedule_collect_spacer_jobs():
     return Queue
 
 
+class HandleJobResultsDecoratorMock(DecoratorMock):
+    @classmethod
+    def after(cls, obj, *args, **kwargs):
+        # The target method is called within a transaction.
+        # Raising an error after that method's body should make the
+        # transaction roll back.
+        raise ValueError("Inducing a rollback")
+
+
 class CollectSpacerJobsTest(BaseTaskTest):
 
     def test_success(self):
@@ -299,13 +308,13 @@ class CollectSpacerJobsTest(BaseTaskTest):
         # The effects of the actual spacer-job collections (e.g. features
         # marked as extracted) don't need to be tested here. That belongs in
         # e.g. feature-extraction tests.
-        job = do_collect_spacer_jobs()
+        job = self.do_collect_spacer_jobs()
         self.assertEqual(
             job.result_message, "Jobs checked/collected: 2 SUCCEEDED")
         self.assertFalse(job.hidden)
 
         # Should be no more to collect.
-        job = do_collect_spacer_jobs()
+        job = self.do_collect_spacer_jobs()
         self.assertEqual(
             job.result_message, "Jobs checked/collected: 0")
         self.assertTrue(job.hidden)
@@ -331,19 +340,19 @@ class CollectSpacerJobsTest(BaseTaskTest):
         # collecting 4th job (as that's when the 1st time-check is done)
         with mock.patch('vision_backend.tasks.batch_generator', mock_batcher):
             self.assertEqual(
-                do_collect_spacer_jobs().result_message,
+                self.do_collect_spacer_jobs().result_message,
                 "Jobs checked/collected: 3 SUCCEEDED (timed out)")
 
         # Running again should collect the other jobs. It'll still say
         # timed out because it didn't get a chance to check if there were
         # more jobs before timing out.
         self.assertEqual(
-            do_collect_spacer_jobs().result_message,
+            self.do_collect_spacer_jobs().result_message,
             "Jobs checked/collected: 3 SUCCEEDED (timed out)")
 
         # Should be no more to collect.
         self.assertEqual(
-            do_collect_spacer_jobs().result_message,
+            self.do_collect_spacer_jobs().result_message,
             "Jobs checked/collected: 0")
 
     def test_no_multiple_runs(self):
@@ -356,11 +365,38 @@ class CollectSpacerJobsTest(BaseTaskTest):
         with mock.patch(
             'vision_backend.tasks.get_queue_class', schedule_collect_spacer_jobs
         ):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         self.assertEqual(
             Job.objects.filter(job_name='collect_spacer_jobs').count(), 1,
             "Should not have accepted the second run")
+
+    def test_transaction(self):
+        # Run 2 extract-features jobs.
+        image1 = self.upload_image(self.user, self.source)
+        image2 = self.upload_image(self.user, self.source)
+        run_scheduled_jobs_until_empty()
+
+        # Collect jobs, mocking the part near the end of the transaction
+        # to force a rollback.
+        handle_method = HandleJobResultsDecoratorMock().get_mock(
+            SpacerResultHandler.handle_job_results)
+        with mock.patch.object(
+            SpacerResultHandler, 'handle_job_results', handle_method
+        ):
+            job = self.do_collect_spacer_jobs()
+
+        self.assertEqual(
+            job.result_message, "ValueError: Inducing a rollback")
+        # Jobs' completion should not have been committed.
+        self.assertEqual(
+            Job.objects.get(
+                job_name='extract_features', arg_identifier=image1.pk).status,
+            Job.Status.IN_PROGRESS)
+        self.assertEqual(
+            Job.objects.get(
+                job_name='extract_features', arg_identifier=image2.pk).status,
+            Job.Status.IN_PROGRESS)
 
 
 class CollectSpacerJobsMultipleTypesTest(BaseTaskTest, DeployTestMixin):
@@ -389,7 +425,7 @@ class CollectSpacerJobsMultipleTypesTest(BaseTaskTest, DeployTestMixin):
         self.upload_images_for_training(source=source_2, user=user)
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Run training.
         run_scheduled_jobs_until_empty()
 
@@ -424,7 +460,7 @@ class CollectSpacerJobsMultipleTypesTest(BaseTaskTest, DeployTestMixin):
             self.assertEqual(job.status, Job.Status.IN_PROGRESS)
 
         # Now collect.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # 1 deploy, 1 train, 2 extract
         self.assert_job_result_message(
             'collect_spacer_jobs', "Jobs checked/collected: 4 SUCCEEDED")

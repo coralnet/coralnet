@@ -35,7 +35,7 @@ from .models import Classifier, ClassifyImageEvent, Features, Score
 from .utils import (
     extractor_to_name,
     reset_invalid_features_bulk,
-    schedule_source_check,
+    schedule_source_check_on_commit,
     source_is_finished_with_core_jobs,
 )
 
@@ -396,7 +396,7 @@ class SpacerFeatureResultHandler(SpacerResultHandler):
             if source_is_finished_with_core_jobs(source_id):
                 # If not waiting for other 'core' jobs,
                 # check if the source has any next steps.
-                schedule_source_check(source_id)
+                schedule_source_check_on_commit(source_id)
 
     def handle_spacer_task_result(
             self,
@@ -481,7 +481,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             if source_is_finished_with_core_jobs(job.source_id):
                 # If not waiting for other 'core' jobs,
                 # check if the source has any next steps.
-                schedule_source_check(job.source_id)
+                schedule_source_check_on_commit(job.source_id)
 
     @classmethod
     def handle_spacer_task_result(
@@ -771,6 +771,10 @@ def handle_spacer_results(job_results: list[JobReturnMsg]):
     for task_name, task_name_job_results in job_results_by_task_name.items():
         if task_name in task_names_to_handler_classes:
             handler_class = task_names_to_handler_classes[task_name]
-            handler_class().handle_job_results(task_name_job_results)
+            # Ensure that job statuses and other DB objects tied to them
+            # (such as Features objects, for extract-features jobs) get
+            # updated at the same time from the perspective of other threads.
+            with transaction.atomic():
+                handler_class().handle_job_results(task_name_job_results)
         else:
             logger.error(f"Spacer task name [{task_name}] not recognized")

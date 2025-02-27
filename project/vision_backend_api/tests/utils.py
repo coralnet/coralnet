@@ -15,7 +15,7 @@ from jobs.utils import start_job
 from lib.tests.utils import ClientTest
 from lib.tests.utils_data import create_sample_image
 from sources.models import Source
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
+from vision_backend.tests.tasks.utils import TaskTestMixin
 
 
 def mock_url_storage_load(*args) -> BytesIO:
@@ -32,7 +32,7 @@ def mock_url_storage_load(*args) -> BytesIO:
     return stream
 
 
-class DeployTestMixin(APITestMixin):
+class DeployTestMixin(APITestMixin, TaskTestMixin):
 
     @staticmethod
     def run_scheduled_jobs_including_deploy():
@@ -138,10 +138,10 @@ class DeployBaseTest(ClientTest, DeployTestMixin, metaclass=ABCMeta):
 
         # Extract features.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         # Train a classifier.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        cls.do_collect_spacer_jobs()
         cls.classifier = cls.source.last_accepted_classifier
 
         cls.deploy_url = reverse('api:deploy', args=[cls.classifier.pk])

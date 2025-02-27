@@ -9,7 +9,6 @@ from rest_framework import status
 from api_core.models import ApiJob, ApiJobUnit
 from api_core.tests.utils import BaseAPIPermissionTest
 from jobs.models import Job
-from vision_backend.tests.tasks.utils import do_collect_spacer_jobs
 from .utils import DeployBaseTest
 
 
@@ -248,7 +247,7 @@ class DeployStatusEndpointTest(DeployBaseTest):
     def test_success(self):
         job = self.schedule_deploy()
         self.run_scheduled_jobs_including_deploy()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         response = self.get_job_status(job)
 

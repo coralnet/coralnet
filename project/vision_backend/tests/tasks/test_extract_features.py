@@ -11,8 +11,7 @@ from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job
 from lib.tests.utils import EmailAssertionsMixin
 from ...common import Extractors
-from .utils import (
-    BaseTaskTest, do_collect_spacer_jobs, source_check_is_scheduled)
+from .utils import BaseTaskTest, source_check_is_scheduled
 
 
 class ExtractFeaturesTest(BaseTaskTest):
@@ -84,7 +83,7 @@ class ExtractFeaturesTest(BaseTaskTest):
 
         # With LocalQueue, the result should be
         # available for collection immediately.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertTrue(
             img.features.extracted, msg="Extracted boolean should be set")
@@ -101,7 +100,7 @@ class ExtractFeaturesTest(BaseTaskTest):
 
         # Extract features + collect results.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertTrue(img1.features.extracted)
         self.assertTrue(img2.features.extracted)
@@ -114,7 +113,7 @@ class ExtractFeaturesTest(BaseTaskTest):
 
         do_job('check_source', self.source.pk)
         do_job('extract_features', img1.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assertTrue(img1.features.extracted)
         self.assertFalse(
             source_check_is_scheduled(self.source.pk),
@@ -122,7 +121,7 @@ class ExtractFeaturesTest(BaseTaskTest):
                 " still incomplete extract jobs")
 
         do_job('extract_features', img2.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assertTrue(img2.features.extracted)
         self.assertFalse(
             source_check_is_scheduled(self.source.pk),
@@ -130,7 +129,7 @@ class ExtractFeaturesTest(BaseTaskTest):
                 " still incomplete extract jobs")
 
         do_job('extract_features', img3.pk)
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assertTrue(img3.features.extracted)
         self.assertTrue(
             source_check_is_scheduled(self.source.pk),
@@ -147,7 +146,7 @@ class ExtractFeaturesTest(BaseTaskTest):
         img = self.upload_image_with_dupe_points('1.png')
         # Extract features + process result.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assertTrue(img.features.extracted, "Features should be extracted")
 
@@ -175,7 +174,7 @@ class ExtractFeaturesTest(BaseTaskTest):
 
         # Extract features + process result.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         large_image.features.refresh_from_db()
         self.assertFalse(
@@ -184,7 +183,7 @@ class ExtractFeaturesTest(BaseTaskTest):
 
         # Train.
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         # Classify.
         run_scheduled_jobs_until_empty()
 
@@ -232,7 +231,7 @@ class AbortCasesTest(
         # Provide enough data for training. Extract features.
         self.upload_images_for_training()
         run_scheduled_jobs_until_empty()
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         # Train a classifier.
         run_scheduled_jobs_until_empty()
@@ -295,7 +294,7 @@ class AbortCasesTest(
         # Collect. The deleted Job shouldn't cause particular issues.
         # The corresponding BatchJob is considered successful, and besides
         # that there's no Job to mark the status of.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
         self.assert_job_result_message(
             'collect_spacer_jobs',
             "Jobs checked/collected: 1 SUCCEEDED",
@@ -312,7 +311,7 @@ class AbortCasesTest(
         img.delete()
 
         # Collect feature extraction.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'extract_features',
@@ -330,7 +329,7 @@ class AbortCasesTest(
             run_scheduled_jobs()
 
         # Collect feature extraction.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
     def test_spacer_priority_error(self):
         """Spacer error that's not in the non-priority categories."""
@@ -451,7 +450,7 @@ class AbortCasesTest(
         point.save()
 
         # Collect feature extraction.
-        do_collect_spacer_jobs()
+        self.do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'extract_features',
@@ -469,7 +468,7 @@ class AbortCasesTest(
         # being True outside of the below context manager) while the
         # source extractor is EfficientNet.
         with override_settings(FORCE_DUMMY_EXTRACTOR=False):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         self.assert_job_result_message(
             'extract_features',
@@ -500,7 +499,7 @@ class CollectJobsQueriesTest(BaseTaskTest):
         # Should run less than 4 queries per image.
         # (Expecting 3: points, source extractor-options, and source-checks)
         with self.assert_queries_less_than(image_count*4):
-            do_collect_spacer_jobs()
+            self.do_collect_spacer_jobs()
 
         for image in images:
             image.features.refresh_from_db()
