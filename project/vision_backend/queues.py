@@ -186,14 +186,17 @@ class BatchQueue(BaseQueue):
                     statuses.append('NOT SUBMITTED')
                 job_ids_without_tokens.append(job.pk)
 
-        # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/batch/client/describe_jobs.html
-        # jobs is "A list of up to 100 job IDs."
-        boto_response = self.batch_client.describe_jobs(jobs=batch_tokens)
+        if batch_tokens:
+            # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/batch/client/describe_jobs.html
+            # jobs is "A list of up to 100 job IDs."
+            boto_response = self.batch_client.describe_jobs(jobs=batch_tokens)
 
-        batch_tokens_to_responses = dict(
-            (response_job['jobId'], response_job)
-            for response_job in boto_response['jobs']
-        )
+            batch_tokens_to_responses = dict(
+                (response_job['jobId'], response_job)
+                for response_job in boto_response['jobs']
+            )
+        else:
+            batch_tokens_to_responses = dict()
 
         for job in jobs:
 
