@@ -31,6 +31,12 @@ def backend_overview(request):
     images_all = Image.objects.all()
     total = images_all.count()
 
+    if total == 0:
+        return render(request, 'lib/function_unavailable.html', {
+            'message': "There are no images on the site yet, so this page"
+                       " has no useful information to show.",
+        })
+
     confirmed = images_all.confirmed().count()
     unconfirmed = images_all.unconfirmed().count()
     images_unclassified = images_all.unclassified()
