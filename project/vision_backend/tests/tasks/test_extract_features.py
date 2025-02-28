@@ -157,7 +157,11 @@ class ExtractFeaturesTest(BaseTaskTest):
             self.rowcols_with_dupes_included, sorted(rowcols),
             "Feature rowcols should match the actual points including dupes")
 
-    @override_settings(SPACER={'MAX_IMAGE_PIXELS': 100})
+    @override_settings(
+        TRAINING_MIN_IMAGES=3,
+        NEW_CLASSIFIER_TRAIN_TH=1.1,
+        SPACER={'MAX_IMAGE_PIXELS': 100},
+    )
     def test_resolution_too_large(self):
         # Upload enough within-limit images for training.
         # (The too-large message only shows when the source has a classifier.)
