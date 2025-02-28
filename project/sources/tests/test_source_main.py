@@ -7,14 +7,13 @@ from bs4 import BeautifulSoup
 from django.test import override_settings
 from django.urls import reverse
 
-from jobs.tasks import run_scheduled_jobs_until_empty
+from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest, HtmlAssertionsMixin
 from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
 from vision_backend.common import Extractors
 from vision_backend.models import Classifier
 from vision_backend.tests.tasks.utils import BaseTaskTest
-from vision_backend.utils import schedule_source_check
 from ..models import Source
 
 
@@ -288,14 +287,13 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         with override_settings(
                 NEW_CLASSIFIER_TRAIN_TH=0.0001,
                 NEW_CLASSIFIER_IMPROVEMENT_TH=math.inf):
-            # Source was considered all caught up earlier, so need to schedule
-            # another check.
-            schedule_source_check(self.source.pk)
-            # Train
-            run_scheduled_jobs_until_empty()
+            do_job(
+                'train_classifier', self.source.pk, source_id=self.source.pk)
             self.do_collect_spacer_jobs()
 
         classifier_2 = self.source.classifier_set.latest('pk')
+        # Sanity checks
+        self.assertNotEqual(classifier_1.pk, classifier_2.pk)
         self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)
 
         soup = self.source_main_soup(self.source)
