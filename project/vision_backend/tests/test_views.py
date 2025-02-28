@@ -3,6 +3,7 @@ import datetime
 from bs4 import BeautifulSoup
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 
 from export.tests.utils import BaseExportTest
 from jobs.models import Job
@@ -622,3 +623,18 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin, TaskTestMixin):
         sources_table_soup = response_soup.select(
             'table#sources-table')[0]
         self.assert_table_values(sources_table_soup, expected_rows)
+
+    def test_zero_images(self):
+        # We have sources, but no images.
+        self.create_source(self.user)
+        self.create_source(self.user)
+
+        self.client.force_login(self.superuser)
+        response = self.client.get(self.url)
+        self.assertTemplateUsed(response, 'lib/function_unavailable.html')
+        self.assertContains(
+            response,
+            escape(
+                "There are no images on the site yet, so this page"
+                " has no useful information to show."
+            ))
