@@ -44,7 +44,7 @@ class MaintenanceOnTest(ManagementCommandTest):
         self.assertEqual(
             "The site will be considered under maintenance starting at:"
             "\n2000-01-01, 00:25"
-            "\nThat's 22 minutes from now."
+            "\nThat's 22\xa0minutes from now."
             "\nMaintenance mode on.",
             stdout_text,
             msg="Output should be as expected",

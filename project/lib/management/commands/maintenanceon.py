@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import dateformat, timezone
@@ -30,17 +31,12 @@ class Command(BaseCommand):
         now_utc = timezone.now()
         now_local = timezone.localtime(now_utc)
         time_until = timeuntil(maintenance_datetime, now_local)
-        # Django's timeuntil has unicode non-breaking spaces (\xa0), but
-        # that doesn't seem to play nice with string.format in Python 2.x.
-        time_until = time_until.replace('\xa0', ' ')
+        start_str = datetime.strftime(maintenance_datetime, '%Y-%m-%d, %H:%M')
 
         self.stdout.write(
-            "The site will be considered under maintenance starting at:"
-            "\n{dt}"
-            "\nThat's {delta} from now.".format(
-                dt=datetime.strftime(
-                    maintenance_datetime, '%Y-%m-%d, %H:%M'),
-                delta=time_until))
+            f"The site will be considered under maintenance starting at:"
+            f"\n{start_str}"
+            f"\nThat's {time_until} from now.")
 
         # Interactivity taken from squashmigrations code.
         answer = None
