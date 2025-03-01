@@ -1,9 +1,6 @@
 # Unique per environment
 .env
 
-# Generated as needed by maintenanceon command
-project/templates/maintenance_notice.html
-
 # Coverage output files
 .coverage
 htmlcov
