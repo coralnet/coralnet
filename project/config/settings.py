@@ -1303,7 +1303,7 @@ POINT_PATCH_FILE_PATTERN = \
     '{full_image_path}.pointpk{point_pk}.thumbnail.jpg'
 PROFILE_AVATAR_FILE_PATTERN = 'avatars/{name}{extension}'
 
-MAINTENANCE_STATUS_FILE_PATH = TMP_DIR / 'maintenance.json'
+MAINTENANCE_DETAILS_FILE_PATH = TMP_DIR / 'maintenance.json'
 
 # Special users
 IMPORTED_USERNAME = 'Imported'

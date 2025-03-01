@@ -1,9 +1,19 @@
 from datetime import datetime
 import json
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import dateformat, timezone
 from django.utils.timesince import timeuntil
+
+
+DEFAULT_MESSAGE = """
+<strong>The site is under maintenance.</strong>
+During maintenance, the site may abruptly become unavailable,
+and certain pages may not work properly. If you're going to
+upload or change anything, we advise you to use the site at
+a later time. We’re sorry for the inconvenience.
+"""
 
 
 class Command(BaseCommand):
@@ -20,6 +30,10 @@ class Command(BaseCommand):
             " If not specified, the time is assumed to be"
             " within 24 hours from now."
             " Example: 2016-11-17"))
+        parser.add_argument('--message', help=(
+            "Message to display as a site header during maintenance."
+            " Supports HTML tags."
+            " If not specified, a default message will be displayed."))
 
     def handle(self, *args, **options):
         maintenance_datetime = self.get_maintenance_datetime(**options)
@@ -30,17 +44,12 @@ class Command(BaseCommand):
         now_utc = timezone.now()
         now_local = timezone.localtime(now_utc)
         time_until = timeuntil(maintenance_datetime, now_local)
-        # Django's timeuntil has unicode non-breaking spaces (\xa0), but
-        # that doesn't seem to play nice with string.format in Python 2.x.
-        time_until = time_until.replace('\xa0', ' ')
+        start_str = datetime.strftime(maintenance_datetime, '%Y-%m-%d, %H:%M')
 
         self.stdout.write(
-            "The site will be considered under maintenance starting at:"
-            "\n{dt}"
-            "\nThat's {delta} from now.".format(
-                dt=datetime.strftime(
-                    maintenance_datetime, '%Y-%m-%d, %H:%M'),
-                delta=time_until))
+            f"The site will be considered under maintenance starting at:"
+            f"\n{start_str}"
+            f"\nThat's {time_until} from now.")
 
         # Interactivity taken from squashmigrations code.
         answer = None
@@ -62,8 +71,13 @@ class Command(BaseCommand):
         # Can deserialize with e.g. fromtimestamp().
         dt_serializable = int(dateformat.format(maintenance_datetime, 'U'))
 
-        with open(settings.MAINTENANCE_STATUS_FILE_PATH, 'w') as json_file:
-            params = dict(timestamp=dt_serializable)
+        message = options['message'] or DEFAULT_MESSAGE
+
+        with open(settings.MAINTENANCE_DETAILS_FILE_PATH, 'w') as json_file:
+            params = dict(
+                timestamp=dt_serializable,
+                message=message,
+            )
             json.dump(params, json_file)
 
         self.stdout.write(self.style.SUCCESS(

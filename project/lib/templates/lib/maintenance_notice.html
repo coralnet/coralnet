@@ -1,0 +1,20 @@
+{% load get_maintenance_details time_is_past from common_tags %}
+
+{% get_maintenance_details as maintenance_details %}
+
+{% if maintenance_details %}
+  <div class="maintenance_message">
+    {% if maintenance_details.time|time_is_past %}
+      {# The message when the site is currently under maintenance. #}
+      {{ maintenance_details.message|safe }}
+    {% else %}
+      {# The message when the site is going to be under maintenance #}
+      {# at a particular time. #}
+      The site will be under maintenance in
+      <strong>{{ maintenance_details.time|timeuntil }}.</strong>
+      If you're working on something, please wrap it up soon
+      and resume when maintenance is over.
+      Sorry for the inconvenience.
+    {% endif %}
+  </div>
+{% endif %}
