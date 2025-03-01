@@ -60,12 +60,15 @@ def jsonify(obj):
 
 
 @register.simple_tag
-def get_maintenance_time():
+def get_maintenance_details():
     try:
-        with open(settings.MAINTENANCE_STATUS_FILE_PATH, 'r') as json_file:
+        with open(settings.MAINTENANCE_DETAILS_FILE_PATH, 'r') as json_file:
             params = json.load(json_file)
-            return datetime.datetime.fromtimestamp(
-                params['timestamp'], datetime.timezone.utc)
+            return dict(
+                time=datetime.datetime.fromtimestamp(
+                    params['timestamp'], datetime.timezone.utc),
+                message=params['message'],
+            )
     except IOError:
         return None
 

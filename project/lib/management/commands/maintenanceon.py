@@ -7,6 +7,15 @@ from django.utils import dateformat, timezone
 from django.utils.timesince import timeuntil
 
 
+DEFAULT_MESSAGE = """
+<strong>The site is under maintenance.</strong>
+During maintenance, the site may abruptly become unavailable,
+and certain pages may not work properly. If you're going to
+upload or change anything, we advise you to use the site at
+a later time. We’re sorry for the inconvenience.
+"""
+
+
 class Command(BaseCommand):
 
     help = "Sets the top-of-page maintenance notice."
@@ -21,6 +30,10 @@ class Command(BaseCommand):
             " If not specified, the time is assumed to be"
             " within 24 hours from now."
             " Example: 2016-11-17"))
+        parser.add_argument('--message', help=(
+            "Message to display as a site header during maintenance."
+            " Supports HTML tags."
+            " If not specified, a default message will be displayed."))
 
     def handle(self, *args, **options):
         maintenance_datetime = self.get_maintenance_datetime(**options)
@@ -58,8 +71,13 @@ class Command(BaseCommand):
         # Can deserialize with e.g. fromtimestamp().
         dt_serializable = int(dateformat.format(maintenance_datetime, 'U'))
 
-        with open(settings.MAINTENANCE_STATUS_FILE_PATH, 'w') as json_file:
-            params = dict(timestamp=dt_serializable)
+        message = options['message'] or DEFAULT_MESSAGE
+
+        with open(settings.MAINTENANCE_DETAILS_FILE_PATH, 'w') as json_file:
+            params = dict(
+                timestamp=dt_serializable,
+                message=message,
+            )
             json.dump(params, json_file)
 
         self.stdout.write(self.style.SUCCESS(
