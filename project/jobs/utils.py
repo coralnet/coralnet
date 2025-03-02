@@ -248,6 +248,7 @@ def abort_job(job_id: int):
 
 def finish_jobs(jobs_details: list[dict]):
     jobs = []
+    now = datetime.now(timezone.utc)
 
     for job_details in jobs_details:
         job = job_details['job']
@@ -255,8 +256,12 @@ def finish_jobs(jobs_details: list[dict]):
         job.status = (
             Job.Status.SUCCESS if job_details['success']
             else Job.Status.FAILURE)
+        # auto_now fields like modify_date don't get auto-updated by
+        # bulk_update(); so we set it explicitly here.
+        # https://docs.djangoproject.com/en/4.2/ref/models/fields/#django.db.models.DateField.auto_now
+        job.modify_date = now
         jobs.append(job)
-    Job.objects.bulk_update(jobs, ['result_message', 'status'])
+    Job.objects.bulk_update(jobs, ['result_message', 'status', 'modify_date'])
 
     # No periodic-job case. Periodic jobs should use finish_job() instead.
 
