@@ -645,36 +645,29 @@ class SpacerClassifyResultHandler(SpacerResultHandler):
 
         self.handle_task_results_main_loop(spacer_task_results)
 
+        # Update ApiJobUnits in bulk, now that the main loop's set the
+        # available results.
         job_units = list(self.job_units_by_job_id.values())
         ApiJobUnit.objects.bulk_update(job_units, ['result_json'])
 
-        api_jobs = (
-            ApiJob.objects
-            .filter(apijobunit__in=[unit.pk for unit in job_units])
-            .annotate(
-                pending_units=Count(
-                    'apijobunit',
-                    filter=Q(
-                        apijobunit__internal_job__status
-                        =Job.Status.PENDING)),
-                in_progress_units=Count(
-                    'apijobunit',
-                    filter=Q(
-                        apijobunit__internal_job__status
-                        =Job.Status.IN_PROGRESS)),
-            )
+        # Check which ApiJobs are now finished, and set finish_date on those.
+        api_job_ids = set(unit.parent_id for unit in job_units)
+        api_jobs_unfinished_units = ApiJobUnit.objects.filter(
+            parent_id__in=api_job_ids,
+            internal_job__status__in=[
+                Job.Status.PENDING, Job.Status.IN_PROGRESS])
+        unfinished_api_job_ids = set(
+            api_jobs_unfinished_units
+            .values_list('parent', flat=True)
+            .distinct()
         )
-        api_jobs_to_update = []
-        for api_job in api_jobs:
-            if (
-                api_job.pending_units == 0
-                and api_job.in_progress_units == 0
-                and not api_job.finish_date
-            ):
-                # All other units of the API job have finished too.
-                api_job.finish_date = timezone.now()
-                api_jobs_to_update.append(api_job)
-        ApiJob.objects.bulk_update(api_jobs_to_update, ['finish_date'])
+        now_finished_api_job_ids = list(api_job_ids - unfinished_api_job_ids)
+        now_finished_api_jobs = ApiJob.objects.in_bulk(
+            now_finished_api_job_ids).values()
+        now = timezone.now()
+        for api_job in now_finished_api_jobs:
+            api_job.finish_date = now
+        ApiJob.objects.bulk_update(now_finished_api_jobs, ['finish_date'])
 
     def handle_spacer_task_result(
             self,

@@ -20,6 +20,7 @@ from errorlogs.tests.utils import ErrorReportTestMixin
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import JobUtilsMixin
+from jobs.utils import start_job
 from lib.tests.utils import EmailAssertionsMixin
 from sources.models import Source
 from vision_backend.models import Classifier
@@ -956,6 +957,115 @@ class ApiRequestsQueriesTest(DeployBaseTest):
         self.assertEqual(
             deploy_job.apijobunit_set.count(), image_count,
             msg=f"Should have {image_count} job units")
+
+
+class ApiJobFinishDateTest(DeployBaseTest):
+    """Test that an ApiJob gets its finish_date set when it's supposed to."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.set_up_classifier(cls.user)
+
+    def test_single(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            # 4 units
+            for index in range(4)
+        ]
+        data = json.dumps(dict(data=images))
+        # Schedule deploy
+        self.client.post(self.deploy_url, data, **self.request_kwargs)
+
+        api_job = ApiJob.objects.latest('pk')
+        units = list(api_job.apijobunit_set.all())
+        # Shouldn't have finish date yet: all pending
+        self.assertIsNone(api_job.finish_date)
+
+        start_job(units[0].internal_job)
+        # Shouldn't have finish date yet: 1 in progress, rest pending
+        api_job.refresh_from_db()
+        self.assertIsNone(api_job.finish_date)
+
+        start_job(units[1].internal_job)
+        start_job(units[2].internal_job)
+        start_job(units[3].internal_job)
+        # Shouldn't have finish date yet: all in progress
+        api_job.refresh_from_db()
+        self.assertIsNone(api_job.finish_date)
+
+        def mock_batcher(items, batch_size):
+            # Force a batch size of 3 so that collect_spacer_jobs() doesn't
+            # collect everything in one go.
+            batch_size = 3
+            index = 0
+            while index < len(items):
+                yield items[index:index+batch_size]
+                index += batch_size
+
+        with (
+            override_settings(JOB_MAX_MINUTES=-1),
+            mock.patch('vision_backend.tasks.batch_generator', mock_batcher),
+        ):
+            self.do_collect_spacer_jobs()
+        # Shouldn't have finish date yet: 1 in progress, 3 finished
+        api_job.refresh_from_db()
+        self.assertIsNone(api_job.finish_date)
+
+        self.do_collect_spacer_jobs()
+        # Should have finish date: all finished
+        api_job.refresh_from_db()
+        self.assertIsNotNone(api_job.finish_date)
+
+    def test_multiple(self):
+        images = [
+            dict(type='image', attributes=dict(
+                url=f'URL {index}', points=[dict(row=10, column=10)]))
+            # 2 units
+            for index in range(2)
+        ]
+        data = json.dumps(dict(data=images))
+        # 3 ApiJobs
+        api_jobs = []
+        units = []
+        for _ in range(3):
+            self.client.post(self.deploy_url, data, **self.request_kwargs)
+            api_job = ApiJob.objects.latest('pk')
+            api_jobs.append(api_job)
+            units.append(list(api_job.apijobunit_set.all()))
+
+        start_job(units[0][0].internal_job)
+        start_job(units[0][1].internal_job)
+        start_job(units[1][0].internal_job)
+        # Shouldn't have finish dates yet: some in progress, some pending
+        api_jobs[0].refresh_from_db()
+        self.assertIsNone(api_jobs[0].finish_date)
+        api_jobs[1].refresh_from_db()
+        self.assertIsNone(api_jobs[1].finish_date)
+        api_jobs[2].refresh_from_db()
+        self.assertIsNone(api_jobs[2].finish_date)
+
+        self.do_collect_spacer_jobs()
+        # Should have finished [0] but not [1] (1/2 units) or [2] (0/2 units)
+        api_jobs[0].refresh_from_db()
+        self.assertIsNotNone(api_jobs[0].finish_date)
+        api_jobs[1].refresh_from_db()
+        self.assertIsNone(api_jobs[1].finish_date)
+        api_jobs[2].refresh_from_db()
+        self.assertIsNone(api_jobs[2].finish_date)
+
+        start_job(units[1][1].internal_job)
+        start_job(units[2][0].internal_job)
+        start_job(units[2][1].internal_job)
+        self.do_collect_spacer_jobs()
+        # All finished
+        api_jobs[0].refresh_from_db()
+        self.assertIsNotNone(api_jobs[0].finish_date)
+        api_jobs[1].refresh_from_db()
+        self.assertIsNotNone(api_jobs[1].finish_date)
+        api_jobs[2].refresh_from_db()
+        self.assertIsNotNone(api_jobs[2].finish_date)
 
 
 # TODO: Also query-optimize and test the task which starts the deploy job.
