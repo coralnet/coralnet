@@ -1,3 +1,4 @@
+import datetime
 import json
 from unittest import mock
 
@@ -397,6 +398,26 @@ class CollectSpacerJobsTest(BaseTaskTest):
             Job.objects.get(
                 job_name='extract_features', arg_identifier=image2.pk).status,
             Job.Status.IN_PROGRESS)
+
+    def test_modify_date(self):
+        # Run 2 extract-features jobs.
+        image_1 = self.upload_image(self.user, self.source)
+        image_2 = self.upload_image(self.user, self.source)
+        run_scheduled_jobs_until_empty()
+
+        time_before_collect = datetime.datetime.now(datetime.timezone.utc)
+
+        # Collect.
+        self.do_collect_spacer_jobs()
+        # The jobs should have had their modify dates updated upon collection.
+        # The reason they might not is that this involves a bulk_update(),
+        # which does not automatically update auto_now dates.
+        job_1 = Job.objects.get(
+            job_name='extract_features', arg_identifier=image_1.pk)
+        self.assertLess(time_before_collect, job_1.modify_date)
+        job_2 = Job.objects.get(
+            job_name='extract_features', arg_identifier=image_2.pk)
+        self.assertLess(time_before_collect, job_2.modify_date)
 
 
 class CollectSpacerJobsMultipleTypesTest(BaseTaskTest, DeployTestMixin):
