@@ -4,21 +4,7 @@ from lib.tests.utils import ClientTest
 from visualization.tests.utils import BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
 
-class BaseExportTest(ClientTest):
-
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        # Image search parameters
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
-
-    def export_metadata(self, post_data):
-        """POST to export_metadata, and return the response."""
-        self.client.force_login(self.user)
-        return self.client.post(
-            resolve_url('export_metadata', self.source.pk), post_data,
-            follow=True)
+class ExportTestMixin:
 
     def assert_csv_content_equal(self, actual_csv_content, expected_lines):
         """
@@ -52,12 +38,32 @@ class BaseExportTest(ClientTest):
         # Compare individual lines (so that if we get a mismatch, the error
         # message will be readable)
         for line_num, actual_line in enumerate(actual_lines, 1):
+            self.assertGreaterEqual(
+                len(expected_lines), line_num,
+                f"Actual content should not have {line_num} or more lines")
             expected_line = expected_lines[line_num-1]
-            self.assertEqual(actual_line, expected_line, msg=(
-                "Line {line_num} not equal | Actual: {actual_line}"
-                " | Expected: {expected_line}").format(
-                line_num=line_num, actual_line=actual_line,
-                expected_line=expected_line,
-            ))
-        # Compare entire file (to ensure line separator types are correct too)
+            self.assertEqual(
+                actual_line, expected_line,
+                msg=f"Line {line_num} should be equal | Actual: {actual_line}"
+                    f" | Expected: {expected_line}"
+            )
+        # Compare entire file, to ensure line separator types and line counts
+        # match.
         self.assertEqual(actual_csv_content, expected_content)
+
+
+class BaseExportTest(ClientTest, ExportTestMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        # Image search parameters
+        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
+
+    def export_metadata(self, post_data):
+        """POST to export_metadata, and return the response."""
+        self.client.force_login(self.user)
+        return self.client.post(
+            resolve_url('export_metadata', self.source.pk), post_data,
+            follow=True)
