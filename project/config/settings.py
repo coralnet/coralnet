@@ -96,6 +96,8 @@ except ValueError:
         f"Unsupported SETTINGS_BASE value: {env('SETTINGS_BASE')}"
         f" (supported values are: {', '.join([b.value for b in Bases])})")
 
+_TESTING = 'test' in sys.argv
+
 
 #
 # More directories
@@ -112,10 +114,20 @@ LOG_DIR = SITE_DIR / 'log'
 
 # Directory containing other temporary files. The idea is that any file here
 # that's old enough (say, a couple months) should be safe to clean up.
-TMP_DIR = SITE_DIR / 'tmp'
+if _TESTING:
+    # A TemporaryDirectory might be a cleaner solution here, but
+    # would need more instrumentation to ensure that directory gets
+    # deleted at the end of the test suite run.
+    # Until we figure that out, we'll ensure it's just this one hardcoded
+    # dir that gets left behind, rather than one dir per test suite run.
+    TMP_DIR = SITE_DIR / 'tmp' / 'test'
+    TMP_DIR.mkdir(exist_ok=True)
+else:
+    TMP_DIR = SITE_DIR / 'tmp'
 
 # Directory containing output files from management commands or scripts.
 COMMAND_OUTPUT_DIR = TMP_DIR / 'command_output'
+COMMAND_OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 #
@@ -129,8 +141,6 @@ else:
     # False is useful sometimes, such as for testing 404 and 500 views.
     DEBUG = env.bool('DEBUG', default=True)
 
-
-_TESTING = 'test' in sys.argv
 
 # [CoralNet setting]
 # Whether the app is being served through nginx, Apache, etc.
