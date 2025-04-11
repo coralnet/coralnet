@@ -123,7 +123,7 @@ class Command(BaseCommand):
         return data_series
 
     def save_csv(self, csv_data: list[dict], fieldnames=None):
-        csv_path = Path(settings.COMMAND_OUTPUT_DIR) / 'jobs_recent_stats.csv'
+        csv_path = settings.COMMAND_OUTPUT_DIR / 'jobs_recent_stats.csv'
 
         with open(csv_path, 'w', newline='', encoding='utf-8') as csv_f:
             if not fieldnames:
@@ -157,10 +157,23 @@ class Command(BaseCommand):
         )
         return fig, ax
 
+    @staticmethod
+    def blank_plot(message):
+        fig = plt.gcf()
+        ax = fig.add_subplot(111)
+        ax.axis('off')
+        plt.text(
+            0.5, 0.5, message,
+            fontsize=20,
+            horizontalalignment='center',
+            verticalalignment='center',
+        )
+        return fig
+
     def save_plot(self, fig):
         aspect_ratio = 3.0
         fig.set_size_inches(aspect_ratio*5, 5)
-        plot_path = Path(settings.COMMAND_OUTPUT_DIR) / 'jobs_recent_stats.png'
+        plot_path = settings.COMMAND_OUTPUT_DIR / 'jobs_recent_stats.png'
         plt.savefig(plot_path)
         self.stdout.write(f"Output: {plot_path}")
 
@@ -244,10 +257,6 @@ class Command(BaseCommand):
                 # into "Others".
                 categories_count_by_slice["Others"][slice_] += count
 
-        plot_data = dict()
-        for category, count_by_slice in categories_count_by_slice.items():
-            plot_data[category] = self.make_data_series(count_by_slice)
-
         slices_count_by_user = defaultdict(dict)
         for (slice_, user), count in count_by_slice_and_user.items():
             slices_count_by_user[slice_][user] = count
@@ -275,12 +284,22 @@ class Command(BaseCommand):
             fieldnames=[self.time_slice_name] + sorted(list(all_users)),
         )
 
+        if not all_users:
+            fig = self.blank_plot("No API jobs finished in this timespan")
+            self.save_plot(fig)
+            return
+
         plot_title = (
             f"Recent API jobs"
             f" - {self.span_end.strftime('%Y-%m-%d %H:%M UTC')}"
             f"\n{span_total_completed} completed"
             f" in last {self.span_days} day(s)"
         )
+
+        plot_data = dict()
+        for category, count_by_slice in categories_count_by_slice.items():
+            plot_data[category] = self.make_data_series(count_by_slice)
+
         any_data_series = plot_data[users_in_legend[0]]
         fig, ax = self.plot_prep(
             any_data_series, plot_title, "Jobs completed")
@@ -333,22 +352,31 @@ class Command(BaseCommand):
             .annotate(time=Time90Percentile('turnaround_time'))
         )
         time_by_slice = dict(
-            (d['date_to_slice'],
-             d['time'].seconds / 60 if d['time'] else 0)
+            (d['date_to_slice'], d['time'].seconds / 60)
             for d in time_by_slice_values
+            if d['time']
         )
         deactivate_timezone()
 
-        plot_data = self.make_data_series(time_by_slice)
-
-        self.save_csv([
+        csv_data = [
             {
-                self.time_slice_name: d['slice_display'],
-                'turnaround_time': d['slice_value'],
+                self.time_slice_name: self.slice_display(slice_),
+                'turnaround_time': turnaround_time,
             }
-            for d in plot_data
-        ])
+            for slice_, turnaround_time in time_by_slice.items()
+        ]
+        self.save_csv(
+            csv_data=csv_data,
+            fieldnames=[self.time_slice_name, 'turnaround_time'],
+        )
 
+        if not time_by_slice:
+            fig = self.blank_plot(
+                "No background jobs finished in this timespan")
+            self.save_plot(fig)
+            return
+
+        plot_data = self.make_data_series(time_by_slice)
         plot_title = (
             f"Recent job turnaround times"
             f" - {self.span_end.strftime('%Y-%m-%d %H:%M UTC')}"
