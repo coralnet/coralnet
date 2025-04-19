@@ -14,6 +14,7 @@ def fabricate_job(
     name: str,
     *task_args,
     delay: timedelta = None,
+    scheduled_start_date: datetime = None,
     start_date: datetime = None,
     create_date: datetime = None,
     modify_date: datetime = None,
@@ -34,6 +35,23 @@ def fabricate_job(
         def task_func():
             return ""
 
+    # Accept naive datetimes as UTC.
+    if start_date and start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=timezone.utc)
+    if create_date and create_date.tzinfo is None:
+        create_date = create_date.replace(tzinfo=timezone.utc)
+    if modify_date and modify_date.tzinfo is None:
+        modify_date = modify_date.replace(tzinfo=timezone.utc)
+
+    if scheduled_start_date:
+        if scheduled_start_date.tzinfo is None:
+            scheduled_start_date = scheduled_start_date.replace(
+                tzinfo=timezone.utc)
+    elif delay:
+        # For some callers, specifying delay is more convenient than
+        # specifying scheduled start date.
+        scheduled_start_date = datetime.now(timezone.utc) + delay
+
     job_kwargs = {
         key: value for key, value in kwargs.items()
         if key in [
@@ -45,20 +63,21 @@ def fabricate_job(
         job_name=name,
         arg_identifier=Job.args_to_identifier(task_args),
         status=status,
-        scheduled_start_date=(
-            datetime.now(timezone.utc) + delay if delay else None),
+        scheduled_start_date=scheduled_start_date,
         start_date=start_date,
         **job_kwargs
     )
     job.save()
 
     if create_date:
-        # Must set create date after creation in order to save a custom value.
+        # Now that the job's been created already, we can set a custom create
+        # date on it.
         job.create_date = create_date
         job.save()
     if modify_date:
-        # Use QuerySet.update() instead of Model.save() so that the modify
-        # date doesn't get auto-updated to the current date.
+        # When we use QuerySet.update() instead of Model.save(), the
+        # modify date doesn't get auto-updated to the current date,
+        # allowing us to set a custom value.
         Job.objects.filter(pk=job.pk).update(modify_date=modify_date)
 
     job.refresh_from_db()
