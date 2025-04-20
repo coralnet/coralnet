@@ -32,7 +32,7 @@ django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+cor
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
 # Compat: Python 3.9-3.13, and matches pyspacer dev requirements as of
-# pyspacer 0.11.0
+# pyspacer 0.12.0
 Pillow==11.0.0
 
 # Image EXIF reading/writing
@@ -205,4 +205,4 @@ matplotlib==3.10.0
 # This can be installed from a local directory (not just PyPI), as long as
 # the local copy's setup.py matches this version number.
 # Compat: Python 3.10-3.12, numpy 1.22-2.1.x
-pyspacer==0.11.0
+pyspacer==0.12.0
