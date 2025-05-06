@@ -689,27 +689,15 @@ div.pagination-links {
     display: flex;
 }
 
-/* Previous/Next page links which use POST. */
-input[type=submit].page,
-/* Previous/Next page links which use GET. */
+/* Previous/Next page links. */
 a.prev-next-page{
-    /* Make these input elements look roughly like normal buttons. */
+    /* Make these elements look roughly like buttons. */
     background: hsl(0, 0%, 80%);
     color: inherit;
-    font-family: inherit;
-    font-size: inherit;
-    font-weight: inherit;
-    line-height: inherit;
-    letter-spacing: inherit;
-    text-shadow: none;
 
-    min-width: inherit;
-    height: inherit;
-    border: none;
     border-radius: 3px;
     padding: 0 3px;
     margin: 0 5px;
-    cursor: pointer;
 }
 
 

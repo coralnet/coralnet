@@ -35,12 +35,12 @@ class AnnotateFormAvailabilityTest(BrowseActionsFormTest):
 
     def test_available(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_available(response)
 
     def test_view_perms_only(self):
         self.client.force_login(self.user_viewer)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_absent(response)
 
 
@@ -109,7 +109,7 @@ class BaseSearchTest(ClientTest):
         """
         data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         data.update(**kwargs)
-        response = self.client.post(self.url, data, follow=True)
+        response = self.client.get(self.url, data)
         return response
 
     def assert_search_results(self, search_kwargs, expected_images):
@@ -402,6 +402,21 @@ class SearchTest(BaseSearchTest):
             dict(),
             [self.imgs[0], self.imgs[1], self.imgs[2],
              self.imgs[3], self.imgs[4]])
+
+    def test_post_request(self):
+        params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, params, follow=False)
+        self.assertRedirects(
+            response, self.url,
+            msg_prefix="Should redirect back to browse images")
+
+        response = self.client.post(self.url, params, follow=True)
+        self.assertContains(
+            response, "An error occurred; please try another search.",
+            msg_prefix="Should show a message indicating the search didn't"
+                       " actually work due to POST being used")
 
 
 class DateSearchTest(BaseSearchTest):
@@ -992,8 +1007,10 @@ class SearchFormInitializationTest(BaseSearchTest):
             ['annotation_tool', str(self.user.pk)])
 
 
-# Make it easy to get multiple pages of results.
-@override_settings(BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3)
+@override_settings(
+    # Require fewer uploads to get multiple pages of results.
+    BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3,
+)
 class ResultsAndPagesTest(ClientTest):
 
     @classmethod
@@ -1010,20 +1027,20 @@ class ResultsAndPagesTest(ClientTest):
         ]
 
     def test_zero_results(self):
-        post_data = self.default_search_params.copy()
-        post_data['photo_date_0'] = 'date'
-        post_data['photo_date_2'] = datetime.date(2000, 1, 1)
+        params = self.default_search_params.copy()
+        params['photo_date_0'] = 'date'
+        params['photo_date_2'] = datetime.date(2000, 1, 1)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, post_data)
+        response = self.client.get(self.url, params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 0)
 
         self.assertContains(response, "No image results.")
 
     def test_one_page_results(self):
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = 'Site1'
+        params = self.default_search_params.copy()
+        params['aux1'] = 'Site1'
 
         self.imgs[0].metadata.aux1 = 'Site1'
         self.imgs[0].metadata.save()
@@ -1031,7 +1048,7 @@ class ResultsAndPagesTest(ClientTest):
         self.imgs[1].metadata.save()
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, post_data)
+        response = self.client.get(self.url, params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 2)
 
@@ -1043,11 +1060,11 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 1</span>", html=True)
 
     def test_multiple_pages_results(self):
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = ''
+        params = self.default_search_params.copy()
+        params['aux1'] = ''
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, post_data)
+        response = self.client.get(self.url, params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 10)
 
@@ -1056,18 +1073,82 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 4</span>", html=True)
 
     def test_page_two(self):
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = ''
-        post_data['page'] = 2
+        params = self.default_search_params.copy()
+        params['aux1'] = ''
+        params['page'] = 2
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, post_data)
+        response = self.client.get(self.url, params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 10)
 
         self.assertContains(
             response, "<span>Showing 4-6 of 10</span>", html=True)
         self.assertContains(response, "<span>Page 2 of 4</span>", html=True)
+
+    def assert_page_links(
+        self, request_params, expected_prev_href, expected_next_href
+    ):
+        """
+        We don't need to test everything about pagination links here,
+        as that's the job of the app that implements such links.
+        However, we do want to test that the query string, which
+        originates from Browse's app, is as expected.
+
+        We assume both previous and next page links are present,
+        for simplicity.
+        """
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, request_params)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        page_links_soup = response_soup.findAll(
+            'a', class_='prev-next-page')
+
+        self.assertEqual(
+            page_links_soup[0].attrs.get('href'),
+            expected_prev_href,
+            msg="Previous page link is as expected")
+        self.assertEqual(
+            page_links_soup[1].attrs.get('href'),
+            expected_next_href,
+            msg="Next page link is as expected")
+
+    def test_page_urls_no_filters(self):
+        params = dict(page=2)
+        self.assert_page_links(params, '?page=1&', '?page=3&')
+
+    def test_page_urls_with_search_filters(self):
+        # Don't start with default_search_params because that'll
+        # make the query args really long.
+        # The logic to automatically exclude blank params is only on
+        # the Javascript side.
+        params = dict(
+            image_form_type='search',
+            sort_method='name',
+            sort_direction='asc',
+            annotation_status='unclassified',
+            page=2,
+        )
+        self.assert_page_links(
+            params,
+            '?page=1&image_form_type=search&sort_method=name'
+            '&sort_direction=asc&annotation_status=unclassified',
+            '?page=3&image_form_type=search&sort_method=name'
+            '&sort_direction=asc&annotation_status=unclassified',
+        )
+
+    def test_page_urls_with_id_set_filter(self):
+        ids = ','.join([str(img.pk) for img in self.imgs])
+        params = dict(
+            image_form_type='ids',
+            ids=ids,
+            page=2,
+        )
+        self.assert_page_links(
+            params,
+            f'?page=1&image_form_type=ids&ids={ids.replace(",", "%2C")}',
+            f'?page=3&image_form_type=ids&ids={ids.replace(",", "%2C")}',
+        )
 
 
 class ImageStatusIndicatorTest(ClientTest):

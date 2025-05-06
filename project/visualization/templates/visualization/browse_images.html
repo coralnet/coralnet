@@ -52,10 +52,10 @@
     {% endfor %}
 
     {# Pagination info and links #}
-    {% include 'pagination_links.html' with use_post_form=True hidden_form=hidden_image_form page_results=page_results %}
+    {% include 'pagination_links.html' with query_string=query_string page_results=page_results %}
 
     {% if can_see_actions %}
-      {% include 'visualization/browse_images_actions.html' %}
+      {% include 'visualization/browse_images_actions.html' with hidden_image_form=hidden_image_form %}
     {% else %}
       <div class="page-section">{{ no_actions_reason }}</div>
     {% endif %}

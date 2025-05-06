@@ -369,7 +369,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
     # This field makes it easier to tell which kind of image-specifying
     # form has been submitted.
     # It also ensures there's at least one required field, so checking form
-    # validity is also a check of whether the relevant POST data is there.
+    # validity is also a check of whether the relevant GET/POST data is there.
     image_form_type = forms.CharField(
         widget=HiddenInput(), initial='search', required=True)
 

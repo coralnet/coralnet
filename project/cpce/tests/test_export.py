@@ -269,11 +269,11 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
         # Search includes images 1 and 2, but not 3
         self.client.force_login(self.user)
-        post_data = self.default_search_params.copy()
-        post_data.update(image_name='X')
-        response = self.client.post(
+        request_params = self.default_search_params.copy()
+        request_params.update(image_name='X')
+        response = self.client.get(
             reverse('browse_images', args=[self.source.pk]),
-            data=post_data, follow=True)
+            data=request_params)
 
         self.assert_form_filepaths_equal(
             response, r'C:\codefile.txt', r'C:\Reef data')
@@ -308,11 +308,11 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
         # Search includes image 3 only
         self.client.force_login(self.user)
-        post_data = self.default_search_params.copy()
-        post_data.update(image_name='Y')
-        response = self.client.post(
+        request_params = self.default_search_params.copy()
+        request_params.update(image_name='Y')
+        response = self.client.get(
             reverse('browse_images', args=[self.source.pk]),
-            data=post_data, follow=True)
+            data=request_params)
 
         self.assert_form_filepaths_equal(
             response, r'C:\codefile.txt', r'C:\Reef data')

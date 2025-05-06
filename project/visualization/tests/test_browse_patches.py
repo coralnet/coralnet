@@ -1,6 +1,8 @@
 import datetime
 from unittest import mock
 
+from bs4 import BeautifulSoup
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -103,7 +105,7 @@ class SearchTest(ClientTest):
         """
         data = default_search_params.copy()
         data.update(**kwargs)
-        response = self.client.post(self.url, data, follow=True)
+        response = self.client.get(self.url, data)
         return response
 
     def assert_search_results(self, search_kwargs, expected_points):
@@ -313,12 +315,12 @@ class SearchTest(ClientTest):
             self.user_editor, self.img1,
             {4: 'A', 5: 'A'})
 
-        post_data = default_search_params.copy()
-        post_data['patch_annotator_0'] = 'annotation_tool'
-        post_data['patch_annotator_1'] = self.user.pk
+        params = default_search_params.copy()
+        params['patch_annotator_0'] = 'annotation_tool'
+        params['patch_annotator_1'] = self.user.pk
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, post_data)
+        response = self.client.get(self.url, params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 3)
 
@@ -370,6 +372,159 @@ class SearchTest(ClientTest):
             dict(),
             [1, 2, 3])
 
+    def test_post_request(self):
+        params = default_search_params.copy()
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, params, follow=False)
+        self.assertRedirects(
+            response, self.url,
+            msg_prefix="Should redirect back to browse patches")
+
+        response = self.client.post(self.url, params, follow=True)
+        self.assertContains(
+            response, "An error occurred; please try another search.",
+            msg_prefix="Should show a message indicating the search didn't"
+                       " actually work due to POST being used")
+
+
+@override_settings(
+    # Require fewer annotations to get multiple pages of results.
+    BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3,
+)
+class ResultsAndPagesTest(ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=2))
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.url = reverse('browse_patches', args=[cls.source.pk])
+
+        cls.images = [cls.upload_image(cls.user, cls.source) for _ in range(5)]
+        cls.add_annotations(cls.user, cls.images[0], {1: 'A', 2: 'A'})
+        cls.add_annotations(cls.user, cls.images[1], {1: 'A', 2: 'A'})
+        cls.add_annotations(cls.user, cls.images[2], {1: 'A', 2: 'A'})
+        cls.add_annotations(cls.user, cls.images[3], {1: 'A', 2: 'B'})
+        cls.add_annotations(cls.user, cls.images[4], {1: 'B', 2: 'B'})
+
+    def request_browse(self, request_params):
+        self.client.force_login(self.user)
+        return self.client.get(self.url, request_params)
+
+    def assert_page_results(
+        self, response,
+        expected_count, expected_summary=None, expected_page_status=None,
+    ):
+        self.assertEqual(
+            response.context['page_results'].paginator.count, expected_count,
+            msg="Result count should be as expected")
+
+        if expected_summary is not None:
+            self.assertContains(
+                response, f"<span>{expected_summary}</span>", html=True,
+                msg_prefix="Page results summary should be as expected")
+
+        if expected_page_status is not None:
+            self.assertContains(
+                response, f"<span>{expected_page_status}</span>", html=True,
+                msg_prefix="Page status text should be as expected")
+
+    def test_zero_results(self):
+        params = default_search_params.copy() | dict(
+            photo_date_0='date',
+            photo_date_2=datetime.date(2000, 1, 1),
+        )
+        response = self.request_browse(params)
+        self.assert_page_results(response, 0)
+        self.assertContains(response, "No patch results.")
+
+    def test_one_page_results(self):
+        params = default_search_params.copy() | dict(
+            patch_label=self.labels.get(default_code='B').pk,
+        )
+        response = self.request_browse(params)
+        self.assert_page_results(
+            response, 3,
+            expected_summary="Showing 1-3 of 3",
+            expected_page_status="Page 1 of 1",
+        )
+
+    def test_multiple_pages_results(self):
+        params = default_search_params.copy() | dict(
+            patch_label=self.labels.get(default_code='A').pk,
+        )
+        response = self.request_browse(params)
+        self.assert_page_results(
+            response, 7,
+            expected_summary="Showing 1-3 of 7",
+            expected_page_status="Page 1 of 3",
+        )
+
+    def test_page_two(self):
+        params = default_search_params.copy() | dict(
+            patch_label=self.labels.get(default_code='A').pk,
+            page=2,
+        )
+        response = self.request_browse(params)
+        self.assert_page_results(
+            response, 7,
+            expected_summary="Showing 4-6 of 7",
+            expected_page_status="Page 2 of 3",
+        )
+
+    def assert_page_links(
+        self, request_params, expected_prev_href, expected_next_href
+    ):
+        """
+        We don't need to test everything about pagination links here,
+        as that's the job of the app that implements such links.
+        However, we do want to test that the query string, which
+        originates from Browse's app, is as expected.
+
+        We assume both previous and next page links are present,
+        for simplicity.
+        """
+        self.client.force_login(self.user)
+        response = self.client.get(self.url, request_params)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        page_links_soup = response_soup.findAll(
+            'a', class_='prev-next-page')
+
+        self.assertEqual(
+            page_links_soup[0].attrs.get('href'),
+            expected_prev_href,
+            msg="Previous page link is as expected")
+        self.assertEqual(
+            page_links_soup[1].attrs.get('href'),
+            expected_next_href,
+            msg="Next page link is as expected")
+
+    def test_page_urls_no_additional_filters(self):
+        params = dict(image_form_type='search', page=2)
+        self.assert_page_links(
+            params,
+            '?page=1&image_form_type=search',
+            '?page=3&image_form_type=search')
+
+    def test_page_urls_with_search_filters(self):
+        label_a_pk = self.labels.get(default_code='A').pk
+        params = dict(
+            image_form_type='search',
+            patch_label=label_a_pk,
+            page=2,
+        )
+        self.assert_page_links(
+            params,
+            f'?page=1&image_form_type=search&patch_label={label_a_pk}',
+            f'?page=3&image_form_type=search&patch_label={label_a_pk}',
+        )
+
 
 class NoLabelsetTest(ClientTest):
 
@@ -388,5 +543,5 @@ class NoLabelsetTest(ClientTest):
         It just won't return anything exciting.
         """
         self.client.force_login(self.user)
-        response = self.client.post(self.url, default_search_params)
+        response = self.client.get(self.url, default_search_params)
         self.assertContains(response, "No patch results.")

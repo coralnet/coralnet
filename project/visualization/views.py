@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.forms import modelformset_factory
 from django.forms.formsets import formset_factory
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -37,6 +37,13 @@ def browse_images(request, source_id):
     """
     Grid of a source's images.
     """
+    if request.POST:
+        # Once this view has been GET-only for a while, this redirect case
+        # can probably be replaced with a use of require_GET.
+        messages.error(
+            request, "An error occurred; please try another search.")
+        return HttpResponseRedirect(reverse('browse_images', args=[source_id]))
+
     source = get_object_or_404(Source, id=source_id)
 
     # Defaults
@@ -44,10 +51,7 @@ def browse_images(request, source_id):
     image_search_form = ImageSearchForm(source=source)
     hidden_image_form = None
 
-    # The primary way to filter images is by POST params due to the possible
-    # length of some of the params. However, in some cases like the source main
-    # page's image-status links, it can be easier to use GET.
-    image_form = create_image_filter_form(request.POST or request.GET, source)
+    image_form = create_image_filter_form(request.GET, source)
     if image_form:
         if image_form.is_valid():
             image_results = image_form.get_images()
@@ -65,10 +69,10 @@ def browse_images(request, source_id):
         # Coming from a straight link or URL entry
         image_results = source.image_set.order_by('metadata__name', 'pk')
 
-    page_results, _ = paginate(
+    page_results, query_string = paginate(
         image_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
-        request.POST)
+        request.GET)
 
     if page_results.paginator.count > 0:
         page_image_ids = [
@@ -107,6 +111,7 @@ def browse_images(request, source_id):
         'empty_message': empty_message,
         'image_search_form': image_search_form,
         'hidden_image_form': hidden_image_form,
+        'query_string': query_string,
 
         'can_see_actions': can_see_actions,
         'no_actions_reason': no_actions_reason,
@@ -141,6 +146,13 @@ def edit_metadata(request, source_id):
     """
     Grid of editable metadata fields.
     """
+    if request.POST:
+        # Once this view has been GET-only for a while, this redirect case
+        # can probably be replaced with a use of require_GET.
+        messages.error(
+            request, "An error occurred; please try another search.")
+        return HttpResponseRedirect(reverse('edit_metadata', args=[source_id]))
+
     source = get_object_or_404(Source, id=source_id)
 
     if source.image_set.count() >= 500:
@@ -161,9 +173,9 @@ def edit_metadata(request, source_id):
     image_search_form = MetadataEditSearchForm(source=source)
     image_results = Image.objects.none()
 
-    if request.POST or request.GET:
+    if request.GET:
         image_form = create_image_filter_form(
-            request.POST or request.GET, source, for_edit_metadata=True)
+            request.GET, source, for_edit_metadata=True)
         if image_form.is_valid():
             image_results = image_form.get_images()
             empty_message = "No image results."
@@ -233,6 +245,13 @@ def browse_patches(request, source_id):
     """
     Grid of a source's point patches.
     """
+    if request.POST:
+        # Once this view has been GET-only for a while, this redirect case
+        # can probably be replaced with a use of require_GET.
+        messages.error(
+            request, "An error occurred; please try another search.")
+        return HttpResponseRedirect(reverse('browse_patches', args=[source_id]))
+
     source = get_object_or_404(Source, id=source_id)
 
     # Defaults
@@ -241,14 +260,11 @@ def browse_patches(request, source_id):
         " corresponding to annotated points."
     )
     annotation_results = Annotation.objects.none()
-    hidden_filter_form = None
 
-    if request.POST or request.GET:
-        patch_form = PatchSearchForm(
-            request.POST or request.GET, source=source)
+    if request.GET:
+        patch_form = PatchSearchForm(request.GET, source=source)
         if patch_form.is_valid():
             annotation_results = patch_form.get_annotations()
-            hidden_filter_form = HiddenForm(forms=[patch_form])
             empty_message = "No patch results."
         else:
             empty_message = "Search parameters were invalid."
@@ -258,16 +274,16 @@ def browse_patches(request, source_id):
     # Random order
     annotation_results = annotation_results.order_by('?')
 
-    page_results, _ = paginate(
+    page_results, query_string = paginate(
         annotation_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
-        request.POST)
+        request.GET)
 
     return render(request, 'visualization/browse_patches.html', {
         'source': source,
         'patch_search_form': patch_form,
         'page_results': page_results,
-        'hidden_filter_form': hidden_filter_form,
+        'query_string': query_string,
         'empty_message': empty_message,
     })
 
