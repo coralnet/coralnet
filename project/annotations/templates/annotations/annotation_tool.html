@@ -209,12 +209,7 @@
         <br/>
         <br/>
 
-        <form action="{% url 'browse_images' source.id %}" method="post">
-          {% csrf_token %}
-          {% for field in hidden_image_set_form %}{{ field }}{% endfor %}
-
-          <input type="submit" value="Return to Browse" class="link" />
-        </form>
+        <a id="return-to-browse-link" href="{{ return_to_browse_link }}">Return to Browse</a>
       </div>
 
     </div>
