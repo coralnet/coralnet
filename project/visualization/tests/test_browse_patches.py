@@ -245,7 +245,8 @@ class SearchTest(ClientTest):
         # way for a slight speed optimization.
         self.assertListEqual(
             year_choices,
-            [str(year) for year in range(2010, current_year+1)])
+            [''] + [str(year) for year in range(2010, current_year+1)],
+        )
 
     def test_filter_by_exact_date(self):
         # The entire 24 hours of the given date should be included.

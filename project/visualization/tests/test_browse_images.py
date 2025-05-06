@@ -465,7 +465,7 @@ class DateSearchTest(BaseSearchTest):
         year_choices = [value for value, label in year_field.choices]
         self.assertListEqual(
             year_choices,
-            ['2011', '2012', '2013'])
+            ['', '2011', '2012', '2013'])
 
     def test_filter_by_photo_date_exact_date(self):
         self.update_multiple_metadatas(
@@ -600,7 +600,8 @@ class DateSearchTest(BaseSearchTest):
         # way for a slight speed optimization.
         self.assertListEqual(
             year_choices,
-            [str(year) for year in range(2010, current_year+1)])
+            [''] + [str(year) for year in range(2010, current_year+1)],
+        )
 
     def test_filter_by_annotation_date_exact_date(self):
         # The entire 24 hours of the given date should be included.

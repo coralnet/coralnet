@@ -386,7 +386,13 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         metadatas = Metadata.objects.filter(image__source=self.source)
         image_years = [
             date.year for date in metadatas.dates('photo_date', 'year')]
-        image_year_choices = [(str(year), str(year)) for year in image_years]
+        image_year_choices = (
+            # Having a blank value as the default allows us to detect when the
+            # field is not being used, so we can omit it from the search
+            # submission in that case (leading to a cleaner search URL).
+            [('', "---")]
+            + [(str(year), str(year)) for year in image_years]
+        )
 
         self.fields['photo_date'] = DateFilterField(
             label="Photo date", year_choices=image_year_choices,
@@ -456,8 +462,10 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
         annotation_years = range(
             self.source.create_date.year, timezone.now().year + 1)
-        annotation_year_choices = [
-            (str(year), str(year)) for year in annotation_years]
+        annotation_year_choices = (
+            [('', "---")]
+            + [(str(year), str(year)) for year in annotation_years]
+        )
         self.fields['last_annotated'] = DateFilterField(
             label="Last annotation date",
             year_choices=annotation_year_choices,
@@ -638,8 +646,10 @@ class PatchSearchForm(BaseImageSearchForm):
 
         annotation_years = range(
             self.source.create_date.year, timezone.now().year + 1)
-        annotation_year_choices = [
-            (str(year), str(year)) for year in annotation_years]
+        annotation_year_choices = (
+            [('', "---")]
+            + [(str(year), str(year)) for year in annotation_years]
+        )
         self.fields['patch_annotation_date'] = DateFilterField(
             label="Annotation date", year_choices=annotation_year_choices,
             date_lookup='annotation_date',
