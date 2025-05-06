@@ -51,20 +51,6 @@
         images on this page</option>
     </select>
 
-    {# This form allows refreshing the current Browse page, which is sometimes what we want after running some ajax. #}
-    <form
-      hidden action=""
-      method="post" class="no-padding" id="refresh-browse-form"
-    >
-      {% csrf_token %}
-      <span id="previous-image-form-fields">
-        {# The image-filter parameters that led us to this browse page. #}
-        {% if hidden_image_form %}
-          {{ hidden_image_form }}
-        {% endif %}
-      </span>
-    </form>
-
     {# Below are the possible action forms. One at a time will be shown depending on which image-action is selected. #}
 
     <form
@@ -315,4 +301,11 @@
     {% endif %}
 
   </div>
+</div>
+
+<div hidden id="previous-image-form-fields">
+  {# The image-filter parameters that led us to this browse page. #}
+  {% if hidden_image_form %}
+    {{ hidden_image_form }}
+  {% endif %}
 </div>
