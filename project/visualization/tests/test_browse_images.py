@@ -366,6 +366,15 @@ class SearchTest(BaseSearchTest):
             dict(image_name='1-1.'),
             [self.imgs[0], self.imgs[2]])
 
+    def test_filter_by_image_id_range(self):
+        """
+        This field should be tested more thoroughly in edit-metadata
+        where we are more expecting the field to be used.
+        """
+        self.assert_search_results(
+            dict(image_id_range=f'{self.imgs[2].pk}_{self.imgs[4].pk + 5}'),
+            [self.imgs[2], self.imgs[3], self.imgs[4]])
+
     def test_filter_by_multiple_fields(self):
         self.update_multiple_metadatas(
             'photo_date',

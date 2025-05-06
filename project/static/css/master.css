@@ -340,6 +340,9 @@ a {
 a:hover {
     color: var(--link-hover-color);
 }
+a.prominent {
+    font-size: 1.2em;
+}
 
 
 hr.light {

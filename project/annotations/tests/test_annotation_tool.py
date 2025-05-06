@@ -346,6 +346,19 @@ class NavigationTest(ClientTest):
             expected_x_of_y_display="Image 1 of 2",
             expected_search_display="Filtering by last annotator;")
 
+    def test_image_id_range_filter(self):
+        # Exclude img1 and img5 with the filter
+        self.assert_navigation_details(
+            dict(
+                image_id_range=f'{self.img2.pk}_{self.img4.pk}',
+            ),
+            self.img3,
+            expected_prev=self.img2,
+            expected_next=self.img4,
+            expected_x_of_y_display="Image 2 of 3",
+            expected_search_display=(
+                "Filtering by upload date;"))
+
     def test_search_filter_multiple_keys(self):
         user2 = self.create_user()
         self.add_source_member(
@@ -380,15 +393,11 @@ class NavigationTest(ClientTest):
             self.img1,
             expected_next=img4,
             expected_x_of_y_display="Image 1 of 2",
-            # TODO: Once we're on Python 3.6+ only, the order of fields here
-            # SHOULD be consistent due to the cleaned_data dict being ordered.
-            # Until then, the order is arbitrary, and we can't safely assert on
-            # this display.
-            # expected_search_display=(
-            #     "Filtering by last annotator, last annotation date;"),
+            expected_search_display=(
+                "Filtering by last annotation date, last annotator;"),
         )
 
-    def test_image_id_filter(self):
+    def test_image_id_set_filter(self):
         # Exclude img2 with the filter
         self.assert_navigation_details(
             dict(

@@ -2,7 +2,8 @@ import datetime
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_comma_separated_integer_list
+from django.core.validators import (
+    int_list_validator, validate_comma_separated_integer_list)
 from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
@@ -372,6 +373,14 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
     image_form_type = forms.CharField(
         widget=HiddenInput(), initial='search', required=True)
 
+    # Used by the "Manage image metadata" link after uploading images.
+    #
+    # This should NOT be rendered in any HTML forms. This is just for server
+    # side form functionality. Therefore, we don't specify a HiddenInput
+    # widget for this, and we don't include this in the fieldsets_keys of any
+    # child form class.
+    image_id_range = forms.CharField(required=False)
+
     # Search by image name.
     image_name = forms.CharField(label="Image name contains", required=False)
 
@@ -489,6 +498,39 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             raise ValidationError("Incorrect value")
         return value
 
+    def clean_image_id_range(self):
+        value = self.cleaned_data['image_id_range']
+        if value == '':
+            # Not using this filter.
+            return value
+
+        # Commas get escaped in URLs, which is a bit ugly, so we use
+        # underscores instead.
+        format_validator = int_list_validator(
+            sep='_',
+            message="Enter only digits separated by underscores.",
+        )
+        format_validator(value)
+
+        id_str_list = value.split('_')
+        if len(id_str_list) != 2:
+            raise ValidationError(
+                "Should be a list of exactly 2 ID numbers.",
+                code='not_two_numbers',
+            )
+
+        # Should already be validated as integer strings.
+        min_id, max_id = [int(id_str) for id_str in id_str_list]
+
+        if min_id > max_id:
+            raise ValidationError(
+                "Minimum ID (first number) should not be greater than the"
+                " maximum ID (second number).",
+                code='min_greater_than_max',
+            )
+
+        return min_id, max_id
+
     def get_images(self):
         """
         Call this after cleaning the form to get the image search results
@@ -520,6 +562,8 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 pass
             elif key in ['image_form_type', 'sort_method', 'sort_direction']:
                 pass
+            elif key == 'image_id_range':
+                filters_used.append("upload date")
             else:
                 field = self.fields[key]
                 if hasattr(field, 'verbose_name'):

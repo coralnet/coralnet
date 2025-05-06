@@ -16,8 +16,8 @@ var UploadImagesHelper = (function() {
 
     var $uploadStartButton = null;
     var $uploadAbortButton = null;
-    var $startAnotherUploadForm = null;
-    var $proceedToManageMetadataForm = null;
+    var proceedLinksContainer = null;
+    var manageMetadataLink = null;
 
     var uploadPreviewUrl = null;
     var uploadStartUrl = null;
@@ -398,14 +398,18 @@ var UploadImagesHelper = (function() {
         updateStatus('uploaded');
         postUploadCleanup();
 
-        // Set the uploaded image ids in the proceed-to-manage-metadata form.
-        var commaSeparatedImageIds = uploadedImageIds.join();
-        $proceedToManageMetadataForm.find('input[name=ids]')
-            .val(commaSeparatedImageIds);
+        // Update the proceed-to-manage-metadata link with a filter arg
+        // that filters to the images that were just uploaded.
+        var minUploadedImageId = Math.min(...uploadedImageIds);
+        var maxUploadedImageId = Math.max(...uploadedImageIds);
+        var searchParams = new URLSearchParams({
+            image_form_type: 'search',
+            image_id_range: `${minUploadedImageId}_${maxUploadedImageId}`,
+        });
+        manageMetadataLink.href += '?' + searchParams.toString();
 
         // Show the buttons for the user's next step.
-        $startAnotherUploadForm.show();
-        $proceedToManageMetadataForm.show();
+        proceedLinksContainer.hidden = false;
     }
 
     function postUploadCleanup() {
@@ -508,15 +512,16 @@ var UploadImagesHelper = (function() {
             // Button elements.
             $uploadStartButton = $('#id_upload_submit');
             $uploadAbortButton = $('#id_upload_abort_button');
-            $startAnotherUploadForm = $('#id_start_another_upload_form');
-            $proceedToManageMetadataForm = $('#id_proceed_to_manage_metadata_form');
+            proceedLinksContainer = document.getElementById(
+                'proceed-links-container');
+            manageMetadataLink = document.getElementById(
+                'manage-metadata-link');
 
             $statusDisplay = $('#status_display');
 
 
             // Hide the after-upload buttons for now
-            $startAnotherUploadForm.hide();
-            $proceedToManageMetadataForm.hide();
+            proceedLinksContainer.hidden = true;
 
             // Handlers.
             $(filesField).change( function(){
