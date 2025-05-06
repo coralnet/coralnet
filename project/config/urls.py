@@ -33,6 +33,7 @@ urlpatterns = [
     path('newsfeed/', include('newsfeed.urls')),
     path('', include('sources.urls')),
     path(SOURCE_ID + 'upload/', include('upload.urls')),
+    path('', include('upload.urls_js')),
     path('', include('vision_backend.urls')),
     path(SOURCE_ID + 'browse/', include('visualization.urls')),
     path('', include('visualization.urls_js')),
