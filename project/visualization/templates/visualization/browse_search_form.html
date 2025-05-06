@@ -1,6 +1,6 @@
-<form action="" method="post" class="no-padding" id="search-form">
-  {% csrf_token %}
+{% load static %}
 
+<form action="" method="get" class="no-padding" id="search-form">
   <div class="center-box-wrapper">
     <div class="form-box">
       {{ form }}
@@ -11,3 +11,9 @@
     </div>
   </div>
 </form>
+
+<script type="module">
+  import BrowseSearchHelper from "{% static 'js/BrowseSearchHelper.js' %}";
+  BrowseSearchHelper.setupSearchSubmitLogic(
+      document.getElementById('search-form'));
+</script>

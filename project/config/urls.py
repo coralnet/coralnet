@@ -34,7 +34,8 @@ urlpatterns = [
     path('', include('sources.urls')),
     path(SOURCE_ID + 'upload/', include('upload.urls')),
     path('', include('vision_backend.urls')),
-    path('', include('visualization.urls')),
+    path(SOURCE_ID + 'browse/', include('visualization.urls')),
+    path('', include('visualization.urls_js')),
 
     # lib.views
     path('', lib_views.index, name='index'),
