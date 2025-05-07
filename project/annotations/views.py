@@ -1,6 +1,7 @@
 from collections import defaultdict
 import csv
 import json
+import urllib.parse
 
 from django.conf import settings
 from django.contrib import messages
@@ -214,17 +215,26 @@ def annotation_tool(request, image_id):
     applied_search_display = None
 
     image_form = create_image_filter_form(request.POST, source)
-    if image_form:
-        if image_form.is_valid():
-            image_set = image_form.get_images()
-            hidden_image_set_form = HiddenForm(forms=[image_form])
-            applied_search_display = image_form.get_applied_search_display()
+    browse_query_args = None
+    if image_form and image_form.is_valid():
+        image_set = image_form.get_images()
+        hidden_image_set_form = HiddenForm(forms=[image_form])
+        applied_search_display = image_form.get_applied_search_display()
+        browse_query_args = {
+            k: v for k, v in request.POST.items()
+            if k in image_form.cleaned_data
+        }
 
     # Get the next and previous images in the image set.
     prev_image = get_prev_image(image, image_set, wrap=True)
     next_image = get_next_image(image, image_set, wrap=True)
     # Get the image's ordered placement in the image set, e.g. 5th.
     image_set_order_placement = get_image_order_placement(image, image_set)
+
+    return_to_browse_link = reverse('browse_images', args=[source.pk])
+    if browse_query_args:
+        return_to_browse_link += (
+            '?' + urllib.parse.urlencode(browse_query_args))
 
     # Get the settings object for this user.
     # If there is no such settings object, then populate the form with
@@ -315,6 +325,7 @@ def annotation_tool(request, image_id):
         'image_set_size': image_set.count(),
         'image_set_order_placement': image_set_order_placement,
         'applied_search_display': applied_search_display,
+        'return_to_browse_link': return_to_browse_link,
         'metadata': metadata,
         'image_meta_table': get_date_and_aux_metadata_table(image),
         'labels': labels,

@@ -483,7 +483,7 @@ QUnit.module("Form submission", (hooks) => {
     });
 
     test.each(
-            "Async actions: request",
+            "Async actions with second step: request",
             [
                 ['export_annotations', 'all', 'all_images'],
                 ['export_annotations', 'selected', 'all_images'],
@@ -501,13 +501,6 @@ QUnit.module("Form submission", (hooks) => {
                 ['export_calcify_rates', 'selected', 'all_images'],
                 ['export_calcify_rates', 'all', 'with_search_filters'],
                 ['export_calcify_rates', 'selected', 'with_search_filters'],
-                // Deletion can't be tested with all_images, because deletion
-                // has a safety measure against accidentally deleting all
-                // images.
-                ['delete_images', 'all', 'with_search_filters'],
-                ['delete_images', 'selected', 'with_search_filters'],
-                ['delete_annotations', 'all', 'with_search_filters'],
-                ['delete_annotations', 'selected', 'with_search_filters'],
             ],
             (assert, [actionValue, imageSelectType, fixtureName]) => {
 
@@ -536,7 +529,7 @@ QUnit.module("Form submission", (hooks) => {
 
         // Wait for the response.
         const done = assert.async();
-        promise.then((response) => {
+        promise.then((_response) => {
             secondForm.assertSubmitted(assert);
 
             // Tell QUnit that the test can finish.
@@ -545,16 +538,12 @@ QUnit.module("Form submission", (hooks) => {
     });
 
     test.each(
-            "Async actions: success response",
+            "Async actions with second step: success response",
             [
                 ['export_annotations_cpc', 'all', 'all_images'],
                 ['export_annotations_cpc', 'selected', 'all_images'],
                 ['export_annotations_cpc', 'all', 'with_search_filters'],
                 ['export_annotations_cpc', 'selected', 'with_search_filters'],
-                ['delete_images', 'all', 'with_search_filters'],
-                ['delete_images', 'selected', 'with_search_filters'],
-                ['delete_annotations', 'all', 'with_search_filters'],
-                ['delete_annotations', 'selected', 'with_search_filters'],
             ],
             (assert, [actionValue, imageSelectType, fixtureName]) => {
 
@@ -575,8 +564,9 @@ QUnit.module("Form submission", (hooks) => {
 
         // Wait for the response.
         const done = assert.async();
-        promise.then((response) => {
+        promise.then((_response) => {
             // Check UI status after the response comes back.
+            // (A previous test already covered checking before the response.)
             form.assertUiStatusCorrect(assert, true);
 
             secondForm.assertSubmitted(assert);
@@ -591,16 +581,12 @@ QUnit.module("Form submission", (hooks) => {
     });
 
     test.each(
-            "Async actions: failure response",
+            "Async actions with second step: failure response",
             [
                 ['export_annotations_cpc', 'all', 'all_images'],
                 ['export_annotations_cpc', 'selected', 'all_images'],
                 ['export_annotations_cpc', 'all', 'with_search_filters'],
                 ['export_annotations_cpc', 'selected', 'with_search_filters'],
-                ['delete_images', 'all', 'with_search_filters'],
-                ['delete_images', 'selected', 'with_search_filters'],
-                ['delete_annotations', 'all', 'with_search_filters'],
-                ['delete_annotations', 'selected', 'with_search_filters'],
             ],
             async(assert, [actionValue, imageSelectType, fixtureName]) => {
 
@@ -626,7 +612,7 @@ QUnit.module("Form submission", (hooks) => {
         window.alert = (message) => {
             alertMessage = message;
         };
-        // Be able to check if the sync form submitted or not (it shouldn't).
+        // Be able to check if the sync form submits or not (it shouldn't).
         let secondForm = secondFormLookup[actionValue];
         secondForm.mockSynchronousFormSubmit();
 
@@ -638,6 +624,166 @@ QUnit.module("Form submission", (hooks) => {
             });
 
         secondForm.assertNotSubmitted(assert);
+
+        assert.equal(
+            alertMessage,
+            "There was an error:" +
+            "\nError: Internal Server Error" +
+            "\nIf the problem persists, please notify us on the forum.",
+            "Alert message should be as expected");
+        assert.equal(
+            errorMessage,
+            "Internal Server Error",
+            "Should throw the expected error");
+    });
+
+    test.each(
+            "Async actions with refetch: request",
+            [
+                // Deletion can't be tested with all_images, because deletion
+                // has a safety measure against accidentally deleting all
+                // images.
+                ['delete_images', 'all', 'with_search_filters'],
+                ['delete_images', 'selected', 'with_search_filters'],
+                ['delete_annotations', 'all', 'with_search_filters'],
+                ['delete_annotations', 'selected', 'with_search_filters'],
+            ],
+            (assert, [actionValue, imageSelectType, fixtureName]) => {
+
+        useFixture(fixtureName);
+        browseActionHelper = new BrowseActionHelper([1, 2, 3]);
+
+        // Replace this function with one that, instead of assigning the
+        // window location (which would trigger a page load away from the
+        // QUnit test page), just sets a variable to signal that the
+        // function's been called.
+        //
+        // Note that this replacement must happen before refetchBrowse()
+        // is bound to event handlers; therefore, before calling
+        // changeAction() below.
+        let calledRefetchBrowse = false;
+        browseActionHelper.refetchBrowse = function() {
+            calledRefetchBrowse = true;
+        };
+
+        changeAction(actionValue);
+        changeImageSelectType(imageSelectType);
+        let form = formLookup[actionValue];
+
+        form.assertUrlPathCorrect(assert);
+
+        form.mockPromptIfApplicable();
+        form.mockAsyncFormSubmit();
+
+        // Submit.
+        let promise = browseActionHelper.actionSubmit(new Event('dummyevent'));
+
+        // Check UI status before response.
+        form.assertUiStatusCorrect(assert, false);
+
+        // Test what was submitted for the async request.
+        form.assertFormDataCorrect(assert, imageSelectType, fixtureName);
+
+        // Wait for the response.
+        const done = assert.async();
+        promise.then((_response) => {
+            assert.true(
+                calledRefetchBrowse,
+                "refetchBrowse() should have been called");
+
+            // Tell QUnit that the test can finish.
+            done();
+        });
+    });
+
+    test.each(
+            "Async actions with refetch: success response",
+            [
+                ['delete_images', 'all', 'with_search_filters'],
+                ['delete_images', 'selected', 'with_search_filters'],
+                ['delete_annotations', 'all', 'with_search_filters'],
+                ['delete_annotations', 'selected', 'with_search_filters'],
+            ],
+            (assert, [actionValue, imageSelectType, fixtureName]) => {
+
+        useFixture(fixtureName);
+        browseActionHelper = new BrowseActionHelper([1, 2, 3]);
+
+        let calledRefetchBrowse = false;
+        browseActionHelper.refetchBrowse = function() {
+            calledRefetchBrowse = true;
+        };
+
+        changeAction(actionValue);
+        changeImageSelectType(imageSelectType);
+        let form = formLookup[actionValue];
+
+        form.mockPromptIfApplicable();
+        form.mockAsyncFormSubmit();
+
+        // Submit.
+        let promise = browseActionHelper.actionSubmit(new Event('dummyevent'));
+
+        // Wait for the response.
+        const done = assert.async();
+        promise.then((_response) => {
+            // Check UI status after the response comes back.
+            // (A previous test already covered checking before the response.)
+            form.assertUiStatusCorrect(assert, true);
+
+            assert.true(
+                calledRefetchBrowse,
+                "refetchBrowse() should have been called");
+
+            // Tell QUnit that the test can finish.
+            done();
+        });
+    });
+
+    test.each(
+            "Async actions with refetch: failure response",
+            [
+                ['delete_images', 'all', 'with_search_filters'],
+                ['delete_images', 'selected', 'with_search_filters'],
+                ['delete_annotations', 'all', 'with_search_filters'],
+                ['delete_annotations', 'selected', 'with_search_filters'],
+            ],
+            async(assert, [actionValue, imageSelectType, fixtureName]) => {
+
+        useFixture(fixtureName);
+        browseActionHelper = new BrowseActionHelper([1, 2, 3]);
+
+        let calledRefetchBrowse = false;
+        browseActionHelper.refetchBrowse = function() {
+            calledRefetchBrowse = true;
+        };
+
+        changeAction(actionValue);
+        changeImageSelectType(imageSelectType);
+        let form = formLookup[actionValue];
+
+        form.mockPromptIfApplicable();
+
+        fetchMock.post(
+            window.location.origin + form.actionPath,
+            new Response(
+                null, {status: 500, statusText: "Internal Server Error"}));
+
+        let alertMessage = null;
+        window.alert = (message) => {
+            alertMessage = message;
+        };
+
+        // Submit.
+        let errorMessage;
+        await browseActionHelper.actionSubmit(new Event('dummyevent'))
+            .catch((error) => {
+                errorMessage = error.message;
+            });
+
+        assert.false(
+            calledRefetchBrowse,
+            "refetchBrowse() should not have been called");
 
         assert.equal(
             alertMessage,

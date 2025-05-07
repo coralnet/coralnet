@@ -1,0 +1,73 @@
+<div class="page-section">
+
+  {% comment %}
+  These fields aren't going to get submitted directly,
+  so they're not in a form element.
+  {% endcomment %}
+  {{ images_form }}
+
+  {# Need a CSRF token for Ajax #}
+  {% csrf_token %}
+
+</div>
+
+<div class="page-section">
+
+  <div id="upload_summary_section">
+
+    <span id="status_display"></span>
+    <hr>
+    <span id="pre_upload_summary"></span>
+
+    <div id="files_table_auto_scroll_checkbox_container">
+      <input type="checkbox" id="files_table_auto_scroll_checkbox" checked>
+      <label for="files_table_auto_scroll_checkbox">Auto-scroll to the currently uploading file</label>
+    </div>
+
+    {# Table showing the files selected for upload. #}
+    <div id="files_table_container">
+      <table id="files_table"></table>
+    </div>
+
+    <span id="mid_upload_summary"></span>
+  </div>
+
+
+  <div id="upload_and_proceed_buttons">
+
+    {# Upload controls #}
+
+    <button type="button" class="submit red" id="id_upload_submit" disabled="disabled">Start upload</button>
+    <button type="button" class="submit red" id="id_upload_abort_button" disabled="disabled">Abort upload</button>
+
+    {# Proceeding after upload #}
+
+    <div id="proceed-links-container">
+
+      <div>
+        <a class="prominent" href="">Upload more images</a>
+        <p class="helptext_small">Upload another set of images.</p>
+      </div>
+
+      <div>
+        <a
+          id="manage-metadata-link"
+          class="prominent"
+          {% comment %}
+            When the upload's done, we'll add filter args to this link to
+            show just the new images.
+          {% endcomment %}
+          href="{% url 'edit_metadata' source.id %}"
+        >
+          Manage image metadata
+        </a>
+        <p class="helptext_small">
+          View and edit the metadata of the images you just uploaded.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>

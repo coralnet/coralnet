@@ -10,28 +10,8 @@
   <div class="pagination-links">
 
     {% if page_results.has_previous %}
-
-      {% if use_post_form %}
-
-        <form action="" method="post" class="no-padding">
-          {% csrf_token %}
-          {% for field in hidden_form %}
-            {{ field }}
-          {% endfor %}
-
-          <input type="hidden" name="page"
-            value="{{ page_results.previous_page_number }}" />
-          <input type="submit" class="page"
-            value="<" title="Previous page" />
-        </form>
-
-      {% else %}
-
-        <a href="?page={{ page_results.previous_page_number }}&{{ query_string }}"
-           class="prev-next-page" title="Previous page"> &lt; </a>
-
-      {% endif %}
-
+      <a href="?page={{ page_results.previous_page_number }}&{{ query_string }}"
+         class="prev-next-page" title="Previous page"> &lt; </a>
     {% endif %}
 
     <span>
@@ -40,28 +20,8 @@
     </span>
 
     {% if page_results.has_next %}
-
-      {% if use_post_form %}
-
-        <form action="" method="post" class="no-padding">
-          {% csrf_token %}
-          {% for field in hidden_form %}
-            {{ field }}
-          {% endfor %}
-
-          <input type="hidden" name="page"
-            value="{{ page_results.next_page_number }}" />
-          <input type="submit" class="page"
-            value=">" title="Next page" />
-        </form>
-
-      {% else %}
-
-        <a href="?page={{ page_results.next_page_number }}&{{ query_string }}"
-           class="prev-next-page" title="Next page"> &gt; </a>
-
-      {% endif %}
-
+      <a href="?page={{ page_results.next_page_number }}&{{ query_string }}"
+         class="prev-next-page" title="Next page"> &gt; </a>
     {% endif %}
 
   </div>

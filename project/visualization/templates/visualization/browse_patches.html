@@ -57,7 +57,7 @@
     {% endfor %}
 
     {# Pagination info and links #}
-    {% include 'pagination_links.html' with use_post_form=True hidden_form=hidden_filter_form page_results=page_results %}
+    {% include 'pagination_links.html' with query_string=query_string page_results=page_results %}
   {% endif %}
 
   {# Script in the body will run on page load. #}

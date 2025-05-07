@@ -31,13 +31,53 @@ var util = {
     @param options - see standard fetch()
     @param callback - function to call when the response is OK and converted
       to JSON. Optional; a no-op if not specified.
+    @param csrfToken - if specified, the options get modified to include
+      this CSRF token in the headers, and to set mode to same-origin.
+      All POST requests to the CoralNet main site require a CSRF token,
+      else a 403 will occur.
     @return - the Promise that fetch() returns. One possible use is to
       `await` this Promise and then run some code, instead of using the
-      callback param.
+      callback param. However, error recovery behavior may be limited in
+      that case.
     */
-    fetch: function(resource, options, callback) {
+    fetch: function(
+        resource, options, callback, {csrfToken=null, errorHandler=null} = {}
+    ) {
         // Default callback is a no-op
         callback = callback || ((responseJson) => {return responseJson});
+
+        let defaultErrorCallback = (error) => {
+            alert(
+                "There was an error:" +
+                `\n${error}` +
+                "\nIf the problem persists, please notify us on the forum."
+            );
+            throw error;
+        }
+        let errorCallback;
+        if (errorHandler) {
+            errorCallback = (error) => {
+                try {
+                    errorHandler(error);
+                }
+                catch (error_2) {
+                    defaultErrorCallback(error_2);
+                }
+            }
+        }
+        else {
+            errorCallback = (error) => {
+                defaultErrorCallback(error);
+            }
+        }
+
+        if (csrfToken) {
+            if (!options.headers) {
+                options.headers = {};
+            }
+            options.headers['X-CSRFToken'] = csrfToken;
+            options.mode = 'same-origin';
+        }
 
         return fetch(resource, options)
             .then(response => {
@@ -48,14 +88,7 @@ var util = {
                 return response.json();
             })
             .then(callback)
-            .catch(error => {
-                alert(
-                    "There was an error:" +
-                    `\n${error}` +
-                    "\nIf the problem persists, please notify us on the forum."
-                );
-                throw error;
-            });
+            .catch(errorCallback);
     },
 
     /* Takes a number representing a number of bytes, and returns a

@@ -62,7 +62,7 @@ class FormAvailabilityTest(BrowseActionsFormTest):
 
     def test_no_search(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.browse_url)
+        response = self.client.get(self.browse_url)
         self.assert_form_placeholdered(
             response,
             "You must first submit the Search form before you can batch-delete images. (This is a safety check to reduce the chances of accidentally deleting all your images. If you really want to delete all images, just click Search without changing any of the search fields.)",
@@ -70,13 +70,13 @@ class FormAvailabilityTest(BrowseActionsFormTest):
 
     def test_after_search(self):
         self.client.force_login(self.user)
-        response = self.client.post(
+        response = self.client.get(
             self.browse_url, self.default_search_params)
         self.assert_form_available(response)
 
     def test_view_perms_only(self):
         self.client.force_login(self.user_viewer)
-        response = self.client.post(
+        response = self.client.get(
             self.browse_url, self.default_search_params)
         self.assert_form_absent(response)
 

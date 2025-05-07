@@ -346,6 +346,19 @@ class NavigationTest(ClientTest):
             expected_x_of_y_display="Image 1 of 2",
             expected_search_display="Filtering by last annotator;")
 
+    def test_image_id_range_filter(self):
+        # Exclude img1 and img5 with the filter
+        self.assert_navigation_details(
+            dict(
+                image_id_range=f'{self.img2.pk}_{self.img4.pk}',
+            ),
+            self.img3,
+            expected_prev=self.img2,
+            expected_next=self.img4,
+            expected_x_of_y_display="Image 2 of 3",
+            expected_search_display=(
+                "Filtering by upload date;"))
+
     def test_search_filter_multiple_keys(self):
         user2 = self.create_user()
         self.add_source_member(
@@ -380,15 +393,11 @@ class NavigationTest(ClientTest):
             self.img1,
             expected_next=img4,
             expected_x_of_y_display="Image 1 of 2",
-            # TODO: Once we're on Python 3.6+ only, the order of fields here
-            # SHOULD be consistent due to the cleaned_data dict being ordered.
-            # Until then, the order is arbitrary, and we can't safely assert on
-            # this display.
-            # expected_search_display=(
-            #     "Filtering by last annotator, last annotation date;"),
+            expected_search_display=(
+                "Filtering by last annotation date, last annotator;"),
         )
 
-    def test_image_id_filter(self):
+    def test_image_id_set_filter(self):
         # Exclude img2 with the filter
         self.assert_navigation_details(
             dict(
@@ -633,6 +642,72 @@ class NavigationTest(ClientTest):
             self.img2,
             expected_prev=self.img5, expected_next=self.img4,
             expected_x_of_y_display="Image 5 of 5")
+
+
+class ReturnToBrowseTest(ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+        cls.source = cls.create_source(cls.user)
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source, dict(filename='1.png'))
+        cls.img2 = cls.upload_image(
+            cls.user, cls.source, dict(filename='2.png'))
+        cls.img3 = cls.upload_image(
+            cls.user, cls.source, dict(filename='3.png'))
+
+    def assert_return_to_browse_link(
+        self, search_kwargs, current_image
+    ):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse('annotation_tool', args=[current_image.pk]), search_kwargs)
+
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        return_link = response_soup.find(
+            'a', dict(id='return-to-browse-link'))
+        href = return_link.attrs.get('href')
+
+        expected_base_url = reverse('browse_images', args=[self.source.pk])
+        if search_kwargs is not None:
+            expected_query_string = '&'.join(
+                [f'{k}={v.replace(",", "%2C")}'
+                 for k, v in search_kwargs.items()])
+            expected_href = f'{expected_base_url}?{expected_query_string}'
+        else:
+            expected_href = expected_base_url
+
+        self.assertEqual(
+            href,
+            expected_href,
+            msg="Return-to-browse link href should be as expected",
+        )
+
+    def test_return_to_browse_no_filters(self):
+        self.assert_return_to_browse_link(None, self.img1)
+
+    def test_return_to_browse_with_search_filters(self):
+        search_kwargs = dict(
+            image_form_type='search',
+            sort_method='name',
+            sort_direction='asc',
+            image_name='1',
+        )
+        self.assert_return_to_browse_link(search_kwargs, self.img1)
+
+    def test_return_to_browse_with_id_set_filter(self):
+        search_kwargs = dict(
+            image_form_type='ids',
+            ids=','.join([str(self.img1.pk), str(self.img3.pk)]),
+        )
+        self.assert_return_to_browse_link(search_kwargs, self.img1)
 
 
 class LoadAnnotationFormTest(ClientTest):

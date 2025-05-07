@@ -17,7 +17,6 @@ from lib.utils import filesize_display
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
 from vision_backend.utils import schedule_source_check_on_commit
-from visualization.forms import ImageSpecifyByIdForm
 from .forms import (
     CSVImportForm, ImageUploadForm, ImageUploadFrontendForm)
 from .utils import (
@@ -59,7 +58,6 @@ def upload_images(request, source_id):
     source = get_object_or_404(Source, id=source_id)
 
     images_form = ImageUploadFrontendForm()
-    proceed_to_manage_metadata_form = ImageSpecifyByIdForm(source=source)
 
     auto_generate_points_message = (
         "We will generate points for the images you upload.\n"
@@ -74,7 +72,6 @@ def upload_images(request, source_id):
     return render(request, 'upload/upload_images.html', {
         'source': source,
         'images_form': images_form,
-        'proceed_to_manage_metadata_form': proceed_to_manage_metadata_form,
         'auto_generate_points_message': auto_generate_points_message,
         'image_upload_max_file_size': filesize_display(
             settings.IMAGE_UPLOAD_MAX_FILE_SIZE),

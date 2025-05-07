@@ -1,6 +1,39 @@
+from django.forms.fields import ChoiceField
+
 from lib.forms import DummyForm
 from lib.tests.utils_qunit import QUnitView
 from lib.utils import paginate
+
+
+class BrowseSearchFormQUnitView(QUnitView):
+
+    test_template_name = 'visualization/browse_search_form.html'
+    javascript_functionality_modules = [
+        'js/jquery.min.js', 'js/util.js', 'js/BrowseSearchHelper.js']
+    javascript_test_modules = ['js/tests/BrowseSearchQUnit.js']
+
+    @property
+    def test_template_contexts(self):
+        return {
+            'main': {
+                'form': DummyForm(
+                    # Text input elements
+                    field_1='',
+                    field_2='',
+                    # Select elements
+                    field_3=ChoiceField(
+                        choices=[('', ''), ('ccc', 'ccc')],
+                        initial='',
+                        required=False,
+                    ),
+                    field_4=ChoiceField(
+                        choices=[('', ''), ('ddd', 'ddd')],
+                        initial='',
+                        required=False,
+                    ),
+                ),
+            },
+        }
 
 
 class BrowseImagesActionsQUnitView(QUnitView):
