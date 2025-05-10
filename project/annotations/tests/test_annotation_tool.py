@@ -12,7 +12,6 @@ from django.utils.html import escape as html_escape
 from accounts.utils import is_alleviate_user, is_robot_user
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
-from visualization.tests.utils import BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import AnnotationHistoryTestMixin
 
@@ -198,11 +197,9 @@ class NavigationTest(ClientTest):
         image.annoinfo.save()
 
     def enter_annotation_tool(self, search_kwargs, current_image):
-        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
-        data.update(**search_kwargs)
         self.client.force_login(self.user)
         response = self.client.post(
-            reverse('annotation_tool', args=[current_image.pk]), data)
+            reverse('annotation_tool', args=[current_image.pk]), search_kwargs)
         return response
 
     def assert_navigation_details(
@@ -357,7 +354,17 @@ class NavigationTest(ClientTest):
             expected_next=self.img4,
             expected_x_of_y_display="Image 2 of 3",
             expected_search_display=(
-                "Filtering by upload date;"))
+                "Filtering by a range of image IDs;"))
+
+    def test_image_id_list_filter(self):
+        # Exclude img2 with the filter
+        self.assert_navigation_details(
+            dict(image_id_list=f'{self.img1.pk}_{self.img3.pk}'),
+            self.img3,
+            expected_prev=self.img1,
+            expected_x_of_y_display="Image 2 of 2",
+            expected_search_display=(
+                "Filtering by a list of individual images;"))
 
     def test_search_filter_multiple_keys(self):
         user2 = self.create_user()
@@ -397,19 +404,6 @@ class NavigationTest(ClientTest):
                 "Filtering by last annotation date, last annotator;"),
         )
 
-    def test_image_id_set_filter(self):
-        # Exclude img2 with the filter
-        self.assert_navigation_details(
-            dict(
-                image_form_type='ids',
-                ids=','.join([str(self.img1.pk), str(self.img3.pk)]),
-            ),
-            self.img3,
-            expected_prev=self.img1,
-            expected_x_of_y_display="Image 2 of 2",
-            expected_search_display=(
-                "Filtering to a specific set of images"))
-
     def test_sort_by_name(self):
         self.update_multiple_metadatas(
             'name',
@@ -422,38 +416,41 @@ class NavigationTest(ClientTest):
         # Ascending
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='asc'), self.img2,
+            dict(sort_method='', sort_direction='', submit='action'),
+            self.img2,
             expected_prev=self.img5, expected_next=self.img1,
             expected_x_of_y_display="Image 1 of 5",
             expected_search_display=(
                 "Sorting by name, ascending"))
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='asc'), self.img3,
+            dict(sort_method='', sort_direction='', submit='action'),
+            self.img3,
             expected_prev=self.img1, expected_next=self.img4,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='asc'), self.img5,
+            dict(sort_method='', sort_direction='', submit='action'),
+            self.img5,
             expected_prev=self.img4, expected_next=self.img2,
             expected_x_of_y_display="Image 5 of 5")
 
         # Descending
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='desc'), self.img5,
+            dict(sort_method='', sort_direction='desc'), self.img5,
             expected_prev=self.img2, expected_next=self.img4,
             expected_x_of_y_display="Image 1 of 5",
             expected_search_display=(
                 "Sorting by name, descending"))
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='desc'), self.img3,
+            dict(sort_method='', sort_direction='desc'), self.img3,
             expected_prev=self.img4, expected_next=self.img1,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='name', sort_direction='desc'), self.img2,
+            dict(sort_method='', sort_direction='desc'), self.img2,
             expected_prev=self.img1, expected_next=self.img5,
             expected_x_of_y_display="Image 5 of 5")
 
@@ -462,19 +459,19 @@ class NavigationTest(ClientTest):
         # Ascending
 
         self.assert_navigation_details(
-            dict(sort_method='upload_date', sort_direction='asc'), self.img1,
+            dict(sort_method='upload_date', sort_direction=''), self.img1,
             expected_prev=self.img5, expected_next=self.img2,
             expected_x_of_y_display="Image 1 of 5",
             expected_search_display=(
                 "Sorting by upload date, ascending"))
 
         self.assert_navigation_details(
-            dict(sort_method='upload_date', sort_direction='asc'), self.img3,
+            dict(sort_method='upload_date', sort_direction=''), self.img3,
             expected_prev=self.img2, expected_next=self.img4,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='upload_date', sort_direction='asc'), self.img5,
+            dict(sort_method='upload_date', sort_direction=''), self.img5,
             expected_prev=self.img4, expected_next=self.img1,
             expected_x_of_y_display="Image 5 of 5")
 
@@ -510,29 +507,29 @@ class NavigationTest(ClientTest):
         # We'll test more images to make sure ties behave as expected.
 
         self.assert_navigation_details(
-            dict(sort_method='photo_date', sort_direction='asc'), self.img2,
+            dict(sort_method='photo_date', sort_direction=''), self.img2,
             expected_prev=self.img4, expected_next=self.img5,
             expected_x_of_y_display="Image 1 of 5",
             expected_search_display=(
                 "Sorting by photo date, ascending"))
 
         self.assert_navigation_details(
-            dict(sort_method='photo_date', sort_direction='asc'), self.img5,
+            dict(sort_method='photo_date', sort_direction=''), self.img5,
             expected_prev=self.img2, expected_next=self.img1,
             expected_x_of_y_display="Image 2 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='photo_date', sort_direction='asc'), self.img1,
+            dict(sort_method='photo_date', sort_direction=''), self.img1,
             expected_prev=self.img5, expected_next=self.img3,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='photo_date', sort_direction='asc'), self.img3,
+            dict(sort_method='photo_date', sort_direction=''), self.img3,
             expected_prev=self.img1, expected_next=self.img4,
             expected_x_of_y_display="Image 4 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='photo_date', sort_direction='asc'), self.img4,
+            dict(sort_method='photo_date', sort_direction=''), self.img4,
             expected_prev=self.img3, expected_next=self.img2,
             expected_x_of_y_display="Image 5 of 5")
 
@@ -578,7 +575,7 @@ class NavigationTest(ClientTest):
         # Ascending
 
         self.assert_navigation_details(
-            dict(sort_method='last_annotation_date', sort_direction='asc'),
+            dict(sort_method='last_annotation_date', sort_direction=''),
             self.img2,
             expected_prev=self.img4, expected_next=self.img5,
             expected_x_of_y_display="Image 1 of 5",
@@ -586,25 +583,25 @@ class NavigationTest(ClientTest):
                 "Sorting by last annotation date, ascending"))
 
         self.assert_navigation_details(
-            dict(sort_method='last_annotation_date', sort_direction='asc'),
+            dict(sort_method='last_annotation_date', sort_direction=''),
             self.img5,
             expected_prev=self.img2, expected_next=self.img1,
             expected_x_of_y_display="Image 2 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='last_annotation_date', sort_direction='asc'),
+            dict(sort_method='last_annotation_date', sort_direction=''),
             self.img1,
             expected_prev=self.img5, expected_next=self.img3,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='last_annotation_date', sort_direction='asc'),
+            dict(sort_method='last_annotation_date', sort_direction=''),
             self.img3,
             expected_prev=self.img1, expected_next=self.img4,
             expected_x_of_y_display="Image 4 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='last_annotation_date', sort_direction='asc'),
+            dict(sort_method='last_annotation_date', sort_direction=''),
             self.img4,
             expected_prev=self.img3, expected_next=self.img2,
             expected_x_of_y_display="Image 5 of 5")
@@ -694,18 +691,12 @@ class ReturnToBrowseTest(ClientTest):
         self.assert_return_to_browse_link(None, self.img1)
 
     def test_return_to_browse_with_search_filters(self):
-        search_kwargs = dict(
-            image_form_type='search',
-            sort_method='name',
-            sort_direction='asc',
-            image_name='1',
-        )
+        search_kwargs = dict(image_name='1')
         self.assert_return_to_browse_link(search_kwargs, self.img1)
 
     def test_return_to_browse_with_id_set_filter(self):
         search_kwargs = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img3.pk)]),
+            image_id_list='_'.join([str(self.img1.pk), str(self.img3.pk)]),
         )
         self.assert_return_to_browse_link(search_kwargs, self.img1)
 
@@ -1533,9 +1524,8 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
 
         # Access the annotation tool through a Browse search
         self.client.force_login(self.user)
-        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         self.client.post(
-            reverse('annotation_tool', args=[self.img.pk]), data)
+            reverse('annotation_tool', args=[self.img.pk]))
 
         # Alleviate should have run
         annotation_1 = Annotation.objects.get(

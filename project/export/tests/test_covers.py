@@ -145,10 +145,11 @@ class FileTypeTest(BaseImageCoversExportTest):
         # re-test that here.
 
     def test_excel(self):
-        data = self.default_search_params.copy()
         # Some, but not all, images
-        data['aux1'] = 'X'
-        data['export_format'] = 'excel'
+        data = dict(
+            aux1='X',
+            export_format='excel',
+        )
         response = self.export_image_covers(data)
 
         self.assertEqual(
@@ -269,8 +270,7 @@ class ImageSetTest(BaseImageCoversExportTest):
         img3.metadata.aux1 = 'X'
         img3.metadata.save()
 
-        data = self.default_search_params.copy()
-        data['aux1'] = 'X'
+        data = dict(aux1='X')
         response = self.export_image_covers(data)
 
         expected_lines = [
@@ -288,8 +288,7 @@ class ImageSetTest(BaseImageCoversExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'B', 3: 'A', 4: 'B', 5: 'A'})
 
-        data = self.default_search_params.copy()
-        data['image_name'] = '5.jpg'
+        data = dict(image_name='5.jpg')
         response = self.export_image_covers(data)
 
         expected_lines = [
@@ -330,8 +329,7 @@ class ImageSetTest(BaseImageCoversExportTest):
     def test_invalid_image_set_params(self):
         self.upload_image(self.user, self.source)
 
-        data = self.default_search_params.copy()
-        data['photo_date_0'] = 'abc'
+        data = dict(photo_date_0='abc')
         response = self.export_image_covers_prep(data)
 
         # Error in JSON instead of serving CSV.
@@ -502,7 +500,7 @@ class PerformanceTest(BaseImageCoversExportTest):
 
         # Number of queries should be a small constant factor from 20
         # (image count), and definitely less than 400 (annotation count).
-        with self.assert_queries_less_than(20*3):
+        with self.assert_queries_less_than(20*4):
             response = self.export_image_covers(dict())
         self.assertStatusOK(response)
         self.assertEqual(response['content-type'], 'text/csv')

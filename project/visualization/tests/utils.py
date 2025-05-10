@@ -5,21 +5,6 @@ from lib.tests.utils import ClientTest
 from sources.models import Source
 
 
-BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS = dict(
-    image_form_type='search',
-    aux1='', aux2='', aux3='', aux4='', aux5='',
-    height_in_cm='', latitude='', longitude='', depth='',
-    photographer='', framing='', balance='',
-    photo_date_0='', photo_date_1='', photo_date_2='',
-    photo_date_3='', photo_date_4='',
-    image_name='', annotation_status='',
-    last_annotated_0='', last_annotated_1='', last_annotated_2='',
-    last_annotated_3='', last_annotated_4='',
-    last_annotator_0='', last_annotator_1='',
-    sort_method='name', sort_direction='asc',
-)
-
-
 class BrowseActionsFormTest(ClientTest):
     """
     Testing states of the Browse page's action forms.
@@ -47,7 +32,7 @@ class BrowseActionsFormTest(ClientTest):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
 
         cls.browse_url = reverse('browse_images', args=[cls.source.pk])
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
+        cls.default_search_params = dict(submit='search')
 
     @classmethod
     def get_form_soup(cls, response):

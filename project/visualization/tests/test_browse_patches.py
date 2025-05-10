@@ -12,6 +12,7 @@ from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
 
 tz = timezone.get_current_timezone()
+default_search_params = dict(submit='search')
 
 
 class PermissionTest(BasePermissionTest):
@@ -26,22 +27,6 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_VIEW, template=template)
         self.source_to_public()
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
-
-
-default_search_params = dict(
-    image_form_type='search',
-    aux1='', aux2='', aux3='', aux4='', aux5='',
-    height_in_cm='', latitude='', longitude='', depth='',
-    photographer='', framing='', balance='',
-    photo_date_0='', photo_date_1='', photo_date_2='',
-    photo_date_3='', photo_date_4='',
-    image_name='',
-    patch_annotation_status='', patch_label='',
-    patch_annotation_date_0='', patch_annotation_date_1='',
-    patch_annotation_date_2='', patch_annotation_date_3='',
-    patch_annotation_date_4='',
-    patch_annotator_0='', patch_annotator_1='',
-)
 
 
 class SearchTest(ClientTest):
@@ -99,14 +84,11 @@ class SearchTest(ClientTest):
         image.annoinfo.last_annotation = annotation
         image.annoinfo.save()
 
-    def submit_search(self, **kwargs):
+    def submit_search(self, **search_kwargs):
         """
         Submit the search form with the given kwargs, and return the response.
         """
-        data = default_search_params.copy()
-        data.update(**kwargs)
-        response = self.client.get(self.url, data)
-        return response
+        return self.client.get(self.url, search_kwargs)
 
     def assert_search_results(self, search_kwargs, expected_points):
         """
@@ -152,7 +134,7 @@ class SearchTest(ClientTest):
             {1: 'A', 2: 'A', 3: 'A'})
 
         self.assert_search_results(
-            dict(),
+            default_search_params,
             [1, 2, 3])
 
     def test_filter_by_annotation_status_confirmed(self):
@@ -224,7 +206,7 @@ class SearchTest(ClientTest):
         self.set_annotation(2, dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
 
         self.assert_search_results(
-            dict(),
+            default_search_params,
             [1, 2])
 
     def test_date_year_choices(self):
@@ -315,9 +297,10 @@ class SearchTest(ClientTest):
             self.user_editor, self.img1,
             {4: 'A', 5: 'A'})
 
-        params = default_search_params.copy()
-        params['patch_annotator_0'] = 'annotation_tool'
-        params['patch_annotator_1'] = self.user.pk
+        params = dict(
+            patch_annotator_0='annotation_tool',
+            patch_annotator_1=self.user.pk,
+        )
 
         self.client.force_login(self.user)
         response = self.client.get(self.url, params)
@@ -369,19 +352,18 @@ class SearchTest(ClientTest):
 
         # Should include patches from img1, but not s2_img
         self.assert_search_results(
-            dict(),
+            default_search_params,
             [1, 2, 3])
 
     def test_post_request(self):
-        params = default_search_params.copy()
         self.client.force_login(self.user)
 
-        response = self.client.post(self.url, params, follow=False)
+        response = self.client.post(self.url, {}, follow=False)
         self.assertRedirects(
             response, self.url,
             msg_prefix="Should redirect back to browse patches")
 
-        response = self.client.post(self.url, params, follow=True)
+        response = self.client.post(self.url, {}, follow=True)
         self.assertContains(
             response, "An error occurred; please try another search.",
             msg_prefix="Should show a message indicating the search didn't"
@@ -436,7 +418,7 @@ class ResultsAndPagesTest(ClientTest):
                 msg_prefix="Page status text should be as expected")
 
     def test_zero_results(self):
-        params = default_search_params.copy() | dict(
+        params = dict(
             photo_date_0='date',
             photo_date_2=datetime.date(2000, 1, 1),
         )
@@ -445,7 +427,7 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "No patch results.")
 
     def test_one_page_results(self):
-        params = default_search_params.copy() | dict(
+        params = dict(
             patch_label=self.labels.get(default_code='B').pk,
         )
         response = self.request_browse(params)
@@ -456,7 +438,7 @@ class ResultsAndPagesTest(ClientTest):
         )
 
     def test_multiple_pages_results(self):
-        params = default_search_params.copy() | dict(
+        params = dict(
             patch_label=self.labels.get(default_code='A').pk,
         )
         response = self.request_browse(params)
@@ -467,7 +449,7 @@ class ResultsAndPagesTest(ClientTest):
         )
 
     def test_page_two(self):
-        params = default_search_params.copy() | dict(
+        params = dict(
             patch_label=self.labels.get(default_code='A').pk,
             page=2,
         )
@@ -506,23 +488,22 @@ class ResultsAndPagesTest(ClientTest):
             msg="Next page link is as expected")
 
     def test_page_urls_no_additional_filters(self):
-        params = dict(image_form_type='search', page=2)
+        params = dict(page=2)
         self.assert_page_links(
             params,
-            '?page=1&image_form_type=search',
-            '?page=3&image_form_type=search')
+            '?page=1&',
+            '?page=3&')
 
     def test_page_urls_with_search_filters(self):
         label_a_pk = self.labels.get(default_code='A').pk
         params = dict(
-            image_form_type='search',
             patch_label=label_a_pk,
             page=2,
         )
         self.assert_page_links(
             params,
-            f'?page=1&image_form_type=search&patch_label={label_a_pk}',
-            f'?page=3&image_form_type=search&patch_label={label_a_pk}',
+            f'?page=1&patch_label={label_a_pk}',
+            f'?page=3&patch_label={label_a_pk}',
         )
 
 
@@ -543,5 +524,5 @@ class NoLabelsetTest(ClientTest):
         It just won't return anything exciting.
         """
         self.client.force_login(self.user)
-        response = self.client.get(self.url, default_search_params)
+        response = self.client.get(self.url, dict(submit='search'))
         self.assertContains(response, "No patch results.")

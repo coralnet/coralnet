@@ -56,7 +56,7 @@ class Form {
 
         // {...<obj>} creates a copy.
         let expectedFormContents = {...this.actionFormParams};
-        let idFilter = {image_form_type: 'ids', ids: '1,2,3'};
+        let idFilter = {image_id_list: '1_2_3'};
         let searchFilters = {
             aux1: 'Site A', photo_date_0: 'date_range',
             photo_date_1: '', photo_date_2: '',

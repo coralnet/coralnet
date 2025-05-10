@@ -411,7 +411,6 @@ var UploadImagesHelper = (function() {
         var minUploadedImageId = Math.min(...uploadedImageIds);
         var maxUploadedImageId = Math.max(...uploadedImageIds);
         var searchParams = new URLSearchParams({
-            image_form_type: 'search',
             image_id_range: `${minUploadedImageId}_${maxUploadedImageId}`,
         });
         manageMetadataLink.href += '?' + searchParams.toString();

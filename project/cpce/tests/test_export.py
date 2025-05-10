@@ -8,8 +8,7 @@ from django.urls import reverse
 from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.models import Image
 from lib.tests.utils import BasePermissionTest, ClientTest
-from visualization.tests.utils import (
-    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from visualization.tests.utils import BrowseActionsFormTest
 from ..utils import get_previous_cpcs_status
 
 
@@ -84,10 +83,7 @@ class CPCExportBaseTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
-        # Image search parameters
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
-        cls.default_export_params = cls.default_search_params.copy()
-        cls.default_export_params.update(
+        cls.default_export_params = dict(
             override_filepaths='no',
             local_code_filepath='D:/Surveys/Codefile.txt',
             local_image_dir='D:/Surveys/Images',
@@ -269,8 +265,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
         # Search includes images 1 and 2, but not 3
         self.client.force_login(self.user)
-        request_params = self.default_search_params.copy()
-        request_params.update(image_name='X')
+        request_params = dict(image_name='X')
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]),
             data=request_params)
@@ -308,8 +303,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
         # Search includes image 3 only
         self.client.force_login(self.user)
-        request_params = self.default_search_params.copy()
-        request_params.update(image_name='Y')
+        request_params = dict(image_name='Y')
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]),
             data=request_params)

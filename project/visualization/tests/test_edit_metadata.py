@@ -1,10 +1,12 @@
 import datetime
-from typing import Any
 
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
 from lib.tests.utils import BasePermissionTest, ClientTest
+
+
+default_search_params = dict(submit='search')
 
 
 class PermissionTest(BasePermissionTest):
@@ -39,20 +41,6 @@ class PermissionTest(BasePermissionTest):
         self.source_to_public()
         self.assertPermissionLevel(
             url, self.SOURCE_EDIT, is_json=True, post_data=post_data)
-
-
-default_search_params: dict[str, Any] = dict(
-    image_form_type='search',
-    aux1='', aux2='', aux3='', aux4='', aux5='',
-    height_in_cm='', latitude='', longitude='', depth='',
-    photographer='', framing='', balance='',
-    photo_date_0='', photo_date_1='', photo_date_2='',
-    photo_date_3='', photo_date_4='',
-    image_name='', annotation_status='',
-    last_annotated_0='', last_annotated_1='', last_annotated_2='',
-    last_annotated_3='', last_annotated_4='',
-    last_annotator_0='', last_annotator_1='',
-)
 
 
 class LoadPageTest(ClientTest):
@@ -93,17 +81,16 @@ class LoadPageTest(ClientTest):
             status_cell_hrefs, expected_status_cell_hrefs,
             "Listed images should be the expected ones")
 
-    def submit_search(self, search_kwargs):
+    def submit_search(self, **search_kwargs):
         self.client.force_login(self.user)
-        params = default_search_params.copy() | search_kwargs
-        return self.client.get(self.url, params)
+        return self.client.get(self.url, search_kwargs)
 
     def assert_search_results_ordered(self, search_kwargs, expected_images):
         """
         Assert that the given search-form kwargs return the expected images,
         in the specified order.
         """
-        response = self.submit_search(search_kwargs)
+        response = self.submit_search(**search_kwargs)
         self.assert_images_ordered(response, expected_images)
 
     def test_page_landing(self):
@@ -115,7 +102,7 @@ class LoadPageTest(ClientTest):
             "Use the form to specify the images you want to work with")
 
     def test_search_all(self):
-        response = self.submit_search(dict())
+        response = self.submit_search(**default_search_params)
         self.assert_table_present(response)
         self.assert_images_ordered(
             response, [self.img1, self.img2, self.img3])
@@ -152,7 +139,7 @@ class LoadPageTest(ClientTest):
 
     def test_non_integer_image_id_range(self):
         response = self.submit_search(
-            dict(image_id_range=f'{self.img1.pk}_a'))
+            image_id_range=f'{self.img1.pk}_a')
         self.assertContains(response, "Search parameters were invalid.")
         # This message won't actually be visible, but it's good to know
         # that the error reason is what we think it is.
@@ -161,7 +148,7 @@ class LoadPageTest(ClientTest):
             "Enter only digits separated by underscores.")
 
         response = self.submit_search(
-            dict(image_id_range=f'4.3_{self.img3.pk}'))
+            image_id_range=f'4.3_{self.img3.pk}')
         self.assertContains(response, "Search parameters were invalid.")
         self.assertEqual(
             self.get_search_form_error(response, 'image_id_range'),
@@ -171,14 +158,14 @@ class LoadPageTest(ClientTest):
         self.client.force_login(self.user)
 
         response = self.submit_search(
-            dict(image_id_range=f'12_13_14'))
+            image_id_range=f'12_13_14')
         self.assertContains(response, "Search parameters were invalid.")
         self.assertEqual(
             self.get_search_form_error(response, 'image_id_range'),
             "Should be a list of exactly 2 ID numbers.")
 
         response = self.submit_search(
-            dict(image_id_range=f'12'))
+            image_id_range=f'12')
         self.assertContains(response, "Search parameters were invalid.")
         self.assertEqual(
             self.get_search_form_error(response, 'image_id_range'),
@@ -186,7 +173,7 @@ class LoadPageTest(ClientTest):
 
     def test_image_id_range_wrong_order(self):
         response = self.submit_search(
-            dict(image_id_range=f'14_13'))
+            image_id_range=f'14_13')
         self.assertContains(response, "Search parameters were invalid.")
         self.assertEqual(
             self.get_search_form_error(response, 'image_id_range'),
@@ -195,7 +182,7 @@ class LoadPageTest(ClientTest):
 
         # Equal bounds are OK.
         response = self.submit_search(
-            dict(image_id_range=f'13_13'))
+            image_id_range=f'13_13')
         self.assertNotContains(response, "Search parameters were invalid.")
 
     def test_image_id_range_field_not_in_search_form(self):
@@ -208,7 +195,7 @@ class LoadPageTest(ClientTest):
         """
         # Arrive at the page with a valid id-range filter.
         response = self.submit_search(
-            dict(image_id_range=f'{self.img1.pk}_{self.img3.pk}'))
+            image_id_range=f'{self.img1.pk}_{self.img3.pk}')
         self.assert_table_present(response)
         self.assertNotContains(response, "Search parameters were invalid.")
 
@@ -225,7 +212,7 @@ class LoadPageTest(ClientTest):
 
     def test_zero_images(self):
         response = self.submit_search(
-            dict(photo_date_0='date', photo_date_2=datetime.date(2000, 1, 1)))
+            photo_date_0='date', photo_date_2=datetime.date(2000, 1, 1))
         self.assert_table_absent(response)
         self.assertContains(response, "No image results.")
 
@@ -239,8 +226,7 @@ class LoadPageTest(ClientTest):
             [self.img1, self.img2, self.img3])
 
     def test_post_request(self):
-        params = default_search_params.copy()
-        params['image_name'] = '1'
+        params = dict(image_name='1')
         self.client.force_login(self.user)
 
         response = self.client.post(self.url, params, follow=False)
@@ -273,7 +259,7 @@ class LoadPageTest(ClientTest):
         self.img2.metadata.comments = "This, is; a< test/\ncomment."
         self.img2.metadata.save()
 
-        response = self.submit_search(dict())
+        response = self.submit_search(**default_search_params)
 
         # The form should have the correct metadata for both images.
         formset = response.context['metadata_formset']

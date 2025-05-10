@@ -130,8 +130,9 @@ class BrowseActionHelper {
         }
         else if (imageSelectType === 'selected') {
             // Get image IDs
-            imageSelectArgs['image_form_type'] = 'ids';
-            imageSelectArgs['ids'] = this.pageImageIds.toString();
+            let pageImageIdsStrings =
+                this.pageImageIds.map((id) => id.toString());
+            imageSelectArgs['image_id_list'] = pageImageIdsStrings.join('_');
         }
 
         for (let fieldName in imageSelectArgs) {
@@ -175,9 +176,16 @@ class BrowseActionHelper {
             this.actionSubmitButton.textContent = "Working...";
             this.actionSelectField.disabled = true;
 
+            let data = new FormData(this.currentActionForm);
+            if (Array.from(data.keys()).length === 0) {
+                // We sometimes want to distinguish this from a
+                // no-args request, so we ensure at least one arg here.
+                data.append('submit', 'action');
+            }
+
             let promise = util.fetch(
                 this.currentActionForm.action,
-                {method: 'POST', body: new FormData(this.currentActionForm)},
+                {method: 'POST', body: data},
                 this.ajaxActionCallback.bind(this));
 
             // TODO: Update this once our Selenium tests are runnable again

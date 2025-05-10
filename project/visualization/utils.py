@@ -65,6 +65,13 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     for token in search_tokens:
         qs.append(Q(metadata__name__icontains=token))
 
+    image_id_list = search_kwargs.get('image_id_list', '')
+    if image_id_list == '':
+        # Don't filter
+        pass
+    else:
+        qs.append(Q(pk__in=image_id_list))
+
     image_id_range = search_kwargs.get('image_id_range', '')
     if image_id_range == '':
         # Don't filter
@@ -87,8 +94,8 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
 
     # Sorting
 
-    sort_method = search_kwargs.get('sort_method', 'name')
-    sort_direction = search_kwargs.get('sort_direction', 'asc')
+    sort_method = search_kwargs.get('sort_method') or 'name'
+    sort_direction = search_kwargs.get('sort_direction') or 'asc'
 
     # Add pk as a secondary key when needed to create an unambiguous ordering.
     if sort_method == 'photo_date':

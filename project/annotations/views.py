@@ -43,7 +43,7 @@ from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
 from upload.forms import CSVImportForm
-from visualization.forms import HiddenForm, create_image_filter_form
+from visualization.forms import ImageSearchForm
 from vision_backend.models import ClassifyImageEvent, Score
 from vision_backend.utils import (
     get_label_scores_for_image,
@@ -161,8 +161,8 @@ def annotation_area_edit(request, image_id):
 def batch_delete_annotations_ajax(request, source_id):
     source = get_object_or_404(Source, id=source_id)
 
-    image_form = create_image_filter_form(request.POST, source)
-    if not image_form:
+    image_form = ImageSearchForm(request.POST, source=source)
+    if not image_form.searched_or_filtered():
         # It's not good to accidentally delete everything, and it's uncommon
         # to do it intentionally. So we'll play it safe.
         return JsonResponse(dict(
@@ -214,11 +214,12 @@ def annotation_tool(request, image_id):
     hidden_image_set_form = None
     applied_search_display = None
 
-    image_form = create_image_filter_form(request.POST, source)
+    image_form = ImageSearchForm(request.POST, source=source)
     browse_query_args = None
-    if image_form and image_form.is_valid():
+
+    if image_form.searched_or_filtered() and image_form.is_valid():
         image_set = image_form.get_images()
-        hidden_image_set_form = HiddenForm(forms=[image_form])
+        hidden_image_set_form = image_form.get_hidden_version()
         applied_search_display = image_form.get_applied_search_display()
         browse_query_args = {
             k: v for k, v in request.POST.items()

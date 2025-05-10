@@ -24,8 +24,6 @@ from lib.utils import paginate
 from sources.models import Source
 from .forms import (
     CheckboxForm,
-    create_image_filter_form,
-    HiddenForm,
     ImageSearchForm,
     MetadataEditSearchForm,
     PatchSearchForm,
@@ -37,7 +35,7 @@ def browse_images(request, source_id):
     """
     Grid of a source's images.
     """
-    if request.POST:
+    if request.method == 'POST':
         # Once this view has been GET-only for a while, this redirect case
         # can probably be replaced with a use of require_GET.
         messages.error(
@@ -48,25 +46,20 @@ def browse_images(request, source_id):
 
     # Defaults
     empty_message = "No image results."
-    image_search_form = ImageSearchForm(source=source)
     hidden_image_form = None
 
-    image_form = create_image_filter_form(request.GET, source)
-    if image_form:
-        if image_form.is_valid():
-            image_results = image_form.get_images()
-            hidden_image_form = HiddenForm(forms=[image_form])
+    image_search_form = ImageSearchForm(request.GET, source=source)
+
+    if image_search_form.searched_or_filtered():
+        if image_search_form.is_valid():
+            image_results = image_search_form.get_images()
+            hidden_image_form = image_search_form.get_hidden_version()
         else:
             empty_message = "Search parameters were invalid."
             # If this isn't ordered, paginate() emits a warning.
             image_results = Image.objects.none().order_by('pk')
-
-        # If a search form was submitted, use that as the displayed
-        # search form. Otherwise we'll display a default-values search form.
-        if isinstance(image_form, ImageSearchForm):
-            image_search_form = image_form
     else:
-        # Coming from a straight link or URL entry
+        # Page landing without filter params
         image_results = source.image_set.order_by('metadata__name', 'pk')
 
     page_results, query_string = paginate(
@@ -146,7 +139,7 @@ def edit_metadata(request, source_id):
     """
     Grid of editable metadata fields.
     """
-    if request.POST:
+    if request.method == 'POST':
         # Once this view has been GET-only for a while, this redirect case
         # can probably be replaced with a use of require_GET.
         messages.error(
@@ -155,7 +148,17 @@ def edit_metadata(request, source_id):
 
     source = get_object_or_404(Source, id=source_id)
 
-    if source.image_set.count() >= 500:
+    # Default
+    image_results = Image.objects.none()
+
+    image_search_form = MetadataEditSearchForm(request.GET, source=source)
+    if image_search_form.searched_or_filtered():
+        if image_search_form.is_valid():
+            image_results = image_search_form.get_images()
+            empty_message = "No image results."
+        else:
+            empty_message = "Search parameters were invalid."
+    elif source.image_set.count() >= 500:
         empty_message = (
             "Use the form to specify the images you want to work with."
             " This page tends to be unresponsive when approaching"
@@ -168,24 +171,6 @@ def edit_metadata(request, source_id):
             " If you'd like to work with all images in the source, you can"
             " click Search without applying any filters."
         )
-
-    # Defaults
-    image_search_form = MetadataEditSearchForm(source=source)
-    image_results = Image.objects.none()
-
-    if request.GET:
-        image_form = create_image_filter_form(
-            request.GET, source, for_edit_metadata=True)
-        if image_form.is_valid():
-            image_results = image_form.get_images()
-            empty_message = "No image results."
-        else:
-            empty_message = "Search parameters were invalid."
-
-        # If a search form was submitted, use that as the displayed
-        # search form.
-        if isinstance(image_form, MetadataEditSearchForm):
-            image_search_form = image_form
 
     # Sort options aren't supported for Edit Metadata for now. The part we
     # can't (efficiently) do yet is the transformation from a sorted image
@@ -245,7 +230,7 @@ def browse_patches(request, source_id):
     """
     Grid of a source's point patches.
     """
-    if request.POST:
+    if request.method == 'POST':
         # Once this view has been GET-only for a while, this redirect case
         # can probably be replaced with a use of require_GET.
         messages.error(
@@ -254,22 +239,21 @@ def browse_patches(request, source_id):
 
     source = get_object_or_404(Source, id=source_id)
 
-    # Defaults
-    empty_message = (
-        "Use the form to retrieve image patches"
-        " corresponding to annotated points."
-    )
+    # Default
     annotation_results = Annotation.objects.none()
 
-    if request.GET:
-        patch_form = PatchSearchForm(request.GET, source=source)
+    patch_form = PatchSearchForm(request.GET, source=source)
+    if patch_form.searched_or_filtered():
         if patch_form.is_valid():
             annotation_results = patch_form.get_annotations()
             empty_message = "No patch results."
         else:
             empty_message = "Search parameters were invalid."
     else:
-        patch_form = PatchSearchForm(source=source)
+        empty_message = (
+            "Use the form to retrieve image patches"
+            " corresponding to annotated points."
+        )
 
     # Random order
     annotation_results = annotation_results.order_by('?')
@@ -363,8 +347,8 @@ def browse_delete_ajax(request, source_id):
     """
     source = get_object_or_404(Source, id=source_id)
 
-    image_form = create_image_filter_form(request.POST, source)
-    if not image_form:
+    image_form = ImageSearchForm(request.POST, source=source)
+    if not image_form.searched_or_filtered():
         # It's not good to accidentally delete everything, and it's uncommon
         # to do it intentionally. So we'll play it safe.
         return JsonResponse(dict(

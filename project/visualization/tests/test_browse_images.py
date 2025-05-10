@@ -10,10 +10,10 @@ from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
-from visualization.tests.utils import (
-    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from visualization.tests.utils import BrowseActionsFormTest
 
 tz = timezone.get_current_timezone()
+default_search_params = dict(submit='search')
 
 
 class PermissionTest(BasePermissionTest):
@@ -103,14 +103,11 @@ class BaseSearchTest(ClientTest):
         image.annoinfo.last_annotation = annotation
         image.annoinfo.save()
 
-    def submit_search(self, **kwargs):
+    def submit_search(self, **search_kwargs):
         """
         Submit the search form with the given kwargs, and return the response.
         """
-        data = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
-        data.update(**kwargs)
-        response = self.client.get(self.url, data)
-        return response
+        return self.client.get(self.url, search_kwargs)
 
     def assert_search_results(self, search_kwargs, expected_images):
         """
@@ -136,7 +133,7 @@ class BaseSearchTest(ClientTest):
         expected_pks = [image.pk for image in expected_images]
         self.assertListEqual(actual_pks, expected_pks)
 
-    def assert_invalid_search(self, **search_kwargs):
+    def assert_invalid_search(self, search_kwargs):
         self.client.force_login(self.user)
         response = self.submit_search(**search_kwargs)
 
@@ -144,8 +141,45 @@ class BaseSearchTest(ClientTest):
         self.assertEqual(
             response.context['page_results'].paginator.count, 0)
 
+    @staticmethod
+    def get_search_form_field(response, field_name):
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        search_form_soup = response_soup.find('form', id='search-form')
+        for tag in ['input', 'select']:
+            if field := search_form_soup.find(
+                tag, attrs=dict(name=field_name)
+            ):
+                return field
+        return None
 
-class SearchTest(BaseSearchTest):
+    @staticmethod
+    def get_hidden_form_field(response, field_name):
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        hidden_form_soup = response_soup.find(
+            'div', id='previous-image-form-fields')
+        return hidden_form_soup.find('input', attrs=dict(name=field_name))
+
+    @staticmethod
+    def get_field_value(field_soup):
+        if field_soup.name == 'input':
+            value = field_soup.attrs.get('value')
+        elif field_soup.name == 'select':
+            selected_option = field_soup.find('option', selected=True)
+            value = selected_option.attrs.get('value')
+        else:
+            raise AssertionError("Don't know how to get field value")
+
+        # At this point, an empty value is either '' for text inputs, or
+        # None otherwise. None doesn't seem completely safe for assertEqual
+        # (because None is supposed to be compared with `is`, not `==`), so
+        # we favor ''.
+        if value is None:
+            return ''
+        else:
+            return value
+
+
+class FilterTest(BaseSearchTest):
 
     def test_page_landing(self):
         self.client.force_login(self.user)
@@ -155,7 +189,7 @@ class SearchTest(BaseSearchTest):
 
     def test_default_search(self):
         self.client.force_login(self.user)
-        response = self.submit_search()
+        response = self.submit_search(**default_search_params)
         self.assertEqual(
             response.context['page_results'].paginator.count, 5)
 
@@ -404,15 +438,14 @@ class SearchTest(BaseSearchTest):
              self.imgs[3], self.imgs[4]])
 
     def test_post_request(self):
-        params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS.copy()
         self.client.force_login(self.user)
 
-        response = self.client.post(self.url, params, follow=False)
+        response = self.client.post(self.url, {}, follow=False)
         self.assertRedirects(
             response, self.url,
             msg_prefix="Should redirect back to browse images")
 
-        response = self.client.post(self.url, params, follow=True)
+        response = self.client.post(self.url, {}, follow=True)
         self.assertContains(
             response, "An error occurred; please try another search.",
             msg_prefix="Should show a message indicating the search didn't"
@@ -535,29 +568,29 @@ class DateSearchTest(BaseSearchTest):
             [])
 
     def test_photo_date_type_invalid(self):
-        self.assert_invalid_search(photo_date_0='abc')
+        self.assert_invalid_search(dict(photo_date_0='abc'))
 
     def test_photo_date_year_missing(self):
-        self.assert_invalid_search(photo_date_0='year')
+        self.assert_invalid_search(dict(photo_date_0='year'))
 
     def test_photo_date_year_invalid(self):
-        self.assert_invalid_search(
-            photo_date_0='year', photo_date_1='not a year')
+        self.assert_invalid_search(dict(
+            photo_date_0='year', photo_date_1='not a year'))
 
     def test_photo_date_exact_date_missing(self):
-        self.assert_invalid_search(photo_date_0='date')
+        self.assert_invalid_search(dict(photo_date_0='date'))
 
     def test_photo_date_exact_date_invalid(self):
-        self.assert_invalid_search(
-            photo_date_0='date', photo_date_2='not a date')
+        self.assert_invalid_search(dict(
+            photo_date_0='date', photo_date_2='not a date'))
 
     def test_photo_date_start_date_missing(self):
-        self.assert_invalid_search(
-            photo_date_0='date_range', photo_date_4=datetime.date(2012, 3, 10))
+        self.assert_invalid_search(dict(
+            photo_date_0='date_range', photo_date_4=datetime.date(2012, 3, 10)))
 
     def test_photo_date_end_date_missing(self):
-        self.assert_invalid_search(
-            photo_date_0='date_range', photo_date_3=datetime.date(2012, 3, 10))
+        self.assert_invalid_search(dict(
+            photo_date_0='date_range', photo_date_3=datetime.date(2012, 3, 10)))
 
     # Last annotation date
 
@@ -819,15 +852,15 @@ class SortTest(BaseSearchTest):
 
         self.assert_search_results_ordered(
             dict(
-                sort_method='name',
-                sort_direction='asc',
+                sort_method='',
+                sort_direction='',
             ),
             [self.imgs[1], self.imgs[0], self.imgs[2],
              self.imgs[3], self.imgs[4]])
 
         self.assert_search_results_ordered(
             dict(
-                sort_method='name',
+                sort_method='',
                 sort_direction='desc',
             ),
             [self.imgs[4], self.imgs[3], self.imgs[2],
@@ -837,7 +870,7 @@ class SortTest(BaseSearchTest):
         self.assert_search_results_ordered(
             dict(
                 sort_method='upload_date',
-                sort_direction='asc',
+                sort_direction='',
             ),
             [self.imgs[0], self.imgs[1], self.imgs[2],
              self.imgs[3], self.imgs[4]])
@@ -862,7 +895,7 @@ class SortTest(BaseSearchTest):
         self.assert_search_results_ordered(
             dict(
                 sort_method='photo_date',
-                sort_direction='asc',
+                sort_direction='',
             ),
             [self.imgs[1], self.imgs[4], self.imgs[0],
              self.imgs[2], self.imgs[3]])
@@ -888,7 +921,7 @@ class SortTest(BaseSearchTest):
         self.assert_search_results_ordered(
             dict(
                 sort_method='last_annotation_date',
-                sort_direction='asc',
+                sort_direction='',
             ),
             [self.imgs[1], self.imgs[4], self.imgs[0],
              self.imgs[2], self.imgs[3]])
@@ -902,7 +935,26 @@ class SortTest(BaseSearchTest):
              self.imgs[4], self.imgs[1]])
 
 
-class SearchFormInitializationTest(BaseSearchTest):
+class FormInitializationTest(BaseSearchTest):
+
+    def assert_multi_field_values(
+        self, response, field_name, expected_values
+    ):
+        for index, expected_value in enumerate(expected_values):
+
+            search_field = self.get_search_form_field(
+                response, f'{field_name}_{index}')
+            self.assertEqual(
+                self.get_field_value(search_field), expected_value,
+                msg=f"Field value {index} should be as expected"
+                    f" in the search form")
+
+            hidden_field = self.get_hidden_form_field(
+                response, f'{field_name}_{index}')
+            self.assertEqual(
+                self.get_field_value(hidden_field), expected_value,
+                msg=f"Field value {index} should be as expected"
+                    f" in the hidden form")
 
     def test_dont_show_metadata_field_if_all_blank_values(self):
         """
@@ -934,31 +986,62 @@ class SearchFormInitializationTest(BaseSearchTest):
         search_form = response.context['image_search_form']
         self.assertFalse('height_in_cm' in search_form.fields)
 
+    def test_no_submit(self):
+        """Page landing, no search performed yet."""
+        pass  # TODO: search field present, hidden field/form absent, but no invalid message
+
+    def test_no_submit_page_2(self):
+        """Page landing, then move to page 2, without searching."""
+        pass  # TODO: same as above, despite the GET param page=2 being present
+
     def test_basic_field_after_submit(self):
+        # Ensure the results of the search aren't completely empty,
+        # so that the hidden form is rendered.
+        self.update_multiple_metadatas(
+            'name',
+            [(self.imgs[0], 'DSC_0001.jpg')])
+
         self.client.force_login(self.user)
         response = self.submit_search(image_name='DSC')
 
-        search_form = response.context['image_search_form']
-        self.assertEqual(search_form['image_name'].data, 'DSC')
+        search_field = self.get_search_form_field(response, 'image_name')
+        self.assertEqual(
+            search_field.attrs.get('value'), 'DSC',
+            msg="Field value should be present in the search form")
+
+        hidden_field = self.get_search_form_field(response, 'image_name')
+        self.assertEqual(
+            hidden_field.attrs.get('value'), 'DSC',
+            msg="Field value should be present in the hidden form")
 
     def test_date_year_after_submit(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [(self.imgs[0], datetime.date(2012, 3, 6))])
+
         self.client.force_login(self.user)
         response = self.submit_search(photo_date_0='year', photo_date_1='2012')
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['photo_date'].data, ['year', '2012', '', '', ''])
+        self.assert_multi_field_values(
+            response, 'photo_date', ['year', '2012', '', '', ''])
 
     def test_exact_date_after_submit(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [(self.imgs[0], datetime.date(2012, 3, 6))])
+
         self.client.force_login(self.user)
         response = self.submit_search(
             photo_date_0='date', photo_date_2=datetime.date(2012, 3, 6))
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['photo_date'].data, ['date', '', '2012-03-06', '', ''])
+        self.assert_multi_field_values(
+            response, 'photo_date', ['date', '', '2012-03-06', '', ''])
 
     def test_date_range_after_submit(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [(self.imgs[0], datetime.date(2012, 10, 21))])
+
         self.client.force_login(self.user)
         response = self.submit_search(
             photo_date_0='date_range',
@@ -966,45 +1049,78 @@ class SearchFormInitializationTest(BaseSearchTest):
             photo_date_4=datetime.date(2013, 4, 7),
         )
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['photo_date'].data,
+        self.assert_multi_field_values(
+            response, 'photo_date',
             ['date_range', '', '', '2012-03-06', '2013-04-07'])
 
     def test_annotator_non_tool_after_submit(self):
+        self.set_last_annotation(self.imgs[0], annotator=get_alleviate_user())
+
         self.client.force_login(self.user)
         response = self.submit_search(
             last_annotator_0='alleviate',
         )
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['last_annotator'].data,
-            ['alleviate', ''])
+        self.assert_multi_field_values(
+            response, 'last_annotator', ['alleviate', ''])
 
     def test_annotator_tool_any_after_submit(self):
+        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
+
         self.client.force_login(self.user)
         response = self.submit_search(
             last_annotator_0='annotation_tool',
         )
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['last_annotator'].data,
-            ['annotation_tool', ''])
+        self.assert_multi_field_values(
+            response, 'last_annotator', ['annotation_tool', ''])
 
     def test_annotator_tool_user_after_submit(self):
-        self.client.force_login(self.user)
         self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
+
+        self.client.force_login(self.user)
         response = self.submit_search(
             last_annotator_0='annotation_tool',
             last_annotator_1=self.user.pk,
         )
 
-        search_form = response.context['image_search_form']
-        self.assertListEqual(
-            search_form['last_annotator'].data,
+        self.assert_multi_field_values(
+            response, 'last_annotator',
             ['annotation_tool', str(self.user.pk)])
+
+    def test_image_id_list_after_submit(self):
+        self.client.force_login(self.user)
+        id_list = f'{self.imgs[0].pk}_{self.imgs[1].pk}_{self.imgs[2].pk}'
+        response = self.submit_search(
+            image_id_list=id_list,
+        )
+
+        search_field = self.get_search_form_field(response, 'image_id_list')
+        self.assertIsNone(
+            search_field,
+            msg="This field isn't supposed to be in the search form")
+
+        hidden_field = self.get_hidden_form_field(response, 'image_id_list')
+        self.assertEqual(
+            hidden_field.attrs.get('value'), id_list,
+            msg="Field value should be present in the hidden form")
+
+    def test_image_id_range_after_submit(self):
+        self.client.force_login(self.user)
+        id_range = f'{self.imgs[0].pk}_{self.imgs[2].pk}'
+        response = self.submit_search(
+            image_id_range=id_range,
+        )
+
+        search_field = self.get_search_form_field(response, 'image_id_range')
+        self.assertIsNone(
+            search_field,
+            msg="This field isn't supposed to be in the search form")
+
+        hidden_field = self.get_hidden_form_field(response, 'image_id_range')
+        self.assertEqual(
+            hidden_field.attrs.get('value'), id_range,
+            msg="Field value should be present in the hidden form")
 
 
 @override_settings(
@@ -1020,16 +1136,16 @@ class ResultsAndPagesTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
         cls.url = reverse('browse_images', args=[cls.source.pk])
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
         cls.imgs = [
             cls.upload_image(cls.user, cls.source) for _ in range(10)
         ]
 
     def test_zero_results(self):
-        params = self.default_search_params.copy()
-        params['photo_date_0'] = 'date'
-        params['photo_date_2'] = datetime.date(2000, 1, 1)
+        params = dict(
+            photo_date_0='date',
+            photo_date_2=datetime.date(2000, 1, 1),
+        )
 
         self.client.force_login(self.user)
         response = self.client.get(self.url, params)
@@ -1039,8 +1155,9 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "No image results.")
 
     def test_one_page_results(self):
-        params = self.default_search_params.copy()
-        params['aux1'] = 'Site1'
+        params = dict(
+            aux1='Site1',
+        )
 
         self.imgs[0].metadata.aux1 = 'Site1'
         self.imgs[0].metadata.save()
@@ -1060,8 +1177,9 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 1</span>", html=True)
 
     def test_multiple_pages_results(self):
-        params = self.default_search_params.copy()
-        params['aux1'] = ''
+        params = dict(
+            photo_date_0='(none)',
+        )
 
         self.client.force_login(self.user)
         response = self.client.get(self.url, params)
@@ -1073,9 +1191,10 @@ class ResultsAndPagesTest(ClientTest):
         self.assertContains(response, "<span>Page 1 of 4</span>", html=True)
 
     def test_page_two(self):
-        params = self.default_search_params.copy()
-        params['aux1'] = ''
-        params['page'] = 2
+        params = dict(
+            photo_date_0='(none)',
+            page=2,
+        )
 
         self.client.force_login(self.user)
         response = self.client.get(self.url, params)
@@ -1118,36 +1237,14 @@ class ResultsAndPagesTest(ClientTest):
         self.assert_page_links(params, '?page=1&', '?page=3&')
 
     def test_page_urls_with_search_filters(self):
-        # Don't start with default_search_params because that'll
-        # make the query args really long.
-        # The logic to automatically exclude blank params is only on
-        # the Javascript side.
         params = dict(
-            image_form_type='search',
-            sort_method='name',
-            sort_direction='asc',
             annotation_status='unclassified',
             page=2,
         )
         self.assert_page_links(
             params,
-            '?page=1&image_form_type=search&sort_method=name'
-            '&sort_direction=asc&annotation_status=unclassified',
-            '?page=3&image_form_type=search&sort_method=name'
-            '&sort_direction=asc&annotation_status=unclassified',
-        )
-
-    def test_page_urls_with_id_set_filter(self):
-        ids = ','.join([str(img.pk) for img in self.imgs])
-        params = dict(
-            image_form_type='ids',
-            ids=ids,
-            page=2,
-        )
-        self.assert_page_links(
-            params,
-            f'?page=1&image_form_type=ids&ids={ids.replace(",", "%2C")}',
-            f'?page=3&image_form_type=ids&ids={ids.replace(",", "%2C")}',
+            '?page=1&annotation_status=unclassified',
+            '?page=3&annotation_status=unclassified',
         )
 
 

@@ -4,27 +4,20 @@ from zipfile import ZipFile
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 
-from visualization.forms import create_image_filter_form
+from visualization.forms import ImageSearchForm
 
 
 def get_request_images(request, source):
-    if request.POST:
-        image_form = create_image_filter_form(request.POST, source)
-    else:
-        image_form = create_image_filter_form(request.GET, source)
+    image_form = ImageSearchForm(request.POST or request.GET, source=source)
 
-    if image_form:
-        if image_form.is_valid():
-            image_set = image_form.get_images()
-        else:
-            # This is an unusual error case where the current image search
-            # worked for the Browse-images page load, but not for the
-            # subsequent export.
-            raise ValidationError("Image-search parameters were invalid.")
-        applied_search_display = image_form.get_applied_search_display()
+    if image_form.is_valid():
+        image_set = image_form.get_images()
     else:
-        image_set = source.image_set.order_by('metadata__name', 'pk')
-        applied_search_display = "Sorting by name, ascending"
+        # This is an unusual error case where the current image search
+        # worked for the Browse-images page load, but not for the
+        # subsequent export.
+        raise ValidationError("Image-search parameters were invalid.")
+    applied_search_display = image_form.get_applied_search_display()
     return image_set, applied_search_display
 
 

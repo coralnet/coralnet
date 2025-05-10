@@ -471,7 +471,7 @@ QUnit.module("Upload", (hooks) => {
             manageMetadataLink.href,
             window.location.origin
             + '/source/1/browse/metadata/'
-            + '?image_form_type=search&image_id_range=10_10',
+            + '?image_id_range=10_10',
             "Link for proceeding to edit metadata should be as expected")
     });
 

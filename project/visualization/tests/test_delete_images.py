@@ -3,7 +3,7 @@ from django.urls import reverse
 from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest, ClientTest
 from vision_backend.models import Features
-from .utils import BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
+from .utils import BrowseActionsFormTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -31,7 +31,7 @@ class BaseDeleteTest(ClientTest):
 
         cls.url = reverse('browse_delete_ajax', args=[cls.source.pk])
 
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
+        cls.default_search_params = dict(submit='search')
 
     def assert_image_deleted(self, image_id, name):
         msg = f"Image {name} should be deleted"
@@ -111,8 +111,7 @@ class SuccessTest(BaseDeleteTest):
         self.img1.metadata.aux1 = 'SiteA'
         self.img1.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = 'SiteA'
+        post_data = dict(aux1='SiteA')
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, post_data)
@@ -129,8 +128,7 @@ class SuccessTest(BaseDeleteTest):
         Delete images of particular image ids.
         """
         post_data = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img3.pk)])
+            image_id_list='_'.join([str(self.img1.pk), str(self.img3.pk)])
         )
 
         self.client.force_login(self.user)
@@ -148,8 +146,7 @@ class SuccessTest(BaseDeleteTest):
         Delete not just the Image objects, but also related objects.
         """
         post_data = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img3.pk)])
+            image_id_list='_'.join([str(self.img1.pk), str(self.img3.pk)])
         )
         metadata_1_id = self.img1.metadata.pk
         metadata_2_id = self.img2.metadata.pk
@@ -216,8 +213,7 @@ class OtherSourceTest(BaseDeleteTest):
         source.
         """
         post_data = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img22.pk)])
+            image_id_list='_'.join([str(self.img1.pk), str(self.img22.pk)])
         )
 
         self.client.force_login(self.user)
@@ -254,8 +250,7 @@ class ErrorTest(BaseDeleteTest):
         self.assert_image_not_deleted(self.img3.pk, "img3")
 
     def test_form_error(self):
-        post_data = self.default_search_params.copy()
-        post_data['annotation_status'] = 'invalid_value'
+        post_data = dict(annotation_status='invalid_value')
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, post_data)

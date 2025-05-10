@@ -6,9 +6,11 @@ from django.urls import reverse
 from jobs.tasks import run_scheduled_jobs_until_empty
 from lib.tests.utils import BasePermissionTest, ClientTest, spy_decorator
 from vision_backend.tests.tasks.utils import BaseTaskTest
-from visualization.tests.utils import (
-    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from visualization.tests.utils import BrowseActionsFormTest
 from ..managers import AnnotationQuerySet
+
+
+default_search_params = dict(submit='search')
 
 
 class PermissionTest(BasePermissionTest):
@@ -40,7 +42,6 @@ class BaseDeleteTest(ClientTest):
 
         cls.url = reverse(
             'batch_delete_annotations_ajax', args=[cls.source.pk])
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
     def assert_annotations_deleted(self, image):
         self.assertFalse(
@@ -84,14 +85,12 @@ class FormAvailabilityTest(BrowseActionsFormTest):
 
     def test_after_search(self):
         self.client.force_login(self.user)
-        response = self.client.get(
-            self.browse_url, self.default_search_params)
+        response = self.client.get(self.browse_url, default_search_params)
         self.assert_form_available(response)
 
     def test_view_perms_only(self):
         self.client.force_login(self.user_viewer)
-        response = self.client.get(
-            self.browse_url, self.default_search_params)
+        response = self.client.get(self.browse_url, default_search_params)
         self.assert_form_absent(response)
 
 
@@ -119,7 +118,7 @@ class SuccessTest(BaseDeleteTest):
         Delete annotations for all images in the source.
         """
         self.client.force_login(self.user)
-        response = self.client.post(self.url, self.default_search_params)
+        response = self.client.post(self.url, default_search_params)
         self.assertDictEqual(response.json(), dict(success=True))
 
         for image in [self.img1, self.img2, self.img3]:
@@ -134,8 +133,7 @@ class SuccessTest(BaseDeleteTest):
         self.img1.metadata.aux1 = 'SiteA'
         self.img1.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = 'SiteA'
+        post_data = dict(aux1='SiteA')
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, post_data)
@@ -152,8 +150,7 @@ class SuccessTest(BaseDeleteTest):
         Delete when filtering images by image ids.
         """
         post_data = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img3.pk)])
+            image_id_list='_'.join([str(self.img1.pk), str(self.img3.pk)])
         )
 
         self.client.force_login(self.user)
@@ -183,7 +180,7 @@ class SuccessTest(BaseDeleteTest):
         annotation_delete = spy_decorator(AnnotationQuerySet.delete)
         with mock.patch.object(AnnotationQuerySet, 'delete', annotation_delete):
             self.client.force_login(self.user)
-            self.client.post(self.url, self.default_search_params)
+            self.client.post(self.url, default_search_params)
 
         self.assertEqual(
             annotation_delete.mock_obj.call_count, 4,
@@ -212,7 +209,7 @@ class NotFullyAnnotatedTest(BaseDeleteTest):
 
     def test(self):
         self.client.force_login(self.user)
-        response = self.client.post(self.url, self.default_search_params)
+        response = self.client.post(self.url, default_search_params)
         self.assertDictEqual(response.json(), dict(success=True))
 
         for image in [self.img1, self.img2, self.img3]:
@@ -249,8 +246,7 @@ class ClassifyAfterDeleteTest(BaseTaskTest):
         self.client.force_login(self.user)
         url = reverse('batch_delete_annotations_ajax', args=[self.source.pk])
         with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                url, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+            response = self.client.post(url, default_search_params)
         self.assertDictEqual(response.json(), dict(success=True))
 
         self.source.refresh_from_db()
@@ -311,7 +307,7 @@ class OtherSourceTest(BaseDeleteTest):
         source.
         """
         self.client.force_login(self.user)
-        response = self.client.post(self.url, self.default_search_params)
+        response = self.client.post(self.url, default_search_params)
         self.assertDictEqual(response.json(), dict(success=True))
 
         self.assert_annotations_deleted(self.img1)
@@ -326,8 +322,7 @@ class OtherSourceTest(BaseDeleteTest):
         source.
         """
         post_data = dict(
-            image_form_type='ids',
-            ids=','.join([str(self.img1.pk), str(self.img22.pk)])
+            image_id_list='_'.join([str(self.img1.pk), str(self.img22.pk)])
         )
 
         self.client.force_login(self.user)
@@ -373,8 +368,7 @@ class ErrorTest(BaseDeleteTest):
             self.assert_annotations_not_deleted(image)
 
     def test_form_error(self):
-        post_data = self.default_search_params.copy()
-        post_data['annotation_status'] = 'invalid_value'
+        post_data = dict(annotation_status='invalid_value')
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, post_data)
