@@ -13,7 +13,7 @@ from accounts.utils import (
     get_alleviate_user, get_imported_user, get_robot_user)
 from annotations.model_utils import ImageAnnoStatuses
 from annotations.models import Annotation
-from images.models import Image, Metadata
+from images.models import Metadata
 from images.utils import (
     get_aux_field_name,
     get_aux_label,
@@ -515,27 +515,19 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 code='too_many_numbers',
             )
 
-        id_list = []
+        # Should already be validated as integer strings, so this shouldn't
+        # fail.
+        id_list = [int(id_str) for id_str in id_str_list]
 
-        # TODO: Make this O(1) queries instead of O(n).
-        for img_id in id_str_list:
-            # Should already be validated as an integer string.
-            id_num = int(img_id)
+        # Check that these ids correspond to images in the source (not to
+        # images of other sources).
+        # This ensures that any attempt to forge POST data to specify
+        # other sources' image ids will not work. Those other ids will just
+        # be ignored by in_bulk().
+        existing_ids_to_images = self.source.image_set.in_bulk(id_list)
+        existing_id_list = list(existing_ids_to_images.keys())
 
-            # Check that these ids correspond to images in the source (not to
-            # images of other sources).
-            # This ensures that any attempt to forge POST data to specify
-            # other sources' image ids will not work.
-            try:
-                Image.objects.get(pk=id_num, source=self.source)
-            except Image.DoesNotExist:
-                # The image either doesn't exist or isn't in this source.
-                # Skip it.
-                continue
-
-            id_list.append(id_num)
-
-        return id_list
+        return existing_id_list
 
     def clean_image_id_range(self):
         value = self.cleaned_data['image_id_range']

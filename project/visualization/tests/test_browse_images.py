@@ -969,6 +969,30 @@ class ImageIdsTest(BaseBrowseImagesTest):
             msg="Field value should be present in the hidden form")
 
 
+@override_settings(
+    # Make processing of the full results, not of the page results,
+    # dominate query count.
+    BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=2,
+)
+class ImageIdListQueriesTest(BaseBrowseImagesTest):
+
+    setup_image_count = 80
+
+    def test(self):
+        id_list = '_'.join([str(image.pk) for image in self.images])
+
+        # Should run less than 1 query per image.
+        with self.assert_queries_less_than(self.setup_image_count):
+            response = self.get_browse(
+                image_id_list=id_list,
+            )
+
+        self.assert_browse_results(
+            response, [self.images[0], self.images[1]],
+            msg_prefix="Shouldn't have any issues preventing correct results",
+        )
+
+
 class SortTest(BaseBrowseImagesTest):
 
     @classmethod
