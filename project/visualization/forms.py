@@ -506,8 +506,15 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         )
         format_validator(value)
 
-        # TODO: Validate a max number of IDs to avoid DoS.
         id_str_list = value.split('_')
+        if len(id_str_list) > 1000:
+            # No DoS, please. We should never be intentionally grabbing this
+            # many images with this filter.
+            raise ValidationError(
+                "Too many ID numbers.",
+                code='too_many_numbers',
+            )
+
         id_list = []
 
         # TODO: Make this O(1) queries instead of O(n).

@@ -893,6 +893,17 @@ class ImageIdsTest(BaseBrowseImagesTest):
             response, 'image_id_list',
             "Enter only digits separated by underscores.")
 
+    def test_image_id_list_max_length(self):
+        response = self.get_browse(
+            image_id_list='_'.join(['1'] * 1000))
+        self.assert_not_invalid_params(response)
+
+        response = self.get_browse(
+            image_id_list='_'.join(['1'] * 1001))
+        self.assert_invalid_params(
+            response, 'image_id_list',
+            "Too many ID numbers.")
+
     def test_dont_get_other_sources_images_id_list(self):
         source_2 = self.create_source(self.user)
         other_image = self.upload_image(self.user, source_2)
