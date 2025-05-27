@@ -198,12 +198,16 @@
         <br/>
         <br/>
 
-        Image {{ image_set_order_placement }} of {{ image_set_size }}
+        <span id="image-set-info">
+          Image {{ image_set_order_placement }} of {{ image_set_size }}
+        </span>
 
         {% if applied_search_display %}
           <br/>
           <br/>
-          {{ applied_search_display }}
+          <span id="applied-search-display">
+            {{ applied_search_display }}
+          </span>
         {% endif %}
 
         <br/>

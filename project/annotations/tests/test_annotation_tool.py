@@ -160,20 +160,27 @@ class NavigationTest(BaseBrowseActionTest):
             expected_x_of_y_display=None, expected_search_display=None):
 
         response = self.enter_annotation_tool(search_kwargs, current_image)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
 
-        if expected_prev:
+        if expected_prev is not None:
             self.assertEqual(
                 response.context['prev_image'].pk, expected_prev.pk)
-        if expected_next:
+
+        if expected_next is not None:
             self.assertEqual(
                 response.context['next_image'].pk, expected_next.pk)
-        if expected_x_of_y_display:
-            # This isn't a particularly strict check; it just checks that the
-            # given text is on the page.
-            self.assertContains(response, expected_x_of_y_display)
+
+        if expected_x_of_y_display is not None:
+            span = response_soup.find('span', dict(id='image-set-info'))
+            self.assertEqual(span.text.strip(), expected_x_of_y_display)
+
+        span = response_soup.find('span', dict(id='applied-search-display'))
         if expected_search_display:
-            # Also not a particularly strict check.
-            self.assertContains(response, expected_search_display)
+            self.assertEqual(span.text.strip(), expected_search_display)
+        elif expected_search_display is False:
+            # Special value indicating we want to check for absence.
+            self.assertIsNone(span)
+        # Else, we don't want to do any check on this.
 
     def test_basic_prev_next(self):
         self.assert_navigation_details(
@@ -207,7 +214,8 @@ class NavigationTest(BaseBrowseActionTest):
             dict(aux1='Site3'), self.img3,
             expected_next=self.img2,
             expected_x_of_y_display="Image 2 of 2",
-            expected_search_display="Filtering by aux1;")
+            expected_search_display="Filtering by aux1;"
+                                    " Sorting by name, ascending")
 
     def test_filter_by_photo_date_year(self):
         self.update_multiple_metadatas(
@@ -220,7 +228,8 @@ class NavigationTest(BaseBrowseActionTest):
             dict(photo_date_0='year', photo_date_1=2012), self.img2,
             expected_prev=self.img3,
             expected_x_of_y_display="Image 1 of 2",
-            expected_search_display="Filtering by photo date;")
+            expected_search_display="Filtering by photo date;"
+                                    " Sorting by name, ascending")
 
     def test_filter_by_annotation_date_range(self):
         # The given range should be included from day 1 00:00 to day n+1 00:00.
@@ -244,7 +253,8 @@ class NavigationTest(BaseBrowseActionTest):
             self.img4,
             expected_next=self.img2,
             expected_x_of_y_display="Image 3 of 3",
-            expected_search_display="Filtering by last annotation date;")
+            expected_search_display="Filtering by last annotation date;"
+                                    " Sorting by name, ascending")
 
     def test_filter_by_annotator_tool_specific_user(self):
         self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
@@ -261,7 +271,8 @@ class NavigationTest(BaseBrowseActionTest):
             ),
             self.img2,
             expected_x_of_y_display="Image 1 of 1",
-            expected_search_display="Filtering by last annotator;")
+            expected_search_display="Filtering by last annotator;"
+                                    " Sorting by name, ascending")
 
     def test_filter_by_image_id_range(self):
         self.assert_navigation_details(
@@ -273,7 +284,8 @@ class NavigationTest(BaseBrowseActionTest):
             expected_next=self.img4,
             expected_x_of_y_display="Image 2 of 3",
             expected_search_display=(
-                "Filtering by a range of image IDs;"))
+                "Filtering by a range of image IDs;"
+                " Sorting by name, ascending"))
 
     def test_filter_by_image_id_list(self):
         self.assert_navigation_details(
@@ -283,7 +295,8 @@ class NavigationTest(BaseBrowseActionTest):
             expected_next=self.img5,
             expected_x_of_y_display="Image 2 of 3",
             expected_search_display=(
-                "Filtering by a list of individual images;"))
+                "Filtering by a list of individual images;"
+                " Sorting by name, ascending"))
 
     def test_filter_by_multiple_fields(self):
         self.update_multiple_metadatas(
@@ -304,7 +317,7 @@ class NavigationTest(BaseBrowseActionTest):
             self.img2,
             expected_x_of_y_display="Image 1 of 1",
             expected_search_display=(
-                "Filtering by photo date, aux4;"),
+                "Filtering by photo date, aux4; Sorting by name, ascending"),
         )
 
     def test_sort_by_name(self):
@@ -543,6 +556,15 @@ class NavigationTest(BaseBrowseActionTest):
             expected_prev=self.img5, expected_next=self.img4,
             expected_x_of_y_display="Image 5 of 5")
 
+    def test_invalid_params(self):
+        # Should act as if there are no filters.
+        self.assert_navigation_details(
+            dict(photo_date_0='year', photo_date_1='abc'), self.img2,
+            expected_prev=self.img1,
+            expected_next=self.img3,
+            expected_x_of_y_display="Image 2 of 5",
+            expected_search_display=False)
+
 
 class ReturnToBrowseTest(ClientTest):
 
@@ -564,7 +586,7 @@ class ReturnToBrowseTest(ClientTest):
             cls.user, cls.source, dict(filename='3.png'))
 
     def assert_return_to_browse_link(
-        self, search_kwargs, current_image
+        self, search_kwargs, current_image, expected_query_string
     ):
         self.client.force_login(self.user)
         response = self.client.post(
@@ -576,13 +598,7 @@ class ReturnToBrowseTest(ClientTest):
         href = return_link.attrs.get('href')
 
         expected_base_url = reverse('browse_images', args=[self.source.pk])
-        if search_kwargs is not None:
-            expected_query_string = '&'.join(
-                [f'{k}={v.replace(",", "%2C")}'
-                 for k, v in search_kwargs.items()])
-            expected_href = f'{expected_base_url}?{expected_query_string}'
-        else:
-            expected_href = expected_base_url
+        expected_href = expected_base_url + expected_query_string
 
         self.assertEqual(
             href,
@@ -591,17 +607,37 @@ class ReturnToBrowseTest(ClientTest):
         )
 
     def test_return_to_browse_no_filters(self):
-        self.assert_return_to_browse_link(None, self.img1)
+        self.assert_return_to_browse_link(
+            None, self.img1, '',
+        )
 
-    def test_return_to_browse_with_search_filters(self):
+    def test_return_to_browse_with_search_filter(self):
         search_kwargs = dict(image_name='1')
-        self.assert_return_to_browse_link(search_kwargs, self.img1)
+        self.assert_return_to_browse_link(
+            search_kwargs, self.img1, '?image_name=1',
+        )
 
     def test_return_to_browse_with_id_set_filter(self):
         search_kwargs = dict(
             image_id_list='_'.join([str(self.img1.pk), str(self.img3.pk)]),
         )
-        self.assert_return_to_browse_link(search_kwargs, self.img1)
+        self.assert_return_to_browse_link(
+            search_kwargs, self.img1,
+            f'?image_id_list={self.img1.pk}_{self.img3.pk}',
+        )
+
+    def test_return_to_browse_with_multiple_filters(self):
+        search_kwargs = dict(image_name='1', sort_direction='desc')
+        self.assert_return_to_browse_link(
+            search_kwargs, self.img1, '?image_name=1&sort_direction=desc',
+        )
+
+    def test_return_to_browse_with_invalid_filters(self):
+        # Should act as if there are no filters.
+        search_kwargs = dict(photo_date_0='year', photo_date_1='abc')
+        self.assert_return_to_browse_link(
+            search_kwargs, self.img1, '',
+        )
 
 
 class LoadAnnotationFormTest(ClientTest):
