@@ -12,6 +12,7 @@ from django.utils.html import escape as html_escape
 from accounts.utils import is_alleviate_user, is_robot_user
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
+from visualization.tests.utils import BaseBrowseActionTest
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
 from .utils import AnnotationHistoryTestMixin
 
@@ -130,71 +131,22 @@ class LoadImageTest(ClientTest):
         self.assertStatusOK(response)
 
 
-class NavigationTest(ClientTest):
+class NavigationTest(BaseBrowseActionTest):
     """
     Test the annotation tool buttons that let you navigate to other images.
     """
+    setup_image_count = 5
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.user = cls.create_user()
-
-        cls.source = cls.create_source(cls.user)
-        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
-        cls.create_labelset(cls.user, cls.source, cls.labels)
-
-        cls.img1 = cls.upload_image(cls.user, cls.source)
-        cls.img2 = cls.upload_image(cls.user, cls.source)
-        cls.img3 = cls.upload_image(cls.user, cls.source)
-        cls.img4 = cls.upload_image(cls.user, cls.source)
-        cls.img5 = cls.upload_image(cls.user, cls.source)
         # Default ordering is by name, so this ensures they're in order
         cls.update_multiple_metadatas(
             'name',
-            [(cls.img1, '1.png'),
-             (cls.img2, '2.png'),
-             (cls.img3, '3.png'),
-             (cls.img4, '4.png'),
-             (cls.img5, '5.png')])
+            ['1.png', '2.png', '3.png', '4.png', '5.png'])
 
-    @staticmethod
-    def update_multiple_metadatas(field_name, image_value_pairs):
-        """Update a particular metadata field on multiple images."""
-        for image, value in image_value_pairs:
-            setattr(image.metadata, field_name, value)
-            image.metadata.save()
-
-    def set_last_annotation(self, image, dt=None, annotator=None):
-        """
-        Update the image's last annotation. This simply assigns the desired
-        annotation field values to the image's first point.
-        """
-        if not dt:
-            dt = timezone.now()
-        if not annotator:
-            annotator = self.user
-
-        first_point = image.point_set.get(point_number=1)
-        try:
-            # If the first point has an annotation, delete it.
-            first_point.annotation.delete()
-        except Annotation.DoesNotExist:
-            pass
-
-        # Add a new annotation to the first point.
-        annotation = Annotation(
-            source=image.source, image=image, point=first_point,
-            user=annotator, label=self.labels.get(default_code='A'))
-        # Fake the current date when saving the annotation, in order to
-        # set the annotation_date field to what we want.
-        # https://devblog.kogan.com/blog/testing-auto-now-datetime-fields-in-django/
-        with mock.patch('django.utils.timezone.now') as mock_now:
-            mock_now.return_value = dt
-            annotation.save()
-
-        image.annoinfo.last_annotation = annotation
-        image.annoinfo.save()
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
 
     def enter_annotation_tool(self, search_kwargs, current_image):
         self.client.force_login(self.user)
@@ -238,113 +190,80 @@ class NavigationTest(ClientTest):
             dict(), self.img1,
             expected_prev=self.img5)
 
-    def test_search_filter_aux_meta(self):
-        # Exclude img2 with the filter
+    # Specific filters.
+    # These filters should be tested more thoroughly in test_browse_images.py,
+    # but we make sure to at least test every type of search-display
+    # here.
+
+    def test_filter_by_aux1(self):
         self.update_multiple_metadatas(
             'aux1',
-            [(self.img1, 'SiteA'),
-             (self.img2, 'SiteB'),
-             (self.img3, 'SiteA')])
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3'),
+             (self.img3, 'Site3')])
 
-        # img1 next -> img3
+        # img3 next -> img2
         self.assert_navigation_details(
-            dict(aux1='SiteA'), self.img1,
-            expected_next=self.img3,
-            expected_x_of_y_display="Image 1 of 2",
+            dict(aux1='Site3'), self.img3,
+            expected_next=self.img2,
+            expected_x_of_y_display="Image 2 of 2",
             expected_search_display="Filtering by aux1;")
 
-    def test_search_filter_photo_date_year(self):
-        # Exclude img2 with the filter
+    def test_filter_by_photo_date_year(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.img1, datetime.date(2020, 4, 9)),
-             (self.img2, datetime.date(2019, 12, 31)),
-             (self.img3, datetime.date(2020, 1, 1))])
+            [(self.img1, datetime.date(2011, 12, 28)),
+             (self.img2, datetime.date(2012, 1, 13)),
+             (self.img3, datetime.date(2012, 8, 4))])
 
         self.assert_navigation_details(
-            dict(photo_date_0='year', photo_date_1='2020'), self.img1,
-            expected_next=self.img3,
+            dict(photo_date_0='year', photo_date_1=2012), self.img2,
+            expected_prev=self.img3,
             expected_x_of_y_display="Image 1 of 2",
             expected_search_display="Filtering by photo date;")
 
-    def test_search_filter_photo_date_exact_date(self):
-        # Exclude img2 with the filter
-        self.update_multiple_metadatas(
-            'photo_date',
-            [(self.img1, datetime.date(2020, 4, 1)),
-             (self.img2, datetime.date(2020, 4, 2)),
-             (self.img3, datetime.date(2020, 4, 1))])
-
-        self.assert_navigation_details(
-            dict(photo_date_0='date', photo_date_2='2020-04-01'), self.img1,
-            expected_next=self.img3,
-            expected_x_of_y_display="Image 1 of 2",
-            expected_search_display="Filtering by photo date;")
-
-    def test_search_filter_photo_date_range(self):
-        # Exclude img2 with the filter
-        self.update_multiple_metadatas(
-            'photo_date',
-            [(self.img1, datetime.date(2020, 3, 18)),
-             (self.img2, datetime.date(2020, 3, 21)),
-             (self.img3, datetime.date(2020, 3, 12))])
-
-        self.assert_navigation_details(
-            dict(
-                photo_date_0='date_range',
-                photo_date_3='2020-03-10',
-                photo_date_4='2020-03-20',
-            ),
-            self.img1,
-            expected_next=self.img3,
-            expected_x_of_y_display="Image 1 of 2",
-            expected_search_display="Filtering by photo date;")
-
-    def test_search_filter_annotation_date_range(self):
-        # Exclude img2 with the filter
+    def test_filter_by_annotation_date_range(self):
+        # The given range should be included from day 1 00:00 to day n+1 00:00.
         self.set_last_annotation(
-            self.img1, dt=datetime.datetime(2020, 3, 10, 0, 0, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2012, 3, 9, 23, 59, tzinfo=tz))
         self.set_last_annotation(
-            self.img2, dt=datetime.datetime(2020, 3, 21, 0, 1, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 3, 10, 0, 0, tzinfo=tz))
         self.set_last_annotation(
-            self.img3, dt=datetime.datetime(2020, 3, 20, 23, 59, tzinfo=tz))
+            self.img3, dt=datetime.datetime(2012, 3, 15, 12, 34, tzinfo=tz))
+        self.set_last_annotation(
+            self.img4, dt=datetime.datetime(2012, 3, 20, 23, 59, tzinfo=tz))
+        self.set_last_annotation(
+            self.img5, dt=datetime.datetime(2012, 3, 21, 0, 1, tzinfo=tz))
 
         self.assert_navigation_details(
             dict(
                 last_annotated_0='date_range',
-                last_annotated_3='2020-03-10',
-                last_annotated_4='2020-03-20',
+                last_annotated_3=datetime.date(2012, 3, 10),
+                last_annotated_4=datetime.date(2012, 3, 20),
             ),
-            self.img1,
-            expected_next=self.img3,
-            expected_x_of_y_display="Image 1 of 2",
+            self.img4,
+            expected_next=self.img2,
+            expected_x_of_y_display="Image 3 of 3",
             expected_search_display="Filtering by last annotation date;")
 
-    def test_search_filter_annotator(self):
+    def test_filter_by_annotator_tool_specific_user(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+
         user2 = self.create_user()
         self.add_source_member(
             self.user, self.source, user2, Source.PermTypes.EDIT.code)
-
-        # Exclude img2 with the filter
-        self.set_last_annotation(
-            self.img1, annotator=self.user)
-        self.set_last_annotation(
-            self.img2, annotator=user2)
-        self.set_last_annotation(
-            self.img3, annotator=self.user)
+        self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
 
         self.assert_navigation_details(
             dict(
                 last_annotator_0='annotation_tool',
-                last_annotator_1=self.user.pk,
+                last_annotator_1=user2.pk,
             ),
-            self.img1,
-            expected_next=self.img3,
-            expected_x_of_y_display="Image 1 of 2",
+            self.img2,
+            expected_x_of_y_display="Image 1 of 1",
             expected_search_display="Filtering by last annotator;")
 
-    def test_image_id_range_filter(self):
-        # Exclude img1 and img5 with the filter
+    def test_filter_by_image_id_range(self):
         self.assert_navigation_details(
             dict(
                 image_id_range=f'{self.img2.pk}_{self.img4.pk}',
@@ -356,52 +275,36 @@ class NavigationTest(ClientTest):
             expected_search_display=(
                 "Filtering by a range of image IDs;"))
 
-    def test_image_id_list_filter(self):
-        # Exclude img2 with the filter
+    def test_filter_by_image_id_list(self):
         self.assert_navigation_details(
-            dict(image_id_list=f'{self.img1.pk}_{self.img3.pk}'),
+            dict(image_id_list=f'{self.img2.pk}_{self.img3.pk}_{self.img5.pk}'),
             self.img3,
-            expected_prev=self.img1,
-            expected_x_of_y_display="Image 2 of 2",
+            expected_prev=self.img2,
+            expected_next=self.img5,
+            expected_x_of_y_display="Image 2 of 3",
             expected_search_display=(
                 "Filtering by a list of individual images;"))
 
-    def test_search_filter_multiple_keys(self):
-        user2 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user2, Source.PermTypes.EDIT.code)
-
-        img4 = self.upload_image(self.user, self.source)
-
-        # Exclude img2 and img3 with the filters
-        self.set_last_annotation(
-            self.img1, annotator=self.user,
-            dt=datetime.datetime(2020, 3, 10, 0, 0, tzinfo=tz))
-        # In date range, but wrong user
-        self.set_last_annotation(
-            self.img2, annotator=user2,
-            dt=datetime.datetime(2020, 3, 10, 0, 0, tzinfo=tz))
-        # Right user, but not in date range
-        self.set_last_annotation(
-            self.img3, annotator=self.user,
-            dt=datetime.datetime(2020, 3, 21, 0, 1, tzinfo=tz))
-        self.set_last_annotation(
-            img4, annotator=self.user,
-            dt=datetime.datetime(2020, 3, 20, 23, 59, tzinfo=tz))
+    def test_filter_by_multiple_fields(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [(self.images[0], datetime.date(2012, 3, 9)),
+             (self.images[1], datetime.date(2013, 3, 10)),
+             (self.images[2], datetime.date(2012, 5, 17)),
+             (self.images[3], datetime.date(2013, 10, 12))])
+        self.update_multiple_metadatas(
+            'aux4',
+            [(self.images[0], 'A4'),
+             (self.images[1], 'A4'),
+             (self.images[2], 'A5'),
+             (self.images[3], 'A6')])
 
         self.assert_navigation_details(
-            dict(
-                last_annotator_0='annotation_tool',
-                last_annotator_1=self.user.pk,
-                last_annotated_0='date_range',
-                last_annotated_3='2020-03-10',
-                last_annotated_4='2020-03-20',
-            ),
-            self.img1,
-            expected_next=img4,
-            expected_x_of_y_display="Image 1 of 2",
+            dict(photo_date_0='year', photo_date_1=2013, aux4='A4'),
+            self.img2,
+            expected_x_of_y_display="Image 1 of 1",
             expected_search_display=(
-                "Filtering by last annotation date, last annotator;"),
+                "Filtering by photo date, aux4;"),
         )
 
     def test_sort_by_name(self):

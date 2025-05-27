@@ -1,5 +1,5 @@
 import datetime
-from unittest import mock
+import re
 
 from bs4 import BeautifulSoup
 from django.test import override_settings
@@ -7,13 +7,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.utils import get_alleviate_user, get_imported_user
-from annotations.models import Annotation
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest
 from sources.models import Source
-from visualization.tests.utils import BrowseActionsFormTest
+from .utils import BaseBrowsePageTest, BrowseActionsFormTest
 
 tz = timezone.get_current_timezone()
-default_search_params = dict(submit='search')
 
 
 class PermissionTest(BasePermissionTest):
@@ -44,398 +42,102 @@ class AnnotateFormAvailabilityTest(BrowseActionsFormTest):
         self.assert_form_absent(response)
 
 
-class BaseSearchTest(ClientTest):
+class BaseBrowseImagesTest(BaseBrowsePageTest):
+
+    url_name = 'browse_images'
+
+    @staticmethod
+    def thumb_wrapper_to_image_id(thumb_wrapper):
+        anchor = thumb_wrapper.find('a')
+        # The only number in the thumbnail's link should be the
+        # image ID.
+        match = re.search(r'(\d+)', anchor.attrs.get('href'))
+        return int(match.groups()[0])
+
+    def assert_browse_results(self, response, expected_images, msg_prefix=None):
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        thumb_wrappers = response_soup.find_all('span', class_='thumb_wrapper')
+        actual_ids = [
+            self.thumb_wrapper_to_image_id(thumb_wrapper)
+            for thumb_wrapper in thumb_wrappers
+        ]
+
+        expected_ids = [image.pk for image in expected_images]
+        self.assertListEqual(
+            actual_ids, expected_ids,
+            # This is a message prefix, not a message replacement,
+            # as long as longMessage is True.
+            msg=msg_prefix,
+        )
+
+    def assert_no_results(self, response):
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        self.assertIsNone(
+            response_soup.find('span', class_='thumb_wrapper'))
+
+    def assert_multi_field_values(
+        self, response, field_name, expected_values
+    ):
+        for index, expected_value in enumerate(expected_values):
+
+            search_field = self.get_search_form_field(
+                response, f'{field_name}_{index}')
+            self.assertEqual(
+                self.get_field_value(search_field), expected_value,
+                msg=f"Field value {index} should be as expected"
+                    f" in the search form")
+
+            hidden_field = self.get_hidden_field(
+                response, f'{field_name}_{index}')
+            self.assertEqual(
+                self.get_field_value(hidden_field), expected_value,
+                msg=f"Field value {index} should be as expected"
+                    f" in the hidden form")
+
+
+class BasicFiltersTest(BaseBrowseImagesTest):
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(
-            cls.user,
-            # Make it easy to have confirmed and partially annotated images
-            default_point_generation_method=dict(type='simple', points=2),
-        )
-        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
-        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
 
-        cls.url = reverse('browse_images', args=[cls.source.pk])
-
-        cls.imgs = [
-            cls.upload_image(cls.user, cls.source) for _ in range(5)
-        ]
-
-    @staticmethod
-    def update_multiple_metadatas(field_name, image_value_pairs):
-        """Update a particular metadata field on multiple images."""
-        for image, value in image_value_pairs:
-            setattr(image.metadata, field_name, value)
-            image.metadata.save()
-
-    def set_last_annotation(self, image, dt=None, annotator=None):
-        """
-        Update the image's last annotation. This simply assigns the desired
-        annotation field values to the image's first point.
-        """
-        if not dt:
-            dt = timezone.now()
-        if not annotator:
-            annotator = self.user
-
-        first_point = image.point_set.get(point_number=1)
-        try:
-            # If the first point has an annotation, delete it.
-            first_point.annotation.delete()
-        except Annotation.DoesNotExist:
-            pass
-
-        # Add a new annotation to the first point.
-        annotation = Annotation(
-            source=image.source, image=image, point=first_point,
-            user=annotator, label=self.labels.get(default_code='A'))
-        # Fake the current date when saving the annotation, in order to
-        # set the annotation_date field to what we want.
-        # https://devblog.kogan.com/blog/testing-auto-now-datetime-fields-in-django/
-        with mock.patch('django.utils.timezone.now') as mock_now:
-            mock_now.return_value = dt
-            annotation.save()
-
-        image.annoinfo.last_annotation = annotation
-        image.annoinfo.save()
-
-    def submit_search(self, **search_kwargs):
-        """
-        Submit the search form with the given kwargs, and return the response.
-        """
-        return self.client.get(self.url, search_kwargs)
-
-    def assert_search_results(self, search_kwargs, expected_images):
-        """
-        Assert that the given search-form kwargs return the expected images,
-        in any order.
-        """
-        self.client.force_login(self.user)
-        response = self.submit_search(**search_kwargs)
-        actual_pks = {
-            image.pk for image in response.context['page_results'].object_list}
-        expected_pks = {image.pk for image in expected_images}
-        self.assertSetEqual(actual_pks, expected_pks)
-
-    def assert_search_results_ordered(self, search_kwargs, expected_images):
-        """
-        Assert that the given search-form kwargs return the expected images,
-        in the specified order.
-        """
-        self.client.force_login(self.user)
-        response = self.submit_search(**search_kwargs)
-        actual_pks = [
-            image.pk for image in response.context['page_results'].object_list]
-        expected_pks = [image.pk for image in expected_images]
-        self.assertListEqual(actual_pks, expected_pks)
-
-    def assert_invalid_search(self, search_kwargs):
-        self.client.force_login(self.user)
-        response = self.submit_search(**search_kwargs)
-
-        self.assertContains(response, "Search parameters were invalid.")
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 0)
-
-    @staticmethod
-    def get_search_form_field(response, field_name):
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        search_form_soup = response_soup.find('form', id='search-form')
-        for tag in ['input', 'select']:
-            if field := search_form_soup.find(
-                tag, attrs=dict(name=field_name)
-            ):
-                return field
-        return None
-
-    @staticmethod
-    def get_hidden_form_field(response, field_name):
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        hidden_form_soup = response_soup.find(
-            'div', id='previous-image-form-fields')
-        return hidden_form_soup.find('input', attrs=dict(name=field_name))
-
-    @staticmethod
-    def get_field_value(field_soup):
-        if field_soup.name == 'input':
-            value = field_soup.attrs.get('value')
-        elif field_soup.name == 'select':
-            selected_option = field_soup.find('option', selected=True)
-            value = selected_option.attrs.get('value')
-        else:
-            raise AssertionError("Don't know how to get field value")
-
-        # At this point, an empty value is either '' for text inputs, or
-        # None otherwise. None doesn't seem completely safe for assertEqual
-        # (because None is supposed to be compared with `is`, not `==`), so
-        # we favor ''.
-        if value is None:
-            return ''
-        else:
-            return value
-
-
-class FilterTest(BaseSearchTest):
-
-    def test_page_landing(self):
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 5)
+    def test_no_submit(self):
+        """Page landing, no search performed yet."""
+        response = self.get_browse()
+        self.assert_browse_results(
+            response, self.images, msg_prefix="Should have all images")
 
     def test_default_search(self):
-        self.client.force_login(self.user)
-        response = self.submit_search(**default_search_params)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 5)
+        response = self.get_browse(**self.default_search_params)
+        self.assert_browse_results(
+            response, self.images, msg_prefix="Should have all images")
 
-    def test_filter_by_annotation_status_confirmed(self):
-        robot = self.create_robot(self.source)
-        # 2 points per image
-        # confirmed, confirmed, unconfirmed, partial
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.add_annotations(self.user, self.imgs[1], {1: 'B', 2: 'A'})
-        self.add_robot_annotations(robot, self.imgs[2])
-        self.add_annotations(self.user, self.imgs[3], {1: 'B'})
+    def test_zero_results(self):
+        response = self.get_browse(image_name='DSC')
 
-        self.assert_search_results(
-            dict(annotation_status='confirmed'),
-            [self.imgs[0], self.imgs[1]])
+        self.assert_no_results(response)
+        self.assert_not_invalid_params(response)
+        self.assertContains(response, "No image results.")
 
-    def test_filter_by_annotation_status_unconfirmed(self):
-        robot = self.create_robot(self.source)
-        # 2 points per image
-        # confirmed, unconfirmed, unconfirmed, partial
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.add_robot_annotations(robot, self.imgs[1])
-        self.add_robot_annotations(robot, self.imgs[2])
-        self.add_annotations(self.user, self.imgs[3], {1: 'B'})
-
-        self.assert_search_results(
-            dict(annotation_status='unconfirmed'),
-            [self.imgs[1], self.imgs[2]])
-
-    def test_filter_by_annotation_status_unclassified(self):
-        robot = self.create_robot(self.source)
-        # 2 points per image
-        # confirmed, unconfirmed, partial (counts as unclassified)
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.add_robot_annotations(robot, self.imgs[1])
-        self.add_annotations(self.user, self.imgs[2], {1: 'B'})
-
-        self.assert_search_results(
-            dict(annotation_status='unclassified'),
-            [self.imgs[2], self.imgs[3], self.imgs[4]])
-
-    def test_filter_by_aux1(self):
-        self.update_multiple_metadatas(
-            'aux1',
-            [(self.imgs[0], 'Site1'),
-             (self.imgs[1], 'Site3'),
-             (self.imgs[2], 'Site3')])
-
-        self.assert_search_results(
-            dict(aux1='Site3'),
-            [self.imgs[1], self.imgs[2]])
-
-    def test_filter_by_aux1_none(self):
-        self.update_multiple_metadatas(
-            'aux1',
-            [(self.imgs[0], 'Site1'),
-             (self.imgs[1], 'Site3')])
-
-        self.assert_search_results(
-            dict(aux1='(none)'),
-            [self.imgs[2], self.imgs[3], self.imgs[4]])
-
-    def test_aux1_choices(self):
-        self.update_multiple_metadatas(
-            'aux1',
-            [(self.imgs[0], 'Site1'),
-             (self.imgs[1], 'Site3')])
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        field = search_form.fields['aux1']
-        choices = [value for value, label in field.choices]
-        self.assertListEqual(
-            choices,
-            ['', 'Site1', 'Site3', '(none)']
-        )
-
-    def test_filter_by_aux5(self):
-        self.update_multiple_metadatas(
-            'aux5',
-            [(self.imgs[0], 'C'),
-             (self.imgs[1], 'D'),
-             (self.imgs[2], 'D')])
-
-        self.assert_search_results(
-            dict(aux5='D'),
-            [self.imgs[1], self.imgs[2]])
-
-    def test_filter_by_height_cm(self):
-        self.update_multiple_metadatas(
-            'height_in_cm',
-            [(self.imgs[0], 25),
-             (self.imgs[1], 25),
-             (self.imgs[2], 30)])
-
-        self.assert_search_results(
-            dict(height_in_cm=25),
-            [self.imgs[0], self.imgs[1]])
-
-    def test_filter_by_height_cm_none(self):
-        self.update_multiple_metadatas(
-            'height_in_cm',
-            [(self.imgs[0], 25),
-             (self.imgs[1], 25),
-             (self.imgs[2], None),
-             (self.imgs[3], 50),
-             (self.imgs[4], 50)])
-
-        self.assert_search_results(
-            dict(height_in_cm='(none)'),
-            [self.imgs[2]])
-
-    def test_height_cm_choices(self):
-        self.update_multiple_metadatas(
-            'height_in_cm',
-            [(self.imgs[0], 25),
-             (self.imgs[1], 30)])
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        field = search_form.fields['height_in_cm']
-        choices = [value for value, label in field.choices]
-        self.assertListEqual(
-            choices,
-            ['', 25, 30, '(none)']
-        )
-
-    def test_filter_by_latitude(self):
-        self.update_multiple_metadatas(
-            'latitude',
-            [(self.imgs[0], '12.34'),
-             (self.imgs[1], '-56.78'),
-             (self.imgs[2], '-56.78')])
-
-        self.assert_search_results(
-            dict(latitude='-56.78'),
-            [self.imgs[1], self.imgs[2]])
-
-    def test_filter_by_latitude_none(self):
-        self.update_multiple_metadatas(
-            'latitude',
-            [(self.imgs[0], '12.34'),
-             (self.imgs[1], '-56.78')])
-
-        self.assert_search_results(
-            dict(latitude='(none)'),
-            [self.imgs[2], self.imgs[3], self.imgs[4]])
-
-    def test_filter_by_camera(self):
-        self.update_multiple_metadatas(
-            'camera',
-            [(self.imgs[0], 'Nikon'),
-             (self.imgs[1], 'Canon'),
-             (self.imgs[2], 'Canon')])
-
-        self.assert_search_results(
-            dict(camera='Canon'),
-            [self.imgs[1], self.imgs[2]])
-
-    def test_filter_by_camera_none(self):
-        self.update_multiple_metadatas(
-            'camera',
-            [(self.imgs[0], 'Nikon'),
-             (self.imgs[1], 'Canon')])
-
-        self.assert_search_results(
-            dict(camera='(none)'),
-            [self.imgs[2], self.imgs[3], self.imgs[4]])
-
-    def test_filter_by_image_name_one_token(self):
+    def test_one_result(self):
         self.update_multiple_metadatas(
             'name',
-            [(self.imgs[0], 'XYZ.jpg'),
-             (self.imgs[1], 'abcxyzdef.png'),
-             (self.imgs[2], 'xydefz.png')])
+            [(self.img3, 'DSC_0001.jpg')])
+        response = self.get_browse(image_name='DSC')
 
-        self.assert_search_results(
-            dict(image_name='xyz'),
-            [self.imgs[0], self.imgs[1]])
-
-    def test_filter_by_image_name_two_tokens(self):
-        # Both search tokens must be present
-        self.update_multiple_metadatas(
-            'name',
-            [(self.imgs[0], 'ABCXYZ.jpg'),
-             (self.imgs[1], 'xyz.abc'),
-             (self.imgs[2], 'abc.png'),
-             (self.imgs[3], 'xyz.jpg')])
-
-        self.assert_search_results(
-            dict(image_name='abc xyz'),
-            [self.imgs[0], self.imgs[1]])
-
-    def test_filter_by_image_name_punctuation(self):
-        # Punctuation is considered part of search tokens
-        self.update_multiple_metadatas(
-            'name',
-            [(self.imgs[0], '1-1.png'),
-             (self.imgs[1], '1*1.png'),
-             (self.imgs[2], '2-1-1.jpg'),
-             (self.imgs[3], '1-1-2.png')])
-
-        self.assert_search_results(
-            dict(image_name='1-1.'),
-            [self.imgs[0], self.imgs[2]])
-
-    def test_filter_by_image_id_range(self):
-        """
-        This field should be tested more thoroughly in edit-metadata
-        where we are more expecting the field to be used.
-        """
-        self.assert_search_results(
-            dict(image_id_range=f'{self.imgs[2].pk}_{self.imgs[4].pk + 5}'),
-            [self.imgs[2], self.imgs[3], self.imgs[4]])
-
-    def test_filter_by_multiple_fields(self):
-        self.update_multiple_metadatas(
-            'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 9)),
-             (self.imgs[1], datetime.date(2013, 3, 10)),
-             (self.imgs[2], datetime.date(2012, 5, 17)),
-             (self.imgs[3], datetime.date(2013, 10, 12))])
-        self.update_multiple_metadatas(
-            'height_in_cm',
-            [(self.imgs[0], 30),
-             (self.imgs[1], 30),
-             (self.imgs[2], 25),
-             (self.imgs[3], 25)])
-
-        self.assert_search_results(
-            dict(photo_date_0='year', photo_date_1=2013, height_in_cm=30),
-            [self.imgs[1]])
+        self.assert_browse_results(response, [self.img3])
+        self.assert_not_invalid_params(response)
+        self.assertNotContains(response, "No image results.")
 
     def test_dont_get_other_sources_images(self):
-        source2 = self.create_source(self.user)
-        self.upload_image(self.user, source2)
+        source_2 = self.create_source(self.user)
+        self.upload_image(self.user, source_2)
 
         # Just source 1's images, not source 2's
-        self.assert_search_results(
-            dict(),
-            [self.imgs[0], self.imgs[1], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
+        response = self.get_browse()
+        self.assert_browse_results(response, self.images)
 
     def test_post_request(self):
         self.client.force_login(self.user)
@@ -451,212 +153,453 @@ class FilterTest(BaseSearchTest):
             msg_prefix="Should show a message indicating the search didn't"
                        " actually work due to POST being used")
 
+    # Specific filters.
 
-class DateSearchTest(BaseSearchTest):
+    def test_filter_by_annotation_status_confirmed(self):
+        robot = self.create_robot(self.source)
+        # 2 points per image
+        # confirmed, confirmed, unconfirmed, partial
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.add_annotations(self.user, self.img2, {1: 'B', 2: 'A'})
+        self.add_robot_annotations(robot, self.img3)
+        self.add_annotations(self.user, self.img4, {1: 'B'})
+
+        response = self.get_browse(annotation_status='confirmed')
+        self.assert_browse_results(
+            response, [self.img1, self.img2])
+
+    def test_filter_by_annotation_status_unconfirmed(self):
+        robot = self.create_robot(self.source)
+        # 2 points per image
+        # confirmed, unconfirmed, unconfirmed, partial
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.add_robot_annotations(robot, self.img2)
+        self.add_robot_annotations(robot, self.img3)
+        self.add_annotations(self.user, self.img4, {1: 'B'})
+
+        response = self.get_browse(annotation_status='unconfirmed')
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
+
+    def test_filter_by_annotation_status_unclassified(self):
+        robot = self.create_robot(self.source)
+        # 2 points per image
+        # confirmed, unconfirmed, partial (counts as unclassified)
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.add_robot_annotations(robot, self.img2)
+        self.add_annotations(self.user, self.img3, {1: 'B'})
+
+        response = self.get_browse(annotation_status='unclassified')
+        self.assert_browse_results(
+            response, [self.img3, self.img4, self.img5])
+
+    def test_filter_by_image_name_one_token(self):
+        self.update_multiple_metadatas(
+            'name',
+            [(self.img1, 'abcxyzdef.png'),
+             (self.img2, 'XYZ.jpg'),
+             (self.img3, 'xydefz.png')])
+
+        response = self.get_browse(image_name='xyz')
+        self.assert_browse_results(
+            response, [self.img1, self.img2])
+
+    def test_filter_by_image_name_two_tokens(self):
+        # Both search tokens must be present
+        self.update_multiple_metadatas(
+            'name',
+            [(self.img1, 'ABCXYZ.jpg'),
+             (self.img2, 'xyz.abc'),
+             (self.img3, 'abc.png'),
+             (self.img4, 'xyz.jpg')])
+
+        response = self.get_browse(image_name='abc xyz')
+        self.assert_browse_results(
+            response, [self.img1, self.img2])
+
+    def test_filter_by_image_name_punctuation(self):
+        # Punctuation is considered part of search tokens
+        self.update_multiple_metadatas(
+            'name',
+            [(self.img1, '1-1.png'),
+             (self.img2, '1*1.png'),
+             (self.img3, '2-1-1.jpg'),
+             (self.img4, '1-1-2.png')])
+
+        response = self.get_browse(image_name='1-1.')
+        self.assert_browse_results(
+            response, [self.img1, self.img3])
+
+    def test_filter_by_multiple_fields(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [(self.img1, datetime.date(2012, 3, 9)),
+             (self.img2, datetime.date(2013, 3, 10)),
+             (self.img3, datetime.date(2012, 5, 17)),
+             (self.img4, datetime.date(2013, 10, 12))])
+        self.update_multiple_metadatas(
+            'aux4',
+            [(self.img1, 'A4'),
+             (self.img2, 'A4'),
+             (self.img3, 'A5'),
+             (self.img4, 'A6')])
+
+        response = self.get_browse(
+            photo_date_0='year', photo_date_1=2013, aux4='A4')
+        self.assert_browse_results(
+            response, [self.img2])
+
+
+class FormInitializationTest(BaseBrowseImagesTest):
+
+    def test_no_submit(self):
+        """Page landing, no search performed yet."""
+        response = self.get_browse()
+
+        self.assertIsNotNone(
+            self.get_search_form_field(response, 'image_name'),
+            msg="Basic search fields should be present")
+        self.assert_no_hidden_fields(response)
+        self.assert_not_invalid_params(response)
+
+    @override_settings(
+        # Ensures we do have multiple pages of results.
+        BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3,
+    )
+    def test_no_submit_page_2(self):
+        """
+        Page landing, then move to page 2, without searching.
+        More detailed tests of multiple pages are in ResultsAndPagesTest.
+        """
+        response = self.get_browse(page=2)
+
+        # Same checks as page 1
+        self.assertIsNotNone(
+            self.get_search_form_field(response, 'image_name'),
+            msg="Basic search fields should be present")
+        self.assert_no_hidden_fields(response)
+        self.assert_not_invalid_params(response)
+
+    def test_default_search(self):
+        response = self.get_browse(**self.default_search_params)
+
+        self.assertIsNotNone(
+            self.get_search_form_field(response, 'image_name'),
+            msg="Basic search fields should be present")
+        self.assert_has_hidden_fields(response)
+        self.assert_not_invalid_params(response)
+
+    def test_basic_field_after_submit(self):
+        # Ensure the results of the search aren't completely empty,
+        # so that the hidden form is rendered.
+        self.update_multiple_metadatas(
+            'name',
+            [(self.images[0], 'DSC_0001.jpg')])
+
+        response = self.get_browse(image_name='DSC')
+
+        search_field = self.get_search_form_field(response, 'image_name')
+        self.assertEqual(
+            search_field.attrs.get('value'), 'DSC',
+            msg="Field value should be present in the search form")
+
+        hidden_field = self.get_hidden_field(response, 'image_name')
+        self.assertEqual(
+            hidden_field.attrs.get('value'), 'DSC',
+            msg="Field value should be present in the hidden form")
+
+    # The following field-specific test classes have further field
+    # initialization tests.
+
+
+class AuxMetadataSearchTest(BaseBrowseImagesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_filter_by_aux1(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3'),
+             (self.img3, 'Site3')])
+
+        response = self.get_browse(aux1='Site3')
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
+
+    def test_filter_by_aux1_none(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3')])
+
+        response = self.get_browse(aux1='(none)')
+        self.assert_browse_results(
+            response, [self.img3, self.img4, self.img5])
+
+    def test_aux1_choices(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3')])
+
+        response = self.get_browse()
+        self.assert_search_field_choices(
+            response, 'aux1', ['', 'Site1', 'Site3', '(none)'])
+
+    def test_filter_by_aux5(self):
+        self.update_multiple_metadatas(
+            'aux5',
+            [(self.img1, 'C'),
+             (self.img2, 'D'),
+             (self.img3, 'D')])
+
+        response = self.get_browse(aux5='D')
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
+
+    def test_only_show_metadata_field_if_multiple_values(self):
+        # aux1 is blank for every image
+        self.update_multiple_metadatas(
+            'aux1', ['', '', '', '', ''])
+        # aux2 has multiple unique non-blank values
+        self.update_multiple_metadatas(
+            'aux2',
+            ['5m', '10m', '10m', '5m', '10m'])
+        # aux3 has the same non-blank value for every image
+        self.update_multiple_metadatas(
+            'aux3',
+            ['Transect4', 'Transect4', 'Transect4', 'Transect4', 'Transect4'])
+        # aux4 has one unique non-blank value as well as blanks
+        self.update_multiple_metadatas(
+            'aux4',
+            ['', '', 'Q3', '', ''])
+
+        response = self.get_browse()
+
+        self.assertIsNone(self.get_search_form_field(response, 'aux1'))
+        self.assertIsNotNone(self.get_search_form_field(response, 'aux2'))
+        self.assertIsNone(self.get_search_form_field(response, 'aux3'))
+        self.assertIsNotNone(self.get_search_form_field(response, 'aux4'))
+
+
+class DateSearchTest(BaseBrowseImagesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
 
     # Photo date
 
     def test_photo_date_type_choices(self):
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
+        response = self.get_browse()
 
-        search_form = response.context['image_search_form']
-        field = search_form.fields['photo_date'].fields[0]
-        self.assertListEqual(
-            list(field.choices),
+        self.assert_search_field_choices(
+            response, 'photo_date_0',
             [('', "Any"),
              ('year', "Year"),
              ('date', "Exact date"),
              ('date_range', "Date range"),
-             ('(none)', "(None)")]
+             ('(none)', "(None)")],
         )
 
     def test_filter_by_photo_date_any(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2011, 12, 28)),
-             (self.imgs[1], datetime.date(2012, 1, 13))])
+            [(self.img1, datetime.date(2011, 12, 28)),
+             (self.img2, datetime.date(2012, 1, 13))])
         # 3 other images left with no date
 
-        # Should include non-null and null dates
-        self.assert_search_results(
-            dict(),
-            [self.imgs[0], self.imgs[1], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
+        response = self.get_browse(photo_date_0='')
+        self.assert_browse_results(
+            response, self.images,
+            msg_prefix="Should include both non-null and null dates")
 
     def test_filter_by_photo_date_none(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2011, 12, 28)),
-             (self.imgs[1], datetime.date(2012, 1, 13)),
-             (self.imgs[2], datetime.date(2013, 8, 4))])
+            [(self.img1, datetime.date(2011, 12, 28)),
+             (self.img2, datetime.date(2012, 1, 13)),
+             (self.img3, datetime.date(2013, 8, 4))])
         # 2 other images left with no date
 
-        self.assert_search_results(
-            dict(photo_date_0='(none)'),
-            [self.imgs[3], self.imgs[4]])
+        response = self.get_browse(photo_date_0='(none)')
+        self.assert_browse_results(
+            response, [self.img4, self.img5])
 
     def test_filter_by_photo_date_year(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2011, 12, 28)),
-             (self.imgs[1], datetime.date(2012, 1, 13)),
-             (self.imgs[2], datetime.date(2012, 8, 4))])
+            [(self.img1, datetime.date(2011, 12, 28)),
+             (self.img2, datetime.date(2012, 1, 13)),
+             (self.img3, datetime.date(2012, 8, 4))])
 
-        self.assert_search_results(
-            dict(photo_date_0='year', photo_date_1=2012),
-            [self.imgs[1], self.imgs[2]])
+        response = self.get_browse(photo_date_0='year', photo_date_1=2012)
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
 
     def test_photo_date_year_choices(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2011, 12, 28)),
-             (self.imgs[1], datetime.date(2012, 1, 13)),
-             (self.imgs[2], datetime.date(2013, 8, 4))])
+            [(self.img1, datetime.date(2011, 12, 28)),
+             (self.img2, datetime.date(2012, 1, 13)),
+             (self.img3, datetime.date(2013, 8, 4))])
 
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        year_field = search_form.fields['photo_date'].fields[1]
-        year_choices = [value for value, label in year_field.choices]
-        self.assertListEqual(
-            year_choices,
-            ['', '2011', '2012', '2013'])
+        response = self.get_browse()
+        self.assert_search_field_choices(
+            response, 'photo_date_1', ['', '2011', '2012', '2013'])
 
     def test_filter_by_photo_date_exact_date(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 1, 12)),
-             (self.imgs[1], datetime.date(2012, 1, 13)),
-             (self.imgs[2], datetime.date(2012, 1, 13))])
+            [(self.img1, datetime.date(2012, 1, 12)),
+             (self.img2, datetime.date(2012, 1, 13)),
+             (self.img3, datetime.date(2012, 1, 13))])
         # 2 other images left with no date
 
-        self.assert_search_results(
-            dict(photo_date_0='date', photo_date_2=datetime.date(2012, 1, 13)),
-            [self.imgs[1], self.imgs[2]])
+        response = self.get_browse(
+            photo_date_0='date', photo_date_2=datetime.date(2012, 1, 13))
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
 
     def test_filter_by_photo_date_range(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 9)),
-             (self.imgs[1], datetime.date(2012, 3, 10)),
-             (self.imgs[2], datetime.date(2012, 3, 15)),
-             (self.imgs[3], datetime.date(2012, 3, 20)),
-             (self.imgs[4], datetime.date(2012, 3, 21))])
+            [(self.img1, datetime.date(2012, 3, 9)),
+             (self.img2, datetime.date(2012, 3, 10)),
+             (self.img3, datetime.date(2012, 3, 15)),
+             (self.img4, datetime.date(2012, 3, 20)),
+             (self.img5, datetime.date(2012, 3, 21))])
 
-        self.assert_search_results(
-            dict(
-                photo_date_0='date_range',
-                photo_date_3=datetime.date(2012, 3, 10),
-                photo_date_4=datetime.date(2012, 3, 20),
-            ),
-            [self.imgs[1], self.imgs[2], self.imgs[3]])
+        response = self.get_browse(
+            photo_date_0='date_range',
+            photo_date_3=datetime.date(2012, 3, 10),
+            photo_date_4=datetime.date(2012, 3, 20),
+        )
+        self.assert_browse_results(
+            response, [self.img2, self.img3, self.img4])
 
     def test_photo_date_negative_range(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 9)),
-             (self.imgs[1], datetime.date(2012, 3, 10))])
+            [(self.img1, datetime.date(2012, 3, 9)),
+             (self.img2, datetime.date(2012, 3, 10))])
 
-        self.assert_search_results(
-            dict(
-                photo_date_0='date_range',
-                photo_date_3=datetime.date(2012, 3, 10),
-                photo_date_4=datetime.date(2012, 3, 9),
-            ),
-            [])
+        response = self.get_browse(
+            photo_date_0='date_range',
+            photo_date_3=datetime.date(2012, 3, 10),
+            photo_date_4=datetime.date(2012, 3, 9),
+        )
+        self.assert_browse_results(response, [])
 
     def test_photo_date_type_invalid(self):
-        self.assert_invalid_search(dict(photo_date_0='abc'))
+        response = self.get_browse(photo_date_0='abc')
+        self.assert_invalid_params(
+            response, 'photo_date',
+            "Select a valid choice. abc is not one of the available choices.")
 
     def test_photo_date_year_missing(self):
-        self.assert_invalid_search(dict(photo_date_0='year'))
+        response = self.get_browse(photo_date_0='year')
+        self.assert_invalid_params(
+            response, 'photo_date', "Must specify a year.")
 
     def test_photo_date_year_invalid(self):
-        self.assert_invalid_search(dict(
-            photo_date_0='year', photo_date_1='not a year'))
+        response = self.get_browse(
+            photo_date_0='year', photo_date_1='not a year')
+        self.assert_invalid_params(
+            response, 'photo_date',
+            "Select a valid choice. not a year is not one of the"
+            " available choices.")
 
     def test_photo_date_exact_date_missing(self):
-        self.assert_invalid_search(dict(photo_date_0='date'))
+        response = self.get_browse(photo_date_0='date')
+        self.assert_invalid_params(
+            response, 'photo_date', "Must specify a date.")
 
     def test_photo_date_exact_date_invalid(self):
-        self.assert_invalid_search(dict(
-            photo_date_0='date', photo_date_2='not a date'))
+        response = self.get_browse(
+            photo_date_0='date', photo_date_2='not a date')
+        self.assert_invalid_params(
+            response, 'photo_date', "Enter a valid date.")
 
     def test_photo_date_start_date_missing(self):
-        self.assert_invalid_search(dict(
-            photo_date_0='date_range', photo_date_4=datetime.date(2012, 3, 10)))
+        response = self.get_browse(
+            photo_date_0='date_range',
+            photo_date_4=datetime.date(2012, 3, 10),
+        )
+        self.assert_invalid_params(
+            response, 'photo_date', "Must specify a start date.")
 
     def test_photo_date_end_date_missing(self):
-        self.assert_invalid_search(dict(
-            photo_date_0='date_range', photo_date_3=datetime.date(2012, 3, 10)))
+        response = self.get_browse(
+            photo_date_0='date_range',
+            photo_date_3=datetime.date(2012, 3, 10),
+        )
+        self.assert_invalid_params(
+            response, 'photo_date', "Must specify an end date.")
 
     # Last annotation date
 
     def test_annotation_date_type_choices(self):
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        field = search_form.fields['last_annotated'].fields[0]
-        self.assertListEqual(
-            list(field.choices),
+        response = self.get_browse()
+        self.assert_search_field_choices(
+            response, 'last_annotated_0',
             [('', "Any"),
              ('year', "Year"),
              ('date', "Exact date"),
              ('date_range', "Date range"),
-             ('(none)', "(None)")]
+             ('(none)', "(None)")],
         )
 
     def test_filter_by_annotation_date_any(self):
         self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
         # 3 other images left with no last annotation
 
-        # Should include both null and non-null dates
-        self.assert_search_results(
-            dict(),
-            [self.imgs[0], self.imgs[1], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
+        response = self.get_browse(last_annotated_0='')
+        self.assert_browse_results(
+            response, self.images,
+            msg_prefix="Should include both annotated"
+                       " and non-annotated images")
 
     def test_filter_by_annotation_date_none(self):
         self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[2], dt=datetime.datetime(2013, 8, 4, tzinfo=tz))
+            self.img3, dt=datetime.datetime(2013, 8, 4, tzinfo=tz))
         # 2 other images left with no last annotation
 
-        self.assert_search_results(
-            dict(last_annotated_0='(none)'),
-            [self.imgs[3], self.imgs[4]])
+        response = self.get_browse(last_annotated_0='(none)')
+        self.assert_browse_results(
+            response, [self.img4, self.img5])
 
     def test_annotation_date_year_choices(self):
         self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2011, 12, 28, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 1, 13, tzinfo=tz))
 
         self.source.create_date = datetime.datetime(2010, 1, 1, tzinfo=tz)
         self.source.save()
 
         current_year = timezone.now().year
 
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        year_field = search_form.fields['last_annotated'].fields[1]
-        year_choices = [value for value, label in year_field.choices]
+        response = self.get_browse()
         # Choices should be based on the source create date and the
         # current year, not based on existing annotation dates. It's done this
         # way for a slight speed optimization.
-        self.assertListEqual(
-            year_choices,
+        self.assert_search_field_choices(
+            response, 'last_annotated_1',
             [''] + [str(year) for year in range(2010, current_year+1)],
         )
 
@@ -665,362 +608,48 @@ class DateSearchTest(BaseSearchTest):
         # As an implementation detail, 00:00 of the next day is also included,
         # so we just make sure 00:01 of the next day isn't in.
         self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2012, 1, 12, 23, 59, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2012, 1, 12, 23, 59, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 1, 13, 0, 0, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 1, 13, 0, 0, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[2], dt=datetime.datetime(2012, 1, 13, 23, 59, tzinfo=tz))
+            self.img3, dt=datetime.datetime(2012, 1, 13, 23, 59, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[3], dt=datetime.datetime(2012, 1, 14, 0, 1, tzinfo=tz))
+            self.img4, dt=datetime.datetime(2012, 1, 14, 0, 1, tzinfo=tz))
 
-        self.assert_search_results(
-            dict(
-                last_annotated_0='date',
-                last_annotated_2=datetime.date(2012, 1, 13),
-            ),
-            [self.imgs[1], self.imgs[2]])
+        response = self.get_browse(
+            last_annotated_0='date',
+            last_annotated_2=datetime.date(2012, 1, 13),
+        )
+        self.assert_browse_results(
+            response, [self.img2, self.img3])
 
     def test_filter_by_annotation_date_range(self):
         # The given range should be included from day 1 00:00 to day n+1 00:00.
         self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2012, 3, 9, 23, 59, tzinfo=tz))
+            self.img1, dt=datetime.datetime(2012, 3, 9, 23, 59, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 3, 10, 0, 0, tzinfo=tz))
+            self.img2, dt=datetime.datetime(2012, 3, 10, 0, 0, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[2], dt=datetime.datetime(2012, 3, 15, 12, 34, tzinfo=tz))
+            self.img3, dt=datetime.datetime(2012, 3, 15, 12, 34, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[3], dt=datetime.datetime(2012, 3, 20, 23, 59, tzinfo=tz))
+            self.img4, dt=datetime.datetime(2012, 3, 20, 23, 59, tzinfo=tz))
         self.set_last_annotation(
-            self.imgs[4], dt=datetime.datetime(2012, 3, 21, 0, 1, tzinfo=tz))
+            self.img5, dt=datetime.datetime(2012, 3, 21, 0, 1, tzinfo=tz))
 
-        self.assert_search_results(
-            dict(
-                last_annotated_0='date_range',
-                last_annotated_3=datetime.date(2012, 3, 10),
-                last_annotated_4=datetime.date(2012, 3, 20),
-            ),
-            [self.imgs[1], self.imgs[2], self.imgs[3]])
-
-
-class LastAnnotatorSearchTest(BaseSearchTest):
-
-    def test_filter_by_annotator_any(self):
-        # Regular user
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        # Imported
-        self.set_last_annotation(self.imgs[1], annotator=get_imported_user())
-        # Alleviate
-        self.set_last_annotation(self.imgs[2], annotator=get_alleviate_user())
-        # Machine
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.imgs[3])
-
-        self.assert_search_results(
-            dict(),
-            [self.imgs[0], self.imgs[1], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
-
-    def test_filter_by_annotator_tool_any_user(self):
-        # Tool user
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-
-        # Another tool user
-        user2 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user2, Source.PermTypes.EDIT.code)
-        self.add_annotations(user2, self.imgs[1], {1: 'A', 2: 'B'})
-
-        # Non annotation tool
-        self.set_last_annotation(self.imgs[2], annotator=get_imported_user())
-        self.set_last_annotation(self.imgs[3], annotator=get_alleviate_user())
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.imgs[4])
-
-        # Unannotated
-        self.upload_image(self.user, self.source)
-
-        self.assert_search_results(
-            dict(last_annotator_0='annotation_tool'),
-            [self.imgs[0], self.imgs[1]])
-
-    def test_filter_by_annotator_tool_specific_user(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-
-        user2 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user2, Source.PermTypes.EDIT.code)
-        self.add_annotations(user2, self.imgs[1], {1: 'A', 2: 'B'})
-
-        self.assert_search_results(
-            dict(
-                last_annotator_0='annotation_tool',
-                last_annotator_1=user2.pk,
-            ),
-            [self.imgs[1]])
-
-    def test_annotator_tool_choices(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-
-        user2 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user2, Source.PermTypes.EDIT.code)
-        self.add_annotations(user2, self.imgs[1], {1: 'A', 2: 'B'})
-
-        user3 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user3, Source.PermTypes.EDIT.code)
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        user_field = search_form.fields['last_annotator'].fields[1]
-        user_choices = [username for value, username in user_field.choices]
-        # Choices should be based on existing annotations in the source, not
-        # based on the source's member list.
-        self.assertListEqual(
-            user_choices,
-            ["Any user"] + sorted([self.user.username, user2.username]))
-
-    def test_filter_by_annotator_alleviate(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.set_last_annotation(self.imgs[1], annotator=get_imported_user())
-        self.set_last_annotation(self.imgs[2], annotator=get_alleviate_user())
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.imgs[3])
-
-        self.assert_search_results(
-            dict(last_annotator_0='alleviate'),
-            [self.imgs[2]])
-
-    def test_filter_by_annotator_importing(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.set_last_annotation(self.imgs[1], annotator=get_imported_user())
-        self.set_last_annotation(self.imgs[2], annotator=get_alleviate_user())
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.imgs[3])
-
-        self.assert_search_results(
-            dict(last_annotator_0='imported'),
-            [self.imgs[1]])
-
-    def test_filter_by_annotator_machine(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-        self.set_last_annotation(self.imgs[1], annotator=get_imported_user())
-        self.set_last_annotation(self.imgs[2], annotator=get_alleviate_user())
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.imgs[3])
-
-        self.assert_search_results(
-            dict(last_annotator_0='machine'),
-            [self.imgs[3]])
-
-    def test_filter_by_annotator_considering_latest_only(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
-
-        user2 = self.create_user()
-        self.add_source_member(
-            self.user, self.source, user2, Source.PermTypes.EDIT.code)
-        self.add_annotations(user2, self.imgs[0], {1: 'B'})
-
-        # user isn't the latest annotator of any image now.
-        self.assert_search_results(
-            dict(
-                last_annotator_0='annotation_tool',
-                last_annotator_1=self.user.pk,
-            ),
-            [])
-        # user2 is.
-        self.assert_search_results(
-            dict(
-                last_annotator_0='annotation_tool',
-                last_annotator_1=user2.pk,
-            ),
-            [self.imgs[0]])
-
-
-class SortTest(BaseSearchTest):
-
-    def test_by_name(self):
-        self.update_multiple_metadatas(
-            'name',
-            [(self.imgs[0], 'B'),
-             (self.imgs[1], 'A'),
-             (self.imgs[2], 'C'),
-             (self.imgs[3], 'D'),
-             (self.imgs[4], 'E')])
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='',
-                sort_direction='',
-            ),
-            [self.imgs[1], self.imgs[0], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='',
-                sort_direction='desc',
-            ),
-            [self.imgs[4], self.imgs[3], self.imgs[2],
-             self.imgs[0], self.imgs[1]])
-
-    def test_by_upload(self):
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='upload_date',
-                sort_direction='',
-            ),
-            [self.imgs[0], self.imgs[1], self.imgs[2],
-             self.imgs[3], self.imgs[4]])
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='upload_date',
-                sort_direction='desc',
-            ),
-            [self.imgs[4], self.imgs[3], self.imgs[2],
-             self.imgs[1], self.imgs[0]])
-
-    def test_by_photo_date(self):
-        self.update_multiple_metadatas(
-            'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 2)),
-             (self.imgs[1], datetime.date(2012, 3, 1)),
-             (self.imgs[4], datetime.date(2012, 3, 1))])
-        # Other 2 have null date and will be ordered after the ones with date.
-        # pk is the tiebreaker.
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='photo_date',
-                sort_direction='',
-            ),
-            [self.imgs[1], self.imgs[4], self.imgs[0],
-             self.imgs[2], self.imgs[3]])
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='photo_date',
-                sort_direction='desc',
-            ),
-            [self.imgs[3], self.imgs[2], self.imgs[0],
-             self.imgs[4], self.imgs[1]])
-
-    def test_by_last_annotated(self):
-        self.set_last_annotation(
-            self.imgs[0], dt=datetime.datetime(2012, 3, 2, 0, 0, tzinfo=tz))
-        self.set_last_annotation(
-            self.imgs[1], dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
-        self.set_last_annotation(
-            self.imgs[4], dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
-        # Other 2 have null date and will be ordered after the ones with date.
-        # pk is the tiebreaker.
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='last_annotation_date',
-                sort_direction='',
-            ),
-            [self.imgs[1], self.imgs[4], self.imgs[0],
-             self.imgs[2], self.imgs[3]])
-
-        self.assert_search_results_ordered(
-            dict(
-                sort_method='last_annotation_date',
-                sort_direction='desc',
-            ),
-            [self.imgs[3], self.imgs[2], self.imgs[0],
-             self.imgs[4], self.imgs[1]])
-
-
-class FormInitializationTest(BaseSearchTest):
-
-    def assert_multi_field_values(
-        self, response, field_name, expected_values
-    ):
-        for index, expected_value in enumerate(expected_values):
-
-            search_field = self.get_search_form_field(
-                response, f'{field_name}_{index}')
-            self.assertEqual(
-                self.get_field_value(search_field), expected_value,
-                msg=f"Field value {index} should be as expected"
-                    f" in the search form")
-
-            hidden_field = self.get_hidden_form_field(
-                response, f'{field_name}_{index}')
-            self.assertEqual(
-                self.get_field_value(hidden_field), expected_value,
-                msg=f"Field value {index} should be as expected"
-                    f" in the hidden form")
-
-    def test_dont_show_metadata_field_if_all_blank_values(self):
-        """
-        If a metadata field has a blank value for every image, don't show
-        that metadata field on the search form.
-        """
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        self.assertFalse('latitude' in search_form.fields)
-
-    def test_dont_show_metadata_field_if_all_same_value(self):
-        """
-        If a metadata field has the same value for every image, don't show
-        that metadata field on the search form.
-        """
-        self.update_multiple_metadatas(
-            'height_in_cm',
-            [(self.imgs[0], 50),
-             (self.imgs[1], 50),
-             (self.imgs[2], 50),
-             (self.imgs[3], 50),
-             (self.imgs[4], 50)])
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url)
-
-        search_form = response.context['image_search_form']
-        self.assertFalse('height_in_cm' in search_form.fields)
-
-    def test_no_submit(self):
-        """Page landing, no search performed yet."""
-        pass  # TODO: search field present, hidden field/form absent, but no invalid message
-
-    def test_no_submit_page_2(self):
-        """Page landing, then move to page 2, without searching."""
-        pass  # TODO: same as above, despite the GET param page=2 being present
-
-    def test_basic_field_after_submit(self):
-        # Ensure the results of the search aren't completely empty,
-        # so that the hidden form is rendered.
-        self.update_multiple_metadatas(
-            'name',
-            [(self.imgs[0], 'DSC_0001.jpg')])
-
-        self.client.force_login(self.user)
-        response = self.submit_search(image_name='DSC')
-
-        search_field = self.get_search_form_field(response, 'image_name')
-        self.assertEqual(
-            search_field.attrs.get('value'), 'DSC',
-            msg="Field value should be present in the search form")
-
-        hidden_field = self.get_search_form_field(response, 'image_name')
-        self.assertEqual(
-            hidden_field.attrs.get('value'), 'DSC',
-            msg="Field value should be present in the hidden form")
+        response = self.get_browse(
+            last_annotated_0='date_range',
+            last_annotated_3=datetime.date(2012, 3, 10),
+            last_annotated_4=datetime.date(2012, 3, 20),
+        )
+        self.assert_browse_results(
+            response, [self.img2, self.img3, self.img4])
 
     def test_date_year_after_submit(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 6))])
+            [(self.img1, datetime.date(2012, 3, 6))])
 
-        self.client.force_login(self.user)
-        response = self.submit_search(photo_date_0='year', photo_date_1='2012')
+        response = self.get_browse(photo_date_0='year', photo_date_1='2012')
 
         self.assert_multi_field_values(
             response, 'photo_date', ['year', '2012', '', '', ''])
@@ -1028,10 +657,9 @@ class FormInitializationTest(BaseSearchTest):
     def test_exact_date_after_submit(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 3, 6))])
+            [(self.img1, datetime.date(2012, 3, 6))])
 
-        self.client.force_login(self.user)
-        response = self.submit_search(
+        response = self.get_browse(
             photo_date_0='date', photo_date_2=datetime.date(2012, 3, 6))
 
         self.assert_multi_field_values(
@@ -1040,10 +668,9 @@ class FormInitializationTest(BaseSearchTest):
     def test_date_range_after_submit(self):
         self.update_multiple_metadatas(
             'photo_date',
-            [(self.imgs[0], datetime.date(2012, 10, 21))])
+            [(self.img1, datetime.date(2012, 10, 21))])
 
-        self.client.force_login(self.user)
-        response = self.submit_search(
+        response = self.get_browse(
             photo_date_0='date_range',
             photo_date_3=datetime.date(2012, 3, 6),
             photo_date_4=datetime.date(2013, 4, 7),
@@ -1053,11 +680,154 @@ class FormInitializationTest(BaseSearchTest):
             response, 'photo_date',
             ['date_range', '', '', '2012-03-06', '2013-04-07'])
 
-    def test_annotator_non_tool_after_submit(self):
-        self.set_last_annotation(self.imgs[0], annotator=get_alleviate_user())
 
-        self.client.force_login(self.user)
-        response = self.submit_search(
+class LastAnnotatorSearchTest(BaseBrowseImagesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_filter_by_annotator_any(self):
+        # Regular user
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        # Imported
+        self.set_last_annotation(self.img2, annotator=get_imported_user())
+        # Alleviate
+        self.set_last_annotation(self.img3, annotator=get_alleviate_user())
+        # Machine
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img4)
+
+        response = self.get_browse(last_annotator_0='')
+        self.assert_browse_results(
+            response, self.images,
+            msg_prefix="Should include both annotated"
+                       " and non-annotated images")
+
+    def test_filter_by_annotator_tool_any_user(self):
+        # Tool user
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+
+        # Another tool user
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
+
+        # Non annotation tool
+        self.set_last_annotation(self.img3, annotator=get_imported_user())
+        self.set_last_annotation(self.img4, annotator=get_alleviate_user())
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img5)
+
+        # Unannotated
+        self.upload_image(self.user, self.source)
+
+        response = self.get_browse(last_annotator_0='annotation_tool')
+        self.assert_browse_results(
+            response, [self.img1, self.img2])
+
+    def test_filter_by_annotator_tool_specific_user(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
+
+        response = self.get_browse(
+            last_annotator_0='annotation_tool',
+            last_annotator_1=user2.pk,
+        )
+        self.assert_browse_results(
+            response, [self.img2])
+
+    def test_annotator_tool_choices(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+
+        # We ensure self.user2's username is alphabetically later than
+        # self.user's. (The choices are sorted by username.)
+        user2 = self.create_user(username=self.user.username + '_')
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
+
+        user3 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user3, Source.PermTypes.EDIT.code)
+
+        response = self.get_browse()
+        # Choices should be based on existing annotations in the source, not
+        # based on the source's member list. So, no user3.
+        self.assert_search_field_choices(
+            response, 'last_annotator_1',
+            [('', "Any user"),
+             (str(self.user.pk), self.user.username),
+             (str(user2.pk), user2.username)],
+        )
+
+    def test_filter_by_annotator_alleviate(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.set_last_annotation(self.img2, annotator=get_imported_user())
+        self.set_last_annotation(self.img3, annotator=get_alleviate_user())
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img4)
+
+        response = self.get_browse(last_annotator_0='alleviate')
+        self.assert_browse_results(
+            response, [self.img3])
+
+    def test_filter_by_annotator_importing(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.set_last_annotation(self.img2, annotator=get_imported_user())
+        self.set_last_annotation(self.img3, annotator=get_alleviate_user())
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img4)
+
+        response = self.get_browse(last_annotator_0='imported')
+        self.assert_browse_results(
+            response, [self.img2])
+
+    def test_filter_by_annotator_machine(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+        self.set_last_annotation(self.img2, annotator=get_imported_user())
+        self.set_last_annotation(self.img3, annotator=get_alleviate_user())
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img4)
+
+        response = self.get_browse(last_annotator_0='machine')
+        self.assert_browse_results(
+            response, [self.img4])
+
+    def test_filter_by_annotator_considering_latest_only(self):
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
+
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        self.add_annotations(user2, self.img1, {1: 'B'})
+
+        # user isn't the latest annotator of any image now.
+        response = self.get_browse(
+            last_annotator_0='annotation_tool',
+            last_annotator_1=self.user.pk,
+        )
+        self.assert_browse_results(
+            response, [])
+        # user2 is.
+        response = self.get_browse(
+            last_annotator_0='annotation_tool',
+            last_annotator_1=user2.pk,
+        )
+        self.assert_browse_results(
+            response, [self.img1])
+
+    def test_annotator_non_tool_after_submit(self):
+        self.set_last_annotation(self.img1, annotator=get_alleviate_user())
+
+        response = self.get_browse(
             last_annotator_0='alleviate',
         )
 
@@ -1065,10 +835,9 @@ class FormInitializationTest(BaseSearchTest):
             response, 'last_annotator', ['alleviate', ''])
 
     def test_annotator_tool_any_after_submit(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
 
-        self.client.force_login(self.user)
-        response = self.submit_search(
+        response = self.get_browse(
             last_annotator_0='annotation_tool',
         )
 
@@ -1076,10 +845,9 @@ class FormInitializationTest(BaseSearchTest):
             response, 'last_annotator', ['annotation_tool', ''])
 
     def test_annotator_tool_user_after_submit(self):
-        self.add_annotations(self.user, self.imgs[0], {1: 'A', 2: 'B'})
+        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
 
-        self.client.force_login(self.user)
-        response = self.submit_search(
+        response = self.get_browse(
             last_annotator_0='annotation_tool',
             last_annotator_1=self.user.pk,
         )
@@ -1088,200 +856,267 @@ class FormInitializationTest(BaseSearchTest):
             response, 'last_annotator',
             ['annotation_tool', str(self.user.pk)])
 
+
+class ImageIdsTest(BaseBrowseImagesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_filter_by_image_id_list(self):
+        response = self.get_browse(
+            image_id_list=f'{self.img2.pk}_{self.img3.pk}'
+                           f'_{self.img5.pk}')
+        self.assert_browse_results(
+            response, [self.img2, self.img3, self.img5])
+
+        # It's OK to have image IDs not in the source. Those will just
+        # be ignored.
+        response = self.get_browse(
+            image_id_list=f'{self.img2.pk}_1000000000000'
+                           f'_2000000000000')
+        self.assert_browse_results(
+            response, [self.img2])
+
+    def test_non_integer_image_id_list(self):
+        response = self.get_browse(
+            image_id_list=f'{self.img2.pk}_a_{self.img5.pk}')
+        self.assert_invalid_params(
+            response, 'image_id_list',
+            "Enter only digits separated by underscores.")
+
+        response = self.get_browse(
+            image_id_list=f'{self.img2.pk}_4.3_{self.img5.pk}')
+        self.assert_invalid_params(
+            response, 'image_id_list',
+            "Enter only digits separated by underscores.")
+
+    def test_dont_get_other_sources_images_id_list(self):
+        source_2 = self.create_source(self.user)
+        other_image = self.upload_image(self.user, source_2)
+
+        # Just source 1's applicable images, not source 2's
+        response = self.get_browse(
+            image_id_list=f'{self.img2.pk}_{other_image.pk}'
+                           f'_{self.img5.pk}')
+        self.assert_browse_results(
+            response, [self.img2, self.img5])
+
+    def test_filter_by_image_id_range(self):
+        """
+        This field should be tested more thoroughly in edit-metadata
+        where we are more expecting the field to be used.
+        """
+        response = self.get_browse(
+            image_id_range=f'{self.img2.pk}_{self.img4.pk}')
+        self.assert_browse_results(
+            response, [self.img2, self.img3, self.img4])
+
     def test_image_id_list_after_submit(self):
-        self.client.force_login(self.user)
-        id_list = f'{self.imgs[0].pk}_{self.imgs[1].pk}_{self.imgs[2].pk}'
-        response = self.submit_search(
+        """
+        Although this field can be used to filter the images,
+        it's meant as a one-off search filter which is not combinable with
+        other filters.
+        Thus, the field should not be in the HTML search form.
+        """
+        id_list = f'{self.img1.pk}_{self.img2.pk}_{self.img3.pk}'
+        response = self.get_browse(
             image_id_list=id_list,
         )
+        self.assert_not_invalid_params(response)
 
         search_field = self.get_search_form_field(response, 'image_id_list')
         self.assertIsNone(
             search_field,
             msg="This field isn't supposed to be in the search form")
 
-        hidden_field = self.get_hidden_form_field(response, 'image_id_list')
+        hidden_field = self.get_hidden_field(response, 'image_id_list')
         self.assertEqual(
             hidden_field.attrs.get('value'), id_list,
             msg="Field value should be present in the hidden form")
 
     def test_image_id_range_after_submit(self):
-        self.client.force_login(self.user)
-        id_range = f'{self.imgs[0].pk}_{self.imgs[2].pk}'
-        response = self.submit_search(
+        """
+        Similar to image_id_list.
+        """
+        id_range = f'{self.img1.pk}_{self.img3.pk}'
+        response = self.get_browse(
             image_id_range=id_range,
         )
+        self.assert_not_invalid_params(response)
 
         search_field = self.get_search_form_field(response, 'image_id_range')
         self.assertIsNone(
             search_field,
             msg="This field isn't supposed to be in the search form")
 
-        hidden_field = self.get_hidden_form_field(response, 'image_id_range')
+        hidden_field = self.get_hidden_field(response, 'image_id_range')
         self.assertEqual(
             hidden_field.attrs.get('value'), id_range,
             msg="Field value should be present in the hidden form")
+
+
+class SortTest(BaseBrowseImagesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_by_name(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['B', 'A', 'C', 'D', 'E'])
+
+        response = self.get_browse(
+            sort_method='',
+            sort_direction='',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [1,0,2,3,4]])
+
+        response = self.get_browse(
+            sort_method='',
+            sort_direction='desc',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [4,3,2,0,1]])
+
+    def test_by_upload(self):
+        response = self.get_browse(
+            sort_method='upload_date',
+            sort_direction='',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [0,1,2,3,4]])
+
+        response = self.get_browse(
+            sort_method='upload_date',
+            sort_direction='desc',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [4,3,2,1,0]])
+
+    def test_by_photo_date(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [datetime.date(2012, 3, 2),
+             datetime.date(2012, 3, 1),
+             None,
+             None,
+             datetime.date(2012, 3, 1)])
+        # Null dates will be ordered after the ones with dates.
+        # pk is the tiebreaker.
+
+        response = self.get_browse(
+            sort_method='photo_date',
+            sort_direction='',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [1,4,0,2,3]])
+
+        response = self.get_browse(
+            sort_method='photo_date',
+            sort_direction='desc',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [3,2,0,4,1]])
+
+    def test_by_last_annotated(self):
+        self.set_last_annotation(
+            self.img1, dt=datetime.datetime(2012, 3, 2, 0, 0, tzinfo=tz))
+        self.set_last_annotation(
+            self.img2, dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
+        self.set_last_annotation(
+            self.img5, dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
+        # Other 2 have null date and will be ordered after the ones with date.
+        # pk is the tiebreaker.
+
+        response = self.get_browse(
+            sort_method='last_annotation_date',
+            sort_direction='',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [1,4,0,2,3]])
+
+        response = self.get_browse(
+            sort_method='last_annotation_date',
+            sort_direction='desc',
+        )
+        self.assert_browse_results(
+            response, [self.images[i] for i in [3,2,0,4,1]])
 
 
 @override_settings(
     # Require fewer uploads to get multiple pages of results.
     BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3,
 )
-class ResultsAndPagesTest(ClientTest):
+class PagesTest(BaseBrowseImagesTest):
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user)
-        cls.url = reverse('browse_images', args=[cls.source.pk])
-
-        cls.imgs = [
-            cls.upload_image(cls.user, cls.source) for _ in range(10)
-        ]
-
-    def test_zero_results(self):
-        params = dict(
-            photo_date_0='date',
-            photo_date_2=datetime.date(2000, 1, 1),
-        )
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url, params)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 0)
-
-        self.assertContains(response, "No image results.")
+    setup_image_count = 10
 
     def test_one_page_results(self):
-        params = dict(
-            aux1='Site1',
-        )
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.images[0], 'Site1'),
+             (self.images[1], 'Site1')])
 
-        self.imgs[0].metadata.aux1 = 'Site1'
-        self.imgs[0].metadata.save()
-        self.imgs[1].metadata.aux1 = 'Site1'
-        self.imgs[1].metadata.save()
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url, params)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 2)
-
-        # html=True is used so that extra whitespace is ignored.
-        # There is a tradeoff though: The element name (span) and attributes
-        # (none here) must be matched as well.
-        self.assertContains(
-            response, "<span>Showing 1-2 of 2</span>", html=True)
-        self.assertContains(response, "<span>Page 1 of 1</span>", html=True)
+        response = self.get_browse(aux1='Site1')
+        self.assert_page_results(
+            response, 2, "Showing 1-2 of 2", "Page 1 of 1")
 
     def test_multiple_pages_results(self):
-        params = dict(
-            photo_date_0='(none)',
-        )
-
-        self.client.force_login(self.user)
-        response = self.client.get(self.url, params)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 10)
-
-        self.assertContains(
-            response, "<span>Showing 1-3 of 10</span>", html=True)
-        self.assertContains(response, "<span>Page 1 of 4</span>", html=True)
+        response = self.get_browse(photo_date_0='(none)')
+        self.assert_page_results(
+            response, 10, "Showing 1-3 of 10", "Page 1 of 4")
 
     def test_page_two(self):
-        params = dict(
-            photo_date_0='(none)',
-            page=2,
-        )
+        response = self.get_browse(photo_date_0='(none)', page=2)
+        self.assert_page_results(
+            response, 10, "Showing 4-6 of 10", "Page 2 of 4")
 
-        self.client.force_login(self.user)
-        response = self.client.get(self.url, params)
-        self.assertEqual(
-            response.context['page_results'].paginator.count, 10)
+    def test_page_urls_no_params(self):
+        response = self.get_browse(page=2)
+        self.assert_page_links(response, '?page=1&', '?page=3&')
 
-        self.assertContains(
-            response, "<span>Showing 4-6 of 10</span>", html=True)
-        self.assertContains(response, "<span>Page 2 of 4</span>", html=True)
-
-    def assert_page_links(
-        self, request_params, expected_prev_href, expected_next_href
-    ):
-        """
-        We don't need to test everything about pagination links here,
-        as that's the job of the app that implements such links.
-        However, we do want to test that the query string, which
-        originates from Browse's app, is as expected.
-
-        We assume both previous and next page links are present,
-        for simplicity.
-        """
-        self.client.force_login(self.user)
-        response = self.client.get(self.url, request_params)
-        response_soup = BeautifulSoup(response.content, 'html.parser')
-        page_links_soup = response_soup.findAll(
-            'a', class_='prev-next-page')
-
-        self.assertEqual(
-            page_links_soup[0].attrs.get('href'),
-            expected_prev_href,
-            msg="Previous page link is as expected")
-        self.assertEqual(
-            page_links_soup[1].attrs.get('href'),
-            expected_next_href,
-            msg="Next page link is as expected")
-
-    def test_page_urls_no_filters(self):
-        params = dict(page=2)
-        self.assert_page_links(params, '?page=1&', '?page=3&')
-
-    def test_page_urls_with_search_filters(self):
-        params = dict(
+    def test_page_urls_with_search_params(self):
+        response = self.get_browse(
             annotation_status='unclassified',
             page=2,
         )
         self.assert_page_links(
-            params,
+            response,
             '?page=1&annotation_status=unclassified',
             '?page=3&annotation_status=unclassified',
         )
 
 
-class ImageStatusIndicatorTest(ClientTest):
+class ImageStatusIndicatorTest(BaseBrowseImagesTest):
     """
-    Test the border styling which indicate the status of each image.
+    Test the border styling which indicates the status of each image.
     """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(
-            cls.user,
-            # Make it easy to have confirmed and partially annotated images
-            default_point_generation_method=dict(type='simple', points=2))
-        labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
-        cls.create_labelset(cls.user, cls.source, labels)
+    setup_image_count = 4
 
     def test_status_indicator(self):
         robot = self.create_robot(self.source)
 
-        img_unannotated = self.upload_image(self.user, self.source)
+        img_unannotated = self.images[0]
 
-        img_unconfirmed = self.upload_image(self.user, self.source)
+        img_unconfirmed = self.images[1]
         self.add_robot_annotations(robot, img_unconfirmed)
 
-        img_partially_confirmed = self.upload_image(self.user, self.source)
+        img_partially_confirmed = self.images[2]
         self.add_robot_annotations(robot, img_partially_confirmed)
         self.add_annotations(self.user, img_partially_confirmed, {1: 'A'})
 
-        img_confirmed = self.upload_image(self.user, self.source)
+        img_confirmed = self.images[3]
         self.add_robot_annotations(robot, img_confirmed)
         self.add_annotations(self.user, img_confirmed, {1: 'A', 2: 'B'})
 
-        response = self.client.get(
-            reverse('browse_images', args=[self.source.pk]))
+        response = self.get_browse()
 
         # Check that each image is rendered with the expected styling.
 

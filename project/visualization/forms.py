@@ -425,15 +425,9 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             metadata_choice_fields.append(
                 (get_aux_field_name(n), get_aux_label(self.source, n))
             )
-        non_aux_fields = [
-            'height_in_cm', 'latitude', 'longitude', 'depth',
-            'camera', 'photographer', 'water_quality',
-            'strobes', 'framing', 'balance',
-        ]
-        for field_name in non_aux_fields:
-            metadata_choice_fields.append(
-                (field_name, Metadata._meta.get_field(field_name).verbose_name)
-            )
+        # There are also other metadata fields like height in cm, latitude,
+        # water quality, etc. But we're not sure how useful they'd be as
+        # filter fields here.
 
         for field_name, field_label in metadata_choice_fields:
             choices = (
@@ -660,7 +654,10 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         if 'submit' in self.data:
             # Form was submitted.
             return True
-        for _key, value in self.data.items():
+        for key, value in self.data.items():
+            if key == 'page':
+                # Pagination args don't count.
+                continue
             if value != '':
                 # There's a non-blank value that we're filtering on.
                 return True
