@@ -507,7 +507,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         format_validator(value)
 
         id_str_list = value.split('_')
-        if len(id_str_list) > 1000:
+        if len(id_str_list) > 100:
             # No DoS, please. We should never be intentionally grabbing this
             # many images with this filter.
             raise ValidationError(

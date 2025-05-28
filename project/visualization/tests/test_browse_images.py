@@ -914,11 +914,11 @@ class ImageIdsTest(BaseBrowseImagesTest):
 
     def test_image_id_list_max_length(self):
         response = self.get_browse(
-            image_id_list='_'.join(['1'] * 1000))
+            image_id_list='_'.join(['1'] * 100))
         self.assert_not_invalid_params(response)
 
         response = self.get_browse(
-            image_id_list='_'.join(['1'] * 1001))
+            image_id_list='_'.join(['1'] * 101))
         self.assert_invalid_params(
             response, 'image_id_list',
             "Too many ID numbers.")
