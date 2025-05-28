@@ -315,7 +315,7 @@ class FormInitializationTest(BaseBrowseImagesTest):
             msg="Field value should be present in the hidden form")
 
     def test_blank_basic_field_after_submit(self):
-        response = self.get_browse(submit='search', image_name='')
+        response = self.get_browse(search='true', image_name='')
 
         search_field = self.get_search_form_field(response, 'image_name')
         self.assertIsNone(

@@ -332,7 +332,7 @@ class NavigationTest(BaseBrowseActionTest):
         # Ascending
 
         self.assert_navigation_details(
-            dict(sort_method='', sort_direction='', submit='action'),
+            dict(sort_method='', sort_direction='', search='true'),
             self.img2,
             expected_prev=self.img5, expected_next=self.img1,
             expected_x_of_y_display="Image 1 of 5",
@@ -340,13 +340,13 @@ class NavigationTest(BaseBrowseActionTest):
                 "Sorting by name, ascending"))
 
         self.assert_navigation_details(
-            dict(sort_method='', sort_direction='', submit='action'),
+            dict(sort_method='', sort_direction='', search='true'),
             self.img3,
             expected_prev=self.img1, expected_next=self.img4,
             expected_x_of_y_display="Image 3 of 5")
 
         self.assert_navigation_details(
-            dict(sort_method='', sort_direction='', submit='action'),
+            dict(sort_method='', sort_direction='', search='true'),
             self.img5,
             expected_prev=self.img4, expected_next=self.img2,
             expected_x_of_y_display="Image 5 of 5")

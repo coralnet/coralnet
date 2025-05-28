@@ -30,8 +30,8 @@ class BrowseSearchHelper {
         if (!hasAnyFieldEnabled) {
             let extraField = document.createElement('input');
             extraField.type = 'hidden';
-            extraField.name = 'submit';
-            extraField.value = 'search';
+            extraField.name = 'search';
+            extraField.value = 'true';
             form.appendChild(extraField);
         }
 

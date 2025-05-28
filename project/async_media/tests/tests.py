@@ -465,7 +465,7 @@ class PatchesTest(AsyncMediaTest):
     """
     Test the thumbnail functionality in Browse Patches.
     """
-    search_params = dict(submit='search')
+    search_params = dict(search='true')
 
     @classmethod
     def setUpTestData(cls):

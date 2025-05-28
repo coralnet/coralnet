@@ -13,7 +13,7 @@ from sources.models import Source
 
 class BaseBrowseTest(ClientTest, ABC):
 
-    default_search_params = dict(submit='search')
+    default_search_params = dict(search='true')
 
     setup_image_count = 5
     # At least 2 lets us have partially annotated images.
@@ -319,7 +319,7 @@ class BrowseActionsFormTest(ClientTest, ABC):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
 
         cls.browse_url = reverse('browse_images', args=[cls.source.pk])
-        cls.default_search_params = dict(submit='search')
+        cls.default_search_params = dict(search='true')
 
     @classmethod
     def get_form_soup(cls, response):

@@ -177,11 +177,6 @@ class BrowseActionHelper {
             this.actionSelectField.disabled = true;
 
             let data = new FormData(this.currentActionForm);
-            if (Array.from(data.keys()).length === 0) {
-                // We sometimes want to distinguish this from a
-                // no-args request, so we ensure at least one arg here.
-                data.append('submit', 'action');
-            }
 
             let promise = util.fetch(
                 this.currentActionForm.action,

@@ -651,12 +651,12 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             else:
                 add_field_if_applicable(name, field)
 
-        # The 'submit' param is the signal that a form was submitted at
+        # The 'search' param is the signal that a form was submitted at
         # all, in the event that all other params are absent. We preserve
         # that here.
-        if submit_param_value := self.data.get('submit'):
-            new_form.fields['submit'] = CharField(
-                initial=submit_param_value,
+        if search_param_value := self.data.get('search'):
+            new_form.fields['search'] = CharField(
+                initial=search_param_value,
                 widget=HiddenInput(),
                 required=False,
             )
@@ -664,7 +664,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         return new_form
 
     def searched_or_filtered(self) -> bool:
-        if 'submit' in self.data:
+        if 'search' in self.data:
             # Form was submitted.
             return True
         for key, value in self.data.items():
