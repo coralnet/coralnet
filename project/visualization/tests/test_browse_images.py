@@ -80,19 +80,25 @@ class BaseBrowseImagesTest(BaseBrowsePageTest):
     ):
         for index, expected_value in enumerate(expected_values):
 
+            subfield_name = f'{field_name}_{index}'
+
             search_field = self.get_search_form_field(
-                response, f'{field_name}_{index}')
+                response, subfield_name)
             self.assertEqual(
                 self.get_field_value(search_field), expected_value,
-                msg=f"Field value {index} should be as expected"
+                msg=f"{subfield_name} field value should be as expected"
                     f" in the search form")
 
-            hidden_field = self.get_hidden_field(
-                response, f'{field_name}_{index}')
-            self.assertEqual(
-                self.get_field_value(hidden_field), expected_value,
-                msg=f"Field value {index} should be as expected"
-                    f" in the hidden form")
+            hidden_field = self.get_hidden_field(response, subfield_name)
+            if expected_value == '':
+                self.assertIsNone(
+                    hidden_field,
+                    msg=f"Hidden form should not have {subfield_name} field")
+            else:
+                self.assertEqual(
+                    self.get_field_value(hidden_field), expected_value,
+                    msg=f"{subfield_name} field value should be as"
+                        f" expected in the hidden form")
 
 
 class BasicFiltersTest(BaseBrowseImagesTest):
@@ -307,6 +313,19 @@ class FormInitializationTest(BaseBrowseImagesTest):
         self.assertEqual(
             hidden_field.attrs.get('value'), 'DSC',
             msg="Field value should be present in the hidden form")
+
+    def test_blank_basic_field_after_submit(self):
+        response = self.get_browse(submit='search', image_name='')
+
+        search_field = self.get_search_form_field(response, 'image_name')
+        self.assertIsNone(
+            search_field.attrs.get('value'),
+            msg="Blank field should be present in the search form")
+
+        hidden_field = self.get_hidden_field(response, 'image_name')
+        self.assertIsNone(
+            hidden_field,
+            msg="Field should not be present in the hidden form")
 
     # The following field-specific test classes have further field
     # initialization tests.

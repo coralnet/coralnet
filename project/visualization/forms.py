@@ -630,22 +630,36 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         """
         new_form = Form()
 
+        def add_field_if_applicable(name_, original_field_):
+            initial_ = self.data.get(name_, original_field_.initial)
+            if initial_ is None or initial_ == '':
+                # Keep the request params tidy by skipping blank values.
+                return
+            new_form.fields[name_] = CharField(
+                initial=initial_,
+                widget=HiddenInput(),
+                required=False,
+            )
+
         for name, field in self.fields.items():
             if isinstance(field, MultiValueField):
                 # Must look in the MultiValueField's attributes
                 # to get the actual rendered input fields.
                 for i, sub_field in enumerate(field.fields):
                     sub_field_name = '{name}_{i}'.format(name=name, i=i)
-                    new_form.fields[sub_field_name] = CharField(
-                        initial=self.data.get(
-                            sub_field_name, sub_field.initial),
-                        widget=HiddenInput(),
-                        required=False)
+                    add_field_if_applicable(sub_field_name, sub_field)
             else:
-                new_form.fields[name] = CharField(
-                    initial=self.data.get(name, field.initial),
-                    widget=HiddenInput(),
-                    required=False)
+                add_field_if_applicable(name, field)
+
+        # The 'submit' param is the signal that a form was submitted at
+        # all, in the event that all other params are absent. We preserve
+        # that here.
+        if submit_param_value := self.data.get('submit'):
+            new_form.fields['submit'] = CharField(
+                initial=submit_param_value,
+                widget=HiddenInput(),
+                required=False,
+            )
 
         return new_form
 
