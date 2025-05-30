@@ -10,7 +10,7 @@
   <div class="pagination-links">
 
     {% if page_results.has_previous %}
-      <a href="?page={{ page_results.previous_page_number }}&{{ query_string }}"
+      <a href="{{ page_results.previous_page_link }}"
          class="prev-next-page" title="Previous page"> &lt; </a>
     {% endif %}
 
@@ -20,7 +20,7 @@
     </span>
 
     {% if page_results.has_next %}
-      <a href="?page={{ page_results.next_page_number }}&{{ query_string }}"
+      <a href="{{ page_results.next_page_link }}"
          class="prev-next-page" title="Next page"> &gt; </a>
     {% endif %}
 

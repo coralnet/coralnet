@@ -1134,7 +1134,7 @@ class PagesTest(BaseBrowseImagesTest):
 
     def test_page_urls_no_params(self):
         response = self.get_browse(page=2)
-        self.assert_page_links(response, '?page=1&', '?page=3&')
+        self.assert_page_links(response, '?page=1', '?page=3')
 
     def test_page_urls_with_search_params(self):
         response = self.get_browse(
@@ -1143,8 +1143,8 @@ class PagesTest(BaseBrowseImagesTest):
         )
         self.assert_page_links(
             response,
-            '?page=1&annotation_status=unclassified',
-            '?page=3&annotation_status=unclassified',
+            '?annotation_status=unclassified&page=1',
+            '?annotation_status=unclassified&page=3',
         )
 
 

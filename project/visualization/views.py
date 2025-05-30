@@ -66,7 +66,7 @@ def browse_images(request, source_id):
         # Page landing without filter params
         image_results = source.image_set.order_by('metadata__name', 'pk')
 
-    page_results, query_string = paginate(
+    page_results = paginate(
         image_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
         request.GET)
@@ -113,7 +113,6 @@ def browse_images(request, source_id):
         'image_search_form': image_search_form,
         'hidden_image_form': hidden_image_form,
         'result_count_form': result_count_form,
-        'query_string': query_string,
 
         'can_see_actions': can_see_actions,
         'no_actions_reason': no_actions_reason,
@@ -267,7 +266,7 @@ def browse_patches(request, source_id):
     # Random order
     annotation_results = annotation_results.order_by('?')
 
-    page_results, query_string = paginate(
+    page_results = paginate(
         annotation_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
         request.GET)
@@ -276,7 +275,6 @@ def browse_patches(request, source_id):
         'source': source,
         'patch_search_form': patch_form,
         'page_results': page_results,
-        'query_string': query_string,
         'empty_message': empty_message,
     })
 

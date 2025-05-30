@@ -20,7 +20,7 @@
     <strong>Job counts:</strong> {% include 'jobs/job_summary_line.html' %}
   </div>
 
-  {% include 'pagination_links.html' with page_results=page_results query_string=query_string no_result_count_line="true" %}
+  {% include 'pagination_links.html' with page_results=page_results no_result_count_line="true" %}
 
   <table class="generic" id="job-table">
     <thead>
@@ -128,7 +128,7 @@
     </tbody>
   </table>
 
-  {% include 'pagination_links.html' with page_results=page_results query_string=query_string %}
+  {% include 'pagination_links.html' with page_results=page_results %}
 
   <div class="line">Most job records are cleaned up after approximately {{ job_max_days }} days, except for jobs with * in the Type column.</div>
 

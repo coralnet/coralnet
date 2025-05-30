@@ -523,8 +523,8 @@ class PagesTest(BaseBrowsePatchesTest):
         )
         self.assert_page_links(
             response,
-            f'?page=1&patch_label={label_a_pk}',
-            f'?page=3&patch_label={label_a_pk}',
+            f'?patch_label={label_a_pk}&page=1',
+            f'?patch_label={label_a_pk}&page=3',
         )
 
 

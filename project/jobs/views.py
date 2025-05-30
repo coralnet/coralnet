@@ -76,7 +76,7 @@ class JobListView(View, ABC):
         raise NotImplementedError
 
     def get_job_list_context(self, request):
-        page_jobs, query_string = paginate(
+        page_jobs = paginate(
             results=self.jobs,
             items_per_page=settings.JOBS_PER_PAGE,
             request_args=request.GET,
@@ -140,7 +140,6 @@ class JobListView(View, ABC):
 
         return dict(
             page_results=page_jobs,
-            query_string=query_string,
             job_table=job_table,
             job_max_days=settings.JOB_MAX_DAYS,
             job_counts=self.form.get_job_counts(),
