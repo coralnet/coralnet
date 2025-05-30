@@ -5,6 +5,7 @@ import urllib.parse
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
@@ -54,6 +55,7 @@ from .forms import (
     AnnotationAreaPixelsForm,
     AnnotationToolSettingsForm,
     AnnotationImageOptionsForm,
+    BatchAnnotationDeleteCountForm,
     ExportAnnotationsForm,
 )
 from .model_utils import AnnotationArea
@@ -181,8 +183,23 @@ def batch_delete_annotations_ajax(request, source_id):
             )
         ))
 
+    count_form = BatchAnnotationDeleteCountForm(request.POST)
+    if not count_form.is_valid():
+        error_message = get_one_form_error(count_form)
+        return JsonResponse(dict(
+            error=(
+                f"Error: {error_message}"
+                " - Nothing was deleted."
+            )
+        ))
+
     image_set = image_form.get_images()
     image_count = image_set.count()
+
+    try:
+        count_form.check_delete_count(image_count)
+    except ValidationError as e:
+        return JsonResponse(dict(error=e.message))
 
     # Delete annotations.
     Annotation.objects.filter(image__in=image_set).delete_in_chunks()

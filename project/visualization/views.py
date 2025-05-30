@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.forms import modelformset_factory
 from django.forms.formsets import formset_factory
@@ -20,13 +21,16 @@ from images.models import Image, Metadata
 from images.utils import delete_images
 from labels.models import LabelGroup, Label
 from lib.decorators import source_visibility_required, source_permission_required
+from lib.forms import get_one_form_error
 from lib.utils import paginate
 from sources.models import Source
 from .forms import (
+    BatchImageDeleteCountForm,
     CheckboxForm,
     ImageSearchForm,
     MetadataEditSearchForm,
     PatchSearchForm,
+    ResultCountForm,
 )
 
 
@@ -82,6 +86,10 @@ def browse_images(request, source_id):
         page_image_ids = None
         links = None
 
+    result_count_form = ResultCountForm(dict(
+        result_count=page_results.paginator.count,
+    ))
+
     if not request.user.is_authenticated:
         # Annotation and deletion require source roles, and export
         # requires login to keep out bots. So, no actions are available
@@ -104,6 +112,7 @@ def browse_images(request, source_id):
         'empty_message': empty_message,
         'image_search_form': image_search_form,
         'hidden_image_form': hidden_image_form,
+        'result_count_form': result_count_form,
         'query_string': query_string,
 
         'can_see_actions': can_see_actions,
@@ -367,13 +376,30 @@ def browse_delete_ajax(request, source_id):
             )
         ))
 
+    count_form = BatchImageDeleteCountForm(request.POST)
+    if not count_form.is_valid():
+        error_message = get_one_form_error(count_form)
+        return JsonResponse(dict(
+            error=(
+                f"Error: {error_message}"
+                " - Nothing was deleted."
+            )
+        ))
+
     image_set = image_form.get_images()
-    delete_count = delete_images(image_set)
+
+    try:
+        # atomic() ensures that any error raised within the block triggers
+        # a database rollback.
+        with transaction.atomic():
+            delete_count = delete_images(image_set)
+            count_form.check_delete_count(delete_count)
+    except ValidationError as e:
+        return JsonResponse(dict(error=e.message))
 
     # This should appear on the next browse load.
     messages.success(
-        request, 'The {num} selected images have been deleted.'.format(
-            num=delete_count))
+        request, f"The {delete_count} selected images have been deleted.")
 
     return JsonResponse(dict(success=True))
 

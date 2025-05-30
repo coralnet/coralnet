@@ -840,6 +840,49 @@ class PatchSearchForm(BaseImageSearchForm):
         return results
 
 
+class ResultCountForm(Form):
+    delete_count_mismatch_error_message: str
+
+    result_count = forms.IntegerField(
+        label="Number of Browse image results",
+        min_value=0,
+        widget=HiddenInput(),
+    )
+
+    def check_delete_count(self, delete_count):
+        if self.data.get('image_id_list'):
+            # When this param is present in the POST data, presumably
+            # 'the selected images on this page' was specified.
+            # We're only checking the delete count when the other option,
+            # 'all images in this search', is specified, because that case
+            # has more potential for catastrophic error: having something
+            # missing can arbitrarily increase the delete count.
+            return
+
+        expected_delete_count = self.cleaned_data['result_count']
+        if delete_count != expected_delete_count:
+            raise ValidationError(
+                self.delete_count_mismatch_error_message.format(
+                    delete_count=delete_count,
+                    expected_delete_count=expected_delete_count,
+                ),
+                code='delete_count_mismatch',
+            )
+
+
+class BatchImageDeleteCountForm(ResultCountForm):
+
+    delete_count_mismatch_error_message = (
+        "The deletions were attempted, but the number of deletions"
+        " ({delete_count}) didn't match the number expected"
+        " ({expected_delete_count}). So as a safety measure, the"
+        " deletions were rolled back."
+        " Make sure there isn't any ongoing activity in this source"
+        " which would change the number of image results. Then,"
+        " redo your search and try again."
+    )
+
+
 # Similar to ImageSearchForm with the difference that
 # label selection appears on a multi-select checkbox form
 # TODO: Remove parts that are redundant with ImageSearchForm, and use

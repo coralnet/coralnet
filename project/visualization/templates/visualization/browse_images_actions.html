@@ -259,6 +259,8 @@
         {% if hidden_image_form %}
 
           {% csrf_token %}
+          {{ result_count_form }}
+
           <div class="line">
             Permanently deletes the images in this image set, along with their annotations. When you click "Go", a confirmation dialog will pop up.
           </div>
@@ -283,6 +285,8 @@
         {% if hidden_image_form %}
 
           {% csrf_token %}
+          {{ result_count_form }}
+
           <div class="line">
             Permanently deletes any existing annotations for these images. The images themselves and their point locations will not be affected. When you click "Go", a confirmation dialog will pop up.
           </div>

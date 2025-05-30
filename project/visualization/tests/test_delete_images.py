@@ -159,11 +159,27 @@ class FormAvailabilityTest(BrowseActionsFormTest):
             "You must first submit the Search form before you can batch-delete images. (This is a safety check to reduce the chances of accidentally deleting all your images. If you really want to delete all images, just click Search without changing any of the search fields.)",
         )
 
+        form_soup = self.get_form_soup(response)
+        field_soup = form_soup.find(
+            'input', attrs=dict(name='result_count')
+        )
+        self.assertIsNone(
+            field_soup, msg="result_count field should be absent")
+
     def test_after_search(self):
         self.client.force_login(self.user)
         response = self.client.get(
             self.browse_url, self.default_search_params)
         self.assert_form_available(response)
+
+        form_soup = self.get_form_soup(response)
+        field_soup = form_soup.find(
+            'input', attrs=dict(name='result_count')
+        )
+        self.assertEqual(
+            field_soup.attrs.get('value'), '1',
+            msg="result_count field should be present with correct value",
+        )
 
     def test_view_perms_only(self):
         self.client.force_login(self.user_viewer)
@@ -191,7 +207,7 @@ class SuccessTest(BaseDeleteTest):
         Delete all images in the source.
         """
         response = self.submit_and_assert_deletion(
-            self.default_search_params,
+            self.default_search_params | dict(result_count=5),
             self.images,
         )
         self.assertDictEqual(response.json(), dict(success=True))
@@ -208,7 +224,7 @@ class SuccessTest(BaseDeleteTest):
              (self.img3, 'Site3')])
 
         response = self.submit_and_assert_deletion(
-            dict(aux1='Site3'),
+            dict(aux1='Site3', result_count=2),
             [self.img2, self.img3],
         )
         self.assertDictEqual(response.json(), dict(success=True))
@@ -223,7 +239,7 @@ class SuccessTest(BaseDeleteTest):
         self.add_annotations(self.user, self.img4, {1: 'B'})
 
         response = self.submit_and_assert_deletion(
-            dict(annotation_status='confirmed'),
+            dict(annotation_status='confirmed', result_count=2),
             [self.img1, self.img2],
         )
         self.assertDictEqual(response.json(), dict(success=True))
@@ -236,7 +252,7 @@ class SuccessTest(BaseDeleteTest):
              (self.img3, datetime.date(2012, 8, 4))])
 
         response = self.submit_and_assert_deletion(
-            dict(photo_date_0='year', photo_date_1=2012),
+            dict(photo_date_0='year', photo_date_1=2012, result_count=2),
             [self.img2, self.img3],
         )
         self.assertDictEqual(response.json(), dict(success=True))
@@ -259,6 +275,7 @@ class SuccessTest(BaseDeleteTest):
                 last_annotated_0='date_range',
                 last_annotated_3=datetime.date(2012, 3, 10),
                 last_annotated_4=datetime.date(2012, 3, 20),
+                result_count=3,
             ),
             [self.img2, self.img3, self.img4],
         )
@@ -276,6 +293,7 @@ class SuccessTest(BaseDeleteTest):
             dict(
                 last_annotator_0='annotation_tool',
                 last_annotator_1=user2.pk,
+                result_count=1,
             ),
             [self.img2],
         )
@@ -283,8 +301,15 @@ class SuccessTest(BaseDeleteTest):
 
     def test_filter_by_image_id_list(self):
         response = self.submit_and_assert_deletion(
-            dict(image_id_list=f'{self.img2.pk}_{self.img3.pk}'
-                               f'_{self.img5.pk}'),
+            # Note how result_count isn't checked for correctness
+            # when using image_id_list.
+            # It does still need to be present, though (because there's no
+            # reason for it to not be present, and conditionally requiring it
+            # takes effort).
+            dict(
+                image_id_list=f'{self.img2.pk}_{self.img3.pk}_{self.img5.pk}',
+                result_count=0,
+            ),
             [self.img2, self.img3, self.img5],
         )
         self.assertDictEqual(response.json(), dict(success=True))
@@ -315,7 +340,8 @@ class OtherSourceTest(BaseDeleteTest):
         Sanity check that the search form only picks up images in the current
         source.
         """
-        response = self.submit_action(**self.default_search_params)
+        response = self.submit_action(
+            **self.default_search_params, result_count=2)
         self.assertDictEqual(response.json(), dict(success=True))
 
         self.assert_image_deleted(self.s1_image1.pk, "s1_image1")
@@ -338,7 +364,8 @@ class OtherSourceTest(BaseDeleteTest):
         source.
         """
         response = self.submit_action(
-            image_id_list='_'.join([str(self.s1_image1.pk), str(self.s2_image2.pk)])
+            image_id_list=f'{self.s1_image1.pk}_{self.s2_image2.pk}',
+            result_count=0,
         )
         self.assertDictEqual(response.json(), dict(success=True))
 
@@ -375,13 +402,60 @@ class ErrorTest(BaseDeleteTest):
         self.assert_image_not_deleted(self.img2.pk, "img2")
         self.assert_image_not_deleted(self.img3.pk, "img3")
 
-    def test_form_error(self):
+    def test_search_field_error(self):
         response = self.submit_action(annotation_status='invalid_value')
 
         self.assertDictEqual(response.json(), dict(
             error=(
                 "There was an error with the form."
                 " Nothing was deleted."
+            )
+        ))
+
+        self.assert_image_not_deleted(self.img1.pk, "img1")
+        self.assert_image_not_deleted(self.img2.pk, "img2")
+        self.assert_image_not_deleted(self.img3.pk, "img3")
+
+    def test_missing_result_count(self):
+        response = self.submit_action(search='true')
+
+        self.assertDictEqual(response.json(), dict(
+            error=(
+                "Error: Number of Browse image results:"
+                " This field is required. - Nothing was deleted."
+            )
+        ))
+
+        self.assert_image_not_deleted(self.img1.pk, "img1")
+        self.assert_image_not_deleted(self.img2.pk, "img2")
+        self.assert_image_not_deleted(self.img3.pk, "img3")
+
+    def test_invalid_result_count(self):
+        response = self.submit_action(search='true', result_count=-1)
+
+        self.assertDictEqual(response.json(), dict(
+            error=(
+                "Error: Number of Browse image results: Ensure this value"
+                " is greater than or equal to 0. - Nothing was deleted."
+            )
+        ))
+
+        self.assert_image_not_deleted(self.img1.pk, "img1")
+        self.assert_image_not_deleted(self.img2.pk, "img2")
+        self.assert_image_not_deleted(self.img3.pk, "img3")
+
+    def test_wrong_result_count(self):
+        response = self.submit_action(search='true', result_count=2)
+
+        self.assertDictEqual(response.json(), dict(
+            error=(
+                "The deletions were attempted, but the number of deletions"
+                " (3) didn't match the number expected"
+                " (2). So as a safety measure, the"
+                " deletions were rolled back."
+                " Make sure there isn't any ongoing activity in this source"
+                " which would change the number of image results. Then,"
+                " redo your search and try again."
             )
         ))
 
