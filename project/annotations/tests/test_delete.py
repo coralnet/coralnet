@@ -41,9 +41,9 @@ class BaseDeleteTest(BaseBrowseActionTest):
             'batch_delete_annotations_ajax', args=[cls.source.pk])
 
     def assert_annotations_deleted(self, image):
-        image.refresh_from_db()
         self.assertFalse(
-            image.annotation_set.exists(),
+            # `.all()` seems to ensure the underlying query is run anew.
+            image.annotation_set.all().exists(),
             f"Image {image.metadata.name}'s annotations should be deleted")
 
         image.annoinfo.refresh_from_db()
@@ -56,7 +56,7 @@ class BaseDeleteTest(BaseBrowseActionTest):
     ):
         image.refresh_from_db()
         self.assertEqual(
-            image.annotation_set.count(), expected_count,
+            image.annotation_set.all().count(), expected_count,
             f"Image {image.metadata.name} should still have its annotations")
 
         if expect_confirmed:
