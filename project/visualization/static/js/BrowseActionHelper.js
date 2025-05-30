@@ -243,3 +243,5 @@ class BrowseActionHelper {
         window.location.assign(window.location);
     }
 }
+
+export default BrowseActionHelper;

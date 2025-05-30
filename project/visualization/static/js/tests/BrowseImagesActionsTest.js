@@ -1,6 +1,7 @@
 const { test } = QUnit;
 import fetchMock from '/static/js/fetch-mock.js';
 
+import BrowseActionHelper from '/static/js/BrowseActionHelper.js';
 import { useFixture } from '/static/js/test-utils.js';
 
 let browseActionHelper = null;

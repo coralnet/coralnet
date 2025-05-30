@@ -139,3 +139,5 @@ class CalcifyTablesHelper {
         });
     }
 }
+
+export default CalcifyTablesHelper;
