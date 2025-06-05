@@ -1,5 +1,6 @@
 import csv
 
+from django.conf import settings
 from django.core.cache import cache
 
 from labels.models import Label
@@ -13,7 +14,12 @@ def get_global_calcify_tables():
 
 
 def get_default_calcify_tables():
-    # Get the latest global table from each region.
+    """
+    Get the latest global table from each region.
+    """
+    if not settings.USE_DISTINCT_ON:
+        return CalcifyRateTable.objects.filter(source__isnull=True)
+
     return CalcifyRateTable.objects.filter(source__isnull=True).order_by(
         'region', '-pk').distinct('region')
 

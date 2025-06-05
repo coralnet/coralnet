@@ -15,7 +15,7 @@ from lib.tests.utils_selenium import (
 
 # Make it easy to get multiple pages of results.
 @override_settings(BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3)
-class DeleteTest(BrowserTest):
+class DeleteImagesTest(BrowserTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -60,18 +60,22 @@ class DeleteTest(BrowserTest):
         # Only the search filter names actually used in the tests are covered
         # here. Add more as needed.
         if name in ['aux1']:
-            dropdown = self.selenium.find_element_by_id('id_{}'.format(name))
+            dropdown = self.selenium.find_element(By.ID, f'id_{name}')
             Select(dropdown).select_by_value(value)
 
     def submit_search(self):
         with self.wait_for_page_load():
-            self.selenium.find_element_by_id('search-form').submit()
+            self.selenium.find_element(By.ID, 'search-form').submit()
+
+    def wait_for_javascript_init(self):
+        # Ensure the init JS runs.
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC_javascript_global_var_value('seleniumDebugInitRan', 'true'))
 
     def select_delete_option(self):
-        browse_action_dropdown = \
-            self.selenium \
-            .find_element_by_css_selector('select[name="browse_action"]')
-        Select(browse_action_dropdown).select_by_value('delete')
+        browse_action_dropdown = self.selenium.find_element(
+            By.CSS_SELECTOR, 'select[name="browse_action"]')
+        Select(browse_action_dropdown).select_by_value('delete_images')
 
     def delete_parametrized(
             self, image_select_type, alert_text, alert_accept,
@@ -86,28 +90,24 @@ class DeleteTest(BrowserTest):
         # prevent bugs that could omit the search fields and accidentally
         # delete everything.)
         self.submit_search()
-        # Ensure the init JS runs.
-        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
-            EC_javascript_global_var_value('seleniumDebugInitRan', 'true'))
+
+        self.wait_for_javascript_init()
 
         self.select_delete_option()
 
         # Image select type
-        image_select_type_dropdown = \
-            self.selenium \
-            .find_element_by_css_selector(
-                'select[name="image_select_type"]')
+        image_select_type_dropdown = self.selenium.find_element(
+            By.CSS_SELECTOR, 'select[name="image_select_type"]')
         Select(image_select_type_dropdown).select_by_value(image_select_type)
 
         # Grab the page's root element in advance. We'll want to check for
         # staleness of it, but Selenium can't grab the element if an alert
         # is up.
-        old_page = self.selenium.find_element_by_tag_name('html')
+        old_page = self.selenium.find_element(By.TAG_NAME, 'html')
 
         # Click Go
-        self.selenium \
-            .find_element_by_css_selector('#delete-form button.submit') \
-            .click()
+        self.selenium.find_element(
+            By.CSS_SELECTOR, '#delete-images-ajax-form button.submit').click()
 
         # Wait for an alert and type in its text box
         WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
@@ -154,18 +154,30 @@ class DeleteTest(BrowserTest):
 
     # Tests start here
 
+    def test_delete_form_not_visible_if_not_searched(self):
+        self.login_and_navigate_to_browse()
+        self.wait_for_javascript_init()
+        self.select_delete_option()
+
+        # Delete form's button should not be visible
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.invisibility_of_element_located(
+                (By.CSS_SELECTOR, '#delete-images-ajax-form button.submit')))
+
     def test_only_delete_form_visible_after_selecting_delete(self):
         self.login_and_navigate_to_browse()
+        self.submit_search()
+        self.wait_for_javascript_init()
         self.select_delete_option()
-        # Delete form's button should be visible
 
+        # Delete form's button should be visible
         WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
             EC.visibility_of_element_located(
-                [By.CSS_SELECTOR, '#delete-form button.submit']))
+                (By.CSS_SELECTOR, '#delete-images-ajax-form button.submit')))
         # Some other form's button should not be visible
         WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
             EC.invisibility_of_element_located(
-                [By.CSS_SELECTOR, '#export-metadata-form button.submit']))
+                (By.CSS_SELECTOR, '#export-metadata-form button.submit')))
 
     def test_delete_all(self):
         """Delete all images in the source."""

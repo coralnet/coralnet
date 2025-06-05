@@ -96,7 +96,8 @@ except ValueError:
         f"Unsupported SETTINGS_BASE value: {env('SETTINGS_BASE')}"
         f" (supported values are: {', '.join([b.value for b in Bases])})")
 
-_TESTING = 'test' in sys.argv
+_TESTING = 'test' in sys.argv or 'selenium_test' in sys.argv
+_SELENIUM = 'selenium_test' in sys.argv
 
 
 #
@@ -252,20 +253,48 @@ EMAIL_SIZE_SOFT_LIMIT = 100000
 # Database related
 #
 
-# Database connection info.
+if _SELENIUM:
+    _DEFAULT_DATABASE_ENGINE = 'django.db.backends.sqlite3'
+    _DATABASE_NAME = env(
+        'SELENIUM_DATABASE_PATH',
+        default=str(TMP_DIR / f"test_{env('DATABASE_NAME')}.sqlite3"),
+    )
+else:
+    _DEFAULT_DATABASE_ENGINE = 'django.db.backends.postgresql'
+    _DATABASE_NAME = env('DATABASE_NAME')
+
+_DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
+
+# Whether to run migrations as part of the test runner's database setup.
+#
+# True makes it easier to maintain correctness, since the migrations are the
+# first source of truth for creation of initial data, such as the Imported
+# and Alleviate users.
+# False can speed up test database setup, and paper over a DB engine's
+# inability to run all the migrations.
+# The JSONFields in some of the earlier migrations are Postgres-only, hence
+# our definition of the default value.
+TEST_DATABASE_MIGRATE = env.bool(
+    'TEST_DATABASE_MIGRATE', default='postgresql' in _DATABASE_ENGINE)
+
+# https://docs.djangoproject.com/en/5.1/ref/models/querysets/#distinct
+# "On PostgreSQL only, you can pass positional arguments (*fields) in order
+# to specify the names of fields to which the DISTINCT should apply.
+# This translates to a SELECT DISTINCT ON SQL query."
+# If we can't use DISTINCT ON, we won't necessarily take the trouble to aim
+# for correctness, but we'll at least return something of the expected type.
+USE_DISTINCT_ON = 'postgresql' in _DATABASE_ENGINE
+
+# Django's database connection info setting.
 DATABASES = {
     'default': {
-        # 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
-        # sqlite3 may speed up test runs, but proceed with caution since
-        # behavior may differ from postgresql.
-        'ENGINE': env(
-            'DATABASE_ENGINE', default='django.db.backends.postgresql'),
+        'ENGINE': _DATABASE_ENGINE,
         # If True, wraps each request (view function) in a transaction by
         # default. Individual view functions can override this behavior with
         # the non_atomic_requests decorator.
         'ATOMIC_REQUESTS': True,
         # Database name, or path to database file if using sqlite3.
-        'NAME': env('DATABASE_NAME'),
+        'NAME': _DATABASE_NAME,
         # Not used with sqlite3.
         'USER': env('DATABASE_USER'),
         # Not used with sqlite3.
@@ -275,7 +304,10 @@ DATABASES = {
         # Set to empty string for default (e.g. 5432 for postgresql).
         # Not used with sqlite3.
         'PORT': env('DATABASE_PORT', default=''),
-    }
+        'TEST': {
+            'MIGRATE': TEST_DATABASE_MIGRATE,
+        },
+    },
 }
 
 # Default auto-primary-key field type for the database.
@@ -1354,7 +1386,8 @@ SELENIUM_TIMEOUTS = {
     # Timeout when waiting for a page to load. If the page loads beforehand,
     # the timeout's cut short. If the page doesn't load within this time, we
     # get an error.
-    'page_load': 20,
+    # Bump this way up if you're using a debugger.
+    'page_load': env.int('SELENIUM_TIMEOUT_PAGE_LOAD', default=20),
 }
 
 # We filter on sources that contains these strings for map and some exports.

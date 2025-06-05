@@ -123,13 +123,23 @@ Certain file-creation parts of the project code may trigger an error such as ``N
 
 Running the unit tests
 ----------------------
-At this point, you should be ready to run the unit test suite to check if everything is working so far.
+At this point, you should be ready to run the Django unit test suite to check if everything is working so far.
 
 Run ``python manage.py test``. Test failures will be shown as F, and errors will be shown as E.
 
 If you want to run a subset of the tests, you can use ``python manage.py test <app_name>``, or ``python manage.py test <app_name>.<module>.<TestClass>``.
 
 Note: running the whole test suite with S3 storage can take a long time. As of April 2021, one particular development machine takes 7 minutes to run the test suite with local storage, and 2 hours 40 minutes with S3 storage.
+
+
+Selenium unit tests
+^^^^^^^^^^^^^^^^^^^
+
+There are additional Django unit tests that include browser interactivity by utilizing Selenium. Run these with ``python manage.py selenium_test``. To make this work, you first need to:
+
+- Download a `webdriver <https://selenium-python.readthedocs.io/installation.html#drivers>`__ for the browser of your choice.
+
+- Configure ``SELENIUM_BROWSERS`` in your ``.env`` file (again, modeling after the examples in ``.env.dist``).
 
 
 Django migrations
