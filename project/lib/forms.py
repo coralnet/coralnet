@@ -1,5 +1,5 @@
 from django import forms
-from django.forms.fields import CharField
+from django.forms.fields import CharField, Field
 from django.forms.renderers import TemplatesSetting
 from django.forms.widgets import MultiWidget
 
@@ -171,14 +171,17 @@ class DummyForm(forms.Form):
     Dummy form that can be used for Javascript tests
     in place of any other form, to keep those tests simple.
     """
-    def __init__(self, **field_values):
+    def __init__(self, **fields_or_values):
         super().__init__()
 
-        if not field_values:
-            field_values['field1'] = 'value1'
-        for field_name, field_value in field_values.items():
-            self.fields[field_name] = CharField(
-                required=False, initial=field_value)
+        if not fields_or_values:
+            fields_or_values['field1'] = 'value1'
+        for field_name, field_or_value in fields_or_values.items():
+            if isinstance(field_or_value, Field):
+                self.fields[field_name] = field_or_value
+            else:
+                self.fields[field_name] = CharField(
+                    required=False, initial=field_or_value)
 
 
 def get_one_form_error(form, include_field_name=True):

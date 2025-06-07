@@ -78,7 +78,7 @@ class BrowseActionHelper {
         else if (action === 'delete_images') {
             formId = 'delete-images-ajax-form';
             this.isAjax = true;
-            this.actionAfterAjax = this.refreshBrowse.bind(this);
+            this.actionAfterAjax = this.refetchBrowse.bind(this);
             this.confirmMessage =
                 "Are you sure you want to delete these images?" +
                 " You won't be able to undo this." +
@@ -88,7 +88,7 @@ class BrowseActionHelper {
         else if (action === 'delete_annotations') {
             formId = 'delete-annotations-ajax-form';
             this.isAjax = true;
-            this.actionAfterAjax = this.refreshBrowse.bind(this);
+            this.actionAfterAjax = this.refetchBrowse.bind(this);
             this.confirmMessage =
                 "Are you sure you want to delete the annotations" +
                 " for these images? You won't be able to undo this." +
@@ -130,8 +130,9 @@ class BrowseActionHelper {
         }
         else if (imageSelectType === 'selected') {
             // Get image IDs
-            imageSelectArgs['image_form_type'] = 'ids';
-            imageSelectArgs['ids'] = this.pageImageIds.toString();
+            let pageImageIdsStrings =
+                this.pageImageIds.map((id) => id.toString());
+            imageSelectArgs['image_id_list'] = pageImageIdsStrings.join('_');
         }
 
         for (let fieldName in imageSelectArgs) {
@@ -175,9 +176,11 @@ class BrowseActionHelper {
             this.actionSubmitButton.textContent = "Working...";
             this.actionSelectField.disabled = true;
 
+            let data = new FormData(this.currentActionForm);
+
             let promise = util.fetch(
                 this.currentActionForm.action,
-                {method: 'POST', body: new FormData(this.currentActionForm)},
+                {method: 'POST', body: data},
                 this.ajaxActionCallback.bind(this));
 
             // TODO: Update this once our Selenium tests are runnable again
@@ -230,13 +233,15 @@ class BrowseActionHelper {
         downloadForm.submit();
     }
 
-    refreshBrowse() {
+    refetchBrowse() {
         // Re-fetch the current browse page, including the search/filter fields
-        // that got us the current set of images.
-        // TODO: And also the current page number.
-        // TODO: This can become a simple webpage refresh, rather than a form
-        // submission, if the search form becomes GET instead of POST.
-        let refreshBrowseForm = document.getElementById('refresh-browse-form');
-        refreshBrowseForm.submit();
+        // that got us the current set of images, and the current page number.
+        //
+        // assign(), unlike reload(), places your scroll position at the
+        // top of the page instead of where you previously were, which is
+        // good because the deletion notice should be at the top.
+        window.location.assign(window.location);
     }
 }
+
+export default BrowseActionHelper;

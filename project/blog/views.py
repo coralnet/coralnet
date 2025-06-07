@@ -1,5 +1,6 @@
 from django.views.generic import ListView, DetailView
 
+from lib.utils import ViewPaginator
 from .models import BlogPost
 
 
@@ -20,6 +21,13 @@ class PostsList(ListView):
     def get_queryset(self):
         """Restrict to posts that the user is allowed to view."""
         return BlogPost.objects.get_visible_to_user(self.request.user)
+
+    def get_paginator(self, *args, **kwargs):
+        """
+        This allows us to use pagination_links.html, which has stuff specific
+        to our ViewPaginator class.
+        """
+        return ViewPaginator(dict(), *args, **kwargs)
 
 
 class PostDetail(DetailView):

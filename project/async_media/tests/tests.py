@@ -465,20 +465,7 @@ class PatchesTest(AsyncMediaTest):
     """
     Test the thumbnail functionality in Browse Patches.
     """
-    search_params = dict(
-        image_form_type='search',
-        aux1='', aux2='', aux3='', aux4='', aux5='',
-        height_in_cm='', latitude='', longitude='', depth='',
-        photographer='', framing='', balance='',
-        photo_date_0='', photo_date_1='', photo_date_2='',
-        photo_date_3='', photo_date_4='',
-        image_name='',
-        patch_annotation_status='', patch_label='',
-        patch_annotation_date_0='', patch_annotation_date_1='',
-        patch_annotation_date_2='', patch_annotation_date_3='',
-        patch_annotation_date_4='',
-        patch_annotator_0='', patch_annotator_1='',
-    )
+    search_params = dict(search='true')
 
     @classmethod
     def setUpTestData(cls):

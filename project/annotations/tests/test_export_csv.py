@@ -7,8 +7,7 @@ from django.urls import reverse
 
 from export.tests.utils import BaseExportTest
 from lib.tests.utils import BasePermissionTest
-from visualization.tests.utils import (
-    BrowseActionsFormTest, BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS)
+from visualization.tests.utils import BrowseActionsFormTest
 from ..models import Annotation
 from .utils import UploadAnnotationsCsvTestMixin
 
@@ -43,8 +42,7 @@ class BaseAnnotationExportTest(BaseExportTest):
         super().setUpTestData()
 
         cls.user = cls.create_user()
-        cls.default_post_params: dict[str, Any] = (
-            BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS | dict(label_format='code'))
+        cls.default_post_params: dict[str, Any] = dict(label_format='code')
 
     def export_annotations_prep(self, post_data):
         self.client.force_login(self.user)

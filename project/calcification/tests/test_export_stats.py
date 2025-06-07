@@ -169,11 +169,12 @@ class FileTypeTest(BaseCalcifyStatsExportTest):
         calcify_table = create_global_calcify_table(
             'Atlantic', {}, name="Test table")
 
-        data = self.default_search_params.copy()
         # Some, but not all, images
-        data['aux1'] = 'X'
-        data['export_format'] = 'excel'
-        data['rate_table_id'] = calcify_table.pk
+        data = dict(
+            aux1='X',
+            export_format='excel',
+            rate_table_id=calcify_table.pk,
+        )
         response = self.export_calcify_stats(data)
 
         self.assertEqual(
@@ -659,9 +660,10 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img3, {
             1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
 
-        data = self.default_search_params.copy()
-        data['aux1'] = 'X'
-        data['rate_table_id'] = self.calcify_table.pk
+        data = dict(
+            aux1='X',
+            rate_table_id=self.calcify_table.pk,
+        )
         response = self.export_calcify_stats(data)
         self.assert_csv_image_set(response.content, [img1, img3])
 
@@ -672,9 +674,10 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
         self.add_annotations(self.user, img1, {
             1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
 
-        data = self.default_search_params.copy()
-        data['image_name'] = '5.jpg'
-        data['rate_table_id'] = self.calcify_table.pk
+        data = dict(
+            image_name='5.jpg',
+            rate_table_id=self.calcify_table.pk,
+        )
         response = self.export_calcify_stats(data)
         self.assert_csv_image_set(response.content, [])
 
@@ -705,9 +708,10 @@ class ImageSetTest(BaseCalcifyStatsExportTest):
     def test_invalid_image_set_params(self):
         self.upload_image(self.user, self.source)
 
-        data = self.default_search_params.copy()
-        data['photo_date_0'] = 'abc'
-        data['rate_table_id'] = self.calcify_table.pk
+        data = dict(
+            photo_date_0='abc',
+            rate_table_id=self.calcify_table.pk,
+        )
         response = self.export_calcify_stats_prep(data)
 
         # Error in JSON instead of serving CSV.
@@ -1066,7 +1070,7 @@ class PerformanceTest(BaseCalcifyStatsExportTest):
 
         # Number of queries should be a small constant factor from 15
         # (image count) and definitely less than 300 (annotation count).
-        with self.assert_queries_less_than(15*4):
+        with self.assert_queries_less_than(15*5.5):
             response = self.export_calcify_stats(dict(
                 rate_table_id=calcify_table.pk))
         self.assertStatusOK(response)

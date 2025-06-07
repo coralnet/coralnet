@@ -51,20 +51,6 @@
         images on this page</option>
     </select>
 
-    {# This form allows refreshing the current Browse page, which is sometimes what we want after running some ajax. #}
-    <form
-      hidden action=""
-      method="post" class="no-padding" id="refresh-browse-form"
-    >
-      {% csrf_token %}
-      <span id="previous-image-form-fields">
-        {# The image-filter parameters that led us to this browse page. #}
-        {% if hidden_image_form %}
-          {{ hidden_image_form }}
-        {% endif %}
-      </span>
-    </form>
-
     {# Below are the possible action forms. One at a time will be shown depending on which image-action is selected. #}
 
     <form
@@ -273,6 +259,8 @@
         {% if hidden_image_form %}
 
           {% csrf_token %}
+          {{ result_count_form }}
+
           <div class="line">
             Permanently deletes the images in this image set, along with their annotations. When you click "Go", a confirmation dialog will pop up.
           </div>
@@ -297,6 +285,8 @@
         {% if hidden_image_form %}
 
           {% csrf_token %}
+          {{ result_count_form }}
+
           <div class="line">
             Permanently deletes any existing annotations for these images. The images themselves and their point locations will not be affected. When you click "Go", a confirmation dialog will pop up.
           </div>
@@ -315,4 +305,11 @@
     {% endif %}
 
   </div>
+</div>
+
+<div hidden id="previous-image-form-fields">
+  {# The image-filter parameters that led us to this browse page. #}
+  {% if hidden_image_form %}
+    {{ hidden_image_form }}
+  {% endif %}
 </div>

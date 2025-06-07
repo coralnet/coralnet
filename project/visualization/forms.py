@@ -2,18 +2,18 @@ import datetime
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_comma_separated_integer_list
+from django.core.validators import int_list_validator
 from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
-from django.forms.widgets import HiddenInput
+from django.forms.widgets import HiddenInput, Widget
 from django.utils import timezone
 
 from accounts.utils import (
     get_alleviate_user, get_imported_user, get_robot_user)
 from annotations.model_utils import ImageAnnoStatuses
 from annotations.models import Annotation
-from images.models import Image, Metadata
+from images.models import Metadata
 from images.utils import (
     get_aux_field_name,
     get_aux_label,
@@ -363,30 +363,56 @@ class AnnotatorFilterField(MultiValueField):
         return queryset_kwargs
 
 
+class NullWidget(Widget):
+    def render(self, name, value, attrs=None, renderer=None):
+        return ""
+
+
 class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
-    # This field makes it easier to tell which kind of image-specifying
-    # form has been submitted.
-    # It also ensures there's at least one required field, so checking form
-    # validity is also a check of whether the relevant POST data is there.
-    image_form_type = forms.CharField(
-        widget=HiddenInput(), initial='search', required=True)
+    # Used by the "20 images on this page" selection option
+    # on Browse Images actions.
+    #
+    # This should NOT be rendered in the HTML search forms. It's meant
+    # as a special filtering method used by certain site functions,
+    # not as a user-specified filter that's combinable with other filters.
+    # Hence the NullWidget.
+    image_id_list = forms.CharField(
+        widget=NullWidget(),
+        required=False)
+
+    # Used by the "Manage image metadata" link after uploading images.
+    #
+    # This should also NOT be rendered in the HTML search forms.
+    image_id_range = forms.CharField(
+        widget=NullWidget(),
+        required=False)
 
     # Search by image name.
     image_name = forms.CharField(label="Image name contains", required=False)
 
     default_renderer = BoxFormRenderer
 
-    def __init__(self, *args, **kwargs):
-
-        self.source = kwargs.pop('source')
+    def __init__(self, *args, source=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # source is required, but we syntactically prefer callers to
+        # specify it as a kwarg, since it's common to pass data as
+        # an initial non-kwarg to any Django form.
+        assert source is not None
+        self.source = source
 
         # Date filter
         metadatas = Metadata.objects.filter(image__source=self.source)
         image_years = [
             date.year for date in metadatas.dates('photo_date', 'year')]
-        image_year_choices = [(str(year), str(year)) for year in image_years]
+        image_year_choices = (
+            # Having a blank value as the default allows us to detect when the
+            # field is not being used, so we can omit it from the search
+            # submission in that case (leading to a cleaner search URL).
+            [('', "---")]
+            + [(str(year), str(year)) for year in image_years]
+        )
 
         self.fields['photo_date'] = DateFilterField(
             label="Photo date", year_choices=image_year_choices,
@@ -399,23 +425,17 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             metadata_choice_fields.append(
                 (get_aux_field_name(n), get_aux_label(self.source, n))
             )
-        non_aux_fields = [
-            'height_in_cm', 'latitude', 'longitude', 'depth',
-            'camera', 'photographer', 'water_quality',
-            'strobes', 'framing', 'balance',
-        ]
-        for field_name in non_aux_fields:
-            metadata_choice_fields.append(
-                (field_name, Metadata._meta.get_field(field_name).verbose_name)
-            )
-
-        self.metadata_choice_fields = []
+        # There are also other metadata fields like height in cm, latitude,
+        # water quality, etc. But we're not sure how useful they'd be as
+        # filter fields here.
 
         for field_name, field_label in metadata_choice_fields:
-            choices = Metadata.objects.filter(image__source=self.source) \
-                .order_by(field_name) \
-                .values_list(field_name, flat=True) \
+            choices = (
+                Metadata.objects.filter(image__source=self.source)
+                .order_by(field_name)
+                .values_list(field_name, flat=True)
                 .distinct()
+            )
 
             if len(choices) <= 1:
                 # No point in having a dropdown for this
@@ -434,11 +454,6 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 required=False,
             )
 
-            # Set this for ease of listing the fields in templates.
-            # self[field_name] seems to be a different field object from
-            # self.fields[field_name], and seems easier to use in templates.
-            self.metadata_choice_fields.append(self[field_name])
-
     def add_image_annotation_status_fields(self):
 
         # Annotation status
@@ -456,8 +471,10 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
         annotation_years = range(
             self.source.create_date.year, timezone.now().year + 1)
-        annotation_year_choices = [
-            (str(year), str(year)) for year in annotation_years]
+        annotation_year_choices = (
+            [('', "---")]
+            + [(str(year), str(year)) for year in annotation_years]
+        )
         self.fields['last_annotated'] = DateFilterField(
             label="Last annotation date",
             year_choices=annotation_year_choices,
@@ -475,11 +492,75 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         # get_applied_search_display().
         self.fields['last_annotator'].verbose_name = "Last annotator"
 
-    def clean_image_form_type(self):
-        value = self.cleaned_data['image_form_type']
-        if value != 'search':
-            raise ValidationError("Incorrect value")
-        return value
+    def clean_image_id_list(self):
+        value = self.cleaned_data['image_id_list']
+        if value == '':
+            # Not using this filter.
+            return value
+
+        # Commas get escaped in URLs, which is a bit ugly, so we use
+        # underscores instead.
+        format_validator = int_list_validator(
+            sep='_',
+            message="Enter only digits separated by underscores.",
+        )
+        format_validator(value)
+
+        id_str_list = value.split('_')
+        if len(id_str_list) > 100:
+            # No DoS, please. We should never be intentionally grabbing this
+            # many images with this filter.
+            raise ValidationError(
+                "Too many ID numbers.",
+                code='too_many_numbers',
+            )
+
+        # Should already be validated as integer strings, so this shouldn't
+        # fail.
+        id_list = [int(id_str) for id_str in id_str_list]
+
+        # Check that these ids correspond to images in the source (not to
+        # images of other sources).
+        # This ensures that any attempt to forge POST data to specify
+        # other sources' image ids will not work. Those other ids will just
+        # be ignored by in_bulk().
+        existing_ids_to_images = self.source.image_set.in_bulk(id_list)
+        existing_id_list = list(existing_ids_to_images.keys())
+
+        return existing_id_list
+
+    def clean_image_id_range(self):
+        value = self.cleaned_data['image_id_range']
+        if value == '':
+            # Not using this filter.
+            return value
+
+        # Commas get escaped in URLs, which is a bit ugly, so we use
+        # underscores instead.
+        format_validator = int_list_validator(
+            sep='_',
+            message="Enter only digits separated by underscores.",
+        )
+        format_validator(value)
+
+        id_str_list = value.split('_')
+        if len(id_str_list) != 2:
+            raise ValidationError(
+                "Should be a list of exactly 2 ID numbers.",
+                code='not_two_numbers',
+            )
+
+        # Should already be validated as integer strings.
+        min_id, max_id = [int(id_str) for id_str in id_str_list]
+
+        if min_id > max_id:
+            raise ValidationError(
+                "Minimum ID (first number) should not be greater than the"
+                " maximum ID (second number).",
+                code='min_greater_than_max',
+            )
+
+        return min_id, max_id
 
     def get_images(self):
         """
@@ -490,7 +571,8 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
     def get_choice_verbose(self, field_name):
         choices = self.fields[field_name].choices
-        return dict(choices)[self.cleaned_data[field_name]]
+        value = self.cleaned_data.get(field_name, '')
+        return dict(choices)[value]
 
     def get_sort_method_verbose(self):
         return self.get_choice_verbose('sort_method')
@@ -510,8 +592,12 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 # Not filtering by this field. '' is the basic field case,
                 # dict() is the MultiValueField case.
                 pass
-            elif key in ['image_form_type', 'sort_method', 'sort_direction']:
+            elif key in ['search', 'sort_method', 'sort_direction']:
                 pass
+            elif key == 'image_id_range':
+                filters_used.append("a range of image IDs")
+            elif key == 'image_id_list':
+                filters_used.append("a list of individual images")
             else:
                 field = self.fields[key]
                 if hasattr(field, 'verbose_name'):
@@ -532,8 +618,86 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         else:
             return sorting_by_str
 
+    def get_hidden_version(self):
+        """
+        Copies the form's submitted data, and creates a copy of
+        the form which uses all HiddenInput widgets.
+
+        This is useful if the previous page load submitted form data, and
+        we wish to pass those submitted values to a subsequent request.
+        This also preserves image_id_range and image_id_list because
+        those end up with non-null widgets.
+        """
+        new_form = Form()
+
+        def add_field_if_applicable(name_, original_field_):
+            initial_ = self.data.get(name_, original_field_.initial)
+            if initial_ is None or initial_ == '':
+                # Keep the request params tidy by skipping blank values.
+                return
+            new_form.fields[name_] = CharField(
+                initial=initial_,
+                widget=HiddenInput(),
+                required=False,
+            )
+
+        for name, field in self.fields.items():
+            if isinstance(field, MultiValueField):
+                # Must look in the MultiValueField's attributes
+                # to get the actual rendered input fields.
+                for i, sub_field in enumerate(field.fields):
+                    sub_field_name = '{name}_{i}'.format(name=name, i=i)
+                    add_field_if_applicable(sub_field_name, sub_field)
+            else:
+                add_field_if_applicable(name, field)
+
+        # The 'search' param is the signal that a form was submitted at
+        # all, in the event that all other params are absent. We preserve
+        # that here.
+        if search_param_value := self.data.get('search'):
+            new_form.fields['search'] = CharField(
+                initial=search_param_value,
+                widget=HiddenInput(),
+                required=False,
+            )
+
+        return new_form
+
+    def searched_or_filtered(self) -> bool:
+        if 'search' in self.data:
+            # Form was submitted.
+            return True
+        for key, value in self.data.items():
+            if key == 'page':
+                # Pagination args don't count.
+                continue
+            if value != '':
+                # There's a non-blank value that we're filtering on.
+                return True
+        # Else, by all evidence, we've just arrived without a form
+        # submission or any filters.
+        return False
+
 
 class ImageSearchForm(BaseImageSearchForm):
+
+    sort_method = forms.ChoiceField(
+        label="Sort by",
+        choices=(
+            ('', "Name"),
+            ('upload_date', "Upload date"),
+            ('photo_date', "Photo date"),
+            ('last_annotation_date', "Last annotation date"),
+        ),
+        required=False)
+
+    sort_direction = forms.ChoiceField(
+        label="Direction",
+        choices=(
+            ('', "Ascending"),
+            ('desc', "Descending"),
+        ),
+        required=False)
 
     fieldsets_keys = [
         [
@@ -552,26 +716,6 @@ class ImageSearchForm(BaseImageSearchForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.add_image_annotation_status_fields()
-
-        # Add sort fields
-
-        self.fields['sort_method'] = forms.ChoiceField(
-            label="Sort by",
-            choices=(
-                ('name', "Name"),
-                ('upload_date', "Upload date"),
-                ('photo_date', "Photo date"),
-                ('last_annotation_date', "Last annotation date"),
-            ),
-            required=True)
-
-        self.fields['sort_direction'] = forms.ChoiceField(
-            label="Direction",
-            choices=(
-                ('asc', "Ascending"),
-                ('desc', "Descending"),
-            ),
-            required=True)
 
 
 class MetadataEditSearchForm(BaseImageSearchForm):
@@ -638,8 +782,10 @@ class PatchSearchForm(BaseImageSearchForm):
 
         annotation_years = range(
             self.source.create_date.year, timezone.now().year + 1)
-        annotation_year_choices = [
-            (str(year), str(year)) for year in annotation_years]
+        annotation_year_choices = (
+            [('', "---")]
+            + [(str(year), str(year)) for year in annotation_years]
+        )
         self.fields['patch_annotation_date'] = DateFilterField(
             label="Annotation date", year_choices=annotation_year_choices,
             date_lookup='annotation_date',
@@ -694,115 +840,47 @@ class PatchSearchForm(BaseImageSearchForm):
         return results
 
 
-class ImageSpecifyByIdForm(forms.Form):
+class ResultCountForm(Form):
+    delete_count_mismatch_error_message: str
 
-    # This field makes it easier to tell which kind of image-specifying
-    # form has been submitted.
-    image_form_type = forms.CharField(
-        widget=HiddenInput(), initial='ids', required=True)
-
-    ids = forms.CharField(
+    result_count = forms.IntegerField(
+        label="Number of Browse image results",
+        min_value=0,
         widget=HiddenInput(),
-        validators=[validate_comma_separated_integer_list],
-        required=True)
+    )
 
-    def __init__(self, *args, **kwargs):
-        self.source = kwargs.pop('source')
-        super().__init__(*args, **kwargs)
+    def check_delete_count(self, delete_count):
+        if self.data.get('image_id_list'):
+            # When this param is present in the POST data, presumably
+            # 'the selected images on this page' was specified.
+            # We're only checking the delete count when the other option,
+            # 'all images in this search', is specified, because that case
+            # has more potential for catastrophic error: having something
+            # missing can arbitrarily increase the delete count.
+            return
 
-    def clean_image_form_type(self):
-        value = self.cleaned_data['image_form_type']
-        if value != 'ids':
-            raise ValidationError("Incorrect value")
-        return value
-
-    def clean_ids(self):
-        id_str_list = self.cleaned_data['ids'].split(',')
-        id_list = []
-
-        for img_id in id_str_list:
-            # Should already be validated as an integer string.
-            id_num = int(img_id)
-
-            # Check that these ids correspond to images in the source (not to
-            # images of other sources).
-            # This ensures that any attempt to forge POST data to specify
-            # other sources' image ids will not work.
-            try:
-                Image.objects.get(pk=id_num, source=self.source)
-            except Image.DoesNotExist:
-                # The image either doesn't exist or isn't in this source.
-                # Skip it.
-                continue
-
-            id_list.append(id_num)
-
-        return id_list
-
-    def get_images(self):
-        """
-        Call this after cleaning the form to get the images
-        specified by the fields.
-        """
-        # TODO: If coming from Browse Images, the ordering specified in Browse
-        # isn't preserved, which can be confusing.
-        return self.source.image_set.filter(pk__in=self.cleaned_data['ids']) \
-            .order_by('metadata__name', 'pk')
-
-    def get_applied_search_display(self):
-        return "Filtering to a specific set of images"
+        expected_delete_count = self.cleaned_data['result_count']
+        if delete_count != expected_delete_count:
+            raise ValidationError(
+                self.delete_count_mismatch_error_message.format(
+                    delete_count=delete_count,
+                    expected_delete_count=expected_delete_count,
+                ),
+                code='delete_count_mismatch',
+            )
 
 
-def create_image_filter_form(
-        data, source, for_edit_metadata=False):
-    """
-    Browse Images, Edit Metadata, and the annotation tool view can use this
-    to process image-specification forms.
+class BatchImageDeleteCountForm(ResultCountForm):
 
-    This doesn't apply to Browse Patches because there isn't a way to
-    get image-ID-based results there.
-    """
-    image_form = None
-    if data.get('image_form_type') == 'search':
-        if for_edit_metadata:
-            image_form = MetadataEditSearchForm(data, source=source)
-        else:
-            image_form = ImageSearchForm(data, source=source)
-    elif data.get('image_form_type') == 'ids':
-        image_form = ImageSpecifyByIdForm(data, source=source)
-
-    return image_form
-
-
-class HiddenForm(forms.Form):
-    """
-    Takes a list of forms as an init parameter, copies the forms'
-    submitted data, and adds corresponding fields with HiddenInput widgets.
-
-    This is useful if the previous page load submitted form data,
-    and we wish to pass those submitted values to a subsequent request.
-    """
-    def __init__(self, *args, **kwargs):
-        forms = kwargs.pop('forms')
-        super().__init__(*args, **kwargs)
-
-        for form in forms:
-            for name, field in form.fields.items():
-                if isinstance(field, MultiValueField):
-                    # Must look in the MultiValueField's attributes
-                    # to get the actual rendered input fields.
-                    for i, sub_field in enumerate(field.fields):
-                        sub_field_name = '{name}_{i}'.format(name=name, i=i)
-                        self.fields[sub_field_name] = CharField(
-                            initial=form.data.get(
-                                sub_field_name, sub_field.initial),
-                            widget=HiddenInput(),
-                            required=False)
-                else:
-                    self.fields[name] = CharField(
-                        initial=form.data.get(name, field.initial),
-                        widget=HiddenInput(),
-                        required=False)
+    delete_count_mismatch_error_message = (
+        "The deletions were attempted, but the number of deletions"
+        " ({delete_count}) didn't match the number expected"
+        " ({expected_delete_count}). So as a safety measure, the"
+        " deletions were rolled back."
+        " Make sure there isn't any ongoing activity in this source"
+        " which would change the number of image results. Then,"
+        " redo your search and try again."
+    )
 
 
 # Similar to ImageSearchForm with the difference that

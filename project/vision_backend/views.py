@@ -132,7 +132,7 @@ def backend_overview(request):
         ))
     sorted_sources.sort(key=lambda s: (s['status_order'], -s['source_id']))
 
-    page_results, _ = paginate(
+    page_results = paginate(
         results=sorted_sources,
         items_per_page=200,
         request_args=request.GET,

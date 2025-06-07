@@ -1,7 +1,6 @@
-from django.shortcuts import resolve_url
+from django.urls import reverse
 
 from lib.tests.utils import ClientTest
-from visualization.tests.utils import BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
 
 
 class ExportTestMixin:
@@ -54,16 +53,11 @@ class ExportTestMixin:
 
 class BaseExportTest(ClientTest, ExportTestMixin):
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        # Image search parameters
-        cls.default_search_params = BROWSE_IMAGES_DEFAULT_SEARCH_PARAMS
-
-    def export_metadata(self, post_data):
+    def export_metadata(self, post_data=None):
         """POST to export_metadata, and return the response."""
         self.client.force_login(self.user)
         return self.client.post(
-            resolve_url('export_metadata', self.source.pk), post_data,
-            follow=True)
+            reverse('export_metadata', args=[self.source.pk]),
+            post_data or {},
+            follow=True,
+        )

@@ -9,7 +9,7 @@ from typing import Any, Callable
 import urllib.parse
 
 from django.core.cache import cache
-from django.core.paginator import Paginator, EmptyPage, InvalidPage
+from django.core.paginator import Page, Paginator, EmptyPage, InvalidPage
 from django.template.defaultfilters import date as date_template_filter
 from django.utils import timezone
 
@@ -164,12 +164,42 @@ def filesize_display(num_bytes):
     return "{n:.2f} GB".format(n=num_bytes / GIGA)
 
 
+class ViewPage(Page):
+
+    def __init__(self, args_besides_page, *args, **kwargs):
+        # Request arguments besides 'page'. We'll preserve these in the
+        # previous/next links.
+        self.args_besides_page = args_besides_page
+        super().__init__(*args, **kwargs)
+
+    def previous_page_link(self):
+        """Can use this in templates."""
+        args = self.args_besides_page | {'page': self.previous_page_number()}
+        return '?' + urllib.parse.urlencode(args)
+
+    def next_page_link(self):
+        """Can use this in templates."""
+        args = self.args_besides_page | {'page': self.next_page_number()}
+        return '?' + urllib.parse.urlencode(args)
+
+
+class ViewPaginator(Paginator):
+
+    def __init__(self, request_args, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.args_besides_page = {
+            k: v for k, v in request_args.items() if k != 'page'}
+
+    def _get_page(self, *args, **kwargs):
+        return ViewPage(self.args_besides_page, *args, **kwargs)
+
+
 def paginate(results, items_per_page, request_args):
     """
     Helper for paginated views.
     Assumes the page number is in the GET parameter 'page'.
     """
-    paginator = Paginator(results, items_per_page)
+    paginator = ViewPaginator(request_args, results, items_per_page)
     request_args = request_args or dict()
 
     # Make sure page request is an int. If not, deliver first page.
@@ -184,12 +214,7 @@ def paginate(results, items_per_page, request_args):
     except (EmptyPage, InvalidPage):
         page_results = paginator.page(paginator.num_pages)
 
-    # We'll often want a string of the other query args for building the
-    # next/previous page links.
-    other_args = {k: v for k, v in request_args.items() if k != 'page'}
-    query_string = urllib.parse.urlencode(other_args)
-
-    return page_results, query_string
+    return page_results
 
 
 def rand_string(num_of_chars):

@@ -301,7 +301,7 @@ class EmailChangeConfirmView(LoginRequiredMixin, TemplateView):
 def profile_list(request):
     all_profiles = Profile.objects.all().order_by('user__date_joined')
     all_results = [p for p in all_profiles if can_view_profile(request, p)]
-    page_results, _ = paginate(
+    page_results = paginate(
         results=all_results,
         items_per_page=50,
         request_args=request.GET,

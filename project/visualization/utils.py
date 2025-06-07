@@ -1,14 +1,14 @@
-import operator
-import re
 from functools import reduce
 from io import BytesIO
+import operator
+import re
 
-import django.db.models.fields as model_fields
 from PIL import Image as PILImage
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
 from django.db.models import Q
+import django.db.models.fields as model_fields
 
 from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
 from images.models import Point, Metadata
@@ -65,6 +65,21 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     for token in search_tokens:
         qs.append(Q(metadata__name__icontains=token))
 
+    image_id_list = search_kwargs.get('image_id_list', '')
+    if image_id_list == '':
+        # Don't filter
+        pass
+    else:
+        qs.append(Q(pk__in=image_id_list))
+
+    image_id_range = search_kwargs.get('image_id_range', '')
+    if image_id_range == '':
+        # Don't filter
+        pass
+    else:
+        min_id, max_id = image_id_range
+        qs.append(Q(pk__gte=min_id, pk__lte=max_id))
+
     # Annotation status
     annotation_status = search_kwargs.get('annotation_status', '')
     if annotation_status == '':
@@ -79,8 +94,8 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
 
     # Sorting
 
-    sort_method = search_kwargs.get('sort_method', 'name')
-    sort_direction = search_kwargs.get('sort_direction', 'asc')
+    sort_method = search_kwargs.get('sort_method') or 'name'
+    sort_direction = search_kwargs.get('sort_direction') or 'asc'
 
     # Add pk as a secondary key when needed to create an unambiguous ordering.
     if sort_method == 'photo_date':

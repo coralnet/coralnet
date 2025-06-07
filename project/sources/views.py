@@ -148,8 +148,7 @@ def source_main(request, source_id):
 
     def browse_link_filtered_by_status(annotation_status):
         return browse_url_base + '?' + urlencode(dict(
-            image_form_type='search', annotation_status=annotation_status,
-            sort_direction='asc', sort_method='name'))
+            annotation_status=annotation_status))
 
     image_stats = dict(
         total = all_images.count(),

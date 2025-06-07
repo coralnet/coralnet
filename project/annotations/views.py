@@ -1,9 +1,11 @@
 from collections import defaultdict
 import csv
 import json
+import urllib.parse
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
@@ -42,7 +44,7 @@ from lib.forms import get_one_form_error
 from sources.models import Source
 from sources.utils import metadata_field_names_to_labels
 from upload.forms import CSVImportForm
-from visualization.forms import HiddenForm, create_image_filter_form
+from visualization.forms import ImageSearchForm
 from vision_backend.models import ClassifyImageEvent, Score
 from vision_backend.utils import (
     get_label_scores_for_image,
@@ -53,6 +55,7 @@ from .forms import (
     AnnotationAreaPixelsForm,
     AnnotationToolSettingsForm,
     AnnotationImageOptionsForm,
+    BatchAnnotationDeleteCountForm,
     ExportAnnotationsForm,
 )
 from .model_utils import AnnotationArea
@@ -160,8 +163,8 @@ def annotation_area_edit(request, image_id):
 def batch_delete_annotations_ajax(request, source_id):
     source = get_object_or_404(Source, id=source_id)
 
-    image_form = create_image_filter_form(request.POST, source)
-    if not image_form:
+    image_form = ImageSearchForm(request.POST, source=source)
+    if not image_form.searched_or_filtered():
         # It's not good to accidentally delete everything, and it's uncommon
         # to do it intentionally. So we'll play it safe.
         return JsonResponse(dict(
@@ -180,8 +183,23 @@ def batch_delete_annotations_ajax(request, source_id):
             )
         ))
 
+    count_form = BatchAnnotationDeleteCountForm(request.POST)
+    if not count_form.is_valid():
+        error_message = get_one_form_error(count_form)
+        return JsonResponse(dict(
+            error=(
+                f"Error: {error_message}"
+                " - Nothing was deleted."
+            )
+        ))
+
     image_set = image_form.get_images()
     image_count = image_set.count()
+
+    try:
+        count_form.check_delete_count(image_count)
+    except ValidationError as e:
+        return JsonResponse(dict(error=e.message))
 
     # Delete annotations.
     Annotation.objects.filter(image__in=image_set).delete_in_chunks()
@@ -213,18 +231,28 @@ def annotation_tool(request, image_id):
     hidden_image_set_form = None
     applied_search_display = None
 
-    image_form = create_image_filter_form(request.POST, source)
-    if image_form:
-        if image_form.is_valid():
-            image_set = image_form.get_images()
-            hidden_image_set_form = HiddenForm(forms=[image_form])
-            applied_search_display = image_form.get_applied_search_display()
+    image_form = ImageSearchForm(request.POST, source=source)
+    browse_query_args = None
+
+    if image_form.searched_or_filtered() and image_form.is_valid():
+        image_set = image_form.get_images()
+        hidden_image_set_form = image_form.get_hidden_version()
+        applied_search_display = image_form.get_applied_search_display()
+        browse_query_args = {
+            k: v for k, v in request.POST.items()
+            if k in image_form.cleaned_data
+        }
 
     # Get the next and previous images in the image set.
     prev_image = get_prev_image(image, image_set, wrap=True)
     next_image = get_next_image(image, image_set, wrap=True)
     # Get the image's ordered placement in the image set, e.g. 5th.
     image_set_order_placement = get_image_order_placement(image, image_set)
+
+    return_to_browse_link = reverse('browse_images', args=[source.pk])
+    if browse_query_args:
+        return_to_browse_link += (
+            '?' + urllib.parse.urlencode(browse_query_args))
 
     # Get the settings object for this user.
     # If there is no such settings object, then populate the form with
@@ -315,6 +343,7 @@ def annotation_tool(request, image_id):
         'image_set_size': image_set.count(),
         'image_set_order_placement': image_set_order_placement,
         'applied_search_display': applied_search_display,
+        'return_to_browse_link': return_to_browse_link,
         'metadata': metadata,
         'image_meta_table': get_date_and_aux_metadata_table(image),
         'labels': labels,

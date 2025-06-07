@@ -198,23 +198,22 @@
         <br/>
         <br/>
 
-        Image {{ image_set_order_placement }} of {{ image_set_size }}
+        <span id="image-set-info">
+          Image {{ image_set_order_placement }} of {{ image_set_size }}
+        </span>
 
         {% if applied_search_display %}
           <br/>
           <br/>
-          {{ applied_search_display }}
+          <span id="applied-search-display">
+            {{ applied_search_display }}
+          </span>
         {% endif %}
 
         <br/>
         <br/>
 
-        <form action="{% url 'browse_images' source.id %}" method="post">
-          {% csrf_token %}
-          {% for field in hidden_image_set_form %}{{ field }}{% endfor %}
-
-          <input type="submit" value="Return to Browse" class="link" />
-        </form>
+        <a id="return-to-browse-link" href="{{ return_to_browse_link }}">Return to Browse</a>
       </div>
 
     </div>

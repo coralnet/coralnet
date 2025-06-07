@@ -21,6 +21,7 @@ from accounts.utils import is_robot_user
 from images.models import Metadata, Point
 from labels.models import LocalLabel
 from lib.forms import EnhancedMultiWidget
+from visualization.forms import ResultCountForm
 from .model_utils import AnnotationArea
 from .models import Annotation, AnnotationToolSettings
 
@@ -329,3 +330,16 @@ class ExportAnnotationsForm(Form):
     optional_columns = MultipleChoiceField(
         widget=CheckboxSelectMultiple, choices=optional_columns_choices,
         required=False)
+
+
+class BatchAnnotationDeleteCountForm(ResultCountForm):
+
+    delete_count_mismatch_error_message = (
+        "The number of image results just before deletion"
+        " ({delete_count}) differs from the number shown in the search"
+        " ({expected_delete_count}). So as a safety measure,"
+        " no annotations were deleted."
+        " Make sure there isn't any ongoing activity in this source"
+        " which would change the number of image results. Then,"
+        " redo your search and try again."
+    )

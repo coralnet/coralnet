@@ -73,7 +73,7 @@ def job_list(request):
     status_counter = Counter([
         job_values['overall_status'] for job_values in jobs_values])
 
-    page_results, _ = paginate(
+    page_results = paginate(
         results=jobs_values,
         items_per_page=1000,
         request_args=request.GET,

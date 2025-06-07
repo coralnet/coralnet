@@ -37,8 +37,7 @@ class ImageSetTest(BaseExportTest):
         self.img1 = self.upload_image(
             self.user, self.source, dict(filename='1.jpg'))
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         expected_lines = [
             'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5'
@@ -58,8 +57,7 @@ class ImageSetTest(BaseExportTest):
         self.img3 = self.upload_image(
             self.user, self.source, dict(filename='3.jpg'))
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         expected_lines = [
             'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5'
@@ -87,8 +85,7 @@ class ImageSetTest(BaseExportTest):
         self.img3.metadata.aux1 = 'X'
         self.img3.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        post_data['aux1'] = 'X'
+        post_data = dict(aux1='X')
         response = self.export_metadata(post_data)
 
         expected_lines = [
@@ -106,8 +103,7 @@ class ImageSetTest(BaseExportTest):
         self.img1 = self.upload_image(
             self.user, self.source, dict(filename='1.jpg'))
 
-        post_data = self.default_search_params.copy()
-        post_data['image_name'] = '5.jpg'
+        post_data = dict(image_name='5.jpg')
         response = self.export_metadata(post_data)
 
         expected_lines = [
@@ -121,8 +117,7 @@ class ImageSetTest(BaseExportTest):
     def test_invalid_image_set_params(self):
         self.upload_image(self.user, self.source)
 
-        post_data = self.default_search_params.copy()
-        post_data['photo_date_0'] = 'abc'
+        post_data = dict(photo_date_0='abc')
         response = self.export_metadata(post_data)
 
         # Display an error in HTML instead of serving CSV.
@@ -136,8 +131,7 @@ class ImageSetTest(BaseExportTest):
         source2 = self.create_source(self.user)
         self.upload_image(self.user, source2, dict(filename='2.jpg'))
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         # Should have image 1, but not 2
         expected_lines = [
@@ -182,8 +176,7 @@ class MetadataColumnsTest(BaseExportTest):
         self.img1.metadata.comments = "Here are\nsome comments."
         self.img1.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         expected_lines = [
             'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5'
@@ -210,8 +203,7 @@ class MetadataColumnsTest(BaseExportTest):
         self.img1.metadata.aux3 = "Quadrant 5"
         self.img1.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         expected_lines = [
             'Name,Date,Site,Transect,Quadrant,Aux4,Aux5'
@@ -239,8 +231,7 @@ class UnicodeTest(BaseExportTest):
         self.img1.metadata.aux1 = "地点A"
         self.img1.metadata.save()
 
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         expected_lines = [
             'Name,Date,Aux1,Aux2,Aux3,Aux4,Aux5'
@@ -292,7 +283,6 @@ class UploadAndExportSameDataTest(BaseExportTest):
         )
 
         # Export metadata
-        post_data = self.default_search_params.copy()
-        response = self.export_metadata(post_data)
+        response = self.export_metadata()
 
         self.assert_csv_content_equal(response.content, csv_lines)

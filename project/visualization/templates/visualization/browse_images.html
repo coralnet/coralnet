@@ -9,9 +9,6 @@
 {% endblock %}
 
 {% block page-specific-includes %}
-  {% include "static-local-include.html" with type="js" path="js/BrowseActionHelper.js" %}
-  {% include "static-local-include.html" with type="js" path="js/CalcifyTablesHelper.js" %}
-
   {% include "static-local-include.html" with type="css" path="css/browse.css" %}
 {% endblock %}
 
@@ -52,10 +49,10 @@
     {% endfor %}
 
     {# Pagination info and links #}
-    {% include 'pagination_links.html' with use_post_form=True hidden_form=hidden_image_form page_results=page_results %}
+    {% include 'pagination_links.html' with page_results=page_results %}
 
     {% if can_see_actions %}
-      {% include 'visualization/browse_images_actions.html' %}
+      {% include 'visualization/browse_images_actions.html' with hidden_image_form=hidden_image_form %}
     {% else %}
       <div class="page-section">{{ no_actions_reason }}</div>
     {% endif %}
@@ -65,12 +62,13 @@
   {# Script in the body will run on page load. #}
 
   <script type="module">
+    import BrowseActionHelper from "{% static 'js/BrowseActionHelper.js' %}";
+    import CalcifyTablesHelper from "{% static 'js/CalcifyTablesHelper.js' %}";
     import MultiValueFieldHelper from "{% static 'js/MultiValueFieldHelper.js' %}";
+
     MultiValueFieldHelper.setUpFieldBasedVisibility(
         document.getElementById('search-form'));
-  </script>
 
-  <script type="text/javascript">
     {% if page_results.paginator.count > 0 and can_see_actions %}
       {# Action form is present. #}
       let browseActionHelper = new BrowseActionHelper(

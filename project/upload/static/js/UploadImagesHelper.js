@@ -16,11 +16,12 @@ var UploadImagesHelper = (function() {
 
     var $uploadStartButton = null;
     var $uploadAbortButton = null;
-    var $startAnotherUploadForm = null;
-    var $proceedToManageMetadataForm = null;
+    var proceedLinksContainer = null;
+    var manageMetadataLink = null;
 
     var uploadPreviewUrl = null;
     var uploadStartUrl = null;
+    var csrfToken = null;
 
     var files = [];
     var numErrors = 0;
@@ -34,7 +35,8 @@ var UploadImagesHelper = (function() {
     var uploadedImageIds = null;
 
     var currentFileIndex = null;
-    var uploadXHRObject = null;
+    var abortController = null;
+    var abortSignal = null;
 
 
     /**
@@ -162,20 +164,20 @@ var UploadImagesHelper = (function() {
             });
         });
 
+        // https://developer.mozilla.org/en-US/docs/Web/API/FormData/Using_FormData_Objects
+        var formData = new FormData();
+        formData.append('file_info', JSON.stringify(fileInfoForPreviewQuery));
+
         // Update upload statuses based on the server's info
-        $.ajax({
-            // URL to make request to
-            url: uploadPreviewUrl,
-            // Data to send in the request. This is a data structure we'll
-            // send as JSON.
-            data: {
-                file_info: JSON.stringify(fileInfoForPreviewQuery)
+        util.fetch(
+            uploadPreviewUrl,
+            {
+                method: 'POST',
+                body: formData,
             },
-            type: 'POST',
-            // Callbacks
-            success: handleUploadPreviewResponse,
-            error: util.handleServerError
-        });
+            handleUploadPreviewResponse,
+            {csrfToken: csrfToken},
+        );
     }
 
     function handleUploadPreviewResponse(response) {
@@ -341,7 +343,6 @@ var UploadImagesHelper = (function() {
             if (files[currentFileIndex].isUploadable) {
                 // An uploadable file was found, so upload it.
 
-                // https://developer.mozilla.org/en-US/docs/Web/API/FormData/Using_FormData_Objects
                 var formData = new FormData();
                 // Add the file as 'file' so that it can be validated
                 // on the server side with a form field named 'file'.
@@ -351,24 +352,30 @@ var UploadImagesHelper = (function() {
                     'name',
                     namePrefixField.value + files[currentFileIndex].file.name);
 
-                uploadXHRObject = $.ajax({
-                    // URL to make request to
-                    url: uploadStartUrl,
-                    // Data to send in the request
-                    data: formData,
-                    // Don't let jQuery auto-set the Content-Type header
-                    // if we're using FormData
-                    // http://stackoverflow.com/a/5976031/
-                    contentType: false,
-                    // Don't let jQuery attempt to convert the FormData
-                    // to a string, as it will fail
-                    // http://stackoverflow.com/a/5976031/
-                    processData: false,
-                    type: 'POST',
-                    // Callbacks
-                    success: handleUploadResponse,
-                    error: util.handleServerError
-                });
+                abortController = new AbortController();
+                abortSignal = abortController.signal;
+                util.fetch(
+                    uploadStartUrl,
+                    {
+                        method: 'POST',
+                        body: formData,
+                        signal: abortSignal,
+                    },
+                    // Using fetch's returned Promise instead of this callback
+                    // parameter, because not sure how to catch an AbortError
+                    // with the latter.
+                    handleUploadResponse,
+                    {
+                        csrfToken: csrfToken,
+                        errorHandler: (err) => {
+                            if (err.name !== 'AbortError') {
+                                throw err;
+                            }
+                            // Else, it's an AbortError, and that case is already
+                            // handled right after the code that does the abort.
+                        }
+                    },
+                );
 
                 // In the files table, update the status for that file.
                 var $statusCell = files[currentFileIndex].$statusCell;
@@ -394,22 +401,27 @@ var UploadImagesHelper = (function() {
             currentFileIndex++;
         }
 
-        // Reached the end of the files array.
+        // If we got here, we've reached the end of the files array, so
+        // there's nothing more to upload.
         updateStatus('uploaded');
         postUploadCleanup();
 
-        // Set the uploaded image ids in the proceed-to-manage-metadata form.
-        var commaSeparatedImageIds = uploadedImageIds.join();
-        $proceedToManageMetadataForm.find('input[name=ids]')
-            .val(commaSeparatedImageIds);
+        // Update the proceed-to-manage-metadata link with a filter arg
+        // that filters to the images that were just uploaded.
+        var minUploadedImageId = Math.min(...uploadedImageIds);
+        var maxUploadedImageId = Math.max(...uploadedImageIds);
+        var searchParams = new URLSearchParams({
+            image_id_range: `${minUploadedImageId}_${maxUploadedImageId}`,
+        });
+        manageMetadataLink.href += '?' + searchParams.toString();
 
         // Show the buttons for the user's next step.
-        $startAnotherUploadForm.show();
-        $proceedToManageMetadataForm.show();
+        proceedLinksContainer.hidden = false;
     }
 
     function postUploadCleanup() {
-        uploadXHRObject = null;
+        abortController = null;
+        abortSignal = null;
         util.pageLeaveWarningDisable();
     }
 
@@ -462,15 +474,9 @@ var UploadImagesHelper = (function() {
             "Are you sure you want to abort the upload?");
 
         if (confirmation) {
-            if (uploadXHRObject !== null) {
-                uploadXHRObject.abort();
-                updateStatus('aborted');
-                postUploadCleanup();
-            }
-            // Else, the upload finished before the user could confirm the
-            // abort (so there's nothing to abort anymore).  This could
-            // happen in Firefox, where scripts don't stop even when a
-            // confirmation dialog is showing.
+            abortController.abort();
+            updateStatus('aborted');
+            postUploadCleanup();
         }
     }
 
@@ -486,6 +492,9 @@ var UploadImagesHelper = (function() {
             // Get the parameters.
             uploadPreviewUrl = params['uploadPreviewUrl'];
             uploadStartUrl = params['uploadStartUrl'];
+
+            csrfToken =
+                document.querySelector('[name=csrfmiddlewaretoken]').value;
 
             // Upload status summary elements.
             $preUploadSummary = $('#pre_upload_summary');
@@ -508,15 +517,16 @@ var UploadImagesHelper = (function() {
             // Button elements.
             $uploadStartButton = $('#id_upload_submit');
             $uploadAbortButton = $('#id_upload_abort_button');
-            $startAnotherUploadForm = $('#id_start_another_upload_form');
-            $proceedToManageMetadataForm = $('#id_proceed_to_manage_metadata_form');
+            proceedLinksContainer = document.getElementById(
+                'proceed-links-container');
+            manageMetadataLink = document.getElementById(
+                'manage-metadata-link');
 
             $statusDisplay = $('#status_display');
 
 
             // Hide the after-upload buttons for now
-            $startAnotherUploadForm.hide();
-            $proceedToManageMetadataForm.hide();
+            proceedLinksContainer.hidden = true;
 
             // Handlers.
             $(filesField).change( function(){
