@@ -47,7 +47,7 @@ class EC_javascript_global_var_value(object):
 
 
 @tag('selenium')
-class BrowserTest(StaticLiveServerTestCase, ClientTest):
+class BaseSeleniumTest(StaticLiveServerTestCase, ClientTest):
     """
     Unit testing class for running tests in the browser with Selenium.
 

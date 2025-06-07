@@ -3,7 +3,7 @@ from django.contrib.auth.hashers import make_password
 from django.urls import reverse
 
 from lib.tests.utils import BasePermissionTest, ClientTest
-from lib.tests.utils_selenium import BrowserTest
+from lib.tests.utils_selenium import BaseSeleniumTest
 from ..hashers import SHA1PasswordHasher
 from .utils import BaseAccountsTest
 
@@ -122,7 +122,7 @@ class SignInTest(BaseAccountsTest):
         self.assertContains(response, "This account is inactive.")
 
 
-class StaySignedInTest(BrowserTest):
+class StaySignedInTest(BaseSeleniumTest):
 
     @classmethod
     def setUpTestData(cls):

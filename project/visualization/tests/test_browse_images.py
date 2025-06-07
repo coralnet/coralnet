@@ -9,7 +9,8 @@ from django.utils import timezone
 from accounts.utils import get_alleviate_user, get_imported_user
 from lib.tests.utils import BasePermissionTest
 from sources.models import Source
-from .utils import BaseBrowsePageTest, BrowseActionsFormTest
+from .utils import (
+    BaseBrowsePageTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
 
 tz = timezone.get_current_timezone()
 
@@ -1196,3 +1197,28 @@ class ImageStatusIndicatorTest(BaseBrowseImagesTest):
                  ' '.join(img_element.attrs.get('class')))
             )
         self.assertSetEqual(expected_thumb_set, actual_thumb_set)
+
+
+class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):
+
+    def test_search_should_preserve_most_params(self):
+        self.login(self.username, self.password)
+        self.get_url(f'{self.browse_url}?image_name=abc&sort_direction=desc')
+
+        self.submit_search()
+        self.assertIn('image_name', self.selenium.current_url)
+        self.assertIn('sort_direction', self.selenium.current_url)
+
+    def test_search_should_not_preserve_id_list(self):
+        self.login(self.username, self.password)
+        self.get_url(f'{self.browse_url}?image_id_list=15_16_17')
+
+        self.submit_search()
+        self.assertNotIn('image_id_list', self.selenium.current_url)
+
+    def test_search_should_not_preserve_id_range(self):
+        self.login(self.username, self.password)
+        self.get_url(f'{self.browse_url}?image_id_range=15_27')
+
+        self.submit_search()
+        self.assertNotIn('image_id_range', self.selenium.current_url)
