@@ -12,6 +12,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 - Updates to required packages:
   - pyspacer 0.11.0 -> 0.12.0
+  - selenium 3.141.0 -> 4.33.0
 
 ## [1.19.5](https://github.com/coralnet/coralnet/tree/1.19.5)
 

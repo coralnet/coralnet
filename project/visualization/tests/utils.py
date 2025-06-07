@@ -1,13 +1,24 @@
 from abc import ABC, abstractmethod
+import time
 from unittest import mock
 
 from bs4 import BeautifulSoup
+from selenium.webdriver.common.alert import Alert
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import classproperty
 
 from annotations.models import Annotation
 from lib.tests.utils import ClientTest
+from lib.tests.utils_selenium import (
+    EC_alert_is_not_present,
+    EC_javascript_global_var_value,
+    BaseSeleniumTest,
+)
 from sources.models import Source
 
 
@@ -349,3 +360,111 @@ class BrowseActionsFormTest(ClientTest, ABC):
         form_soup = self.get_form_soup(response)
         self.assertIsNone(
             form_soup, msg="Form should be absent")
+
+
+class BaseBrowseSeleniumTest(BaseSeleniumTest, ABC):
+
+    default_search_params = dict(search='true')
+    setup_image_count = 5
+    points_per_image = 2
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.username = 'userA'
+        cls.password = 'BrowseTest'
+        cls.user = cls.create_user(
+            username=cls.username, password=cls.password)
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(
+                type='simple', points=cls.points_per_image),
+        )
+        labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.browse_url = reverse('browse_images', args=[cls.source.pk])
+
+        cls.images = [
+            cls.upload_image(cls.user, cls.source)
+            for _ in range(cls.setup_image_count)
+        ]
+
+    @classmethod
+    def update_multiple_metadatas(cls, field_name, values):
+        """Update a particular metadata field on multiple images."""
+
+        if isinstance(values[0], tuple):
+            # Image-value pairs
+            image_value_pairs = values
+        else:
+            # Just values, to be paired with the full list of images
+            if len(cls.images) != len(values):
+                raise AssertionError(
+                    "If passing only values, number of values must equal"
+                    " number of images.")
+            image_value_pairs = zip(cls.images, values)
+
+        for image, value in image_value_pairs:
+            setattr(image.metadata, field_name, value)
+            image.metadata.save()
+
+    def login_and_navigate_to_browse(self):
+        self.login(self.username, self.password)
+        self.get_url(self.browse_url)
+
+    def select_search_filter(self, name, value):
+        # Only the search filter names actually used in the tests are covered
+        # here. Add more as needed.
+        if name in ['aux1']:
+            dropdown = self.selenium.find_element(By.ID, f'id_{name}')
+            Select(dropdown).select_by_value(value)
+
+    def submit_search(self):
+        with self.wait_for_page_load():
+            self.selenium.find_element(By.ID, 'search-form').submit()
+
+    def wait_for_javascript_init(self):
+        # Ensure the init JS runs.
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC_javascript_global_var_value('seleniumDebugInitRan', 'true'))
+
+    def do_confirmation_prompt(self, old_page, alert_text, alert_accept, expect_submit):
+
+        # Wait for an alert and type in its text box
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.alert_is_present())
+        alert = Alert(self.selenium)
+        alert.send_keys(alert_text)
+
+        if expect_submit:
+            # Close the alert and wait for page load before returning.
+            with self.wait_for_page_load(old_element=old_page):
+                if alert_accept:
+                    # OK
+                    alert.accept()
+                else:
+                    # Cancel
+                    alert.dismiss()
+                # Before checking if the page loaded, wait for the alert to
+                # close. Otherwise, checking page load could get an unexpected
+                # alert exception.
+                WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+                    EC_alert_is_not_present())
+        else:
+            # Expecting that closing the alert will not trigger an ajax
+            # delete or load
+            if alert_accept:
+                alert.accept()
+            else:
+                alert.dismiss()
+            # Wait a moment for the JS to run. We are going to assert the
+            # LACK of a change, so we can't check for an expected condition.
+            # We just sleep before asserting.
+            time.sleep(self.TIMEOUT_SHORT)
+
+            # Check the debug JS variable to ensure the delete did not trigger
+            delete_triggered = self.selenium.execute_script(
+                'return Boolean(window.seleniumDebugDeleteTriggered)')
+            self.assertFalse(delete_triggered)

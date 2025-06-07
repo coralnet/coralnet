@@ -3,15 +3,18 @@ from contextlib import contextmanager
 from selenium import webdriver
 from selenium.common.exceptions import NoAlertPresentException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.common.by import By
+from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
-from django.test import skipIfDBFeature, tag
+from django.test import tag
+from django.test.runner import DiscoverRunner
 from django.urls import reverse
 
-from .utils import ClientTest
+from .utils import ClientTest, CustomTestRunner
 
 
 class EC_alert_is_not_present(object):
@@ -44,16 +47,18 @@ class EC_javascript_global_var_value(object):
 
 
 @tag('selenium')
-@skipIfDBFeature('test_db_allows_multiple_connections')
-class BrowserTest(StaticLiveServerTestCase, ClientTest):
+class BaseSeleniumTest(StaticLiveServerTestCase, ClientTest):
     """
     Unit testing class for running tests in the browser with Selenium.
-    Selenium reference: https://selenium-python.readthedocs.io/api.html
 
-    You can skip these tests like `manage.py test --exclude-tag selenium`.
+    It's recommended to only run these tests with SeleniumTestRunner.
+    Do that with `python manage.py selenium_test` (not manage.py test).
+    It'll use that test runner class to run all the tests that are tagged
+    'selenium'.
+    Also, manage.py test will skip the tests tagged 'selenium' by default.
+    The special part about SeleniumTestRunner is that it uses SQLite to
+    stay single-threaded. Explanation on why that's important:
 
-    Explanation of the inheritance scheme and
-    @skipIfDBFeature('test_db_allows_multiple_connections'):
     This class inherits StaticLiveServerTestCase for the live-server
     functionality, and (a subclass of) TestCase to achieve test-function
     isolation using uncommitted transactions.
@@ -62,22 +67,18 @@ class BrowserTest(StaticLiveServerTestCase, ClientTest):
     DB connections, which may end up in inconsistent states. To avoid
     this, it inherits from TransactionTestCase, which makes each connection
     commit all their transactions.
-    But if there is only one DB connection possible, like with SQLite
-    (which is in-memory for Django tests), then this inconsistency concern
-    is not present, and we can use TestCase's feature. Hence the decorator:
-    @skipIfDBFeature('test_db_allows_multiple_connections')
-    Which ensures that these tests are skipped for PostgreSQL, MySQL, etc.,
-    but are run if the DB backend setting is SQLite.
-    Finally, we really want TestCase because:
-    1) Our migrations have initial data in them, such as Robot and Alleviate
-    users, and for some reason this data might get erased (and not re-created)
-    between tests if TestCase is not used.
+    But if there is only one DB connection possible, then this inconsistency
+    concern is not present, and we can use TestCase's feature.
+
+    We want TestCase because:
+    1) Our initial data, such as Robot and Alleviate users, might get
+    erased (and not re-created) between tests if TestCase is not used,
+    as explained here:
+    https://stackoverflow.com/questions/29378328/
     2) The ClientUtilsMixin's utility methods are all classmethods which are
     supposed to be called in setUpTestData(). TestCase is what provides the
     setUpTestData() hook.
-    Related discussions:
-    https://code.djangoproject.com/ticket/23640
-    https://stackoverflow.com/questions/29378328/
+    Related discussion: https://code.djangoproject.com/ticket/23640
     """
     selenium = None
 
@@ -93,37 +94,40 @@ class BrowserTest(StaticLiveServerTestCase, ClientTest):
         # https://twitter.com/audreyr/status/702540511425396736
         # Test parametrization idea 2: https://stackoverflow.com/a/40982410/
         # Decorator idea: https://stackoverflow.com/a/26821662/
-        for browser in settings.SELENIUM_BROWSERS:
-            browser_name_lower = browser['name'].lower()
+        if len(settings.SELENIUM_BROWSERS) == 0:
+            raise ValueError("SELENIUM_BROWSERS is empty.")
+        browser = settings.SELENIUM_BROWSERS[0]
 
-            if browser_name_lower == 'firefox':
-                options = FirefoxOptions()
-                for option in browser.get('options', []):
-                    options.add_argument(option)
-                cls.selenium = webdriver.Firefox(
-                    firefox_binary=browser.get('browser_binary', None),
-                    executable_path=browser.get('webdriver', 'geckodriver'),
-                    firefox_options=options,
-                )
-                break
+        browser_name_lower = browser['name'].lower()
 
-            if browser_name_lower == 'chrome':
-                options = ChromeOptions()
-                for option in browser.get('options', []):
-                    options.add_argument(option)
-                # Seems like the Chrome driver doesn't support a browser
-                # binary argument.
-                cls.selenium = webdriver.Chrome(
-                    executable_path=browser.get('webdriver', 'chromedriver'),
-                    chrome_options=options,
-                )
-                break
+        if browser_name_lower == 'firefox':
+            options = FirefoxOptions()
+            webdriver_class = webdriver.Firefox
+            service_class = webdriver.FirefoxService
+            default_webdriver_path = 'geckodriver'
+        elif browser_name_lower == 'chrome':
+            options = ChromeOptions()
+            webdriver_class = webdriver.Chrome
+            service_class = webdriver.ChromeService
+            default_webdriver_path = 'chromedriver'
+        elif browser_name_lower == 'edge':
+            options = EdgeOptions()
+            webdriver_class = webdriver.Edge
+            service_class = webdriver.EdgeService
+            default_webdriver_path = 'msedgedriver'
+        else:
+            raise ValueError(f"Unsupported browser: {browser['name']}")
 
-            if browser_name_lower == 'phantomjs':
-                cls.selenium = webdriver.PhantomJS(
-                    executable_path=browser.get('webdriver', 'phantomjs'),
-                )
-                break
+        for cli_argument in browser.get('cli_args', []):
+            options.add_argument(cli_argument)
+        if browser_binary := browser.get('browser_binary'):
+            options.binary_location = browser_binary
+
+        executable_path = browser.get('webdriver', default_webdriver_path)
+        cls.selenium = webdriver_class(
+            options=options,
+            service=service_class(executable_path=executable_path),
+        )
 
         # These class-var names should be nicer for autocomplete usage.
         cls.TIMEOUT_DB_CONSISTENCY = \
@@ -163,7 +167,7 @@ class BrowserTest(StaticLiveServerTestCase, ClientTest):
         to be checked separately.
         """
         if not old_element:
-            old_element = self.selenium.find_element_by_tag_name('html')
+            old_element = self.selenium.find_element(By.TAG_NAME, 'html')
         yield
         WebDriverWait(self.selenium, self.TIMEOUT_PAGE_LOAD) \
             .until(EC.staleness_of(old_element))
@@ -173,21 +177,30 @@ class BrowserTest(StaticLiveServerTestCase, ClientTest):
         url is something like `/login/`. In general it can be a result of
         reverse().
         """
-        self.selenium.get('{}{}'.format(self.live_server_url, url))
+        self.selenium.get(f'{self.live_server_url}{url}')
 
     def login(self, username, password, stay_signed_in=False):
         self.get_url(reverse('login'))
-        username_input = self.selenium.find_element_by_name("username")
+        username_input = self.selenium.find_element(By.NAME, "username")
         username_input.send_keys(username)
-        password_input = self.selenium.find_element_by_name("password")
+        password_input = self.selenium.find_element(By.NAME, "password")
         password_input.send_keys(password)
 
         if stay_signed_in:
             # Tick the checkbox
             stay_signed_in_input = \
-                self.selenium.find_element_by_name("stay_signed_in")
+                self.selenium.find_element(By.NAME, "stay_signed_in")
             stay_signed_in_input.click()
 
         with self.wait_for_page_load():
-            self.selenium.find_element_by_css_selector(
-                'input[value="Sign in"]').click()
+            self.selenium.find_element(
+                By.CSS_SELECTOR, 'input[value="Sign in"]').click()
+
+
+class SeleniumTestRunner(CustomTestRunner):
+
+    def __init__(self, *args, tags=None, **kwargs):
+        # By default this will only run tests tagged 'selenium'.
+        tags = set(tags or [])
+        tags.add('selenium')
+        DiscoverRunner.__init__(self, *args, tags=list(tags), **kwargs)

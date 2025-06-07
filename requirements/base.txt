@@ -149,13 +149,16 @@ charset-normalizer>=3.1.0,<3.2
 # https://www.crummy.com/software/BeautifulSoup/bs4/doc/#unicode-dammit
 beautifulsoup4>=4.11.1,<4.12
 
-# Browser-side testing.
-# Changelog: https://github.com/SeleniumHQ/selenium/blob/master/py/CHANGES
+# Enables browser-side testing which can be integrated with Django.
+# Changelog: https://github.com/SeleniumHQ/selenium/blob/trunk/py/CHANGES
+# Compat: Python 3.9-3.13
 #
 # Also requires installing drivers for specific browsers, and putting the
 # drivers on your PATH:
 # https://selenium-python.readthedocs.io/installation.html#drivers
-selenium==3.141.0
+# (Those docs are unofficial, but can sometimes be more useful than the
+# official ones.)
+selenium==4.33.0
 
 # Python interface to Redis, an in-memory data store which can be a
 # message broker among other things.

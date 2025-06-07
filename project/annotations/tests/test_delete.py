@@ -1,6 +1,11 @@
 import datetime
+import time
 from unittest import mock
 
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -10,7 +15,7 @@ from lib.tests.utils import BasePermissionTest, spy_decorator
 from sources.models import Source
 from vision_backend.tests.tasks.utils import TaskTestMixin
 from visualization.tests.utils import (
-    BaseBrowseActionTest, BrowseActionsFormTest)
+    BaseBrowseActionTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
 from ..managers import AnnotationQuerySet
 
 
@@ -560,3 +565,241 @@ class ErrorTest(BaseDeleteTest):
 
         for image in self.images:
             self.assert_annotations_not_deleted(image)
+
+
+# Make it easy to get multiple pages of results.
+@override_settings(BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3)
+class SeleniumTest(BaseBrowseSeleniumTest):
+
+    setup_image_count = 5
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        # Be able to test a filtered Browse page.
+        # When filtered by aux1='X', should still bring up multiple pages,
+        # with the first page being different from an unfiltered first page.
+        cls.update_multiple_metadatas('aux1', ['X', 'X', 'Y', 'X', 'X'])
+
+        cls.img1_pk, cls.img2_pk, cls.img3_pk, cls.img4_pk, cls.img5_pk = [
+            img.pk for img in cls.images]
+
+    def setUp(self):
+        super().setUp()
+
+        for image in self.images:
+            image.refresh_from_db()
+            self.add_annotations(self.user, image)
+
+    def select_delete_option(self):
+        browse_action_dropdown = self.selenium.find_element(
+            By.CSS_SELECTOR, 'select[name="browse_action"]')
+        Select(browse_action_dropdown).select_by_value('delete_annotations')
+
+    def delete_parametrized(
+            self, image_select_type, alert_text, alert_accept,
+            expect_submit, search_filters=None):
+
+        self.login_and_navigate_to_browse()
+        if search_filters:
+            for name, value in search_filters:
+                self.select_search_filter(name, value)
+        # Whether or not there are search filters, submit the search form
+        # in order for deletion to be possible. (It's designed this way to
+        # prevent bugs that could omit the search fields and accidentally
+        # delete everything.)
+        self.submit_search()
+
+        self.wait_for_javascript_init()
+
+        self.select_delete_option()
+
+        # Image select type
+        image_select_type_dropdown = self.selenium.find_element(
+            By.CSS_SELECTOR, 'select[name="image_select_type"]')
+        Select(image_select_type_dropdown).select_by_value(image_select_type)
+
+        # Grab the page's root element in advance. We'll want to check for
+        # staleness of it, but Selenium can't grab the element if an alert
+        # is up.
+        old_page = self.selenium.find_element(By.TAG_NAME, 'html')
+
+        # Click Go
+        self.selenium.find_element(
+            By.CSS_SELECTOR, '#delete-annotations-ajax-form button.submit').click()
+
+        self.do_confirmation_prompt(
+            old_page, alert_text, alert_accept, expect_submit)
+
+        # For whatever reason, this makes the tests more stable, at least
+        # on Chrome (maybe because it's faster than Firefox?).
+        # Otherwise there may be some point where the DB doesn't get
+        # properly rolled back before starting the next test.
+        time.sleep(self.TIMEOUT_DB_CONSISTENCY)
+
+    def assert_annotations_deleted(self, image):
+        self.assertFalse(
+            # `.all()` seems to ensure the underlying query is run anew.
+            image.annotation_set.all().exists(),
+            f"Image {image.metadata.name}'s annotations should be deleted")
+
+        image.annoinfo.refresh_from_db()
+        self.assertFalse(
+            image.annoinfo.confirmed,
+            f"Image {image.metadata.name} should not be confirmed anymore")
+
+    def assert_annotations_not_deleted(
+        self, image, expected_count=2, expect_confirmed=True,
+    ):
+        image.refresh_from_db()
+        self.assertEqual(
+            image.annotation_set.all().count(), expected_count,
+            f"Image {image.metadata.name} should still have its annotations")
+
+        if expect_confirmed:
+            image.annoinfo.refresh_from_db()
+            self.assertTrue(
+                image.annoinfo.confirmed,
+                f"Image {image.metadata.name} should still be confirmed")
+
+    def assert_deletion_set(self, expected_deleted_ids: list[int]):
+        expected_deleted_images = [
+            image for image in self.images
+            if image.pk in expected_deleted_ids
+        ]
+        expected_not_deleted_images = [
+            image for image in self.images
+            if image.pk not in expected_deleted_ids
+        ]
+
+        for image in expected_deleted_images:
+            self.assert_annotations_deleted(image)
+        for image in expected_not_deleted_images:
+            self.assert_annotations_not_deleted(image)
+
+    # Tests start here
+
+    def test_delete_form_not_visible_if_not_searched(self):
+        self.login_and_navigate_to_browse()
+        self.wait_for_javascript_init()
+        self.select_delete_option()
+
+        # Delete form's button should not be visible
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.invisibility_of_element_located(
+                (By.CSS_SELECTOR, '#delete-annotations-ajax-form button.submit')))
+
+    def test_delete_form_not_visible_at_non_search_page_2(self):
+        self.login_and_navigate_to_browse()
+
+        next_page_link = self.selenium.find_element(
+            By.CSS_SELECTOR, 'a[title="Next page"]')
+        with self.wait_for_page_load():
+            next_page_link.click()
+
+        self.wait_for_javascript_init()
+        self.select_delete_option()
+
+        # Delete form's button should not be visible
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.invisibility_of_element_located(
+                (By.CSS_SELECTOR, '#delete-annotations-ajax-form button.submit')))
+
+    def test_only_delete_form_visible_after_selecting_delete(self):
+        self.login_and_navigate_to_browse()
+        self.submit_search()
+        self.wait_for_javascript_init()
+        self.select_delete_option()
+
+        # Delete form's button should be visible
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.visibility_of_element_located(
+                (By.CSS_SELECTOR, '#delete-annotations-ajax-form button.submit')))
+        # Some other form's button should not be visible
+        WebDriverWait(self.selenium, self.TIMEOUT_MEDIUM).until(
+            EC.invisibility_of_element_located(
+                (By.CSS_SELECTOR, '#export-metadata-form button.submit')))
+
+    def test_delete_all(self):
+        """Delete for all images in the source."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='delete',
+            alert_accept=True,
+            expect_submit=True)
+        self.assert_deletion_set([
+            self.img1_pk, self.img2_pk, self.img3_pk, self.img4_pk,
+            self.img5_pk,
+        ])
+
+    def test_delete_selected(self):
+        """Delete for selected images only."""
+        self.delete_parametrized(
+            image_select_type='selected',
+            alert_text='delete',
+            alert_accept=True,
+            expect_submit=True)
+        # 1st page (3 per page) should be deleted
+        self.assert_deletion_set([
+            self.img1_pk, self.img2_pk, self.img3_pk])
+
+    def test_delete_current_search_all(self):
+        """Delete for all images in the current search."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='delete',
+            alert_accept=True,
+            expect_submit=True,
+            search_filters=[('aux1', 'X')])
+        # Images 1, 2, 4, and 5 had aux1 of X
+        self.assert_deletion_set([
+            self.img1_pk, self.img2_pk, self.img4_pk, self.img5_pk])
+
+    def test_delete_current_search_selected(self):
+        """Delete for just selected images in the current search."""
+        self.delete_parametrized(
+            image_select_type='selected',
+            alert_text='delete',
+            alert_accept=True,
+            expect_submit=True,
+            search_filters=[('aux1', 'X')])
+        # 1st page of results had 1, 2, 4
+        self.assert_deletion_set([
+            self.img1_pk, self.img2_pk, self.img4_pk])
+
+    def test_delete_clicked_cancel(self):
+        """Cancel on the prompt should result in no deletion."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='',
+            alert_accept=False,
+            expect_submit=False)
+        self.assert_deletion_set([])
+
+    def test_delete_confirmation_not_typed_clicked_ok(self):
+        """OK on prompt, but no confirmation text -> no deletion."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='',
+            alert_accept=True,
+            expect_submit=False)
+        self.assert_deletion_set([])
+
+    def test_delete_confirmation_mistyped_clicked_ok(self):
+        """OK on prompt, but wrong confirmation text -> no deletion."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='sometext',
+            alert_accept=True,
+            expect_submit=False)
+        self.assert_deletion_set([])
+
+    def test_delete_confirmation_typed_clicked_cancel(self):
+        """Correct confirmation text, but clicked Cancel -> no deletion."""
+        self.delete_parametrized(
+            image_select_type='all',
+            alert_text='delete',
+            alert_accept=False,
+            expect_submit=False)
+        self.assert_deletion_set([])

@@ -30,6 +30,19 @@ User = get_user_model()
 
 class CustomTestRunner(DiscoverRunner):
 
+    def __init__(self, *args, tags=None, exclude_tags=None, **kwargs):
+        # By default this will run all tests except those tagged 'selenium'.
+        # However, additional tags or exclude_tags can be specified in
+        # the command options to do things differently. You can even
+        # override the selenium-exclusion by including 'selenium' in the
+        # tags option.
+        tags = set(tags or [])
+        exclude_tags = set(exclude_tags or [])
+        if 'selenium' not in tags:
+            exclude_tags.add('selenium')
+        super().__init__(
+            *args, tags=list(tags), exclude_tags=list(exclude_tags), **kwargs)
+
     def run_tests(self, test_labels, **kwargs):
         # Make tasks run synchronously. This is needed since the
         # huey consumer would run in a separate process, meaning it
@@ -193,6 +206,15 @@ class ClientTest(DataTestMixin, BaseTest):
 
         # Create a superuser.
         cls.superuser = cls.create_superuser()
+
+        if not settings.TEST_DATABASE_MIGRATE:
+            # Create the initial data that the migrations would have created.
+            user = User(username=settings.IMPORTED_USERNAME)
+            user.save()
+            user = User(username=settings.ROBOT_USERNAME)
+            user.save()
+            user = User(username=settings.ALLEVIATE_USERNAME)
+            user.save()
 
     def setUp(self):
         super().setUp()
