@@ -4,6 +4,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoAlertPresentException
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
+from selenium.webdriver.edge.options import Options as EdgeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -109,6 +110,11 @@ class BrowserTest(StaticLiveServerTestCase, ClientTest):
             webdriver_class = webdriver.Chrome
             service_class = webdriver.ChromeService
             default_webdriver_path = 'chromedriver'
+        elif browser_name_lower == 'edge':
+            options = EdgeOptions()
+            webdriver_class = webdriver.Edge
+            service_class = webdriver.EdgeService
+            default_webdriver_path = 'msedgedriver'
         else:
             raise ValueError(f"Unsupported browser: {browser['name']}")
 
