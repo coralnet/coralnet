@@ -2,17 +2,6 @@
 -r base.txt
 
 
-# Enables browser-side testing which can be integrated with Django.
-# Changelog: https://github.com/SeleniumHQ/selenium/blob/trunk/py/CHANGES
-# Compat: Python 3.9-3.13
-#
-# Also requires installing drivers for specific browsers, and putting the
-# drivers on your PATH:
-# https://selenium-python.readthedocs.io/installation.html#drivers
-# (Those docs are unofficial, but can sometimes be more useful than the
-# official ones.)
-selenium==4.33.0
-
 # Output info on test coverage - how much of the Python codebase is covered
 # by the unit tests.
 # The version shouldn't really matter here, as it's not part of the running
