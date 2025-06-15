@@ -332,6 +332,7 @@ class FormInitializationTest(BaseBrowseImagesTest):
     # initialization tests.
 
 
+@override_settings(BROWSE_METADATA_OPTION_LIMIT=3)
 class AuxMetadataSearchTest(BaseBrowseImagesTest):
 
     @classmethod
@@ -382,7 +383,7 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
         self.assert_browse_results(
             response, [self.img2, self.img3])
 
-    def test_only_show_metadata_field_if_multiple_values(self):
+    def test_only_show_metadata_field_if_non_blank_values(self):
         # aux1 is blank for every image
         self.update_multiple_metadatas(
             'aux1', ['', '', '', '', ''])
@@ -403,8 +404,27 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
 
         self.assertIsNone(self.get_search_form_field(response, 'aux1'))
         self.assertIsNotNone(self.get_search_form_field(response, 'aux2'))
-        self.assertIsNone(self.get_search_form_field(response, 'aux3'))
+        self.assertIsNotNone(self.get_search_form_field(response, 'aux3'))
         self.assertIsNotNone(self.get_search_form_field(response, 'aux4'))
+
+    def test_text_field_if_too_many_uniques(self):
+        # aux2 has 3 unique non-blank values
+        self.update_multiple_metadatas(
+            'aux2',
+            ['5m', '10m', '20m', '5m', '10m'])
+        # aux3 has 4 unique non-blank values
+        self.update_multiple_metadatas(
+            'aux3',
+            ['Transect4', 'Transect3', 'Transect1', 'Transect2', 'Transect4'])
+
+        response = self.get_browse()
+
+        self.assertEqual(
+            self.get_search_form_field(response, 'aux2').name, 'select',
+            msg="aux2 should use a dropdown")
+        self.assertEqual(
+            self.get_search_form_field(response, 'aux3').name, 'input',
+            msg="aux3 should use a text input")
 
 
 class DateSearchTest(BaseBrowseImagesTest):
