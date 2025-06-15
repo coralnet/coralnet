@@ -73,6 +73,8 @@ html {
      form fields look weird (at least on the Add/Remove Labels page) */
     --dialog-form-background-color: hsl(30, 18%, 95%);
 
+    --kbd-background-color: hsl(0, 0%, 87%);
+
     --top-message-outer-background-color: hsl(0, 0%, 7%);
     --top-message-normal-background-color: hsl(48, 86%, 92%);
     --top-message-maintenance-background-color: hsl(0, 100%, 90%);
@@ -127,6 +129,8 @@ html.dark-scheme {
 
     --dialog-background-color: hsl(210, 5%, 15%, 95%);
     --dialog-form-background-color: hsl(210, 5%, 15%);
+
+    --kbd-background-color: hsl(0, 0%, 25%);
 
     --top-message-outer-background-color: hsl(0, 0%, 30%);
     --top-message-normal-background-color: hsl(48, 50%, 30%);
@@ -396,7 +400,7 @@ kbd {
     font-size: 0.9em;
     line-height: 1.4em;
     padding: 0 2px;    /* 2px of horizontal padding */
-    background-color: #DDDDDD;
+    background-color: var(--kbd-background-color);
 
     border: 1px solid black;
     border-radius: 3px;
