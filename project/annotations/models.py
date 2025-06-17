@@ -29,6 +29,48 @@ class Annotation(models.Model):
     label = models.ForeignKey(Label, on_delete=models.PROTECT)
     source = models.ForeignKey(Source, on_delete=models.CASCADE, editable=False)
 
+    class Meta:
+        # Due to the sheer number of Annotations there can be in a source
+        # in practice (e.g. 50k images, 400 points per image), performance
+        # of Annotation queries is a difficult problem. So we explicitly
+        # define this table's indexes here in an attempt to optimize.
+        # General ideas behind these indexes:
+        #
+        # 1) A multi-column index [A,B,C] should speed up queries that filter
+        # on just A, on just A + B, or on A + B + C.
+        #
+        # 2) We seem to almost never filter on just user, or just robot
+        # version, so those don't need their own indexes (i.e. indexes where
+        # that is the first column). Cutting out some indexes we don't use
+        # saves us some time when doing inserts. (Incidentally, to figure out
+        # what we don't use, run `select * from pg_stat_user_indexes;` on
+        # the dbshell and look at number of scans.)
+        #
+        # 3) The choices of multi-column indexes are hopefully tailored to
+        # our most expensive/frequent Annotation queries.
+        #
+        # Note: We do not explicitly define indexes for unique constraints
+        # (in this case, the OneToOne to Point), since those seem guaranteed
+        # to be automatically defined (since the constraint isn't allowed to
+        # exist without the index).
+        indexes = [
+            models.Index(
+                fields=['image', 'user'],
+                name='annotation_to_img_usr_i'),
+            models.Index(
+                fields=['image', 'label', 'user'],
+                name='annotation_to_img_lbl_usr_i'),
+            models.Index(
+                fields=['label', 'source'],
+                name='annotation_to_lbl_src_i'),
+            models.Index(
+                fields=['source', 'user', 'robot_version'],
+                name='annotation_to_src_usr_rbtv_i'),
+            models.Index(
+                fields=['source', 'label', 'user'],
+                name='annotation_to_src_lbl_usr_i'),
+        ]
+
     @property
     def label_code(self):
         local_label = LocalLabel.objects.get(
