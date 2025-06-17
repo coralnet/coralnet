@@ -1356,6 +1356,11 @@ BROWSE_DEFAULT_THUMBNAILS_PER_PAGE = 20
 LABEL_EXAMPLE_PATCHES_PER_PAGE = 50
 LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST = 5
 
+# If a source has more than this many unique values for a given
+# aux. metadata model field, the corresponding search form field
+# becomes a free text field rather than a dropdown options field.
+BROWSE_METADATA_OPTION_LIMIT = 50
+
 # Image counts required for sources to: display on the map,
 # display as medium size, and display as large size.
 MAP_IMAGE_COUNT_TIERS = env.list(

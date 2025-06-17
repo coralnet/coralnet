@@ -1,6 +1,7 @@
 import datetime
 
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import int_list_validator
 from django.forms import Form
@@ -436,23 +437,37 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 .values_list(field_name, flat=True)
                 .distinct()
             )
+            non_blank_choices = [(c, c) for c in choices if c != '']
 
-            if len(choices) <= 1:
+            if len(non_blank_choices) == 0:
+
                 # No point in having a dropdown for this
                 continue
 
-            self.fields[field_name] = forms.ChoiceField(
-                label=field_label,
-                choices=(
-                    # Any value
-                    [('', "Any")]
-                    # Non-blank values
-                    + [(c, c) for c in choices if c]
-                    # Blank value
-                    + [('(none)', "(None)")]
-                ),
-                required=False,
-            )
+            elif (len(non_blank_choices)
+                  <= settings.BROWSE_METADATA_OPTION_LIMIT):
+
+                self.fields[field_name] = forms.ChoiceField(
+                    label=field_label,
+                    choices=(
+                        # Any value
+                        [('', "Any")]
+                        # Non-blank values
+                        + non_blank_choices
+                        # Blank value
+                        + [('(none)', "(None)")]
+                    ),
+                    required=False,
+                )
+
+            else:
+
+                # There'd be too many choices for a dropdown,
+                # so use a free text field instead.
+                self.fields[field_name] = forms.CharField(
+                    label=field_label,
+                    required=False,
+                )
 
     def add_image_annotation_status_fields(self):
 
