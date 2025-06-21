@@ -269,7 +269,9 @@ def browse_patches(request, source_id):
     page_results = paginate(
         annotation_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
-        request.GET)
+        request.GET,
+        count_limit=settings.BROWSE_PATCHES_RESULT_LIMIT,
+    )
 
     return render(request, 'visualization/browse_patches.html', {
         'source': source,

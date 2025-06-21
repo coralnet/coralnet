@@ -527,6 +527,50 @@ class PagesTest(BaseBrowsePatchesTest):
             f'?patch_label={label_a_pk}&page=3',
         )
 
+    # Only Browse Patches has a result-count limit.
+
+    @override_settings(BROWSE_PATCHES_RESULT_LIMIT=8)
+    def test_result_limit(self):
+        # There are 10 total patches, more than the limit.
+
+        explanation = (
+            "Due to site performance limitations, this is the last page"
+            " of search results we can show.")
+
+        response = self.get_browse(**self.default_search_params)
+        self.assert_page_results(
+            response, 8,
+            expected_summary="Showing 1-3 of 8 or more",
+            expected_page_status="Page 1 of 3",
+        )
+        self.assertNotContains(response, explanation)
+
+        response = self.get_browse(page=3, **self.default_search_params)
+        self.assert_page_results(
+            response, 8,
+            expected_summary="Showing 7-8 of 8 or more",
+            expected_page_status="Page 3 of 3",
+        )
+        self.assertContains(response, explanation)
+
+        response = self.get_browse(page=4, **self.default_search_params)
+        self.assert_page_results(
+            response, 8,
+            expected_summary="Showing 7-8 of 8 or more",
+            expected_page_status="Page 3 of 3",
+        )
+        self.assertContains(response, explanation)
+
+        # Here the limit is not reached.
+        label_a_pk = self.labels.get(default_code='A').pk
+        response = self.get_browse(page=3, patch_label=label_a_pk)
+        self.assert_page_results(
+            response, 7,
+            expected_summary="Showing 7-7 of 7",
+            expected_page_status="Page 3 of 3",
+        )
+        self.assertNotContains(response, explanation)
+
 
 class NoLabelsetTest(BaseBrowsePatchesTest):
 
