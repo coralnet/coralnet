@@ -1,6 +1,6 @@
 from django.views.generic import ListView, DetailView
 
-from lib.utils import ViewPaginator
+from lib.utils import CustomPaginator
 from .models import BlogPost
 
 
@@ -25,9 +25,9 @@ class PostsList(ListView):
     def get_paginator(self, *args, **kwargs):
         """
         This allows us to use pagination_links.html, which has stuff specific
-        to our ViewPaginator class.
+        to our CustomPaginator class.
         """
-        return ViewPaginator(dict(), *args, **kwargs)
+        return CustomPaginator(dict(), *args, **kwargs)
 
 
 class PostDetail(DetailView):

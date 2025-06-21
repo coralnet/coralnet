@@ -4,6 +4,9 @@
     <div class="line"><span>
       Showing {{ page_results.start_index }}-{{ page_results.end_index }}
       of {{ page_results.paginator.count }}
+      {% if page_results.paginator.count_limit_reached %}
+        or more
+      {% endif %}
     </span></div>
   {% endif %}
 
@@ -25,4 +28,10 @@
     {% endif %}
 
   </div>
+
+  {% if page_results.paginator.count_limit_reached and not page_results.has_next %}
+    <div class="line">
+      Due to site performance limitations, this is the last page of search results we can show.
+    </div>
+  {% endif %}
 </div>

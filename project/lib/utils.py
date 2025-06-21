@@ -3,6 +3,7 @@
 from contextlib import ContextDecorator
 from contextvars import ContextVar
 import datetime
+from functools import cached_property
 import random
 import string
 from typing import Any, Callable
@@ -183,23 +184,44 @@ class ViewPage(Page):
         return '?' + urllib.parse.urlencode(args)
 
 
-class ViewPaginator(Paginator):
+class CustomPaginator(Paginator):
 
-    def __init__(self, request_args, *args, **kwargs):
+    def __init__(self, request_args, *args, count_limit=None, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.args_besides_page = {
             k: v for k, v in request_args.items() if k != 'page'}
+
+        self.count_limit = count_limit
 
     def _get_page(self, *args, **kwargs):
         return ViewPage(self.args_besides_page, *args, **kwargs)
 
+    @cached_property
+    def count(self):
+        c = getattr(self.object_list, "count", None)
+        if callable(c):
+            # We've figured we have a QuerySet, using logic similar to
+            # that of Paginator.count().
+            # In this case we have a chance to optimize for not too much
+            # UX detriment, by telling the database to stop counting
+            # past a certain limit.
+            if self.count_limit:
+                return self.object_list[:self.count_limit].count()
+        # If not a QuerySet, or no count limit, defer to superclass.
+        return super().count
 
-def paginate(results, items_per_page, request_args):
+    def count_limit_reached(self):
+        return self.count_limit and self.count == self.count_limit
+
+
+def paginate(results, items_per_page, request_args, count_limit=None):
     """
     Helper for paginated views.
     Assumes the page number is in the GET parameter 'page'.
     """
-    paginator = ViewPaginator(request_args, results, items_per_page)
+    paginator = CustomPaginator(
+        request_args, results, items_per_page, count_limit=count_limit)
     request_args = request_args or dict()
 
     # Make sure page request is an int. If not, deliver first page.

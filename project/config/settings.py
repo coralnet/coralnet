@@ -1361,6 +1361,10 @@ LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST = 5
 # becomes a free text field rather than a dropdown options field.
 BROWSE_METADATA_OPTION_LIMIT = 50
 
+# Max results to count in Browse Patches, because arbitrarily
+# high counts are a potential source of slow page loads.
+BROWSE_PATCHES_RESULT_LIMIT = 20000
+
 # Image counts required for sources to: display on the map,
 # display as medium size, and display as large size.
 MAP_IMAGE_COUNT_TIERS = env.list(
