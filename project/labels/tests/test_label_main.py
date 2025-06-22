@@ -530,6 +530,41 @@ class LabelMainPatchLinksTest(BaseLabelMainTest):
         self.assertEqual(response['patchesHtml'].count('<a'), 6)
 
 
+@override_settings(LABEL_EXAMPLE_PATCHES_PER_PAGE=80)
+class LabelMainPatchQueriesTest(BaseLabelMainTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        # Call the parent's setup (while still using this class as cls)
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=20),
+        )
+
+        # All annotations will be of label A.
+        cls.labels = cls.create_labels(
+            cls.user, ['A'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.source.refresh_from_db()
+
+        cls.images = []
+        # 20*4 annotations
+        for _ in range(4):
+            image = cls.upload_image(cls.user, cls.source)
+            cls.images.append(image)
+            cls.add_annotations(cls.user, image)
+
+    def test(self):
+        # Should run less than 1 query per patch.
+        with self.assert_queries_less_than(80):
+            response = self.get_example_patches()
+
+        self.assertEqual(self.patch_img_element_count(response), 80)
+
+
 class PopularityTest(ClientTest):
     """Tests related to label popularity values."""
 

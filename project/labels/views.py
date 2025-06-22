@@ -476,11 +476,13 @@ def label_example_patches_ajax(request, label_id):
         patch_annotations = page_annotations.object_list
         is_last_page = page >= paginator.num_pages
 
+    patch_annotations = patch_annotations.select_related(
+        'point', 'point__image', 'source')
     patches = []
     for index, annotation in enumerate(patch_annotations):
         point = annotation.point
         image = point.image
-        source = image.source
+        source = annotation.source
 
         generate_patch_if_doesnt_exist(point)
 
