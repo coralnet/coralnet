@@ -190,6 +190,7 @@ def edit_metadata(request, source_id):
     #
     # But for now, we always just sort by image name.
     image_results = image_results.order_by('metadata__name', 'pk')
+    image_results = image_results.select_related('annoinfo')
     num_images = image_results.count()
 
     # Formset of MetadataForms.
