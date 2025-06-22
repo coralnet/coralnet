@@ -442,11 +442,11 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         self.image.annotation_set \
             .filter(point__point_number__in=[2, 4]).delete()
 
-        remaining_annotation_point_ids = set(
-            self.image.annotation_set.values_list('point_id', flat=True))
+        remaining_annotations = set(
+            self.image.annotation_set.select_related('point'))
         expected_thumbnail_filenames = set([
-            Path(get_patch_path(point_id)).name
-            for point_id in remaining_annotation_point_ids])
+            Path(get_patch_path(annotation.point)).name
+            for annotation in remaining_annotations])
 
         response = self.get_example_patches()
         patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')

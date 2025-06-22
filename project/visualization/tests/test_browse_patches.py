@@ -589,3 +589,32 @@ class NoLabelsetTest(BaseBrowsePatchesTest):
         response = self.get_browse(**self.default_search_params)
         self.assert_no_results(response)
         self.assertContains(response, "No patch results.")
+
+
+@override_settings(
+    # More results per page, to really make clear how the query count
+    # depends on results per page.
+    BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=100,
+)
+class QueriesTest(BaseBrowsePatchesTest):
+
+    setup_image_count = 5
+    points_per_image = 20
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        for image in cls.images:
+            cls.add_annotations(cls.user, image)
+
+    def test(self):
+        # Should run less than 1 query per patch.
+        with self.assert_queries_less_than(100):
+            response = self.get_browse(**self.default_search_params)
+
+        self.assert_browse_results(
+            response,
+            [(i, p) for i in range(1, 5+1) for p in range(1, 20+1)],
+            msg_prefix="Shouldn't have any issues preventing correct results",
+        )

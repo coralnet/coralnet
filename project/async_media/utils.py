@@ -6,6 +6,7 @@ from django.core.files.storage import default_storage
 from django.templatetags.static import static as to_static_path
 from easy_thumbnails.files import get_thumbnailer
 
+from images.models import Point
 from jobs.models import Job
 from jobs.utils import get_or_create_job, start_job
 from lib.utils import scoped_cache_context_var
@@ -97,8 +98,26 @@ class AsyncThumbnail(AsyncMediaItem):
 
 class AsyncPatch(AsyncMediaItem):
 
-    def __init__(self, point_id):
-        self.point_id = point_id
+    def __init__(self, point=None, point_id=None):
+        # In some cases it's efficient to pass in point so that it
+        # doesn't have to be re-fetched.
+        # In other cases point_id is all we can provide and we don't
+        # need point anyway, so fetching would be unnecessary.
+        # So, we support either parameter here.
+        if point:
+            self._point = point
+            self.point_id = point.pk
+        elif point_id:
+            self._point = None
+            self.point_id = point_id
+        else:
+            raise ValueError("Must pass in point or point_id.")
+
+    @property
+    def point(self):
+        if not self._point:
+            self._point = Point.objects.get(pk=self.point_id)
+        return self._point
 
     @property
     def width(self):
@@ -122,9 +141,9 @@ class AsyncPatch(AsyncMediaItem):
 
     def get_url(self):
         # Check if patch exists for the point.
-        patch_relative_path = get_patch_path(self.point_id)
+        patch_relative_path = get_patch_path(self.point)
         if default_storage.exists(patch_relative_path):
-            return get_patch_url(self.point_id)
+            return get_patch_url(self.point)
         else:
             return None
 
@@ -133,7 +152,7 @@ class AsyncPatch(AsyncMediaItem):
         first_token, point_id = media_key.split(':')
         if first_token != 'point':
             raise ValueError("Not the expected first token.")
-        return cls(point_id)
+        return cls(point_id=point_id)
 
 
 def async_media_factory(media_key):

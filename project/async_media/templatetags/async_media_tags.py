@@ -56,7 +56,7 @@ def patch_async(point, media_batch_key, request):
     """
     Image patch for an annotation point.
     """
-    media_item = AsyncPatch(point_id=point.pk)
+    media_item = AsyncPatch(point=point)
     return media_async(media_item, media_batch_key, request)
 
 

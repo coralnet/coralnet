@@ -30,9 +30,9 @@ def generate_patch(point_id: int):
     Generate an image patch centered around an annotation point.
     """
     try:
-        Point.objects.get(pk=point_id)
+        point = Point.objects.get(pk=point_id)
     except Point.DoesNotExist:
         raise JobError(f"Point {point_id} doesn't exist anymore.")
 
-    generate_patch_if_doesnt_exist(point_id)
-    return get_patch_url(point_id)
+    generate_patch_if_doesnt_exist(point)
+    return get_patch_url(point)

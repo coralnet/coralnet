@@ -482,7 +482,7 @@ def label_example_patches_ajax(request, label_id):
         image = point.image
         source = image.source
 
-        generate_patch_if_doesnt_exist(point.pk)
+        generate_patch_if_doesnt_exist(point)
 
         if source.visible_to_user(request.user):
             dest_url = reverse('image_detail', args=[image.pk])
@@ -492,7 +492,7 @@ def label_example_patches_ajax(request, label_id):
         patches.append(dict(
             source=source,
             dest_url=dest_url,
-            thumbnail_url=get_patch_url(point.id),
+            thumbnail_url=get_patch_url(point),
         ))
 
     return JsonResponse({

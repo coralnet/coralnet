@@ -272,6 +272,8 @@ def browse_patches(request, source_id):
         request.GET,
         count_limit=settings.BROWSE_PATCHES_RESULT_LIMIT,
     )
+    page_results.object_list = page_results.object_list.select_related(
+        'point', 'point__image', 'point__image__metadata')
 
     return render(request, 'visualization/browse_patches.html', {
         'source': source,

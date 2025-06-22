@@ -140,34 +140,31 @@ def get_annotation_tool_users(source):
     return User.objects.filter(pk__in=tool_user_pks).order_by('username')
 
 
-def get_patch_path(point_id):
-    point = Point.objects.get(pk=point_id)
-
+def get_patch_path(point):
     return settings.POINT_PATCH_FILE_PATTERN.format(
         full_image_path=point.image.original_file.name,
         point_pk=point.pk,
     )
 
 
-def get_patch_url(point_id):
-    return default_storage.url(get_patch_path(point_id))
+def get_patch_url(point):
+    return default_storage.url(get_patch_path(point))
 
 
-def generate_patch_if_doesnt_exist(point_id):
+def generate_patch_if_doesnt_exist(point):
     """
     If this point doesn't have an image patch file yet, then
     generate one.
-    :param point_id: Primary key to point object to generate a patch for
+    :param point: Point object to generate a patch for
     :return: None
     """
 
     # Check if patch exists for the point
-    patch_relative_path = get_patch_path(point_id)
+    patch_relative_path = get_patch_path(point)
     if default_storage.exists(patch_relative_path):
         return
 
     # Locate the image.
-    point = Point.objects.get(pk=point_id)
     image = point.image
     original_image_relative_path = image.original_file.name
 

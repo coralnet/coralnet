@@ -499,7 +499,7 @@ class PatchesTest(AsyncMediaTest):
             # This assumes there is only one annotated image in the test
             point = Point.objects.get(point_number=point_number)
             comparable_expected_results[media_key] = make_media_url_comparable(
-                get_patch_url(point.pk))
+                get_patch_url(point))
 
         self.assertDictEqual(
             comparable_actual_results,
@@ -509,11 +509,11 @@ class PatchesTest(AsyncMediaTest):
     def test_load_existing_patch(self):
         img = self.upload_image(self.user, self.source)
         self.add_annotations(self.user, img, {1: 'A'})
-        point_id = img.point_set.get(point_number=1).pk
+        point = img.point_set.get(point_number=1)
 
         # Generate patch before loading browse page
-        generate_patch_if_doesnt_exist(point_id)
-        patch_url = get_patch_url(point_id)
+        generate_patch_if_doesnt_exist(point)
+        patch_url = get_patch_url(point)
 
         patch_image = self.load_browse_and_get_media()[0]
 
@@ -609,9 +609,9 @@ class PatchesTest(AsyncMediaTest):
 
         # Point numbers 1 and 3: already generated before loading browse page
         generate_patch_if_doesnt_exist(
-            Point.objects.get(point_number=1).pk)
+            Point.objects.get(point_number=1))
         generate_patch_if_doesnt_exist(
-            Point.objects.get(point_number=3).pk)
+            Point.objects.get(point_number=3))
 
         batch_key, media_keys = self.load_browse_and_get_media_keys()[0]
 
