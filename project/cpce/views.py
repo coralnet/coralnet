@@ -3,6 +3,7 @@ from io import StringIO
 import json
 from pathlib import PureWindowsPath
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db.models import QuerySet
@@ -56,6 +57,7 @@ def upload_page(request, source_id):
     return render(request, 'cpce/upload.html', {
         'source': source,
         'cpc_import_form': cpc_import_form,
+        'upload_max_files': settings.DATA_UPLOAD_MAX_NUMBER_FILES,
     })
 
 

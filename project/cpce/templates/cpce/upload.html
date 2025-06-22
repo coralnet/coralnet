@@ -60,7 +60,8 @@
   <script type="text/javascript">
     UploadAnnotationsCPCHelper.initForm({
         uploadPreviewUrl: "{% url 'cpce:upload_preview_ajax' source.id %}",
-        uploadStartUrl: "{% url 'cpce:upload_confirm_ajax' source.id %}"
+        uploadStartUrl: "{% url 'cpce:upload_confirm_ajax' source.id %}",
+        maxFiles: {{ upload_max_files }},
     });
   </script>
 

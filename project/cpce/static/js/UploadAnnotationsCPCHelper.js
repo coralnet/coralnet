@@ -18,6 +18,7 @@ var UploadAnnotationsCPCHelper = (function() {
 
     var uploadPreviewUrl = null;
     var uploadStartUrl = null;
+    var maxFiles = null;
 
 
     function updateStatus(newStatus) {
@@ -168,6 +169,13 @@ var UploadAnnotationsCPCHelper = (function() {
             updatePreviewTable();
             return;
         }
+        if (cpcFileField.files.length > maxFiles) {
+            cpcFileError =
+                `Can't upload more than ${maxFiles} files at a time.`;
+            updateStatus('preview_error');
+            updatePreviewTable();
+            return;
+        }
 
         updateStatus('processing');
         updatePreviewTable();
@@ -259,6 +267,7 @@ var UploadAnnotationsCPCHelper = (function() {
             // Get the parameters.
             uploadPreviewUrl = params['uploadPreviewUrl'];
             uploadStartUrl = params['uploadStartUrl'];
+            maxFiles = params['maxFiles'];
 
             // Upload status elements.
             $statusDisplay = $('#status_display');
