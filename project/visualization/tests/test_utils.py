@@ -41,16 +41,16 @@ class LabelPatchGenerationTest(ClientTest):
         img = self.upload_image(self.user, self.source,
                                 image_options={'mode': image_mode})
 
-        point_id = Point.objects.filter(image=img)[0].id
+        point = Point.objects.filter(image=img)[0]
 
         # Assert that patches can be generated without problems
         try:
-            generate_patch_if_doesnt_exist(point_id)
+            generate_patch_if_doesnt_exist(point)
         except IOError as msg:
             self.fail("Error occurred during patch generation: {}".format(msg))
 
         # Then assert the patch was actually generated and that it's RGB
-        with default_storage.open(get_patch_path(point_id)) as fp:
+        with default_storage.open(get_patch_path(point)) as fp:
             patch = PILImage.open(fp)
             self.assertEqual(patch.size[0], settings.LABELPATCH_NROWS)
             self.assertEqual(patch.size[1], settings.LABELPATCH_NCOLS)
@@ -142,9 +142,9 @@ class PatchCropTest(ClientTest):
         # a version that always saves PNG, ignoring the 'format' param passed
         # to save().
         with mock.patch.object(PILImage.Image, 'save', always_save_png):
-            generate_patch_if_doesnt_exist(point.pk)
+            generate_patch_if_doesnt_exist(point)
 
-        with default_storage.open(get_patch_path(point.pk)) as fp:
+        with default_storage.open(get_patch_path(point)) as fp:
             patch = PILImage.open(fp)
 
             # The patch should have 1 red pixel in the center (to be exact, the

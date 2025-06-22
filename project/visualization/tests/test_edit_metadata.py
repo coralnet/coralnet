@@ -727,3 +727,19 @@ class SubmitEditsTest(BaseBrowseMetadataTest):
         image_s2.metadata.refresh_from_db()
         self.assertEqual(image_s2.metadata.name, old_name)
         self.assertEqual(image_s2.metadata.photo_date, None)
+
+
+class QueriesTest(BaseBrowseMetadataTest):
+
+    setup_image_count = 80
+
+    def test(self):
+        # Should be less than 1 query per result
+        with self.assert_queries_less_than(80):
+            response = self.get_browse(**self.default_search_params)
+
+        self.assert_browse_results(
+            response,
+            self.images,
+            msg_prefix="Shouldn't have any issues preventing correct results",
+        )

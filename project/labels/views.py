@@ -476,13 +476,15 @@ def label_example_patches_ajax(request, label_id):
         patch_annotations = page_annotations.object_list
         is_last_page = page >= paginator.num_pages
 
+    patch_annotations = patch_annotations.select_related(
+        'point', 'point__image', 'source')
     patches = []
     for index, annotation in enumerate(patch_annotations):
         point = annotation.point
         image = point.image
-        source = image.source
+        source = annotation.source
 
-        generate_patch_if_doesnt_exist(point.pk)
+        generate_patch_if_doesnt_exist(point)
 
         if source.visible_to_user(request.user):
             dest_url = reverse('image_detail', args=[image.pk])
@@ -492,7 +494,7 @@ def label_example_patches_ajax(request, label_id):
         patches.append(dict(
             source=source,
             dest_url=dest_url,
-            thumbnail_url=get_patch_url(point.id),
+            thumbnail_url=get_patch_url(point),
         ))
 
     return JsonResponse({

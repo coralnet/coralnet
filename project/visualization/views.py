@@ -70,6 +70,8 @@ def browse_images(request, source_id):
         image_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
         request.GET)
+    page_results.object_list = page_results.object_list.select_related(
+        'annoinfo', 'metadata')
 
     if page_results.paginator.count > 0:
         page_image_ids = [
@@ -188,6 +190,7 @@ def edit_metadata(request, source_id):
     #
     # But for now, we always just sort by image name.
     image_results = image_results.order_by('metadata__name', 'pk')
+    image_results = image_results.select_related('annoinfo')
     num_images = image_results.count()
 
     # Formset of MetadataForms.
@@ -272,6 +275,8 @@ def browse_patches(request, source_id):
         request.GET,
         count_limit=settings.BROWSE_PATCHES_RESULT_LIMIT,
     )
+    page_results.object_list = page_results.object_list.select_related(
+        'point', 'point__image', 'point__image__metadata')
 
     return render(request, 'visualization/browse_patches.html', {
         'source': source,

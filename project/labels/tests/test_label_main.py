@@ -442,11 +442,11 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         self.image.annotation_set \
             .filter(point__point_number__in=[2, 4]).delete()
 
-        remaining_annotation_point_ids = set(
-            self.image.annotation_set.values_list('point_id', flat=True))
+        remaining_annotations = set(
+            self.image.annotation_set.select_related('point'))
         expected_thumbnail_filenames = set([
-            Path(get_patch_path(point_id)).name
-            for point_id in remaining_annotation_point_ids])
+            Path(get_patch_path(annotation.point)).name
+            for annotation in remaining_annotations])
 
         response = self.get_example_patches()
         patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
@@ -528,6 +528,41 @@ class LabelMainPatchLinksTest(BaseLabelMainTest):
         self.assertEqual(response['patchesHtml'].count('<img'), 7)
         # Patches with links: 4 + 2
         self.assertEqual(response['patchesHtml'].count('<a'), 6)
+
+
+@override_settings(LABEL_EXAMPLE_PATCHES_PER_PAGE=80)
+class LabelMainPatchQueriesTest(BaseLabelMainTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        # Call the parent's setup (while still using this class as cls)
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=20),
+        )
+
+        # All annotations will be of label A.
+        cls.labels = cls.create_labels(
+            cls.user, ['A'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.source.refresh_from_db()
+
+        cls.images = []
+        # 20*4 annotations
+        for _ in range(4):
+            image = cls.upload_image(cls.user, cls.source)
+            cls.images.append(image)
+            cls.add_annotations(cls.user, image)
+
+    def test(self):
+        # Should run less than 1 query per patch.
+        with self.assert_queries_less_than(80):
+            response = self.get_example_patches()
+
+        self.assertEqual(self.patch_img_element_count(response), 80)
 
 
 class PopularityTest(ClientTest):
