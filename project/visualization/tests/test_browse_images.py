@@ -1219,6 +1219,27 @@ class ImageStatusIndicatorTest(BaseBrowseImagesTest):
         self.assertSetEqual(expected_thumb_set, actual_thumb_set)
 
 
+@override_settings(
+    # More results per page, to really make clear how the query count
+    # depends on results per page.
+    BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=80,
+)
+class QueriesTest(BaseBrowseImagesTest):
+
+    setup_image_count = 80
+
+    def test(self):
+        # Should be less than 1 query per result
+        with self.assert_queries_less_than(80):
+            response = self.get_browse(**self.default_search_params)
+
+        self.assert_browse_results(
+            response,
+            self.images,
+            msg_prefix="Shouldn't have any issues preventing correct results",
+        )
+
+
 class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):
 
     def test_search_should_preserve_most_params(self):

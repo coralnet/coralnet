@@ -70,6 +70,8 @@ def browse_images(request, source_id):
         image_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
         request.GET)
+    page_results.object_list = page_results.object_list.select_related(
+        'annoinfo', 'metadata')
 
     if page_results.paginator.count > 0:
         page_image_ids = [
