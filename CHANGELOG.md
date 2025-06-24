@@ -8,12 +8,14 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.20 (WIP)
+## [1.20](https://github.com/coralnet/coralnet/tree/1.20)
+
+Production: 2025-06-22
 
 - Updates to required packages:
   - pyspacer 0.11.0 -> 0.12.0
   - selenium 3.141.0 -> 4.33.0
-- New migrations to run for `annotations`, involving creation of potentially large indexes.
+- New migrations to run for `annotations`, involving creation of potentially large indexes. Took 30 minutes to run in production.
 
 ## [1.19.5](https://github.com/coralnet/coralnet/tree/1.19.5)
 
