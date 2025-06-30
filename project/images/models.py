@@ -2,89 +2,17 @@ import posixpath
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
+from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
 from django.db import models
 from easy_thumbnails.fields import ThumbnailerImageField
 
-from accounts.utils import is_robot_user
 from annotations.model_utils import AnnotationArea
 from lib.utils import rand_string
 from sources.models import Source
 from .managers import ImageQuerySet, PointQuerySet
 from .model_utils import PointGen
-
-
-class Metadata(models.Model):
-    name = models.CharField("Name", max_length=200, blank=True)
-    photo_date = models.DateField(
-        "Date",
-        help_text='Format: YYYY-MM-DD',
-        null=True, blank=True,
-    )
-
-    latitude = models.CharField("Latitude", max_length=20, blank=True)
-    longitude = models.CharField("Longitude", max_length=20, blank=True)
-    depth = models.CharField("Depth", max_length=45, blank=True)
-
-    height_in_cm = models.IntegerField(
-        "Height (cm)",
-        help_text=(
-            "The number of centimeters of substrate the image covers,"
-            " from the top of the image to the bottom."),
-        validators=[MinValueValidator(0)],
-        null=True, blank=True
-    )
-
-    annotation_area = models.CharField(
-        "Annotation area",
-        help_text=(
-            "This defines a rectangle of the image where annotation points are"
-            " allowed to be generated."
-            " If you change this, then new points will be generated for this"
-            " image, and the old points will be deleted."),
-        max_length=50,
-        null=True, blank=True
-    )
-    
-    camera = models.CharField("Camera", max_length=200, blank=True)
-    photographer = models.CharField("Photographer", max_length=45, blank=True)
-    water_quality = models.CharField("Water quality", max_length=45, blank=True)
-
-    strobes = models.CharField("Strobes", max_length=200, blank=True)
-    framing = models.CharField("Framing gear used", max_length=200, blank=True)
-    balance = models.CharField("White balance card", max_length=200, blank=True)
-    
-    comments = models.TextField("Comments", max_length=1000, blank=True)
-
-    aux1 = models.CharField(max_length=50, blank=True)
-    aux2 = models.CharField(max_length=50, blank=True)
-    aux3 = models.CharField(max_length=50, blank=True)
-    aux4 = models.CharField(max_length=50, blank=True)
-    aux5 = models.CharField(max_length=50, blank=True)
-
-    # Names of fields that may be included in a basic 'edit metadata' form.
-    # annotation_area is more complex to edit, which is why it's
-    # not included here.
-    EDIT_FORM_FIELDS = [
-        'name', 'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5',
-        'height_in_cm', 'latitude', 'longitude', 'depth',
-        'camera', 'photographer', 'water_quality',
-        'strobes', 'framing', 'balance', 'comments',
-    ]
-
-    def __str__(self):
-        return "Metadata of " + self.name
-
-    def to_dict(self):
-        """
-        Returns the model as python dict of the form:
-            {field_name: field_value}
-        Both field name and values are strings.
-        """
-        return {field: str(getattr(self, field)) for
-                field in self.EDIT_FORM_FIELDS}
 
 
 def get_original_image_upload_path(instance, filename):
@@ -177,8 +105,6 @@ class Image(models.Model):
         max_length=1000,
     )
 
-    metadata = models.ForeignKey(Metadata, on_delete=models.PROTECT)
-
     source = models.ForeignKey(Source, on_delete=models.CASCADE)
 
     # Set this only if a technical issue prevents the image from
@@ -266,6 +192,79 @@ class Image(models.Model):
         return "{0}-{1:02}-{2:02}".format(
             self.process_date.year, self.process_date.month,
             self.process_date.day)
+
+
+class Metadata(models.Model):
+    image = models.OneToOneField(Image, on_delete=models.CASCADE)
+
+    name = models.CharField("Name", max_length=200, blank=True)
+    photo_date = models.DateField(
+        "Date",
+        help_text='Format: YYYY-MM-DD',
+        null=True, blank=True,
+    )
+
+    latitude = models.CharField("Latitude", max_length=20, blank=True)
+    longitude = models.CharField("Longitude", max_length=20, blank=True)
+    depth = models.CharField("Depth", max_length=45, blank=True)
+
+    height_in_cm = models.IntegerField(
+        "Height (cm)",
+        help_text=(
+            "The number of centimeters of substrate the image covers,"
+            " from the top of the image to the bottom."),
+        validators=[MinValueValidator(0)],
+        null=True, blank=True
+    )
+
+    annotation_area = models.CharField(
+        "Annotation area",
+        help_text=(
+            "This defines a rectangle of the image where annotation points are"
+            " allowed to be generated."
+            " If you change this, then new points will be generated for this"
+            " image, and the old points will be deleted."),
+        max_length=50,
+        null=True, blank=True
+    )
+
+    camera = models.CharField("Camera", max_length=200, blank=True)
+    photographer = models.CharField("Photographer", max_length=45, blank=True)
+    water_quality = models.CharField("Water quality", max_length=45, blank=True)
+
+    strobes = models.CharField("Strobes", max_length=200, blank=True)
+    framing = models.CharField("Framing gear used", max_length=200, blank=True)
+    balance = models.CharField("White balance card", max_length=200, blank=True)
+
+    comments = models.TextField("Comments", max_length=1000, blank=True)
+
+    aux1 = models.CharField(max_length=50, blank=True)
+    aux2 = models.CharField(max_length=50, blank=True)
+    aux3 = models.CharField(max_length=50, blank=True)
+    aux4 = models.CharField(max_length=50, blank=True)
+    aux5 = models.CharField(max_length=50, blank=True)
+
+    # Names of fields that may be included in a basic 'edit metadata' form.
+    # annotation_area is more complex to edit, which is why it's
+    # not included here.
+    EDIT_FORM_FIELDS = [
+        'name', 'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5',
+        'height_in_cm', 'latitude', 'longitude', 'depth',
+        'camera', 'photographer', 'water_quality',
+        'strobes', 'framing', 'balance', 'comments',
+    ]
+
+    def __str__(self):
+        return "Metadata of " + self.name
+
+    def to_dict(self):
+        """
+        Returns the model as python dict of the form:
+            {field_name: field_value}
+        Both field name and values are strings.
+        """
+        return {field: str(getattr(self, field)) for
+                field in self.EDIT_FORM_FIELDS}
 
 
 class Point(models.Model):
