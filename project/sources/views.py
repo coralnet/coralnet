@@ -13,7 +13,7 @@ from django.urls import reverse
 from annotations.model_utils import ImageAnnoStatuses
 from annotations.utils import cacheable_annotation_count
 from images.models import Image
-from images.utils import delete_image
+from images.utils import delete_images
 from jobs.utils import schedule_job
 from lib.decorators import (
     source_permission_required,
@@ -382,11 +382,7 @@ def source_admin(request, source_id):
             messages.success(request, 'User has been removed from the source.')
             return HttpResponseRedirect(reverse('source_main', args=[source_id]))
         elif deleteSource:
-            # Delete all images with our utility function to ensure no
-            # problems like leftover related objects.
-            images = source.get_all_images()
-            for img in images:
-                delete_image(img)
+            delete_images(source.image_set.all())
 
             # This is a ForeignKey field of the Source, and thus deleting
             # the Source can't trigger a cascade delete on this labelset.

@@ -286,13 +286,17 @@ class DeleteSourceTest(ClientTest):
     """
     def test_delete_source(self):
         user = self.create_user()
+
         source = self.create_source(user)
-        img = self.upload_image(user, source)
+        image = self.upload_image(user, source)
+
+        other_source = self.create_source(user)
+        other_image = self.upload_image(user, other_source)
 
         source_id = source.pk
-        image_id = img.pk
-        metadata_id = img.metadata.pk
-        features_id = img.features.pk
+        image_id = image.pk
+        metadata_id = image.metadata.pk
+        features_id = image.features.pk
 
         # Source should exist
         Source.objects.get(pk=source_id)
@@ -315,3 +319,8 @@ class DeleteSourceTest(ClientTest):
             Metadata.objects.get(pk=metadata_id)
         with self.assertRaises(Features.DoesNotExist):
             Features.objects.get(pk=features_id)
+
+        # Other source should not see any deletions
+        # (these lines should not raise DoesNotExist)
+        Source.objects.get(pk=other_source.pk)
+        Image.objects.get(pk=other_image.pk)
