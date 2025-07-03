@@ -1,0 +1,25 @@
+<div class="article-body">
+
+<p>
+  You're seeing a text field instead of a dropdown field for {{ field_label }} because there are a lot of options for this field.
+</p>
+
+<p>
+  {% if is_over_limit %}
+    Here are the first {{ limit }} options (not a complete list):
+  {% else %}
+    Here are all {{ choices|length }} options:
+  {% endif %}
+</p>
+
+<ul>
+  {% for choice in choices %}
+    <li>{{ choice }}</li>
+  {% endfor %}
+</ul>
+
+<p>
+  To search for results matching a particular {{ field_label }} value, type the entire value into the text field, not just part of the value. Typing <kbd>(none)</kbd> will search for images which do not have {{ field_label }} filled in.
+</p>
+
+</div>

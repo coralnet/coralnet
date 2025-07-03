@@ -1359,7 +1359,10 @@ LABEL_EXAMPLE_PATCHES_PER_PAGE_GUEST = 5
 # If a source has more than this many unique values for a given
 # aux. metadata model field, the corresponding search form field
 # becomes a free text field rather than a dropdown options field.
-BROWSE_METADATA_OPTION_LIMIT = 50
+BROWSE_METADATA_DROPDOWN_LIMIT = 100
+# And if the dropdown limit's exceeded, then we provide help
+# text with a list of possible options up to this amount.
+BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT = 500
 
 # Max results to count in Browse Patches, because arbitrarily
 # high counts are a potential source of slow page loads.
