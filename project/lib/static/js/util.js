@@ -174,20 +174,6 @@ var util = {
     },
 
     /*
-    Generates a random string of the specified length.
-    Idea from: http://stackoverflow.com/a/1349426/859858
-    */
-    randomString: function(strLength) {
-        var chars = [];
-        var allowed_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-        for (var i = 0; i < strLength; i++)
-            chars.append(allowed_chars.charAt(Math.floor(Math.random() * allowed_chars.length)));
-
-        return chars;
-    },
-
-    /*
     Checks a string or number to see if it represents a number.
     Source: http://stackoverflow.com/a/1830844/859858
     */
@@ -219,15 +205,6 @@ var util = {
     toArray: function(argumentsObj) {
         return Array.prototype.slice.call(argumentsObj);
     },
-
-    /*
-    Trim leading and trailing spaces from a string.
-
-    From http://blog.stevenlevithan.com/archives/faster-trim-javascript
-    */
-    trimSpaces: function(str) {
-        return str.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
-    }
 };
 
 
@@ -240,43 +217,6 @@ var util = {
  * Though, third-party JS plugins really shouldn't extend standard types.
  * (So if this becomes a JS plugin, rework this code!)
  */
-
-
-/* Array indexOf(), in case the browser doesn't have it (hi, IE)
- * Source: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/IndexOf
- */
-if (!Array.prototype.indexOf) {
-    Array.prototype.indexOf = function (searchElement /*, fromIndex */ ) {
-        "use strict";
-        if (this === void 0 || this === null) {
-            throw new TypeError();
-        }
-        var t = Object(this);
-        var len = t.length >>> 0;
-        if (len === 0) {
-            return -1;
-        }
-        var n = 0;
-        if (arguments.length > 0) {
-            n = Number(arguments[1]);
-            if (n !== n) { // shortcut for verifying if it's NaN
-                n = 0;
-            } else if (n !== 0 && n !== Infinity && n !== -Infinity) {
-                n = (n > 0 || -1) * Math.floor(Math.abs(n));
-            }
-        }
-        if (n >= len) {
-            return -1;
-        }
-        var k = n >= 0 ? n : Math.max(len - Math.abs(n), 0);
-        for (; k < len; k++) {
-            if (k in t && t[k] === searchElement) {
-                return k;
-            }
-        }
-        return -1;
-    }
-}
 
 
 /* Curry function.
@@ -354,50 +294,6 @@ String.prototype.startsWith = function(prefix) {
  * jQuery extensions can go here.
  */
 
-/* autoWidth
- *
- * Automatically make a group of elements the same width, by taking the maximum width of all
- * the elements and then setting the whole group to this width.
- *
- * Parameters:
- * limitWidth - Maximum allowed width.  If any element's width is greater than limitWidth,
- *              make the elements use width=limitWidth instead.
- *
- * Side effects:
- * On slow computers, the elements will appear without their width set for the first
- * 0.5 second or so, and then will shift position on the page once they have their
- * widths set.  It can be jarring to see this on nearly every page load.
- *
- * Original source (though it's been slightly modified):
- * http://stackoverflow.com/a/4641390 (http://stackoverflow.com/questions/4641346/css-to-align-label-and-input)
- * http://www.jankoatwarpspeed.com/post/2008/07/09/Justify-elements-using-jQuery-and-CSS.aspx#id_b16cb791-5bd7-4bb3-abc2-dc414fc1bd07
- * - (1 mistake: maxWidth >= settings.limitWidth should be $(this).width >= settings.limitWidth)
- */
-jQuery.fn.autoWidth = function(options) {
-  var settings = {
-      limitWidth: false
-  };
-
-  if(options) {
-      jQuery.extend(settings, options);
-  }
-
-  var maxWidth = 0;
-
-  this.each(function(){
-      var thisWidth = $(this).width();
-      if (thisWidth > maxWidth){
-          if(settings.limitWidth && thisWidth >= settings.limitWidth) {
-            maxWidth = settings.limitWidth;
-          } else {
-            maxWidth = thisWidth;
-          }
-      }
-  });
-
-  this.width(maxWidth);
-};
-
 /* changeFontSize
  *
  * Change the font size of an element.
@@ -437,30 +333,6 @@ jQuery.fn.disable = function() {
  * disable
  */
 jQuery.fn.enable = function() {
-    $(this).prop('disabled', false);
-};
-
-/* hideAndDisable
- *
- * Hide and disable a jQuery element.
- *
- * See also:
- * showAndEnable
- */
-jQuery.fn.hideAndDisable = function() {
-    $(this).hide();
-    $(this).prop('disabled', true);
-};
-
-/* showAndEnable
- *
- * Show and enable a jQuery element.
- *
- * See also:
- * hideAndDisable
- */
-jQuery.fn.showAndEnable = function() {
-    $(this).show();
     $(this).prop('disabled', false);
 };
 
