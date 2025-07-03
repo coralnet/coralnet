@@ -22,7 +22,7 @@
           <label for="{{ field.id_for_label }}">
             {{ field.label }}
           </label>
-          {% include "form_generic_one_field_help_text.html" with field=field %}
+          {% include "lib/forms/field_help_text.html" with field=field %}
         </div>
 
       {% elif widget.use_subfield_labels %}
@@ -46,7 +46,7 @@
 
         <div {% field_visibility_attrs widget %} >
           {{ field }}
-          {% include "form_generic_one_field_help_text.html" with field=field %}
+          {% include "lib/forms/field_help_text.html" with field=field %}
         </div>
 
       {% endif %}

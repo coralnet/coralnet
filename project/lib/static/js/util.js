@@ -5,27 +5,6 @@ General-purpose JS utility functions can go here.
 var util = {
 
     /*
-    Add a JS event that will run when the page is loaded.
-    This will just add to the "events to run" list, it won't
-    override previously specified events.
-
-    From http://simonwillison.net/2004/May/26/addLoadEvent/
-    */
-    addLoadEvent: function(func) {
-        var oldonload = window.onload;
-        if (typeof window.onload != 'function') {
-            window.onload = func;
-        } else {
-            window.onload = function() {
-                if (oldonload) {
-                    oldonload();
-                }
-                func();
-            }
-        }
-    },
-
-    /*
     Wrapper around the standard fetch() which does error handling.
     @param resource - url or other resource to fetch (see standard fetch())
     @param options - see standard fetch()
@@ -158,6 +137,14 @@ var util = {
            /* All others */
            return (event.which < 2) ? "LEFT" :
                      ((event.which == 2) ? "MIDDLE" : "RIGHT");
+    },
+
+    openHelpDialog: function(helpContentElement) {
+        $(helpContentElement).dialog({
+            height: 400,
+            width: 600,
+            modal: true
+        });
     },
 
     /*
@@ -535,50 +522,42 @@ $(document).ajaxSend(function(event, xhr, settings) {
 });
 
 
-
 /*
- * Below: Document-manipulating JS to run at every page load.
- */
-
-
-
-/* Make all labels with class 'form_label' the same width,
- * and figure out this width dynamically (the longest width
- * needed by any field, with a max allowed width of 250px).
- *
- * See previously defined: jQuery.fn.autoWidth
- */
-/*util.addLoadEvent( function() {
-    $('label.column_form_text_field').autoWidth({limitWidth: 250});
-});*/
-
-
-/*
-When you have a div with the class name "tutorial-message", this function
-will turn that into a question-mark button which you click to display the
-div contents in a pop-up.
-
-Example: <div class="tutorial-message">This is my message</div>
+Set up help dialogs.
 */
-util.addLoadEvent( function() {
-    var $tutorialMessages = $(".tutorial-message");
-    $tutorialMessages.each ( function() {
-        var $helpImage = $('<img style="display:inline;cursor:pointer" width="20" />');
-        $helpImage.attr('src', window.utilQuestionMarkImage);
+window.addEventListener('load', () => {
+
+    /*
+    When you have a div with the class name "tutorial-message", this function
+    will turn that into a question-mark button which you click to display the
+    div contents in a pop-up.
+
+    Example: <div class="tutorial-message">This is my message</div>
+    */
+    document.querySelectorAll('.tutorial-message').forEach((helpContainer) => {
+        let helpImage = document.createElement('img');
+        helpImage.classList.add('help-button');
+        helpImage.width = 20;
+        helpImage.src = window.utilQuestionMarkImage;
+
         // Insert the help image before the tutorial message element
         // (which should have display:none, so effectively, insert the
         // help image in place of the tutorial message).
-        $(this).before($helpImage);
-        openDialogFunction = function($element) {
-            $element.dialog({
-                height: 400,
-                width: 600,
-                modal: true
-            });
-        };
+        helpContainer.parentNode.insertBefore(helpImage, helpContainer);
+
         // When the help image is clicked, display the tutorial message
         // contents in a dialog.
-        $helpImage.bind("click", openDialogFunction.curry($(this)));
+        let boundMethod = util.openHelpDialog.bind(util, helpContainer);
+        helpImage.addEventListener('click', boundMethod);
     });
 
+    /*
+    Certain fields have these dialog-based help content elements.
+    */
+    document.querySelectorAll('button.extra-help-content-button').forEach((button) => {
+        let helpContainer =
+            document.getElementById(button.dataset.helpContainerId);
+        let boundMethod = util.openHelpDialog.bind(util, helpContainer);
+        button.addEventListener('click', boundMethod);
+    });
 });

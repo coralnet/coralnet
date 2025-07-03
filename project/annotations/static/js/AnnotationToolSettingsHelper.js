@@ -73,20 +73,6 @@ var ATS = {
             });
         }
 
-        // Separate-dialog help text for this field.
-        // Can show by clicking "(More info)".
-        $("#id_show_machine_annotations_dialog_help_text_link").click(function() {
-
-            // TODO: Reduce the text size in this dialog
-            // TODO: Come up with sensible (possibly flexible) dimensions
-            $("#id_show_machine_annotations_dialog_help_text").dialog({
-                modal: true,
-                width: 600,
-                height: 300,
-                title: "Show Machine Annotations"
-            });
-        });
-
         // When the save button is clicked, save.
         ATS.$saveButton.click(ATS.saveSettings);
     },

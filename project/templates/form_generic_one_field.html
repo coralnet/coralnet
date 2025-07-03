@@ -1,9 +1,8 @@
 {% comment %}
 This form template is meant to be used with the "include" template tag.
 
-dont_mark_required and dont_show_help_text are parameters that can be passed
-in with the "with" template tag.
-These parameters are evaluated as booleans, but Django templates don't have
+dont_mark_required can be passed in with the "with" template tag.
+It's evaluated as a boolean, but Django templates don't have
 True/False literals.  So just don't pass in the parameter if you want
 it to be False, and pass in anything that'll evaluate to True
 (such as the string "True") if you want it to be True.
@@ -26,7 +25,7 @@ TODO: This template should be phased out in favor of lib/templates/django/forms/
         </label>
 
         {# Field help text #}
-        {% include "form_generic_one_field_help_text.html" %}
+        {% include "lib/forms/field_help_text.html" %}
 
     </div>
 
@@ -54,7 +53,7 @@ TODO: This template should be phased out in favor of lib/templates/django/forms/
         </ul>
 
         {# Field help text #}
-        {% include "form_generic_one_field_help_text.html" %}
+        {% include "lib/forms/field_help_text.html" %}
     </div>
 
   {% else %}
@@ -74,7 +73,7 @@ TODO: This template should be phased out in favor of lib/templates/django/forms/
         <div class="errorlist_wrapper">{{ field.errors|safe }}</div>
 
         {# Field help text #}
-        {% include "form_generic_one_field_help_text.html" %}
+        {% include "lib/forms/field_help_text.html" %}
     </div>
 
   {% endif %}

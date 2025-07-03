@@ -8,5 +8,5 @@ that's including it.  But the with statement's there for code clarity.
 
 {{ form.non_field_errors }}
 {% for field in form %}
-    {% include "form_generic_one_field.html" with field=field dont_mark_required=dont_mark_required dont_show_help_text=dont_show_help_text %}
+    {% include "form_generic_one_field.html" with field=field dont_mark_required=dont_mark_required %}
 {% endfor %}
