@@ -197,6 +197,13 @@ class Image(models.Model):
 class Metadata(models.Model):
     image = models.OneToOneField(Image, on_delete=models.CASCADE)
 
+    # Redundant with image.source, but enables creation of useful
+    # database indexes.
+    # We won't create an index for just this column, as we'd rather have
+    # multi-column indexes starting with source.
+    source = models.ForeignKey(
+        Source, on_delete=models.CASCADE, db_index=False)
+
     name = models.CharField("Name", max_length=200, blank=True)
     photo_date = models.DateField(
         "Date",

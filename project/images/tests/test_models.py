@@ -354,3 +354,61 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
             msg="Should require 4 calls with batch size 3"
                 " to update 10 metadata instances"
         )
+
+
+class MetadataSourceFieldMigrationTest(MigrationTest):
+    """
+    Test population of Metadata.source from Metadata.image.source.
+    """
+
+    before = [
+        ('images', '0045_metadata_image_onetoone_schema3'),
+        ('sources', '0010_populate_deployed_classifier'),
+    ]
+    after = [
+        ('images', '0048_metadata_source_schema2'),
+    ]
+
+    image_defaults = dict(
+        original_width=100,
+        original_height=100,
+    )
+
+    def test(self):
+        Source = self.get_model_before('sources.Source')
+        Image = self.get_model_before('images.Image')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source_1 = Source.objects.create(name="Source 1")
+        source_1_pk = source_1.pk
+        source_2 = Source.objects.create(name="Source 2")
+        source_2_pk = source_2.pk
+        image_1 = Image.objects.create(
+            source=source_1, **self.image_defaults)
+        metadata_1 = Metadata.objects.create(image=image_1)
+        metadata_1_pk = metadata_1.pk
+        image_2 = Image.objects.create(
+            source=source_2, **self.image_defaults)
+        metadata_2 = Metadata.objects.create(image=image_2)
+        metadata_2_pk = metadata_2.pk
+        image_3 = Image.objects.create(
+            source=source_2, **self.image_defaults)
+        metadata_3 = Metadata.objects.create(image=image_3)
+        metadata_3_pk = metadata_3.pk
+
+        # Metadata.source attributes shouldn't exist yet
+        self.assertRaises(AttributeError, getattr, metadata_1, 'source')
+        self.assertRaises(AttributeError, getattr, metadata_2, 'source')
+        self.assertRaises(AttributeError, getattr, metadata_3, 'source')
+
+        self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        # Metadata.source attributes should be filled in
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).source.pk, source_1_pk)
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).source.pk, source_2_pk)
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).source.pk, source_2_pk)
