@@ -6,6 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models.functions import Lower
 from easy_thumbnails.fields import ThumbnailerImageField
 
 from annotations.model_utils import AnnotationArea
@@ -260,6 +261,41 @@ class Metadata(models.Model):
         'camera', 'photographer', 'water_quality',
         'strobes', 'framing', 'balance', 'comments',
     ]
+
+    class Meta:
+        indexes = [
+            # Browse pages should find these indexes useful.
+            models.Index(
+                'source',
+                Lower('aux1'),
+                Lower('aux2'),
+                Lower('aux3'),
+                Lower('aux4'),
+                Lower('aux5'),
+                name='metadata_to_src_auxes_i'),
+            models.Index(
+                'source',
+                Lower('aux2'),
+                name='metadata_to_src_aux2_i'),
+            models.Index(
+                'source',
+                Lower('aux3'),
+                name='metadata_to_src_aux3_i'),
+            models.Index(
+                'source',
+                Lower('aux4'),
+                name='metadata_to_src_aux4_i'),
+            models.Index(
+                'source',
+                Lower('aux5'),
+                name='metadata_to_src_aux5_i'),
+            # Browse pages, and Image Detail / Annotation Tool prev/next links,
+            # should find this index useful.
+            models.Index(
+                'source',
+                Lower('name'),
+                name='metadata_to_src_name_i'),
+        ]
 
     def __str__(self):
         return "Metadata of " + self.name
