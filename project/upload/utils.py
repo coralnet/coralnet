@@ -310,6 +310,7 @@ def upload_image_process(image_file, image_name, source, current_user):
 
     metadata_obj = Metadata(
         image=img,
+        source=source,
         name=image_name,
         annotation_area=source.image_annotation_area,
     )
