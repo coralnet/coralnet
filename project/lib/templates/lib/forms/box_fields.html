@@ -2,5 +2,6 @@
   {# Put label+field in a div to ensure they stay on the same line. #}
   <div class="field-and-label-wrapper">
     {{ field.label }}: {{ field }}
+    {% include "lib/forms/box_field_help_text.html" with field=field %}
   </div>
 {% endfor %}

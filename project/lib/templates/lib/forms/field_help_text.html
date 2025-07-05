@@ -1,0 +1,9 @@
+{# Regular help text is always visible. #}
+{% if field.help_text %}
+  <div class="helptext_small" id="id_{{ field.name }}_help_text">
+    {# Regular help text may contain simple 'inline' HTML like <a>. But not stuff like <p> and <div>. So we apply linebreaksbr to it. #}
+    {{ field.help_text|safe|linebreaksbr }}
+  </div>
+{% endif %}
+
+{% include 'lib/forms/field_extra_help_content.html' with field=field extra_help_button_content='More info' %}

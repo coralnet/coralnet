@@ -667,6 +667,10 @@ ul.errorlist li {
        when the user clicks a button. */
     display: none;
 }
+img.help-button {
+    display: inline;
+    cursor: pointer;
+}
 
 
 /* Special cases */

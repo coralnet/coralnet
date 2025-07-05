@@ -148,18 +148,10 @@ h3.form {
     margin: 10px 0;
 }
 
-.extra_help_text, .dialog_help_text {
-    /* Extra help text starts out hidden, and can be shown via Javascript
+.extra-help-content {
+    /* Extra help content starts out hidden, and can be shown via Javascript
        when the user clicks a button. */
     display: none;
-}
-
-/* TODO: Link-styled elements that actually act as buttons instead of links
-    are confusing. Replace these at some point. */
-a.extra_help_text_link, a.dialog_help_text_link {
-    cursor: pointer;
-
-    font-size: 0.9em;
 }
 
 

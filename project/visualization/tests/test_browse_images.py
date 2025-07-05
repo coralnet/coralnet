@@ -332,7 +332,10 @@ class FormInitializationTest(BaseBrowseImagesTest):
     # initialization tests.
 
 
-@override_settings(BROWSE_METADATA_OPTION_LIMIT=3)
+@override_settings(
+    BROWSE_METADATA_DROPDOWN_LIMIT=2,
+    BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT=4,
+)
 class AuxMetadataSearchTest(BaseBrowseImagesTest):
 
     @classmethod
@@ -408,6 +411,10 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
         self.assertIsNotNone(self.get_search_form_field(response, 'aux4'))
 
     def test_text_field_if_too_many_uniques(self):
+        # aux1 has 2 unique non-blank values
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', '', 'Site2', 'Site2'])
         # aux2 has 3 unique non-blank values
         self.update_multiple_metadatas(
             'aux2',
@@ -415,16 +422,89 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
         # aux3 has 4 unique non-blank values
         self.update_multiple_metadatas(
             'aux3',
-            ['Transect4', 'Transect3', 'Transect1', 'Transect2', 'Transect4'])
+            ['Transect 4', 'Transect 3', 'Transect 1',
+             'Transect 2', 'Transect 4'])
+        # aux4 has 5 unique non-blank values
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q4', 'Q1', 'Q5', 'Q2', 'Q3'])
 
         response = self.get_browse()
 
         self.assertEqual(
-            self.get_search_form_field(response, 'aux2').name, 'select',
-            msg="aux2 should use a dropdown")
+            self.get_search_form_field(response, 'aux1').name, 'select',
+            msg="aux1 should use a dropdown")
+        self.assertEqual(
+            self.get_search_form_field(response, 'aux2').name, 'input',
+            msg="aux2 should use a text input")
         self.assertEqual(
             self.get_search_form_field(response, 'aux3').name, 'input',
             msg="aux3 should use a text input")
+        self.assertEqual(
+            self.get_search_form_field(response, 'aux4').name, 'input',
+            msg="aux4 should use a text input")
+
+    def test_extra_help_text(self):
+        self.source.key2 = "Habitat"
+        self.source.save()
+
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', '', 'Site2', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['5m', '10m', '20m', '5m', '10m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['Transect 4', 'Transect 3', 'Transect 1',
+             'Transect 2', 'Transect 4'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q4', 'Q1', 'Q5', 'Q2', 'Q3'])
+
+        response = self.get_browse()
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+
+        aux1_help = response_soup.find('div', id='id-aux1-extra-help-content')
+        self.assertIsNone(aux1_help)
+
+        aux2_help = response_soup.find('div', id='id-aux2-extra-help-content')
+        self.assertInHTML(
+            f"<p>You're seeing a text field instead of a dropdown"
+            " field for Habitat because there are a lot of options for this"
+            " field.</p>",
+            str(aux2_help)
+        )
+        self.assertInHTML(
+            "<p>Here are all 3 options:</p>",
+            str(aux2_help)
+        )
+        self.assertInHTML(
+            "<ul><li>10m</li><li>20m</li><li>5m</li></ul>",
+            str(aux2_help)
+        )
+
+        aux3_help = response_soup.find('div', id='id-aux3-extra-help-content')
+        self.assertInHTML(
+            "<p>Here are all 4 options:</p>",
+            str(aux3_help)
+        )
+        self.assertInHTML(
+            "<ul><li>Transect 1</li><li>Transect 2</li>"
+            "<li>Transect 3</li><li>Transect 4</li></ul>",
+            str(aux3_help)
+        )
+
+        aux4_help = response_soup.find('div', id='id-aux4-extra-help-content')
+        self.assertInHTML(
+            "<p>Here are the first 4 options (not a complete list):</p>",
+            str(aux4_help)
+        )
+        self.assertInHTML(
+            "<ul><li>Q1</li><li>Q2</li>"
+            "<li>Q3</li><li>Q4</li></ul>",
+            str(aux4_help)
+        )
 
 
 class DateSearchTest(BaseBrowseImagesTest):

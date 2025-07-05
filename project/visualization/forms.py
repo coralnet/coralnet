@@ -8,6 +8,7 @@ from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
 from django.forms.widgets import HiddenInput, Widget
+from django.template import loader
 from django.utils import timezone
 
 from accounts.utils import (
@@ -420,8 +421,8 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             date_lookup='metadata__photo_date', required=False)
 
         # Metadata fields
-        metadata_choice_fields = []
 
+        metadata_choice_fields = []
         for n in range(1, get_num_aux_fields()+1):
             metadata_choice_fields.append(
                 (get_aux_field_name(n), get_aux_label(self.source, n))
@@ -430,14 +431,23 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         # water quality, etc. But we're not sure how useful they'd be as
         # filter fields here.
 
+        help_text_option_limit = (
+            settings.BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT)
+
         for field_name, field_label in metadata_choice_fields:
             choices = (
                 Metadata.objects.filter(image__source=self.source)
                 .order_by(field_name)
                 .values_list(field_name, flat=True)
                 .distinct()
+                # No point in getting more results than this.
+                # (The +2 is so we can actually detect if the non-blank
+                # option count exceeds the limit.
+                # That's the limit + 1 for the blank option + 1 to see if
+                # it exceeds.)
+                [:help_text_option_limit+2]
             )
-            non_blank_choices = [(c, c) for c in choices if c != '']
+            non_blank_choices = [c for c in choices if c != '']
 
             if len(non_blank_choices) == 0:
 
@@ -445,7 +455,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                 continue
 
             elif (len(non_blank_choices)
-                  <= settings.BROWSE_METADATA_OPTION_LIMIT):
+                  <= settings.BROWSE_METADATA_DROPDOWN_LIMIT):
 
                 self.fields[field_name] = forms.ChoiceField(
                     label=field_label,
@@ -453,7 +463,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                         # Any value
                         [('', "Any")]
                         # Non-blank values
-                        + non_blank_choices
+                        + [(c, c) for c in non_blank_choices]
                         # Blank value
                         + [('(none)', "(None)")]
                     ),
@@ -468,6 +478,22 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
                     label=field_label,
                     required=False,
                 )
+
+                # Show an example to hint at the fact that you're supposed to
+                # enter the entire value, not just part of it.
+                self.fields[field_name].widget.attrs |= {
+                    'placeholder': f"Example: {non_blank_choices[0]}",
+                }
+
+                template = loader.get_template(
+                    'visualization/help_browse_aux_meta_fields.html')
+                self.fields[field_name].extra_help_content = template.render({
+                    'field_label': field_label,
+                    'choices': non_blank_choices[:help_text_option_limit],
+                    'limit': help_text_option_limit,
+                    'is_over_limit':
+                        len(non_blank_choices) > help_text_option_limit,
+                })
 
     def add_image_annotation_status_fields(self):
 

@@ -5,27 +5,6 @@ General-purpose JS utility functions can go here.
 var util = {
 
     /*
-    Add a JS event that will run when the page is loaded.
-    This will just add to the "events to run" list, it won't
-    override previously specified events.
-
-    From http://simonwillison.net/2004/May/26/addLoadEvent/
-    */
-    addLoadEvent: function(func) {
-        var oldonload = window.onload;
-        if (typeof window.onload != 'function') {
-            window.onload = func;
-        } else {
-            window.onload = function() {
-                if (oldonload) {
-                    oldonload();
-                }
-                func();
-            }
-        }
-    },
-
-    /*
     Wrapper around the standard fetch() which does error handling.
     @param resource - url or other resource to fetch (see standard fetch())
     @param options - see standard fetch()
@@ -160,6 +139,14 @@ var util = {
                      ((event.which == 2) ? "MIDDLE" : "RIGHT");
     },
 
+    openHelpDialog: function(helpContentElement) {
+        $(helpContentElement).dialog({
+            height: 400,
+            width: 600,
+            modal: true
+        });
+    },
+
     /*
     When the user tries to leave the page by clicking a link, closing the
     tab, etc., a confirmation dialog will pop up. In most browsers, the
@@ -184,20 +171,6 @@ var util = {
      */
     pageLeaveWarningDisable: function() {
         window.onbeforeunload = null;
-    },
-
-    /*
-    Generates a random string of the specified length.
-    Idea from: http://stackoverflow.com/a/1349426/859858
-    */
-    randomString: function(strLength) {
-        var chars = [];
-        var allowed_chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-        for (var i = 0; i < strLength; i++)
-            chars.append(allowed_chars.charAt(Math.floor(Math.random() * allowed_chars.length)));
-
-        return chars;
     },
 
     /*
@@ -232,15 +205,6 @@ var util = {
     toArray: function(argumentsObj) {
         return Array.prototype.slice.call(argumentsObj);
     },
-
-    /*
-    Trim leading and trailing spaces from a string.
-
-    From http://blog.stevenlevithan.com/archives/faster-trim-javascript
-    */
-    trimSpaces: function(str) {
-        return str.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
-    }
 };
 
 
@@ -253,43 +217,6 @@ var util = {
  * Though, third-party JS plugins really shouldn't extend standard types.
  * (So if this becomes a JS plugin, rework this code!)
  */
-
-
-/* Array indexOf(), in case the browser doesn't have it (hi, IE)
- * Source: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/IndexOf
- */
-if (!Array.prototype.indexOf) {
-    Array.prototype.indexOf = function (searchElement /*, fromIndex */ ) {
-        "use strict";
-        if (this === void 0 || this === null) {
-            throw new TypeError();
-        }
-        var t = Object(this);
-        var len = t.length >>> 0;
-        if (len === 0) {
-            return -1;
-        }
-        var n = 0;
-        if (arguments.length > 0) {
-            n = Number(arguments[1]);
-            if (n !== n) { // shortcut for verifying if it's NaN
-                n = 0;
-            } else if (n !== 0 && n !== Infinity && n !== -Infinity) {
-                n = (n > 0 || -1) * Math.floor(Math.abs(n));
-            }
-        }
-        if (n >= len) {
-            return -1;
-        }
-        var k = n >= 0 ? n : Math.max(len - Math.abs(n), 0);
-        for (; k < len; k++) {
-            if (k in t && t[k] === searchElement) {
-                return k;
-            }
-        }
-        return -1;
-    }
-}
 
 
 /* Curry function.
@@ -367,50 +294,6 @@ String.prototype.startsWith = function(prefix) {
  * jQuery extensions can go here.
  */
 
-/* autoWidth
- *
- * Automatically make a group of elements the same width, by taking the maximum width of all
- * the elements and then setting the whole group to this width.
- *
- * Parameters:
- * limitWidth - Maximum allowed width.  If any element's width is greater than limitWidth,
- *              make the elements use width=limitWidth instead.
- *
- * Side effects:
- * On slow computers, the elements will appear without their width set for the first
- * 0.5 second or so, and then will shift position on the page once they have their
- * widths set.  It can be jarring to see this on nearly every page load.
- *
- * Original source (though it's been slightly modified):
- * http://stackoverflow.com/a/4641390 (http://stackoverflow.com/questions/4641346/css-to-align-label-and-input)
- * http://www.jankoatwarpspeed.com/post/2008/07/09/Justify-elements-using-jQuery-and-CSS.aspx#id_b16cb791-5bd7-4bb3-abc2-dc414fc1bd07
- * - (1 mistake: maxWidth >= settings.limitWidth should be $(this).width >= settings.limitWidth)
- */
-jQuery.fn.autoWidth = function(options) {
-  var settings = {
-      limitWidth: false
-  };
-
-  if(options) {
-      jQuery.extend(settings, options);
-  }
-
-  var maxWidth = 0;
-
-  this.each(function(){
-      var thisWidth = $(this).width();
-      if (thisWidth > maxWidth){
-          if(settings.limitWidth && thisWidth >= settings.limitWidth) {
-            maxWidth = settings.limitWidth;
-          } else {
-            maxWidth = thisWidth;
-          }
-      }
-  });
-
-  this.width(maxWidth);
-};
-
 /* changeFontSize
  *
  * Change the font size of an element.
@@ -450,30 +333,6 @@ jQuery.fn.disable = function() {
  * disable
  */
 jQuery.fn.enable = function() {
-    $(this).prop('disabled', false);
-};
-
-/* hideAndDisable
- *
- * Hide and disable a jQuery element.
- *
- * See also:
- * showAndEnable
- */
-jQuery.fn.hideAndDisable = function() {
-    $(this).hide();
-    $(this).prop('disabled', true);
-};
-
-/* showAndEnable
- *
- * Show and enable a jQuery element.
- *
- * See also:
- * hideAndDisable
- */
-jQuery.fn.showAndEnable = function() {
-    $(this).show();
     $(this).prop('disabled', false);
 };
 
@@ -535,50 +394,42 @@ $(document).ajaxSend(function(event, xhr, settings) {
 });
 
 
-
 /*
- * Below: Document-manipulating JS to run at every page load.
- */
-
-
-
-/* Make all labels with class 'form_label' the same width,
- * and figure out this width dynamically (the longest width
- * needed by any field, with a max allowed width of 250px).
- *
- * See previously defined: jQuery.fn.autoWidth
- */
-/*util.addLoadEvent( function() {
-    $('label.column_form_text_field').autoWidth({limitWidth: 250});
-});*/
-
-
-/*
-When you have a div with the class name "tutorial-message", this function
-will turn that into a question-mark button which you click to display the
-div contents in a pop-up.
-
-Example: <div class="tutorial-message">This is my message</div>
+Set up help dialogs.
 */
-util.addLoadEvent( function() {
-    var $tutorialMessages = $(".tutorial-message");
-    $tutorialMessages.each ( function() {
-        var $helpImage = $('<img style="display:inline;cursor:pointer" width="20" />');
-        $helpImage.attr('src', window.utilQuestionMarkImage);
+window.addEventListener('load', () => {
+
+    /*
+    When you have a div with the class name "tutorial-message", this function
+    will turn that into a question-mark button which you click to display the
+    div contents in a pop-up.
+
+    Example: <div class="tutorial-message">This is my message</div>
+    */
+    document.querySelectorAll('.tutorial-message').forEach((helpContainer) => {
+        let helpImage = document.createElement('img');
+        helpImage.classList.add('help-button');
+        helpImage.width = 20;
+        helpImage.src = window.utilQuestionMarkImage;
+
         // Insert the help image before the tutorial message element
         // (which should have display:none, so effectively, insert the
         // help image in place of the tutorial message).
-        $(this).before($helpImage);
-        openDialogFunction = function($element) {
-            $element.dialog({
-                height: 400,
-                width: 600,
-                modal: true
-            });
-        };
+        helpContainer.parentNode.insertBefore(helpImage, helpContainer);
+
         // When the help image is clicked, display the tutorial message
         // contents in a dialog.
-        $helpImage.bind("click", openDialogFunction.curry($(this)));
+        let boundMethod = util.openHelpDialog.bind(util, helpContainer);
+        helpImage.addEventListener('click', boundMethod);
     });
 
+    /*
+    Certain fields have these dialog-based help content elements.
+    */
+    document.querySelectorAll('button.extra-help-content-button').forEach((button) => {
+        let helpContainer =
+            document.getElementById(button.dataset.helpContainerId);
+        let boundMethod = util.openHelpDialog.bind(util, helpContainer);
+        button.addEventListener('click', boundMethod);
+    });
 });

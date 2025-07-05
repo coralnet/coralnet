@@ -1,0 +1,17 @@
+{# Extra help content is initially hidden, and can be shown by clicking the button. #}
+{% if field.field.extra_help_content %}
+  <button
+    type="button"
+    class="extra-help-content-button"
+    data-help-container-id="id-{{ field.name }}-extra-help-content"
+  >
+    {{ extra_help_button_content }}
+  </button>
+
+  <div
+    class="extra-help-content"
+    id="id-{{ field.name }}-extra-help-content"
+  >
+    {{ field.field.extra_help_content|safe }}
+  </div>
+{% endif %}
