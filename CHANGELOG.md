@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.21 (WIP)
+
+- New migrations to run for `images`. Migration 0042 may take about 80 minutes per million images.
+
 ## [1.20](https://github.com/coralnet/coralnet/tree/1.20)
 
 Production: 2025-06-22

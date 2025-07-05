@@ -11,7 +11,7 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from images.models import Image
+from images.models import Image, Metadata
 from lib.tests.utils import BasePermissionTest, ClientTest
 from lib.tests.utils_data import create_sample_image
 
@@ -202,6 +202,7 @@ class UploadImageTest(ClientTest):
         self.assertRegex(
             str(img.original_file), image_filepath_regex)
 
+        self.assertEqual(img.source_id, self.source.pk)
         self.assertEqual(img.original_width, 600)
         self.assertEqual(img.original_height, 450)
 
@@ -209,8 +210,14 @@ class UploadImageTest(ClientTest):
         self.assertTrue(img.upload_date <= timezone.now())
 
         # Check that the user who uploaded the image is the
-        # currently logged in user.
+        # user we logged in as to do the upload.
         self.assertEqual(img.uploaded_by.pk, self.user.pk)
+
+        metadata = Metadata.objects.get(image=img)
+        self.assertEqual(metadata.source_id, self.source.pk)
+        self.assertEqual(metadata.name, '1.png')
+        self.assertEqual(
+            metadata.annotation_area, self.source.image_annotation_area)
 
     def test_file_existence(self):
         """Uploaded file should exist in storage."""

@@ -4,6 +4,7 @@ from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import int_list_validator
+from django.db.models.functions import Lower
 from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
@@ -436,8 +437,9 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
         for field_name, field_label in metadata_choice_fields:
             choices = (
-                Metadata.objects.filter(image__source=self.source)
-                .order_by(field_name)
+                Metadata.objects.filter(source=self.source)
+                # Case insensitive
+                .order_by(Lower(field_name))
                 .values_list(field_name, flat=True)
                 .distinct()
                 # No point in getting more results than this.
