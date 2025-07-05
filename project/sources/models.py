@@ -400,12 +400,6 @@ class Source(models.Model):
             or user.has_perm(Source.PermTypes.VIEW.fullCode)
         )
 
-    def get_all_images(self):
-        # Avoid circular dependency between modules
-        from images.models import Image
-
-        return Image.objects.filter(source=self)
-
     @property
     def nbr_confirmed_images(self):
         return self.image_set.confirmed().count()

@@ -133,8 +133,7 @@ def metadata_obj_to_dict(metadata):
 
 def delete_images(image_queryset):
     """
-    Delete Image objects without leaving behind leftover related objects.
-    Return the number of Images that were actually deleted.
+    Delete Image objects, and return the number that were actually deleted.
 
     We DON'T delete the original image file just yet, because if we did,
     then a subsequent exception in this request/response cycle would leave
@@ -144,32 +143,16 @@ def delete_images(image_queryset):
     It would be reasonable to delete easy-thumbnails' image thumbnails now,
     but best left for later again, for better user-end responsiveness.
     """
-    # These are ForeignKey fields of the Image, and thus deleting the Image
-    # can't trigger a cascade delete on these objects. So we have to get
-    # these objects and delete them separately.
-    metadata_queryset = Metadata.objects.filter(image__in=image_queryset)
-
-    # Since these querysets are obtained based on their related images,
-    # the querysets will change once the images are deleted!
-    # Force-evaluate these querysets BEFORE image deletion.
-    # https://docs.djangoproject.com/en/dev/ref/models/querysets/#when-querysets-are-evaluated
-    metadata_pks = list(metadata_queryset.values_list('pk', flat=True))
-    metadata_queryset = Metadata.objects.filter(pk__in=metadata_pks)
-
-    # We call delete() on the querysets rather than the individual
+    # We call delete() on the queryset rather than the individual
     # objects for faster performance.
     _, num_objects_deleted = image_queryset.delete()
     delete_count = num_objects_deleted.get('images.Image', 0)
 
-    # We delete the related objects AFTER deleting the images to not trigger
-    # PROTECT-related errors on those ForeignKeys.
-    metadata_queryset.delete()
-
     return delete_count
 
 
-def delete_image(img):
-    delete_images(Image.objects.filter(pk=img.pk))
+def delete_image(img: Image):
+    img.delete()
 
 
 def calculate_points(annotation_area, point_gen_spec):

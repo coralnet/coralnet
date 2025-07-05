@@ -299,21 +299,21 @@ def metadata_preview(csv_metadata, source):
 
 def upload_image_process(image_file, image_name, source, current_user):
 
-    metadata_obj = Metadata(
-        name=image_name,
-        annotation_area=source.image_annotation_area,
-    )
-    metadata_obj.save()
-
     # Save the image into the DB
     img = Image(
         original_file=image_file,
         uploaded_by=current_user,
         point_generation_method=source.default_point_generation_method,
-        metadata=metadata_obj,
         source=source,
     )
     img.save()
+
+    metadata_obj = Metadata(
+        image=img,
+        name=image_name,
+        annotation_area=source.image_annotation_area,
+    )
+    metadata_obj.save()
 
     annotation_info = ImageAnnotationInfo(image=img)
     annotation_info.save()
