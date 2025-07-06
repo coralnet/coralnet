@@ -42,9 +42,9 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
         user_viewer.save()
         user = User(username='user')
         user.save()
-        source_1 = Source(name="Source 1")
+        source_1 = Source(name="Source 1", image_annotation_area='0;100;0;100')
         source_1.save()
-        source_2 = Source(name="Source 2")
+        source_2 = Source(name="Source 2", image_annotation_area='0;100;0;100')
         source_2.save()
 
         # Add source memberships.
@@ -110,9 +110,9 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
 
         user = User()
         user.save()
-        source_1 = Source(name="Source 1")
+        source_1 = Source(name="Source 1", image_annotation_area='0;100;0;100')
         source_1.save()
-        source_2 = Source(name="Source 2")
+        source_2 = Source(name="Source 2", image_annotation_area='0;100;0;100')
         source_2.save()
 
         # Make every possible source FK
@@ -250,7 +250,7 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
 
         user = User()
         user.save()
-        source = Source()
+        source = Source(image_annotation_area='0;100;0;100')
         source.save()
         # Pretty unlikely that we'll hit this high of an ID (max AutoField
         # value) in a test environment.
@@ -258,7 +258,7 @@ class MigrateSourceFromImagesAppTest(MigrationTest):
         # And let's sanity-check either way.
         self.assertNotEqual(source.pk, nonexistent_source_id)
 
-        # Try to every possible source FK
+        # Try every possible source FK
 
         metadata = Metadata()
         metadata.save()

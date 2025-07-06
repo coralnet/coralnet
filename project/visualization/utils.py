@@ -11,7 +11,7 @@ from django.db.models import Q
 import django.db.models.fields as model_fields
 
 from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
-from images.models import Point, Metadata
+from images.models import Metadata
 
 User = get_user_model()
 
@@ -47,8 +47,8 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
             else:
                 metadata_kwargs['metadata__' + field_name] = None
         else:
-            # Filter by the given non-empty value
-            metadata_kwargs['metadata__' + field_name] = value
+            # Filter by the given non-empty value (case insensitive)
+            metadata_kwargs[f'metadata__{field_name}__iexact'] = value
     qs.append(Q(**metadata_kwargs))
 
     # Image-name search field; all punctuation is allowed
@@ -98,6 +98,8 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     sort_direction = search_kwargs.get('sort_direction') or 'asc'
 
     # Add pk as a secondary key when needed to create an unambiguous ordering.
+    # This secondary key slows down ordering, but the consistency is important
+    # for things like prev/next links.
     if sort_method == 'photo_date':
         sort_fields = ['metadata__photo_date', 'pk']
     elif sort_method == 'last_annotation_date':

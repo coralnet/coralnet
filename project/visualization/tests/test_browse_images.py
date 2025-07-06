@@ -332,10 +332,6 @@ class FormInitializationTest(BaseBrowseImagesTest):
     # initialization tests.
 
 
-@override_settings(
-    BROWSE_METADATA_DROPDOWN_LIMIT=2,
-    BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT=4,
-)
 class AuxMetadataSearchTest(BaseBrowseImagesTest):
 
     @classmethod
@@ -386,6 +382,29 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
         self.assert_browse_results(
             response, [self.img2, self.img3])
 
+    def test_filter_case_insensitive(self):
+        self.update_multiple_metadatas(
+            'aux2',
+            [(self.img1, '5m'),
+             (self.img2, '10m'),
+             (self.img3, '5M')])
+
+        response = self.get_browse(aux2='5M')
+        self.assert_browse_results(
+            response, [self.img1, self.img3])
+
+    def test_choices_sorting_case_insensitive(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            [(self.img1, 'Transect7'),
+             (self.img2, 'transect4'),
+             (self.img3, 'Transect2')])
+
+        response = self.get_browse()
+        self.assert_search_field_choices(
+            response, 'aux3',
+            ['', 'Transect2', 'transect4', 'Transect7', '(none)'])
+
     def test_only_show_metadata_field_if_non_blank_values(self):
         # aux1 is blank for every image
         self.update_multiple_metadatas(
@@ -410,6 +429,10 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
         self.assertIsNotNone(self.get_search_form_field(response, 'aux3'))
         self.assertIsNotNone(self.get_search_form_field(response, 'aux4'))
 
+    @override_settings(
+        BROWSE_METADATA_DROPDOWN_LIMIT=2,
+        BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT=4,
+    )
     def test_text_field_if_too_many_uniques(self):
         # aux1 has 2 unique non-blank values
         self.update_multiple_metadatas(
@@ -444,6 +467,10 @@ class AuxMetadataSearchTest(BaseBrowseImagesTest):
             self.get_search_form_field(response, 'aux4').name, 'input',
             msg="aux4 should use a text input")
 
+    @override_settings(
+        BROWSE_METADATA_DROPDOWN_LIMIT=2,
+        BROWSE_METADATA_HELP_TEXT_OPTION_LIMIT=4,
+    )
     def test_extra_help_text(self):
         self.source.key2 = "Habitat"
         self.source.save()
