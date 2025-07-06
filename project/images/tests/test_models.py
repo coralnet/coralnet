@@ -4,11 +4,12 @@ from unittest import mock
 import piexif
 from PIL import Image as PILImage
 from django.core.files.base import ContentFile
+from django.db.models import QuerySet
 from django.test import override_settings
 from django_migration_testcase import MigrationTest
 from easy_thumbnails.files import get_thumbnailer
 
-from lib.tests.utils import BaseTest, ClientTest
+from lib.tests.utils import BaseTest, ClientTest, spy_decorator
 from vision_backend.common import Extractors
 from ..model_utils import PointGen
 from ..models import Point
@@ -204,31 +205,43 @@ class MetadataImageFieldMigrationTest(MigrationTest):
 
         source = Source.objects.create()
 
-        metadata_1 = Metadata.objects.create()
-        metadata_1_pk = metadata_1.pk
-        image_1 = Image.objects.create(
-            source=source, metadata=metadata_1, **self.image_defaults)
-        image_1_pk = image_1.pk
+        metadata_ids = []
+        image_ids = []
+        for _ in range(10):
+            metadata = Metadata.objects.create()
+            metadata_ids.append(metadata.pk)
+            image = Image.objects.create(
+                source=source, metadata=metadata, **self.image_defaults)
+            image_ids.append(image.pk)
 
-        metadata_2 = Metadata.objects.create()
-        metadata_2_pk = metadata_2.pk
-        image_2 = Image.objects.create(
-            source=source, metadata=metadata_2, **self.image_defaults)
-        image_2_pk = image_2.pk
+            # Metadata.image attributes shouldn't exist yet
+            self.assertRaises(AttributeError, getattr, metadata, 'image')
 
-        # Metadata.image attributes shouldn't exist yet
-        self.assertRaises(AttributeError, getattr, metadata_1, 'image')
-        self.assertRaises(AttributeError, getattr, metadata_2, 'image')
+        bulk_update = spy_decorator(QuerySet.bulk_update)
 
-        self.run_migration()
+        with (
+            mock.patch(
+                'images.migrations.0042_metadata_image_onetoone_data1'
+                '.UPDATE_BATCH_SIZE',
+                3,
+            ),
+            mock.patch.object(QuerySet, 'bulk_update', bulk_update),
+        ):
+            self.run_migration()
 
         Metadata = self.get_model_after('images.Metadata')
 
-        # Metadata.image attributes should be filled in
+        for i in range(10):
+            # Metadata.image attributes should be filled in
+            self.assertEqual(
+                Metadata.objects.get(pk=metadata_ids[i]).image.pk,
+                image_ids[i])
+
         self.assertEqual(
-            Metadata.objects.get(pk=metadata_1_pk).image.pk, image_1_pk)
-        self.assertEqual(
-            Metadata.objects.get(pk=metadata_2_pk).image.pk, image_2_pk)
+            bulk_update.mock_obj.call_count, 4,
+            msg="Should require 4 calls with batch size 3"
+                " to update 10 metadata instances"
+        )
 
     def test_clean_up_metadata_without_images(self):
         """
@@ -301,33 +314,43 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
 
         source = Source.objects.create()
 
-        image_1 = Image.objects.create(
-            source=source, **self.image_defaults)
-        image_1_pk = image_1.pk
-        metadata_1 = Metadata.objects.create(image=image_1)
-        metadata_1_pk = metadata_1.pk
+        image_ids = []
+        metadata_ids = []
+        for _ in range(10):
+            image = Image.objects.create(
+                source=source, **self.image_defaults)
+            image_ids.append(image.pk)
+            metadata = Metadata.objects.create(image=image)
+            metadata_ids.append(metadata.pk)
 
-        image_2 = Image.objects.create(
-            source=source, **self.image_defaults)
-        image_2_pk = image_2.pk
-        metadata_2 = Metadata.objects.create(image=image_2)
-        metadata_2_pk = metadata_2.pk
+        bulk_update = spy_decorator(QuerySet.bulk_update)
 
-        self.run_migration()
+        with (
+            mock.patch(
+                'images.migrations.0042_metadata_image_onetoone_data1'
+                '.UPDATE_BATCH_SIZE',
+                3,
+            ),
+            mock.patch.object(QuerySet, 'bulk_update', bulk_update),
+        ):
+            self.run_migration()
 
         Image = self.get_model_after('images.Image')
         Metadata = self.get_model_after('images.Metadata')
 
-        # Image.metadata should be filled in
-        self.assertEqual(
-            Image.objects.get(pk=image_1_pk).metadata.pk, metadata_1_pk)
-        self.assertEqual(
-            Image.objects.get(pk=image_2_pk).metadata.pk, metadata_2_pk)
+        for i in range(10):
+            # Image.metadata should be filled in
+            self.assertEqual(
+                Image.objects.get(pk=image_ids[i]).metadata.pk,
+                metadata_ids[i])
 
-        # Metadata.image attributes shouldn't exist anymore
-        self.assertRaises(
-            AttributeError, getattr,
-            Metadata.objects.get(pk=metadata_1_pk), 'image')
-        self.assertRaises(
-            AttributeError, getattr,
-            Metadata.objects.get(pk=metadata_2_pk), 'image')
+            # Metadata.image attributes shouldn't exist anymore
+            self.assertRaises(
+                AttributeError, getattr,
+                Metadata.objects.get(pk=metadata_ids[i]), 'image')
+
+        self.assertEqual(
+            bulk_update.mock_obj.call_count, 4,
+            msg="Should require 4 calls with batch size 3"
+                " to update 10 metadata instances"
+        )
