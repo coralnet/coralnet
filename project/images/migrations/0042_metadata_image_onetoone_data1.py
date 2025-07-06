@@ -5,6 +5,9 @@ from django.db import migrations
 from tqdm import tqdm
 
 
+UPDATE_BATCH_SIZE = 1000
+
+
 def populate_metadata_image(apps, schema_editor):
     """
     Populate the Metadata model's image_new field using the Image.metadata
@@ -13,14 +16,28 @@ def populate_metadata_image(apps, schema_editor):
     Image = apps.get_model('images', 'Image')
     Metadata = apps.get_model('images', 'Metadata')
 
-    # iterator() helps to not run out of memory with lots of images
-    # (like millions).
-    all_images = Image.objects.all().iterator(chunk_size=10000)
+    all_images = (
+        Image.objects.all()
+        .select_related('metadata')
+        # iterator() helps to not run out of memory with lots of images
+        # (like millions).
+        .iterator(chunk_size=10000))
+    metadata_batch = []
+
     for image in tqdm(all_images, disable=settings.TQDM_DISABLE):
-        if image.metadata:
-            metadata = Metadata.objects.get(pk=image.metadata.pk)
-            metadata.image_new = image
-            metadata.save()
+        if not image.metadata:
+            continue
+
+        image.metadata.image_new = image
+        metadata_batch.append(image.metadata)
+        if len(metadata_batch) >= UPDATE_BATCH_SIZE:
+            # bulk_update() when we've gathered
+            # UPDATE_BATCH_SIZE metadata instances.
+            Metadata.objects.bulk_update(metadata_batch, ['image_new'])
+            metadata_batch = []
+
+    # Last batch.
+    Metadata.objects.bulk_update(metadata_batch, ['image_new'])
 
 
 def populate_image_metadata(apps, schema_editor):
@@ -30,11 +47,24 @@ def populate_image_metadata(apps, schema_editor):
     """
     Image = apps.get_model('images', 'Image')
 
-    all_images = Image.objects.all().iterator(chunk_size=10000)
+    all_images = (
+        Image.objects.all()
+        .select_related('metadata_new')
+        .iterator(chunk_size=10000))
+    image_batch = []
+
     for image in tqdm(all_images, disable=settings.TQDM_DISABLE):
-        if image.metadata_new:
-            image.metadata = image.metadata_new
-            image.save()
+        if not image.metadata_new:
+            continue
+
+        image.metadata = image.metadata_new
+        image_batch.append(image)
+        if len(image_batch) >= UPDATE_BATCH_SIZE:
+            Image.objects.bulk_update(image_batch, ['metadata'])
+            image_batch = []
+
+    # Last batch.
+    Image.objects.bulk_update(image_batch, ['metadata'])
 
 
 class Migration(migrations.Migration):
