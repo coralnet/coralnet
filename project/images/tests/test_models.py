@@ -15,6 +15,14 @@ from ..model_utils import PointGen
 from ..models import Point
 
 
+def input_without_prompt(_):
+    """
+    Bypass the input prompt by mocking input(). This just returns a
+    constant value.
+    """
+    return 'y'
+
+
 class SourceExtractorPropertyTest(ClientTest):
     """
     Test the feature_extractor property of the Source model.
@@ -191,8 +199,8 @@ class MetadataImageFieldMigrationTest(MigrationTest):
     ]
 
     image_defaults = dict(
-        original_width=100,
-        original_height=100,
+        original_width=32,
+        original_height=32,
     )
 
     def test_images_and_metadata_remain_paired(self):
@@ -207,8 +215,8 @@ class MetadataImageFieldMigrationTest(MigrationTest):
 
         metadata_ids = []
         image_ids = []
-        for _ in range(10):
-            metadata = Metadata.objects.create()
+        for i in range(10):
+            metadata = Metadata.objects.create(name=str(i))
             metadata_ids.append(metadata.pk)
             image = Image.objects.create(
                 source=source, metadata=metadata, **self.image_defaults)
@@ -253,20 +261,14 @@ class MetadataImageFieldMigrationTest(MigrationTest):
 
         source = Source.objects.create()
 
-        metadata_1 = Metadata.objects.create()
+        metadata_1 = Metadata.objects.create(name='1')
         metadata_1_pk = metadata_1.pk
         Image.objects.create(
             source=source, metadata=metadata_1, **self.image_defaults)
 
-        metadata_2 = Metadata.objects.create()
+        metadata_2 = Metadata.objects.create(name='2')
         metadata_2_pk = metadata_2.pk
 
-        def input_without_prompt(_):
-            """
-            Bypass the input prompt by mocking input(). This just returns a
-            constant value.
-            """
-            return 'y'
         def print_noop(_):
             """Don't print output during the migration run."""
             pass
@@ -300,8 +302,8 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
     ]
 
     image_defaults = dict(
-        original_width=100,
-        original_height=100,
+        original_width=32,
+        original_height=32,
     )
 
     def test_images_and_metadata_remain_paired(self):
@@ -316,11 +318,11 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
 
         image_ids = []
         metadata_ids = []
-        for _ in range(10):
+        for i in range(10):
             image = Image.objects.create(
                 source=source, **self.image_defaults)
             image_ids.append(image.pk)
-            metadata = Metadata.objects.create(image=image)
+            metadata = Metadata.objects.create(image=image, name=str(i))
             metadata_ids.append(metadata.pk)
 
         bulk_update = spy_decorator(QuerySet.bulk_update)
@@ -370,8 +372,8 @@ class MetadataSourceFieldMigrationTest(MigrationTest):
     ]
 
     image_defaults = dict(
-        original_width=100,
-        original_height=100,
+        original_width=32,
+        original_height=32,
     )
 
     def test(self):
@@ -385,15 +387,15 @@ class MetadataSourceFieldMigrationTest(MigrationTest):
         source_2_pk = source_2.pk
         image_1 = Image.objects.create(
             source=source_1, **self.image_defaults)
-        metadata_1 = Metadata.objects.create(image=image_1)
+        metadata_1 = Metadata.objects.create(image=image_1, name='1')
         metadata_1_pk = metadata_1.pk
         image_2 = Image.objects.create(
             source=source_2, **self.image_defaults)
-        metadata_2 = Metadata.objects.create(image=image_2)
+        metadata_2 = Metadata.objects.create(image=image_2, name='2')
         metadata_2_pk = metadata_2.pk
         image_3 = Image.objects.create(
             source=source_2, **self.image_defaults)
-        metadata_3 = Metadata.objects.create(image=image_3)
+        metadata_3 = Metadata.objects.create(image=image_3, name='3')
         metadata_3_pk = metadata_3.pk
 
         # Metadata.source attributes shouldn't exist yet
@@ -412,3 +414,214 @@ class MetadataSourceFieldMigrationTest(MigrationTest):
             Metadata.objects.get(pk=metadata_2_pk).source.pk, source_2_pk)
         self.assertEqual(
             Metadata.objects.get(pk=metadata_3_pk).source.pk, source_2_pk)
+
+
+class RenameDupeImageNamesMigrationTest(MigrationTest):
+
+    before = [
+        ('images', '0049_metadata_aux_and_name_indexes'),
+        ('sources', '0010_populate_deployed_classifier'),
+    ]
+    after = [
+        ('images', '0050_rename_dupe_image_names'),
+    ]
+
+    image_defaults = dict(
+        original_width=32,
+        original_height=32,
+    )
+
+    def setup_image(self, source):
+        Image = self.get_model_before('images.Image')
+        return Image.objects.create(source=source, **self.image_defaults)
+
+    def test_no_dupes(self):
+
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source = Source.objects.create(name="Source 1")
+        metadata_1_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.jpg').pk
+        metadata_2_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_2.jpg').pk
+        # Different extension, so not a dupe
+        metadata_3_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_2.png').pk
+
+        # Not expecting any prompts confirming renames
+        self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        # Not expecting any renames
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).name, 'IMG_1.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).name, 'IMG_2.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).name, 'IMG_2.png')
+
+    def test_two_dupe(self):
+
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source = Source.objects.create(name="Source 1")
+        metadata_1_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.jpg').pk
+        metadata_2_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_2.jpg').pk
+        metadata_3_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_2.jpg').pk
+
+        input_mock_target = (
+            'images.migrations.0050_rename_dupe_image_names.input')
+        with mock.patch(input_mock_target, input_without_prompt):
+            self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).name, 'IMG_1.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).name,
+            'IMG_2__dupe-name-01.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).name,
+            'IMG_2__dupe-name-02.jpg')
+
+    def test_three_dupe(self):
+
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source = Source.objects.create(name="Source 1")
+        # All dupes of each other.
+        # While we're at it, we test that dupe detection is case-insensitive.
+        metadata_1_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.jpg').pk
+        metadata_2_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.JPG').pk
+        metadata_3_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='img_1.jpg').pk
+
+        input_mock_target = (
+            'images.migrations.0050_rename_dupe_image_names.input')
+        with mock.patch(input_mock_target, input_without_prompt):
+            self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        # Suffixes should respect the original name's case.
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).name,
+            'IMG_1__dupe-name-01.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).name,
+            'IMG_1__dupe-name-02.JPG')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).name,
+            'img_1__dupe-name-03.jpg')
+
+    def test_two_sets_of_dupes(self):
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source = Source.objects.create(name="Source 1")
+        # 1+2, and 3+4 are dupes.
+        # While we're at it, we'll test different file extension cases:
+        # double extension, and no extension.
+        metadata_1_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.jpg.bak').pk
+        metadata_2_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.JPG.bak').pk
+        metadata_3_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='img_1').pk
+        metadata_4_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='img_1').pk
+
+        input_mock_target = (
+            'images.migrations.0050_rename_dupe_image_names.input')
+        with mock.patch(input_mock_target, input_without_prompt):
+            self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).name,
+            'IMG_1.jpg__dupe-name-01.bak')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).name,
+            'IMG_1.JPG__dupe-name-02.bak')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).name,
+            'img_1__dupe-name-01')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_4_pk).name,
+            'img_1__dupe-name-02')
+
+
+class RenameDupeImageNamesBackwardMigrationTest(MigrationTest):
+
+    before = [
+        ('images', '0050_rename_dupe_image_names'),
+        ('sources', '0010_populate_deployed_classifier'),
+    ]
+    after = [
+        ('images', '0049_metadata_aux_and_name_indexes'),
+    ]
+
+    image_defaults = dict(
+        original_width=32,
+        original_height=32,
+    )
+
+    def setup_image(self, source):
+        Image = self.get_model_before('images.Image')
+        return Image.objects.create(source=source, **self.image_defaults)
+
+    def test(self):
+        Source = self.get_model_before('sources.Source')
+        Metadata = self.get_model_before('images.Metadata')
+
+        source = Source.objects.create(name="Source 1")
+        # No dupe suffix
+        metadata_1_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source, name='IMG_1.jpg').pk
+        # Dupe suffix
+        metadata_2_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source,
+            name='IMG_1__dupe-name-01.jpg').pk
+        # With double extension
+        metadata_3_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source,
+            name='img_1.jpg__dupe-name-14.bak').pk
+        # With no extension
+        metadata_4_pk = Metadata.objects.create(
+            image=self.setup_image(source), source=source,
+            name='img_1__dupe-name-02').pk
+
+        self.run_migration()
+
+        Metadata = self.get_model_after('images.Metadata')
+
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_1_pk).name,
+            'IMG_1.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_2_pk).name,
+            'IMG_1.jpg')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_3_pk).name,
+            'img_1.jpg.bak')
+        self.assertEqual(
+            Metadata.objects.get(pk=metadata_4_pk).name,
+            'img_1')
+
+        # As part of tearDown(), it's going to go forward in migrations again,
+        # which will catch any dupes and trigger an input prompt in that case.
+        # So, don't end the test with any dupes.
+        metadata_2 = Metadata.objects.get(pk=metadata_2_pk)
+        metadata_2.name = 'IMG_1__some-suffix.jpg'
+        metadata_2.save()
