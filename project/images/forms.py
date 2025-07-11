@@ -56,6 +56,30 @@ class MetadataForm(ModelForm):
             self.fields[field_name].widget.attrs['size'] = str(field_size)
 
 
+class MetadataFormForDetailEdit(MetadataForm):
+    """
+    Metadata form which is used in the image-detail-edit view.
+    """
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+
+        if self.instance.name == name:
+            # Unchanged, so short-circuit the check to prevent comparing
+            # with own name.
+            pass
+        else:
+            try:
+                Metadata.objects.get(source=self.source, name__iexact=name)
+            except Metadata.DoesNotExist:
+                pass
+            else:
+                raise ValidationError(
+                    "This name already exists in the source.",
+                    code='dupe_name')
+
+        return name
+
+
 class MetadataFormForGrid(MetadataForm):
     """
     Metadata form which is used in the metadata-edit grid view.
