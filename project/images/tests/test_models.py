@@ -4,6 +4,7 @@ from unittest import mock
 import piexif
 from PIL import Image as PILImage
 from django.core.files.base import ContentFile
+from django.db import IntegrityError
 from django.db.models import QuerySet
 from django.test import override_settings
 from django_migration_testcase import MigrationTest
@@ -12,7 +13,7 @@ from easy_thumbnails.files import get_thumbnailer
 from lib.tests.utils import BaseTest, ClientTest, spy_decorator
 from vision_backend.common import Extractors
 from ..model_utils import PointGen
-from ..models import Point
+from ..models import Image, Metadata, Point
 
 
 def input_without_prompt(_):
@@ -21,6 +22,12 @@ def input_without_prompt(_):
     constant value.
     """
     return 'y'
+
+
+image_defaults = dict(
+    original_width=32,
+    original_height=32,
+)
 
 
 class SourceExtractorPropertyTest(ClientTest):
@@ -124,6 +131,53 @@ class ImageExifOrientationTest(ClientTest):
                 " image, indicating that the thumbnail content is un-rotated")
 
 
+class MetadataUniqueNamesInSourceTest(ClientTest):
+    """
+    Raw-ORM testing for dupe image names.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.other_source = cls.create_source(cls.user)
+
+    def new_image(self, source):
+        return Image.objects.create(source=source, **image_defaults)
+
+    def test(self):
+        Metadata.objects.create(
+            source=self.source, image=self.new_image(self.source),
+            name='1.png')
+        Metadata.objects.create(
+            source=self.source, image=self.new_image(self.source),
+            name='2.png')
+
+        with self.assertRaises(IntegrityError):
+            Metadata.objects.create(
+                source=self.source, image=self.new_image(self.source),
+                name='1.png')
+
+    def test_same_name_in_other_source_ok(self):
+        Metadata.objects.create(
+            source=self.other_source, image=self.new_image(self.other_source),
+            name='1.png')
+        Metadata.objects.create(
+            source=self.source, image=self.new_image(self.source),
+            name='1.png')
+
+    def test_case_insensitive(self):
+        Metadata.objects.create(
+            source=self.source, image=self.new_image(self.source),
+            name='1.png')
+
+        with self.assertRaises(IntegrityError):
+            Metadata.objects.create(
+                source=self.source, image=self.new_image(self.source),
+                name='1.PNG')
+
+
 class PointGenTest(BaseTest):
 
     def test_point_count_simple_random(self):
@@ -198,11 +252,6 @@ class MetadataImageFieldMigrationTest(MigrationTest):
         ('images', '0045_metadata_image_onetoone_schema3'),
     ]
 
-    image_defaults = dict(
-        original_width=32,
-        original_height=32,
-    )
-
     def test_images_and_metadata_remain_paired(self):
         """
         Images and Metadata that were paired before should remain paired after.
@@ -219,7 +268,7 @@ class MetadataImageFieldMigrationTest(MigrationTest):
             metadata = Metadata.objects.create(name=str(i))
             metadata_ids.append(metadata.pk)
             image = Image.objects.create(
-                source=source, metadata=metadata, **self.image_defaults)
+                source=source, metadata=metadata, **image_defaults)
             image_ids.append(image.pk)
 
             # Metadata.image attributes shouldn't exist yet
@@ -264,7 +313,7 @@ class MetadataImageFieldMigrationTest(MigrationTest):
         metadata_1 = Metadata.objects.create(name='1')
         metadata_1_pk = metadata_1.pk
         Image.objects.create(
-            source=source, metadata=metadata_1, **self.image_defaults)
+            source=source, metadata=metadata_1, **image_defaults)
 
         metadata_2 = Metadata.objects.create(name='2')
         metadata_2_pk = metadata_2.pk
@@ -301,11 +350,6 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
         ('images', '0040_delete_source'),
     ]
 
-    image_defaults = dict(
-        original_width=32,
-        original_height=32,
-    )
-
     def test_images_and_metadata_remain_paired(self):
         """
         Images and Metadata that were paired before should remain paired after.
@@ -320,7 +364,7 @@ class MetadataImageFieldBackwardsMigrationTest(MigrationTest):
         metadata_ids = []
         for i in range(10):
             image = Image.objects.create(
-                source=source, **self.image_defaults)
+                source=source, **image_defaults)
             image_ids.append(image.pk)
             metadata = Metadata.objects.create(image=image, name=str(i))
             metadata_ids.append(metadata.pk)
@@ -371,11 +415,6 @@ class MetadataSourceFieldMigrationTest(MigrationTest):
         ('images', '0048_metadata_source_schema2'),
     ]
 
-    image_defaults = dict(
-        original_width=32,
-        original_height=32,
-    )
-
     def test(self):
         Source = self.get_model_before('sources.Source')
         Image = self.get_model_before('images.Image')
@@ -386,15 +425,15 @@ class MetadataSourceFieldMigrationTest(MigrationTest):
         source_2 = Source.objects.create(name="Source 2")
         source_2_pk = source_2.pk
         image_1 = Image.objects.create(
-            source=source_1, **self.image_defaults)
+            source=source_1, **image_defaults)
         metadata_1 = Metadata.objects.create(image=image_1, name='1')
         metadata_1_pk = metadata_1.pk
         image_2 = Image.objects.create(
-            source=source_2, **self.image_defaults)
+            source=source_2, **image_defaults)
         metadata_2 = Metadata.objects.create(image=image_2, name='2')
         metadata_2_pk = metadata_2.pk
         image_3 = Image.objects.create(
-            source=source_2, **self.image_defaults)
+            source=source_2, **image_defaults)
         metadata_3 = Metadata.objects.create(image=image_3, name='3')
         metadata_3_pk = metadata_3.pk
 
@@ -426,14 +465,9 @@ class RenameDupeImageNamesMigrationTest(MigrationTest):
         ('images', '0050_rename_dupe_image_names'),
     ]
 
-    image_defaults = dict(
-        original_width=32,
-        original_height=32,
-    )
-
     def setup_image(self, source):
         Image = self.get_model_before('images.Image')
-        return Image.objects.create(source=source, **self.image_defaults)
+        return Image.objects.create(source=source, **image_defaults)
 
     def test_no_dupes(self):
 
@@ -572,14 +606,9 @@ class RenameDupeImageNamesBackwardMigrationTest(MigrationTest):
         ('images', '0049_metadata_aux_and_name_indexes'),
     ]
 
-    image_defaults = dict(
-        original_width=32,
-        original_height=32,
-    )
-
     def setup_image(self, source):
         Image = self.get_model_before('images.Image')
-        return Image.objects.create(source=source, **self.image_defaults)
+        return Image.objects.create(source=source, **image_defaults)
 
     def test(self):
         Source = self.get_model_before('sources.Source')

@@ -263,6 +263,14 @@ class Metadata(models.Model):
     ]
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                'source',
+                Lower('name'),
+                name='unique_metadata_names_in_source',
+            ),
+        ]
+
         indexes = [
             # Browse pages should find these indexes useful.
             models.Index(
@@ -289,12 +297,6 @@ class Metadata(models.Model):
                 'source',
                 Lower('aux5'),
                 name='metadata_to_src_aux5_i'),
-            # Browse pages, and Image Detail / Annotation Tool prev/next links,
-            # should find this index useful.
-            models.Index(
-                'source',
-                Lower('name'),
-                name='metadata_to_src_name_i'),
         ]
 
     def __str__(self):
