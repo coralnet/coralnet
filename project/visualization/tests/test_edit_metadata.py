@@ -527,10 +527,18 @@ class SubmitEditsTest(BaseBrowseMetadataTest):
         self.assertEqual(image_1.metadata.photo_date, None)
         self.assertEqual(image_2.metadata.balance, "")
 
-    def test_dupe_name_errors(self):
+    def test_dupe_names(self):
         """
-        Submit metadata edits with duplicate-image-name errors.
+        Duplicate-image-name cases.
         """
+        other_source = self.create_source(self.user)
+        other_image = self.upload_image(
+            self.user, other_source,
+            image_options=dict(filename='name_in_other_source.png'))
+        self.assertEqual(
+            other_image.metadata.name, 'name_in_other_source.png',
+            msg="Sanity check: other_source upload should succeed")
+
         post_data = {
             'form-TOTAL_FORMS': 4,
             'form-INITIAL_FORMS': 4,
@@ -570,7 +578,7 @@ class SubmitEditsTest(BaseBrowseMetadataTest):
 
             'form-2-id': self.images[2].metadata.pk,
             # Dupe with [1], which is also in the form
-            'form-2-name': 'new_name_23',
+            'form-2-name': 'New_Name_23',
             'form-2-photo_date': '2007-04-08',
             'form-2-height_in_cm': '',
             'form-2-latitude': '',
@@ -586,7 +594,7 @@ class SubmitEditsTest(BaseBrowseMetadataTest):
 
             'form-3-id': self.images[3].metadata.pk,
             # Not dupe
-            'form-3-name': 'new_name_4',
+            'form-3-name': 'name_in_other_source.png',
             'form-3-photo_date': '2007-04-08',
             'form-3-height_in_cm': '',
             'form-3-latitude': '',
@@ -626,7 +634,7 @@ class SubmitEditsTest(BaseBrowseMetadataTest):
             + " | Same name as another image in the source or this form"
         )
         expected_error_dict['id_form-2-name'] = (
-            'new_name_23'
+            'New_Name_23'
             + " | Name"
             + " | Same name as another image in the source or this form"
         )

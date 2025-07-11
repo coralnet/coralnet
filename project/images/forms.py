@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db.models.functions import Lower
 from django.forms import BaseModelFormSet, ModelForm
 from django.forms.fields import ChoiceField, IntegerField, MultiValueField
 from django.forms.widgets import TextInput
@@ -91,26 +92,30 @@ class BaseMetadataFormSet(BaseModelFormSet):
         # no valid values...
         actual_forms = self.forms[:-1]
 
-        # Find dupe image names in the source, taking together the
-        # existing names of images not in the forms, and the new names
-        # of images in the forms
+        # Find dupe image names in the source; start with the
+        # existing names of images not in the forms.
         pks_in_forms = [f.instance.pk for f in actual_forms]
-        names_not_in_forms = list(
+        seen_names = set(
             Metadata.objects
-            .filter(image__source=source)
+            .filter(source=source)
             .exclude(pk__in=pks_in_forms)
-            .values_list('name', flat=True)
+            # Case insensitive
+            .values_list(Lower('name'), flat=True)
         )
-        names_in_forms = [f.cleaned_data['name'] for f in actual_forms]
-        all_names = names_not_in_forms + names_in_forms
-        dupe_names = [
-            name for name in all_names
-            if all_names.count(name) > 1
-        ]
-
+        # Then look at the new names of images in the forms.
+        dupe_names = set()
         for form in actual_forms:
-            name = form.cleaned_data['name']
-            if name in dupe_names:
+            name_lower = form.cleaned_data['name'].lower()
+            if name_lower in seen_names:
+                dupe_names.add(name_lower)
+            else:
+                seen_names.add(name_lower)
+
+        # Then, another pass through the forms so that all instances of
+        # a particular dupe name get the appropriate error message.
+        for form in actual_forms:
+            name_lower = form.cleaned_data['name'].lower()
+            if name_lower in dupe_names:
                 form.add_error(
                     'name',
                     ValidationError(
