@@ -10,6 +10,23 @@ from .model_utils import PointGen
 from .models import Image, Metadata, Point
 
 
+def find_dupe_image(source, image_name):
+    """
+    Sees if the given source already has an image with this name.
+
+    If a duplicate image was found, returns that duplicate.
+    If no duplicate was found, returns None.
+    """
+    try:
+        # Case insensitive name search.
+        metadata = Metadata.objects.get(
+            source=source, name__iexact=image_name)
+    except Metadata.DoesNotExist:
+        return None
+    else:
+        return metadata.image
+
+
 def _get_next_images_queryset(current_image, image_queryset):
     """
     Get the images that are ordered after current_image, based on the
@@ -377,39 +394,11 @@ def get_aux_metadata_form_choices(source, aux_field_number):
         .distinct()
     return [(v,v) for v in distinct_aux_values if v != '']
 
-def get_aux_metadata_db_value_dict_from_str_list(source, str_list):
-    aux_dict = dict()
-    for aux_field_number, s in enumerate(str_list, 1):
-        aux_field_name = get_aux_field_name(aux_field_number)
-        aux_dict[aux_field_name] = s
-    return aux_dict
-
 def get_aux_metadata_str_for_image(image, aux_field_number):
     return getattr(image.metadata, get_aux_field_name(aux_field_number))
 
-def get_aux_metadata_max_length():
-    # This assumes all aux metadata fields have the same max length.
-    # Assuming the user can't customize it, they should be the same.
-    return Metadata._meta.get_field(
-        get_aux_field_name(1)).max_length
-
-def update_filter_args_specifying_aux_metadata(
-        filter_args, aux_field_number, value):
-    filter_args['metadata__'+get_aux_field_name(aux_field_number)] = value
-
 
 # Other auxiliary metadata related functions.
-# TODO: These could go in model Manager classes.
-
-def get_aux_metadata_str_list_for_image(image, for_export=False):
-    lst = []
-    for n in range(1, get_num_aux_fields()+1):
-        s = get_aux_metadata_str_for_image(image, n)
-        if for_export and s == '':
-            s = "not specified"
-        lst.append(s)
-
-    return lst
 
 def get_date_and_aux_metadata_table(image):
     """

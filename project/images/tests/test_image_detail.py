@@ -211,8 +211,28 @@ class ImageDetailEditTest(ClientTest):
             cls.user,
             key1="Aux1", key2="Aux2", key3="Aux3", key4="Aux4", key5="Aux5",
         )
-        cls.img = cls.upload_image(cls.user, cls.source)
+        cls.img = cls.upload_image(
+            cls.user, cls.source, image_options=dict(filename='1.png'))
         cls.url = reverse('image_detail_edit', kwargs={'image_id': cls.img.id})
+
+    def submit_edits(self, post_data: dict):
+        self.client.force_login(self.user)
+        return self.client.post(
+            self.url,
+            data=post_data,
+            follow=True,
+        )
+
+    def assert_field_error(self, response, field_html_name, error_message):
+        response_soup = BeautifulSoup(
+            response.content, 'html.parser')
+
+        errors_container = response_soup.find(
+            'div', id=f'{field_html_name}-field-errors')
+        self.assertIsNotNone(
+            errors_container,
+            msg="Should find the expected errors container")
+        self.assertInHTML(error_message, str(errors_container))
 
     def test_load_page(self):
         # Set metadata
@@ -267,29 +287,25 @@ class ImageDetailEditTest(ClientTest):
         self.assertEqual(field.text.strip(), "Here are\nsome comments.")
 
     def test_submit_edits(self):
-        self.client.force_login(self.user)
-        response = self.client.post(
-            self.url,
-            data=dict(
-                photo_date=datetime.date(2020, 4, 3),
-                aux1='Site A',
-                aux2='Fringing Reef',
-                aux3='2-4',
-                aux4='qu5',
-                name='13.png',
-                height_in_cm=50,
-                latitude='12.3456',
-                longitude='65.4321',
-                depth='3m',
-                camera='Nikon',
-                photographer='John Doe',
-                water_quality='Clear',
-                strobes='White A',
-                framing='Framing set C',
-                balance='Card B',
-                comments="Here are\nsome comments.",
-            ),
-            follow=True)
+        response = self.submit_edits(dict(
+            photo_date=datetime.date(2020, 4, 3),
+            aux1='Site A',
+            aux2='Fringing Reef',
+            aux3='2-4',
+            aux4='qu5',
+            name='13.png',
+            height_in_cm=50,
+            latitude='12.3456',
+            longitude='65.4321',
+            depth='3m',
+            camera='Nikon',
+            photographer='John Doe',
+            water_quality='Clear',
+            strobes='White A',
+            framing='Framing set C',
+            balance='Card B',
+            comments="Here are\nsome comments.",
+        ))
         self.assertContains(response, "Image successfully edited.")
 
         # Check that the values have been updated in the DB
@@ -313,3 +329,54 @@ class ImageDetailEditTest(ClientTest):
         self.assertEqual(self.img.metadata.balance, 'Card B')
         self.assertEqual(
             self.img.metadata.comments, "Here are\nsome comments.")
+
+    def test_invalid_date(self):
+        self.img.metadata.refresh_from_db()
+        old_name = self.img.metadata.name
+
+        response = self.submit_edits(dict(
+            photo_date='03/2020',
+            name=old_name+'__a_suffix',
+        ))
+        self.assertNotContains(response, "Image successfully edited.")
+        self.assert_field_error(response, 'photo_date', "Enter a valid date.")
+
+        # Check that no values have been updated in the DB
+        self.img.metadata.refresh_from_db()
+        self.assertEqual(self.img.metadata.name, old_name)
+
+    def test_dupe_name(self):
+        img_2 = self.upload_image(self.user, self.source)
+        img_2.metadata.name = '2.png'
+        img_2.metadata.save()
+
+        # Try to edit self.img to have the same name (case insensitive)
+        # as img_2.
+        response = self.submit_edits(dict(name='2.PNG'))
+        self.assertNotContains(response, "Image successfully edited.")
+        self.assert_field_error(response, 'name', "This name already exists in the source.")
+
+    def test_same_name(self):
+        """
+        Submitting with the same name should not fail some kind of
+        duplicate check against itself.
+        """
+        response = self.submit_edits(dict(name='1.png', aux1='Site S'))
+        self.assertContains(response, "Image successfully edited.")
+        self.img.metadata.refresh_from_db()
+        self.assertEqual(self.img.metadata.name, '1.png')
+        # This other field's value proves that the edit went through.
+        self.assertEqual(self.img.metadata.aux1, 'Site S')
+
+    def test_same_name_in_other_source_ok(self):
+        source_2 = self.create_source(self.user)
+        source_2_img = self.upload_image(
+            self.user, source_2, image_options=dict(filename='3.png'))
+        self.assertEqual(
+            source_2_img.metadata.name, '3.png',
+            msg="Sanity check: source_2 upload should succeed")
+
+        response = self.submit_edits(dict(name='3.png'))
+        self.assertContains(response, "Image successfully edited.")
+        self.img.metadata.refresh_from_db()
+        self.assertEqual(self.img.metadata.name, '3.png')

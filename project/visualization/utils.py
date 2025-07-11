@@ -105,10 +105,9 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     elif sort_method == 'last_annotation_date':
         sort_fields = ['annoinfo__last_annotation__annotation_date', 'pk']
     elif sort_method == 'name':
-        # metadata__name is SUPPOSED to be unique for each image, but
-        # occasionally it's not due to a bug (issue #251), so we also use pk.
-        # TODO: Natural-sort by name.
-        sort_fields = ['metadata__name', 'pk']
+        # metadata__name is guaranteed unique for each image, so pk as a
+        # secondary isn't needed.
+        sort_fields = ['metadata__name']
     else:
         # 'upload_date'
         sort_fields = ['pk']

@@ -19,7 +19,7 @@ from lib.decorators import (
 from sources.models import Source
 from vision_backend.utils import reset_features
 from . import utils
-from .forms import MetadataForm
+from .forms import MetadataFormForDetailEdit
 from .models import Image, Metadata
 
 
@@ -58,7 +58,7 @@ def image_detail(request, image_id):
 
     # Next and previous image links.
     # Ensure the ordering is unambiguous.
-    source_images = source.image_set.order_by('metadata__name', 'pk')
+    source_images = source.image_set.order_by('metadata__name')
     next_image = utils.get_next_image(image, source_images, wrap=False)
     prev_image = utils.get_prev_image(image, source_images, wrap=False)
 
@@ -97,8 +97,6 @@ def image_detail_edit(request, image_id):
     source = image.source
     metadata = image.metadata
 
-    old_height_in_cm = metadata.height_in_cm
-
     if request.method == 'POST':
 
         # Cancel
@@ -108,7 +106,7 @@ def image_detail_edit(request, image_id):
             return HttpResponseRedirect(reverse('image_detail', args=[image.id]))
 
         # Submit
-        metadata_form = MetadataForm(
+        metadata_form = MetadataFormForDetailEdit(
             request.POST, instance=metadata, source=source)
 
         if metadata_form.is_valid():
@@ -120,7 +118,8 @@ def image_detail_edit(request, image_id):
             messages.error(request, 'Please correct the errors below.')
     else:
         # Just reached this form page
-        metadata_form = MetadataForm(instance=metadata, source=source)
+        metadata_form = MetadataFormForDetailEdit(
+            instance=metadata, source=source)
 
     return render(request, 'images/image_detail_edit.html', {
         'source': source,

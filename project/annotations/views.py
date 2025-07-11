@@ -227,7 +227,7 @@ def annotation_tool(request, image_id):
 
     # The set of images we're annotating.
     # Ensure it has an unambiguous ordering.
-    image_set = source.image_set.order_by('metadata__name', 'pk')
+    image_set = source.image_set.order_by('metadata__name')
     hidden_image_set_form = None
     applied_search_display = None
 

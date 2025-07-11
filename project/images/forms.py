@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db.models.functions import Lower
 from django.forms import BaseModelFormSet, ModelForm
 from django.forms.fields import ChoiceField, IntegerField, MultiValueField
 from django.forms.widgets import TextInput
 
-from lib.forms import EnhancedMultiWidget
+from lib.forms import EnhancedMultiWidget, FieldsetsFormComponent
 from .model_utils import PointGen, PointGenerationTypes
 from .models import Metadata
 
@@ -55,6 +56,48 @@ class MetadataForm(ModelForm):
             self.fields[field_name].widget.attrs['size'] = str(field_size)
 
 
+class MetadataFormForDetailEdit(FieldsetsFormComponent, MetadataForm):
+    """
+    Metadata form which is used in the image-detail-edit view.
+    """
+    fieldsets = [
+        dict(
+            header="Date and Auxiliary Metadata",
+            fields=[
+                'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5',
+            ],
+        ),
+
+        dict(
+            header="Other Information",
+            fields=[
+                'name', 'height_in_cm', 'latitude', 'longitude',
+                'depth', 'camera', 'photographer', 'water_quality',
+                'strobes', 'framing', 'balance', 'comments',
+            ],
+        ),
+    ]
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+
+        if self.instance.name == name:
+            # Unchanged, so short-circuit the check to prevent comparing
+            # with own name.
+            pass
+        else:
+            try:
+                Metadata.objects.get(source=self.source, name__iexact=name)
+            except Metadata.DoesNotExist:
+                pass
+            else:
+                raise ValidationError(
+                    "This name already exists in the source.",
+                    code='dupe_name')
+
+        return name
+
+
 class MetadataFormForGrid(MetadataForm):
     """
     Metadata form which is used in the metadata-edit grid view.
@@ -91,26 +134,30 @@ class BaseMetadataFormSet(BaseModelFormSet):
         # no valid values...
         actual_forms = self.forms[:-1]
 
-        # Find dupe image names in the source, taking together the
-        # existing names of images not in the forms, and the new names
-        # of images in the forms
+        # Find dupe image names in the source; start with the
+        # existing names of images not in the forms.
         pks_in_forms = [f.instance.pk for f in actual_forms]
-        names_not_in_forms = list(
+        seen_names = set(
             Metadata.objects
-            .filter(image__source=source)
+            .filter(source=source)
             .exclude(pk__in=pks_in_forms)
-            .values_list('name', flat=True)
+            # Case insensitive
+            .values_list(Lower('name'), flat=True)
         )
-        names_in_forms = [f.cleaned_data['name'] for f in actual_forms]
-        all_names = names_not_in_forms + names_in_forms
-        dupe_names = [
-            name for name in all_names
-            if all_names.count(name) > 1
-        ]
-
+        # Then look at the new names of images in the forms.
+        dupe_names = set()
         for form in actual_forms:
-            name = form.cleaned_data['name']
-            if name in dupe_names:
+            name_lower = form.cleaned_data['name'].lower()
+            if name_lower in seen_names:
+                dupe_names.add(name_lower)
+            else:
+                seen_names.add(name_lower)
+
+        # Then, another pass through the forms so that all instances of
+        # a particular dupe name get the appropriate error message.
+        for form in actual_forms:
+            name_lower = form.cleaned_data['name'].lower()
+            if name_lower in dupe_names:
                 form.add_error(
                     'name',
                     ValidationError(

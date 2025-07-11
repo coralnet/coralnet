@@ -326,19 +326,3 @@ def upload_image_process(image_file, image_name, source, current_user):
     generate_points(img)
 
     return img
-
-
-def find_dupe_image(source, image_name):
-    """
-    Sees if the given source already has an image with this name.
-
-    If a duplicate image was found, returns that duplicate.
-    If no duplicate was found, returns None.
-    """
-    image_matches = Image.objects.filter(
-        source=source, metadata__name=image_name)
-
-    if len(image_matches) >= 1:
-        return image_matches[0]
-    else:
-        return None
