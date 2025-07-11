@@ -223,6 +223,17 @@ class ImageDetailEditTest(ClientTest):
             follow=True,
         )
 
+    def assert_field_error(self, response, field_html_name, error_message):
+        response_soup = BeautifulSoup(
+            response.content, 'html.parser')
+
+        errors_container = response_soup.find(
+            'div', id=f'{field_html_name}-field-errors')
+        self.assertIsNotNone(
+            errors_container,
+            msg="Should find the expected errors container")
+        self.assertInHTML(error_message, str(errors_container))
+
     def test_load_page(self):
         # Set metadata
         self.img.metadata.photo_date = datetime.date(2020, 4, 3)
@@ -328,7 +339,7 @@ class ImageDetailEditTest(ClientTest):
             name=old_name+'__a_suffix',
         ))
         self.assertNotContains(response, "Image successfully edited.")
-        self.assertContains(response, "Enter a valid date.")
+        self.assert_field_error(response, 'photo_date', "Enter a valid date.")
 
         # Check that no values have been updated in the DB
         self.img.metadata.refresh_from_db()
@@ -343,8 +354,7 @@ class ImageDetailEditTest(ClientTest):
         # as img_2.
         response = self.submit_edits(dict(name='2.PNG'))
         self.assertNotContains(response, "Image successfully edited.")
-        self.assertContains(
-            response, "This name already exists in the source.")
+        self.assert_field_error(response, 'name', "This name already exists in the source.")
 
     def test_same_name(self):
         """

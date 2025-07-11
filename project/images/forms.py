@@ -5,7 +5,7 @@ from django.forms import BaseModelFormSet, ModelForm
 from django.forms.fields import ChoiceField, IntegerField, MultiValueField
 from django.forms.widgets import TextInput
 
-from lib.forms import EnhancedMultiWidget
+from lib.forms import EnhancedMultiWidget, FieldsetsFormComponent
 from .model_utils import PointGen, PointGenerationTypes
 from .models import Metadata
 
@@ -56,10 +56,28 @@ class MetadataForm(ModelForm):
             self.fields[field_name].widget.attrs['size'] = str(field_size)
 
 
-class MetadataFormForDetailEdit(MetadataForm):
+class MetadataFormForDetailEdit(FieldsetsFormComponent, MetadataForm):
     """
     Metadata form which is used in the image-detail-edit view.
     """
+    fieldsets = [
+        dict(
+            header="Date and Auxiliary Metadata",
+            fields=[
+                'photo_date', 'aux1', 'aux2', 'aux3', 'aux4', 'aux5',
+            ],
+        ),
+
+        dict(
+            header="Other Information",
+            fields=[
+                'name', 'height_in_cm', 'latitude', 'longitude',
+                'depth', 'camera', 'photographer', 'water_quality',
+                'strobes', 'framing', 'balance', 'comments',
+            ],
+        ),
+    ]
+
     def clean_name(self):
         name = self.cleaned_data.get('name')
 

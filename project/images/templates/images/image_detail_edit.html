@@ -6,37 +6,14 @@
 
     <legend>Edit Image Details</legend>
 
-    <form action="" method="post">{% csrf_token %}
+    <form action="" method="post">
+      {% csrf_token %}
       
-      <fieldset>
-        <legend class="small">Date and Auxiliary Metadata</legend>
-        {% include "form_generic_one_field.html" with field=metadata_form.photo_date %}
-        {% include "form_generic_one_field.html" with field=metadata_form.aux1 %}
-        {% include "form_generic_one_field.html" with field=metadata_form.aux2 %}
-        {% include "form_generic_one_field.html" with field=metadata_form.aux3 %}
-        {% include "form_generic_one_field.html" with field=metadata_form.aux4 %}
-        {% include "form_generic_one_field.html" with field=metadata_form.aux5 %}
-      </fieldset>
+      {{ metadata_form }}
 
-      <fieldset>
-        <legend class="small">Other Information</legend>
-        {% include "form_generic_one_field.html" with field=metadata_form.name %}
-        {% include "form_generic_one_field.html" with field=metadata_form.height_in_cm %}
-        {% include "form_generic_one_field.html" with field=metadata_form.latitude %}
-        {% include "form_generic_one_field.html" with field=metadata_form.longitude %}
-        {% include "form_generic_one_field.html" with field=metadata_form.depth %}
-        {% include "form_generic_one_field.html" with field=metadata_form.camera %}
-        {% include "form_generic_one_field.html" with field=metadata_form.photographer %}
-        {% include "form_generic_one_field.html" with field=metadata_form.water_quality %}
-        {% include "form_generic_one_field.html" with field=metadata_form.strobes %}
-        {% include "form_generic_one_field.html" with field=metadata_form.framing %}
-        {% include "form_generic_one_field.html" with field=metadata_form.balance %}
-        {% include "form_generic_one_field.html" with field=metadata_form.comments %}
-      </fieldset>
-
-      <div class="submit_button_wrapper_column_form">
-        <input type="submit" value="Save Changes" />
-        <input name="cancel" type="submit" value="Cancel Changes" />
+      <div>
+        <input type="submit" class="red" value="Save Changes" />
+        <input name="cancel" type="submit" class="red" value="Cancel Changes" />
       </div>
     </form>
 
