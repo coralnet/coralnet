@@ -58,7 +58,7 @@ def image_detail(request, image_id):
 
     # Next and previous image links.
     # Ensure the ordering is unambiguous.
-    source_images = source.image_set.order_by('metadata__name', 'pk')
+    source_images = source.image_set.order_by('metadata__name')
     next_image = utils.get_next_image(image, source_images, wrap=False)
     prev_image = utils.get_prev_image(image, source_images, wrap=False)
 
