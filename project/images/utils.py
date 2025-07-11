@@ -10,6 +10,23 @@ from .model_utils import PointGen
 from .models import Image, Metadata, Point
 
 
+def find_dupe_image(source, image_name):
+    """
+    Sees if the given source already has an image with this name.
+
+    If a duplicate image was found, returns that duplicate.
+    If no duplicate was found, returns None.
+    """
+    try:
+        # Case insensitive name search.
+        metadata = Metadata.objects.get(
+            source=source, name__iexact=image_name)
+    except Metadata.DoesNotExist:
+        return None
+    else:
+        return metadata.image
+
+
 def _get_next_images_queryset(current_image, image_queryset):
     """
     Get the images that are ordered after current_image, based on the

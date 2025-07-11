@@ -4,12 +4,13 @@ from django.conf import settings
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from annotations.model_utils import AnnotationArea
 from images.forms import MetadataForm
 from images.model_utils import PointGen
 from images.models import Metadata
-from images.utils import get_aux_labels, metadata_obj_to_dict
+from images.utils import find_dupe_image, get_aux_labels, metadata_obj_to_dict
 from lib.decorators import source_permission_required
 from lib.exceptions import FileProcessError
 from lib.forms import get_one_form_error
@@ -20,8 +21,7 @@ from vision_backend.utils import schedule_source_check_on_commit
 from .forms import (
     CSVImportForm, ImageUploadForm, ImageUploadFrontendForm)
 from .utils import (
-    find_dupe_image, metadata_csv_to_dict,
-    metadata_preview, upload_image_process)
+    metadata_csv_to_dict, metadata_preview, upload_image_process)
 
 
 @source_permission_required('source_id', perm=Source.PermTypes.EDIT.code)
@@ -78,6 +78,7 @@ def upload_images(request, source_id):
     })
 
 
+@require_POST
 @source_permission_required(
     'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
 def upload_images_preview_ajax(request, source_id):
@@ -85,11 +86,6 @@ def upload_images_preview_ajax(request, source_id):
     Preview the images that are about to be uploaded.
     Check to see if there's any problems with the filenames or file sizes.
     """
-    if request.method != 'POST':
-        return JsonResponse(dict(
-            error="Not a POST request",
-        ))
-
     source = get_object_or_404(Source, id=source_id)
 
     file_info_list = json.loads(request.POST.get('file_info'))
@@ -120,6 +116,7 @@ def upload_images_preview_ajax(request, source_id):
     ))
 
 
+@require_POST
 @source_permission_required(
     'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
 def upload_images_ajax(request, source_id):
@@ -128,11 +125,6 @@ def upload_images_ajax(request, source_id):
     for each image file. This view saves the image to the database
     and media storage.
     """
-    if request.method != 'POST':
-        return JsonResponse(dict(
-            error="Not a POST request",
-        ))
-
     source = get_object_or_404(Source, id=source_id)
 
     # Retrieve image related fields
@@ -147,9 +139,20 @@ def upload_images_ajax(request, source_id):
             error=get_one_form_error(image_form),
         ))
 
+    # Check for dupe name
+    image_name = image_form.cleaned_data['name']
+    if find_dupe_image(source, image_name):
+        # Dupe.
+        # Note: if there's a race condition that makes a dupe slip through
+        # this check, it'll still get caught, but it'll be a DB-level
+        # IntegrityError (resulting in 500) instead of this error.
+        return JsonResponse(dict(
+            error="Image with this name already exists.",
+        ))
+
     img = upload_image_process(
         image_file=image_form.cleaned_data['file'],
-        image_name=image_form.cleaned_data['name'],
+        image_name=image_name,
         source=source,
         current_user=request.user,
     )
@@ -182,6 +185,7 @@ def upload_metadata(request, source_id):
     })
 
 
+@require_POST
 @source_permission_required(
     'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
 def upload_metadata_preview_ajax(request, source_id):
@@ -191,11 +195,6 @@ def upload_metadata_preview_ajax(request, source_id):
     This view takes the CSV file, processes it, saves the processed metadata
     to the session, and returns a preview table of the metadata to be saved.
     """
-    if request.method != 'POST':
-        return JsonResponse(dict(
-            error="Not a POST request",
-        ))
-
     source = get_object_or_404(Source, id=source_id)
 
     csv_import_form = CSVImportForm(request.POST, request.FILES)
@@ -225,6 +224,7 @@ def upload_metadata_preview_ajax(request, source_id):
     ))
 
 
+@require_POST
 @source_permission_required(
     'source_id', perm=Source.PermTypes.EDIT.code, ajax=True)
 def upload_metadata_ajax(request, source_id):
@@ -234,11 +234,6 @@ def upload_metadata_ajax(request, source_id):
     This view gets the metadata that was previously saved to the session
     by the upload-preview view. Then it saves the metadata to the database.
     """
-    if request.method != 'POST':
-        return JsonResponse(dict(
-            error="Not a POST request",
-        ))
-
     source = get_object_or_404(Source, id=source_id)
 
     csv_metadata = request.session.pop('csv_metadata', None)

@@ -49,7 +49,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class UploadImagePreviewTest(ClientTest):
+class PreviewTest(ClientTest):
     """
     Test the upload-image preview view.
     """
@@ -65,72 +65,96 @@ class UploadImagePreviewTest(ClientTest):
         cls.img2 = cls.upload_image(
             cls.user, cls.source, image_options=dict(filename='2.png'))
 
-    def test_no_dupe(self):
+    def submit_preview(self, file_info: list[dict]):
         self.client.force_login(self.user)
-        response = self.client.post(
+        return self.client.post(
             reverse('upload_images_preview_ajax', args=[self.source.pk]),
-            dict(file_info=json.dumps([dict(filename='3.png', size=1024)])),
+            dict(file_info=json.dumps(file_info)),
         )
 
+    def assert_statuses(self, response, expected_statuses: list[dict]):
         response_json = response.json()
         self.assertDictEqual(
             response_json,
-            dict(statuses=[dict(ok=True)]),
+            dict(statuses=expected_statuses),
         )
 
-    def test_detect_dupe(self):
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_preview_ajax', args=[self.source.pk]),
-            dict(file_info=json.dumps([dict(filename='1.png', size=1024)])),
-        )
+    def test_valid(self):
+        response = self.submit_preview(
+            [dict(filename='3.png', size=1024)])
 
-        response_json = response.json()
-        self.assertDictEqual(
-            response_json,
+        self.assert_statuses(response, [dict(ok=True)])
+
+    def test_dupe(self):
+        response = self.submit_preview(
+            [dict(filename='1.png', size=1024)])
+
+        self.assert_statuses(response, [dict(
+            error="Image with this name already exists",
+            url=reverse('image_detail', args=[self.img1.id]),
+        )])
+
+    def test_dupe_case_insensitive(self):
+        response = self.submit_preview(
+            [dict(filename='1.PNG', size=1024)])
+
+        self.assert_statuses(response, [dict(
+            error="Image with this name already exists",
+            url=reverse('image_detail', args=[self.img1.id]),
+        )])
+
+    def test_same_name_in_other_source_ok(self):
+        source_2 = self.create_source(self.user)
+        source_2_img = self.upload_image(
+            self.user, source_2, image_options=dict(filename='3.png'))
+        self.assertEqual(
+            source_2_img.metadata.name, '3.png',
+            msg="Sanity check: source_2 upload should succeed")
+
+        # Upload preview on self.source
+        response = self.submit_preview(
+            [dict(filename='3.png', size=1024)])
+
+        # Having the same name as source_2_img should be OK
+        self.assert_statuses(response, [dict(ok=True)])
+
+    @override_settings(IMAGE_UPLOAD_MAX_FILE_SIZE=30*1024*1024)
+    def test_max_filesize(self):
+        response = self.submit_preview(
+            [dict(filename='3.png', size=30*1024*1024)])
+        self.assert_statuses(response, [dict(ok=True)])
+
+        response = self.submit_preview(
+            [dict(filename='3.png', size=(30*1024*1024)+1)])
+        self.assert_statuses(response, [dict(
+            error="Exceeds size limit of 30.00 MB",
+        )])
+
+    def test_multiple(self):
+        response = self.submit_preview([
+            dict(filename='1.png', size=1024),
+            dict(filename='2.png', size=1024),
+            dict(filename='3.png', size=1024),
+        ])
+
+        self.assert_statuses(response, [
             dict(
-                statuses=[dict(
-                    error="Image with this name already exists",
-                    url=reverse('image_detail', args=[self.img1.id]),
-                )]
+                error="Image with this name already exists",
+                url=reverse('image_detail', args=[self.img1.id]),
             ),
-        )
-
-    def test_detect_multiple_dupes(self):
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_preview_ajax', args=[self.source.pk]),
-            dict(file_info=json.dumps([
-                dict(filename='1.png', size=1024),
-                dict(filename='2.png', size=1024),
-                dict(filename='3.png', size=1024),
-            ])),
-        )
-
-        response_json = response.json()
-        self.assertDictEqual(
-            response_json,
             dict(
-                statuses=[
-                    dict(
-                        error="Image with this name already exists",
-                        url=reverse('image_detail', args=[self.img1.id]),
-                    ),
-                    dict(
-                        error="Image with this name already exists",
-                        url=reverse('image_detail', args=[self.img2.id]),
-                    ),
-                    dict(
-                        ok=True,
-                    ),
-                ]
+                error="Image with this name already exists",
+                url=reverse('image_detail', args=[self.img2.id]),
             ),
-        )
+            dict(
+                ok=True,
+            ),
+        ])
 
 
-class UploadImageTest(ClientTest):
+class UploadProcessTest(ClientTest):
     """
-    Upload a valid image.
+    Tests for the image upload itself (not the preview).
     """
     @classmethod
     def setUpTestData(cls):
@@ -139,15 +163,25 @@ class UploadImageTest(ClientTest):
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
 
-    def test_valid_png(self):
-        """ .png created using the PIL. """
+    def submit_upload(self, post_data: dict):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=self.sample_image_as_file('1.png'), name='1.png')
+            post_data,
         )
+        return response.json()
 
-        response_json = response.json()
+
+class BasicsTest(UploadProcessTest):
+    """
+    Basic checks for the image upload itself.
+    """
+
+    def test_valid_png(self):
+        """ .png created using the PIL. """
+        response_json = self.submit_upload(
+            dict(file=self.sample_image_as_file('1.png'), name='1.png'))
+
         self.assertEqual(response_json['success'], True)
         image_id = response_json['image_id']
         image = Image.objects.get(pk=image_id)
@@ -155,13 +189,9 @@ class UploadImageTest(ClientTest):
 
     def test_valid_jpg(self):
         """ .jpg created using the PIL. """
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=self.sample_image_as_file('A.jpg'), name='A.jpg')
-        )
+        response_json = self.submit_upload(
+            dict(file=self.sample_image_as_file('A.jpg'), name='A.jpg'))
 
-        response_json = response.json()
         self.assertEqual(response_json['success'], True)
         image_id = response_json['image_id']
         image = Image.objects.get(pk=image_id)
@@ -180,14 +210,9 @@ class UploadImageTest(ClientTest):
             ),
         )
 
-        self.client.force_login(self.user)
-        post_dict = dict(file=image_file, name=image_file.name)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            post_dict,
-        )
+        response_json = self.submit_upload(
+            dict(file=image_file, name=image_file.name))
 
-        response_json = response.json()
         image_id = response_json['image_id']
         img = Image.objects.get(pk=image_id)
 
@@ -221,13 +246,9 @@ class UploadImageTest(ClientTest):
 
     def test_file_existence(self):
         """Uploaded file should exist in storage."""
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=self.sample_image_as_file('1.png'), name='1.png')
-        )
+        response_json = self.submit_upload(
+            dict(file=self.sample_image_as_file('1.png'), name='1.png'))
 
-        response_json = response.json()
         self.assertEqual(response_json['success'], True)
         image_id = response_json['image_id']
         img = Image.objects.get(pk=image_id)
@@ -235,7 +256,7 @@ class UploadImageTest(ClientTest):
         self.assertTrue(default_storage.exists(img.original_file.name))
 
 
-class UploadImageFormatTest(ClientTest):
+class FormatTest(UploadProcessTest):
     """
     Tests pertaining to filetype, filesize and dimensions.
     """
@@ -248,13 +269,9 @@ class UploadImageFormatTest(ClientTest):
 
     def test_non_image(self):
         """Text file. Should get an error."""
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=ContentFile('some text', name='1.txt'), name='1.txt'),
-        )
+        response_json = self.submit_upload(
+            dict(file=ContentFile('some text', name='1.txt'), name='1.txt'))
 
-        response_json = response.json()
         self.assertDictEqual(
             response_json,
             dict(error=(
@@ -265,19 +282,14 @@ class UploadImageFormatTest(ClientTest):
 
     def test_unsupported_image_type(self):
         """An image, but not a supported type. Should get an error."""
-        self.client.force_login(self.user)
-
         im = create_sample_image()
         with BytesIO() as stream:
             im.save(stream, 'BMP')
             bmp_file = ContentFile(stream.getvalue(), name='1.bmp')
 
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=bmp_file, name=bmp_file.name),
-        )
+        response_json = self.submit_upload(
+            dict(file=bmp_file, name=bmp_file.name))
 
-        response_json = response.json()
         self.assertDictEqual(
             response_json,
             dict(error="Image file: This image file format isn't supported.")
@@ -285,13 +297,9 @@ class UploadImageFormatTest(ClientTest):
 
     def test_capitalized_extension(self):
         """Capitalized extensions like .PNG should be okay."""
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=self.sample_image_as_file('1.PNG'), name='1.PNG')
-        )
+        response_json = self.submit_upload(
+            dict(file=self.sample_image_as_file('1.PNG'), name='1.PNG'))
 
-        response_json = response.json()
         self.assertEqual(response_json['success'], True)
 
         image_id = response_json['image_id']
@@ -300,30 +308,23 @@ class UploadImageFormatTest(ClientTest):
 
     def test_no_filename_extension(self):
         """A supported image type, but the given filename has no extension."""
-        self.client.force_login(self.user)
-
         im = create_sample_image()
         with BytesIO() as stream:
             im.save(stream, 'PNG')
             png_file = ContentFile(stream.getvalue(), name='123')
 
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=png_file, name=png_file.name),
-        )
-        error_message = response.json()['error']
+        response_json = self.submit_upload(
+            dict(file=png_file, name=png_file.name))
+
+        error_message = response_json['error']
         self.assertIn(
             'Image file: File extension “” is not allowed.', error_message)
 
     def test_empty_file(self):
         """0-byte file. Should get an error."""
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=ContentFile(bytes(), name='1.png'), name='1.png'),
-        )
+        response_json = self.submit_upload(
+            dict(file=ContentFile(bytes(), name='1.png'), name='1.png'))
 
-        response_json = response.json()
         self.assertDictEqual(
             response_json,
             dict(error="Image file: The submitted file is empty.")
@@ -335,15 +336,10 @@ class UploadImageFormatTest(ClientTest):
             '1.png', image_options=dict(width=600, height=450),
         )
 
-        self.client.force_login(self.user)
-        post_dict = dict(file=image_file, name=image_file.name)
         with self.settings(IMAGE_UPLOAD_MAX_DIMENSIONS=(599, 1000)):
-            response = self.client.post(
-                reverse('upload_images_ajax', args=[self.source.pk]),
-                post_dict,
-            )
+            response_json = self.submit_upload(
+                dict(file=image_file, name=image_file.name))
 
-        response_json = response.json()
         self.assertDictEqual(
             response_json,
             dict(error=(
@@ -357,40 +353,15 @@ class UploadImageFormatTest(ClientTest):
             '1.png', image_options=dict(width=600, height=450),
         )
 
-        self.client.force_login(self.user)
-        post_dict = dict(file=image_file, name=image_file.name)
         with self.settings(IMAGE_UPLOAD_MAX_DIMENSIONS=(1000, 449)):
-            response = self.client.post(
-                reverse('upload_images_ajax', args=[self.source.pk]),
-                post_dict,
-            )
+            response_json = self.submit_upload(
+                dict(file=image_file, name=image_file.name))
 
-        response_json = response.json()
         self.assertDictEqual(
             response_json,
             dict(error=(
                 "Image file: Ensure the image dimensions"
                 " are at most 1000 x 449."))
-        )
-
-    def test_max_filesize(self):
-        """Should check the max filesize in the upload preview."""
-        self.client.force_login(self.user)
-
-        post_dict = dict(file_info=json.dumps(
-            [dict(filename='1.png', size=1024*1024*1024)]
-        ))
-
-        with self.settings(IMAGE_UPLOAD_MAX_FILE_SIZE=1024*1024*30):
-            response = self.client.post(
-                reverse('upload_images_preview_ajax', args=[self.source.pk]),
-                post_dict,
-            )
-
-        response_json = response.json()
-        self.assertDictEqual(
-            response_json,
-            dict(statuses=[dict(error="Exceeds size limit of 30.00 MB")])
         )
 
     def test_upload_max_memory_size(self):
@@ -399,22 +370,70 @@ class UploadImageFormatTest(ClientTest):
             '1.png', image_options=dict(width=600, height=450),
         )
 
-        self.client.force_login(self.user)
-        post_dict = dict(file=image_file, name=image_file.name)
-
         # Use an upload max memory size of 200 bytes; as long as the image has
         # some color variation, no way it'll be smaller than that
         with self.settings(FILE_UPLOAD_MAX_MEMORY_SIZE=200):
-            response = self.client.post(
-                reverse('upload_images_ajax', args=[self.source.pk]),
-                post_dict,
-            )
+            response_json = self.submit_upload(
+                dict(file=image_file, name=image_file.name))
 
-        response_json = response.json()
         self.assertEqual(response_json['success'], True)
         image_id = response_json['image_id']
         image = Image.objects.get(pk=image_id)
         self.assertEqual(image.metadata.name, '1.png')
+
+
+class MetadataNameCollisionTest(UploadProcessTest):
+    """
+    Test metadata name field collisions at confirm/process time.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+        cls.img1 = cls.upload_image(
+            cls.user, cls.source, image_options=dict(filename='1.png'))
+
+    def test_dupe(self):
+        image_file = self.sample_image_as_file('1.png')
+        response_json = self.submit_upload(
+            dict(file=image_file, name=image_file.name))
+
+        self.assertDictEqual(
+            response_json,
+            dict(error=(
+                "Image with this name already exists."))
+        )
+
+    def test_dupe_case_insensitive(self):
+        image_file = self.sample_image_as_file('1.PNG')
+        response_json = self.submit_upload(
+            dict(file=image_file, name=image_file.name))
+
+        self.assertDictEqual(
+            response_json,
+            dict(error=(
+                "Image with this name already exists."))
+        )
+
+    def test_same_name_in_other_source_ok(self):
+        source_2 = self.create_source(self.user)
+        source_2_img = self.upload_image(
+            self.user, source_2, image_options=dict(filename='3.png'))
+        self.assertEqual(
+            source_2_img.metadata.name, '3.png',
+            msg="Sanity check: source_2 upload should succeed")
+
+        image_file = self.sample_image_as_file('3.png')
+        response_json = self.submit_upload(
+            dict(file=image_file, name=image_file.name))
+
+        self.assertEqual(response_json['success'], True)
+        image_id = response_json['image_id']
+        image = Image.objects.get(pk=image_id)
+        self.assertEqual(image.metadata.name, '3.png')
 
 
 class ThreeNameGenerator:
@@ -440,7 +459,7 @@ class ThreeNameGenerator:
 # The patched function can only generate 3 possible base names.
 @mock.patch('images.models.rand_string', ThreeNameGenerator.generate_name)
 @override_settings(ADMINS=[('Admin', 'admin@example.com')])
-class UploadImageFilenameCollisionTest(ClientTest):
+class StorageNameCollisionTest(UploadProcessTest):
     """
     Test name collisions when generating the image filename to save to
     file storage.
@@ -457,12 +476,8 @@ class UploadImageFilenameCollisionTest(ClientTest):
         # sequence.
         ThreeNameGenerator.reset_iteration()
 
-        self.client.force_login(self.user)
-        response = self.client.post(
-            reverse('upload_images_ajax', args=[self.source.pk]),
-            dict(file=self.sample_image_as_file(image_name), name=image_name)
-        )
-        return response
+        return self.submit_upload(
+            dict(file=self.sample_image_as_file(image_name), name=image_name))
 
     def assertProblemMailAsExpected(self):
         problem_mail = mail.outbox[-1]
@@ -484,9 +499,9 @@ class UploadImageFilenameCollisionTest(ClientTest):
 
         # Should be able to upload 3 images with the 3 possible base names.
         for image_name in ['1.png', '2.png', '3.png']:
-            response = self.upload(image_name)
+            response_json = self.upload(image_name)
 
-            img = Image.objects.get(pk=response.json()['image_id'])
+            img = Image.objects.get(pk=response_json['image_id'])
             self.assertRegex(img.original_file.name, r'[abc]\.png')
 
         self.assertEqual(
@@ -494,9 +509,9 @@ class UploadImageFilenameCollisionTest(ClientTest):
 
         # Should get a collision for the 4th, because there are no other
         # possible base names.
-        response = self.upload('4.png')
+        response_json = self.upload('4.png')
 
-        img = Image.objects.get(pk=response.json()['image_id'])
+        img = Image.objects.get(pk=response_json['image_id'])
         # In this case, we expect the storage framework to add a suffix to get
         # a unique filename.
         self.assertRegex(
@@ -508,9 +523,9 @@ class UploadImageFilenameCollisionTest(ClientTest):
         # Should still get a collision even if the extension is different
         # from the existing images, since comparisons are done on the
         # base name.
-        response = self.upload('4.jpg')
+        response_json = self.upload('4.jpg')
 
-        img = Image.objects.get(pk=response.json()['image_id'])
+        img = Image.objects.get(pk=response_json['image_id'])
         # In this case, we expect the storage framework to not add a suffix
         # because the extension is different.
         self.assertRegex(
