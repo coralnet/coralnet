@@ -133,6 +133,15 @@ class ImageAnnotationInfo(models.Model):
         # this case.
         related_name='+')
 
+    class Meta:
+        indexes = [
+            # For Browse search, image counts on source main page,
+            # and potentially source checks.
+            models.Index(
+                fields=['source', 'status'],
+                name='annoinfo_to_src_status_i'),
+        ]
+
     def update_annotation_progress_fields(self):
         """
         Ensure the redundant annotation-progress fields (which exist for
