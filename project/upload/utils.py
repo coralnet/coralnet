@@ -316,7 +316,7 @@ def upload_image_process(image_file, image_name, source, current_user):
     )
     metadata_obj.save()
 
-    annotation_info = ImageAnnotationInfo(image=img)
+    annotation_info = ImageAnnotationInfo(image=img, source=source)
     annotation_info.save()
 
     features = Features(image=img)

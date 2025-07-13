@@ -100,6 +100,13 @@ class ImageAnnotationInfo(models.Model):
         # Name of reverse relation
         related_name='annoinfo')
 
+    # Redundant with image.source, but enables creation of useful
+    # database indexes.
+    # We won't create an index for just this column, as we'd rather have
+    # multi-column indexes starting with source.
+    source = models.ForeignKey(
+        Source, on_delete=models.CASCADE, db_index=False)
+
     # The Classifier that this image's Scores (if any) are from, and that this
     # image's unconfirmed Annotations (if any) match up with.
     classifier = models.ForeignKey(
