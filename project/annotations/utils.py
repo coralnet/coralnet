@@ -3,6 +3,7 @@ from io import StringIO
 import operator
 
 from django.conf import settings
+from django.db.models import Count, Q
 from django.urls import reverse
 
 from accounts.utils import get_alleviate_user, get_robot_user, is_robot_user
@@ -13,7 +14,8 @@ from lib.exceptions import FileProcessError
 from lib.utils import CacheableValue
 from sources.models import Source
 from upload.utils import csv_to_dicts
-from .models import Annotation
+from .model_utils import ImageAnnoStatuses
+from .models import Annotation, ImageAnnotationInfo
 
 
 def image_has_any_confirmed_annotations(image):
@@ -322,6 +324,24 @@ def annotations_preview(
         num_images_with_existing_annotations
 
     return table, details
+
+
+def source_image_status_counts(source: Source) -> dict:
+    """
+    Return something like
+    dict(confirmed=10, unconfirmed=5, unclassified=3).
+
+    Implementation based on:
+    https://docs.djangoproject.com/en/4.2/ref/models/conditional-expressions/#conditional-aggregation
+    """
+    return ImageAnnotationInfo.objects.filter(source=source).aggregate(
+        confirmed=Count(
+            'pk', filter=Q(status=ImageAnnoStatuses.CONFIRMED.value)),
+        unconfirmed=Count(
+            'pk', filter=Q(status=ImageAnnoStatuses.UNCONFIRMED.value)),
+        unclassified=Count(
+            'pk', filter=Q(status=ImageAnnoStatuses.UNCLASSIFIED.value)),
+    )
 
 
 def compute_sitewide_annotation_count():

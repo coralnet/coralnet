@@ -12,6 +12,12 @@ from ..model_utils import (
 from ..models import Annotation
 
 
+image_defaults = dict(
+    original_width=32,
+    original_height=32,
+)
+
+
 class ImageStatusLogicTest(ClientTest):
 
     @classmethod
@@ -232,7 +238,8 @@ class PopulateAnnoInfoStatusTest(MigrationTest):
         group.save()
         label = Label(name="A", default_code='A', group=group)
         label.save()
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         metadata = Metadata()
         metadata.save()
@@ -392,3 +399,63 @@ class PopulateAnnoInfoClassifierTest(MigrationTest):
         self.assertIsNone(
             image.annoinfo.classifier_id,
             msg="Should not set classifier for images without events")
+
+
+class AnnoInfoSourceFieldMigrationTest(MigrationTest):
+    """
+    Test population of ImageAnnotationInfo.source from
+    ImageAnnotationInfo.image.source.
+    """
+
+    before = [
+        ('annotations', '0030_annotation_new_indexes'),
+        ('images', '0051_unique_metadata_names_in_source'),
+        ('sources', '0010_populate_deployed_classifier'),
+    ]
+    after = [
+        ('annotations', '0033_annoinfo_source_schema2'),
+    ]
+
+    def test(self):
+        Source = self.get_model_before('sources.Source')
+        Image = self.get_model_before('images.Image')
+        ImageAnnotationInfo = self.get_model_before(
+            'annotations.ImageAnnotationInfo')
+
+        source_1 = Source.objects.create(name="Source 1")
+        source_1_pk = source_1.pk
+        source_2 = Source.objects.create(name="Source 2")
+        source_2_pk = source_2.pk
+        image_1 = Image.objects.create(
+            source=source_1, **image_defaults)
+        annoinfo_1 = ImageAnnotationInfo.objects.create(image=image_1)
+        annoinfo_1_pk = annoinfo_1.pk
+        image_2 = Image.objects.create(
+            source=source_2, **image_defaults)
+        annoinfo_2 = ImageAnnotationInfo.objects.create(image=image_2)
+        annoinfo_2_pk = annoinfo_2.pk
+        image_3 = Image.objects.create(
+            source=source_2, **image_defaults)
+        annoinfo_3 = ImageAnnotationInfo.objects.create(image=image_3)
+        annoinfo_3_pk = annoinfo_3.pk
+
+        # source attributes shouldn't exist yet
+        self.assertRaises(AttributeError, getattr, annoinfo_1, 'source')
+        self.assertRaises(AttributeError, getattr, annoinfo_2, 'source')
+        self.assertRaises(AttributeError, getattr, annoinfo_3, 'source')
+
+        self.run_migration()
+
+        ImageAnnotationInfo = self.get_model_after(
+            'annotations.ImageAnnotationInfo')
+
+        # source attributes should be filled in
+        self.assertEqual(
+            ImageAnnotationInfo.objects.get(pk=annoinfo_1_pk).source.pk,
+            source_1_pk)
+        self.assertEqual(
+            ImageAnnotationInfo.objects.get(pk=annoinfo_2_pk).source.pk,
+            source_2_pk)
+        self.assertEqual(
+            ImageAnnotationInfo.objects.get(pk=annoinfo_3_pk).source.pk,
+            source_2_pk)

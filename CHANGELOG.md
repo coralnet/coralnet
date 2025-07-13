@@ -8,6 +8,10 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.22 (WIP)
+
+- New migrations to run for `annotations` and `images`. Suffixes like `__dupe-name-1` will be added to sets of same-named images in each source.
+
 ## [1.21](https://github.com/coralnet/coralnet/tree/1.21)
 
 Production: 2025-07-06

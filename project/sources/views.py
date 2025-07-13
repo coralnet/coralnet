@@ -11,7 +11,10 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 
 from annotations.model_utils import ImageAnnoStatuses
-from annotations.utils import cacheable_annotation_count
+from annotations.utils import (
+    cacheable_annotation_count,
+    source_image_status_counts,
+)
 from images.models import Image
 from images.utils import delete_images
 from jobs.utils import schedule_job
@@ -150,16 +153,15 @@ def source_main(request, source_id):
         return browse_url_base + '?' + urlencode(dict(
             annotation_status=annotation_status))
 
-    image_stats = dict(
-        total = all_images.count(),
+    image_status_counts = source_image_status_counts(source)
+    total = sum([count for count in image_status_counts.values()])
+    image_stats = image_status_counts | dict(
+        total = total,
         total_link = browse_url_base,
-        confirmed = all_images.confirmed().count(),
         confirmed_link = browse_link_filtered_by_status(
             ImageAnnoStatuses.CONFIRMED.value),
-        unconfirmed = all_images.unconfirmed().count(),
         unconfirmed_link = browse_link_filtered_by_status(
             ImageAnnoStatuses.UNCONFIRMED.value),
-        unclassified = all_images.unclassified().count(),
         unclassified_link = browse_link_filtered_by_status(
             ImageAnnoStatuses.UNCLASSIFIED.value),
     )
