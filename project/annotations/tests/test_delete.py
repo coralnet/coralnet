@@ -85,6 +85,7 @@ class BaseDeleteTest(BaseBrowseActionTest):
     def submit_and_assert_deletion(
         self, post_data: dict,
         expected_deleted: list = None,
+        debug: bool = False,
     ):
         """
         - Submits the given post data to the delete view.
@@ -107,10 +108,24 @@ class BaseDeleteTest(BaseBrowseActionTest):
 
         response = self.submit_action(**post_data)
 
-        for image in expected_deleted:
-            self.assert_annotations_deleted(image)
-        for image in expected_not_deleted:
-            self.assert_annotations_not_deleted(image)
+        try:
+            for image in expected_deleted:
+                self.assert_annotations_deleted(image)
+            for image in expected_not_deleted:
+                self.assert_annotations_not_deleted(image)
+        except AssertionError as e:
+            if debug:
+                counts = ", ".join([
+                    str(image.annotation_set.count())
+                    for image in self.images
+                ])
+                details = (
+                    f"\n- Annotation counts per image: {counts}"
+                    f"\n- Delete ajax response: {response.json()}"
+                )
+                raise AssertionError(f"{e}{details}")
+            else:
+                raise e
 
         self.assert_confirmation_message(count=len(expected_deleted))
 
@@ -257,6 +272,7 @@ class SuccessTest(BaseDeleteTest):
                 result_count=1,
             ),
             [self.img2],
+            debug=True,
         )
         self.assertDictEqual(response.json(), dict(success=True))
 
