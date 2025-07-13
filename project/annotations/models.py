@@ -19,15 +19,21 @@ class Annotation(models.Model):
     annotation_date = models.DateTimeField(
         blank=True, auto_now=True, editable=False)
     point = models.OneToOneField(Point, on_delete=models.CASCADE, editable=False)
-    image = models.ForeignKey(Image, on_delete=models.CASCADE, editable=False)
+    image = models.ForeignKey(
+        Image, on_delete=models.CASCADE, editable=False, db_index=False)
 
     # The user who made this annotation
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, editable=False, null=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL, editable=False, null=True, db_index=False)
     # Only fill this in if the user is the robot user
-    robot_version = models.ForeignKey(Classifier, on_delete=models.SET_NULL, editable=False, null=True)
+    robot_version = models.ForeignKey(
+        Classifier,
+        on_delete=models.SET_NULL, editable=False, null=True, db_index=False)
 
-    label = models.ForeignKey(Label, on_delete=models.PROTECT)
-    source = models.ForeignKey(Source, on_delete=models.CASCADE, editable=False)
+    label = models.ForeignKey(Label, on_delete=models.PROTECT, db_index=False)
+    source = models.ForeignKey(
+        Source, on_delete=models.CASCADE, editable=False, db_index=False)
 
     class Meta:
         # Due to the sheer number of Annotations there can be in a source
