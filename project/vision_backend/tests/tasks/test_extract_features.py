@@ -188,6 +188,21 @@ class ExtractFeaturesTest(BaseTaskTest):
         # Train.
         run_scheduled_jobs_until_empty()
         self.do_collect_spacer_jobs()
+        # It's intermittently failing to train. See if we can debug why.
+        self.source.refresh_from_db()
+        if not self.source.deployed_classifier:
+            completed_jobs = Job.objects.filter(
+                source=self.source).completed().order_by('pk')
+            completed_job_details = '\n'.join([
+                f'- {job}: {job.status} / {job.result_message}'
+                for job in completed_jobs
+            ])
+            message = (
+                f"Failed to train initial classifier. Job results:"
+                f"\n{completed_job_details}"
+            )
+            self.fail(msg=message)
+
         # Classify.
         run_scheduled_jobs_until_empty()
 
