@@ -2,7 +2,9 @@ class CPCBatchEditor {
 
     cpcs = [];
 
-    constructor() {
+    constructor(maxCpcFiles) {
+        this.maxCpcFiles = maxCpcFiles;
+
         this.cpcDropZone.addEventListener('dragover', (event) => {
             // Prevent navigation.
             event.preventDefault();
@@ -183,7 +185,7 @@ class CPCBatchEditor {
         this.dropZonePreview.textContent = "";
 
         let reader = new DataTransferReader(
-            {acceptedExtensions: ['cpc']}
+            {acceptedExtensions: ['cpc'], maxFiles: this.maxCpcFiles}
         );
         this.cpcs = await reader.getFiles(event.dataTransfer.items);
 
@@ -246,10 +248,9 @@ https://github.com/anatol-grabowski/datatransfer-files-promise
  */
 class DataTransferReader {
 
-    FILES_READ_WARNING_THRESHOLD = 5000;
-
-    constructor({acceptedExtensions = null} = {}) {
+    constructor({acceptedExtensions = null, maxFiles = null} = {}) {
         this.acceptedExtensions = acceptedExtensions;
+        this.maxFiles = maxFiles;
         this.totalFilesRead = 0;
         this.warnedAboutFileCount = false;
     }
@@ -271,8 +272,8 @@ class DataTransferReader {
         }
 
         this.totalFilesRead++;
-        if (this.totalFilesRead > this.FILES_READ_WARNING_THRESHOLD) {
-            let keepGoing = window.confirm(`You've dragged in a lot of files (over ${this.FILES_READ_WARNING_THRESHOLD}, including non-cpc). Is this what you wanted to do? Select OK to keep scanning, or select Cancel to abort.`);
+        if (this.totalFilesRead > this.maxFiles) {
+            let keepGoing = window.confirm(`You've dragged in a lot of files (over ${this.maxFiles}, including non-cpc). Is this what you wanted to do? Select OK to keep scanning, or select Cancel to abort.`);
             this.warnedAboutFileCount = true;
 
             if (!keepGoing) {
@@ -366,6 +367,14 @@ class DataTransferReader {
             }
             const newFiles = await this.getFilesFromEntry(entry);
             files = files.concat(newFiles);
+
+            if (files.length > this.maxFiles) {
+                let message = `Exceeded .cpc file limit of ${this.maxFiles}.`;
+                window.alert(message);
+                // We just let this error cancel the rest of the drop
+                // handler and propagate to the JS console.
+                throw new Error(message);
+            }
         }
 
         return files;
