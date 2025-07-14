@@ -509,6 +509,8 @@ class ExportPrepView(View):
 def cpc_batch_editor(request):
     return render(request, 'cpce/cpc_batch_editor.html', {
         'process_form': CpcBatchEditSpecForm(),
+        # Minus 1 so the CSV file can also be submitted.
+        'max_cpc_files': settings.DATA_UPLOAD_MAX_NUMBER_FILES - 1,
     })
 
 

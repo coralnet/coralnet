@@ -113,7 +113,7 @@
 
   {# Script in the body will run on page load. #}
   <script type="text/javascript">
-    let cpcBatchEditor = new CPCBatchEditor();
+    let cpcBatchEditor = new CPCBatchEditor({{ max_cpc_files }});
   </script>
 
 {% endblock %}
