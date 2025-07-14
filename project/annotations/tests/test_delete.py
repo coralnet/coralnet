@@ -85,7 +85,6 @@ class BaseDeleteTest(BaseBrowseActionTest):
     def submit_and_assert_deletion(
         self, post_data: dict,
         expected_deleted: list = None,
-        debug: bool = False,
     ):
         """
         - Submits the given post data to the delete view.
@@ -108,24 +107,10 @@ class BaseDeleteTest(BaseBrowseActionTest):
 
         response = self.submit_action(**post_data)
 
-        try:
-            for image in expected_deleted:
-                self.assert_annotations_deleted(image)
-            for image in expected_not_deleted:
-                self.assert_annotations_not_deleted(image)
-        except AssertionError as e:
-            if debug:
-                counts = ", ".join([
-                    str(image.annotation_set.count())
-                    for image in self.images
-                ])
-                details = (
-                    f"\n- Annotation counts per image: {counts}"
-                    f"\n- Delete ajax response: {response.json()}"
-                )
-                raise AssertionError(f"{e}{details}")
-            else:
-                raise e
+        for image in expected_deleted:
+            self.assert_annotations_deleted(image)
+        for image in expected_not_deleted:
+            self.assert_annotations_not_deleted(image)
 
         self.assert_confirmation_message(count=len(expected_deleted))
 
@@ -189,7 +174,7 @@ class SuccessTest(BaseDeleteTest):
 
         for image in self.images:
             image.refresh_from_db()
-            self.add_annotations(self.user, image)
+            self.add_annotations(self.user, image, {1: 'A', 2: 'B'})
 
     def test_delete_for_all_images(self):
         """
@@ -258,12 +243,14 @@ class SuccessTest(BaseDeleteTest):
         self.assertDictEqual(response.json(), dict(success=True))
 
     def test_filter_by_annotator_tool_specific_user(self):
-        self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
 
         user2 = self.create_user()
         self.add_source_member(
             self.user, self.source, user2, Source.PermTypes.EDIT.code)
-        self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
+        # self.user already added annotations for all images in setUp().
+        # To ensure user2 is credited for annotations, they must specify
+        # different label codes from what self.user added.
+        self.add_annotations(user2, self.img2, {1: 'B', 2: 'A'})
 
         response = self.submit_and_assert_deletion(
             dict(
@@ -272,7 +259,6 @@ class SuccessTest(BaseDeleteTest):
                 result_count=1,
             ),
             [self.img2],
-            debug=True,
         )
         self.assertDictEqual(response.json(), dict(success=True))
 
