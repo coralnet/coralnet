@@ -330,7 +330,7 @@ class PopulateAnnoInfoClassifierTest(MigrationTest):
 
         image_ids = []
         for i in range(4):
-            metadata = Metadata()
+            metadata = Metadata(name=f'{i}.png')
             metadata.save()
             image = Image(
                 original_file=sample_image_as_file('a.png'),
