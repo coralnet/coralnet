@@ -8,15 +8,19 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.22 (WIP)
+## [1.22](https://github.com/coralnet/coralnet/tree/1.22)
 
-- New migrations to run for `annotations` and `images`. Suffixes like `__dupe-name-1` will be added to sets of same-named images in each source.
+Production: 2025-07-14
+
+- New migrations to run for `annotations` and `images`. Suffixes like `__dupe-name-01` will be added to sets of same-named images in each source.
+  - Performance recommendation: open dbshell and run `VACUUM ANALYZE annotations_imageannotationinfo;`. Running VACUUM ANALYZE on related tables may also help.
 
 ## [1.21](https://github.com/coralnet/coralnet/tree/1.21)
 
 Production: 2025-07-06
 
 - New migrations to run for `images`. The longest ones are migration 0042 (about 8 minutes per million images) and 0047 (about 40 seconds per million images).
+  - Performance recommendation: open dbshell and run `VACUUM ANALYZE images_metadata;`. Running VACUUM ANALYZE on related tables may also help.
 
 ## [1.20](https://github.com/coralnet/coralnet/tree/1.20)
 
@@ -26,6 +30,7 @@ Production: 2025-06-22
   - pyspacer 0.11.0 -> 0.12.0
   - selenium 3.141.0 -> 4.33.0
 - New migrations to run for `annotations`, involving creation of potentially large indexes. Took 30 minutes to run in production.
+  - Performance recommendation: open dbshell and run `VACUUM ANALYZE annotations_annotation;`. Running VACUUM ANALYZE on related tables may also help.
 
 ## [1.19.5](https://github.com/coralnet/coralnet/tree/1.19.5)
 
