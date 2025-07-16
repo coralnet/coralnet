@@ -64,7 +64,7 @@ class DataTestMixin:
             reason_for_registering="-",
             project_description="-",
             how_did_you_hear_about_us="-",
-            agree_to_data_policy=True,
+            agree_to_privacy_policy=True,
         ))
 
         if activate:

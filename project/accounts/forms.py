@@ -44,8 +44,8 @@ class AuthenticationForm(DefaultAuthenticationForm):
 
 class RegistrationForm(DefaultRegistrationForm):
 
-    agree_to_data_policy = BooleanField(
-        required=True, label="I agree to the data policy")
+    agree_to_privacy_policy = BooleanField(
+        required=True, label="I agree to the privacy policy")
 
     class Meta(DefaultRegistrationForm.Meta):
         # Include first_name and last_name.

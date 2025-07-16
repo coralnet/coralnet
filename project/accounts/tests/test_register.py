@@ -111,6 +111,9 @@ class RegisterTest(BaseAccountsTest):
             settings.FORUM_LINK, activation_email.body,
             "Forum link should be in the email body")
         self.assertIn(
+            reverse('privacy_policy'), activation_email.body,
+            "Privacy policy link should be in the email body")
+        self.assertIn(
             reverse('about'), activation_email.body,
             "About link should be in the email body")
         self.assertIn(
@@ -401,7 +404,7 @@ class RegisterTest(BaseAccountsTest):
         self.assertContains(response, "This field is required.")
 
     def test_did_not_agree_to_policy(self):
-        response = self.register(agree_to_data_policy=False)
+        response = self.register(agree_to_privacy_policy=False)
 
         self.assertTemplateUsed(
             response, 'django_registration/registration_form.html')

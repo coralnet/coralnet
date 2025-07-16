@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block page-specific-includes %}
+  {% include "static-local-include.html" with type="css" path="css/infopage.css" %}
+{% endblock %}
+
+{% block content %}
+
+<div class="article-body center">
+
+<h1>CoralNet's Privacy Policy</h1>
+
+<p>
+  We at CoralNet highly encourage public sharing of research data for the greater good. However, we realize that data privacy is preferred in some cases, especially for newer projects. So, sources have two visibility options, Public or Private.
+</p>
+
+<h2>Public sources</h2>
+<ul>
+  <li>All of your source's images and annotation data are available for the public to browse and download (including original images in full resolution).</li>
+  <li>Only members of the source can add or edit content.</li>
+</ul>
+
+<h2>Private sources</h2>
+<ul>
+  <li>All users can still see your source on the world map, based on the source's latitude and longitude settings. Here, they can also see the name, description, affiliation, and total number of images in your source - but no example images.</li>
+  <li>Label information pages - public to all users - list the names of all sources that use the label, including private sources. Also, these label pages show example image 'patches' (small thumbnail cut-outs of a larger image) of point annotations using that label. These patches can come from any source using the label, but if a particular patch is from a private source, the name of the patch's source will not be given.</li>
+  <li>Only members of the source (invited with View, Edit, or Admin permissions) can browse all of the source's data, including full images and their annotations. Other users will be unable to browse pages and images within the source, even if they know the URLs.</li>
+</ul>
+
+<h2>User privacy</h2>
+<ul>
+  <li>Your username (handle) is public on CoralNet through the list of profiles.</li>
+  <li>You may choose to make your user profile (including first name, last name, and affiliation) public for everyone, public for registered users only, or private.</li>
+  <li>The email address associated with your account is not publicly viewable.</li>
+  <li>We'll never ask you for your password. If you get an email asking you for your password, it didn't come from us.</li>
+  <li>The CoralNet website uses cookies for login and for analytics (via Google).</li>
+</ul>
+
+</div>
+
+{% endblock %}

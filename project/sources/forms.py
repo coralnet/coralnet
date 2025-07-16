@@ -127,7 +127,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
         self.fieldsets = [
             dict(
                 header="General Information",
-                help_text=f"""To learn about the differences between public and private sources, please read our <a href="{reverse('about')}#datapolicy" target="_blank">data policy</a>.""",
+                help_text=f"""To learn about the differences between public and private sources, please read our <a href="{reverse('privacy_policy')}" target="_blank">privacy policy</a>.""",
                 fields=[
                     'name', 'visibility', 'affiliation', 'description',
                 ],
