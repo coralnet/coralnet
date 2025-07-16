@@ -2,7 +2,6 @@
 body {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    font-size: 14px;
     line-height: 140%;
     color:#777;
 }
