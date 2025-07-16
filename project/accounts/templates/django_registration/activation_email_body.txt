@@ -26,9 +26,9 @@ A few other things to keep in mind:
 
 2) Please make your data public if possible. The more public data on the site, the better for the community.
 
-3) If you found this email in your Spam folder, you should add "noreply@coralnet.ucsd.edu" to your contact list to ensure you receive future emails from us without problems. We will use email for account-related concerns (such as password-reset requests) and for major site announcements.
+3) If you found this email in your Spam folder, you should add "{{ default_from_email }}" to your contact list to ensure you receive future emails from us without problems. We will use email for account-related concerns (such as password-reset requests) and for major site announcements.
 
-4) Finally, if you use CoralNet in your work, we ask that you cite the appropriate papers among the ones listed here: https://coralnet.ucsd.edu/about/#papers
+4) Finally, if you use CoralNet in your work, we ask that you cite the appropriate papers among the ones listed here: {{ request.scheme }}://{{ request.get_host }}{% url 'about' %}#papers
 
 Happy CoralNetting!
 

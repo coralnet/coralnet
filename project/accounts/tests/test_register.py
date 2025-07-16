@@ -3,6 +3,7 @@ import time
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.test import override_settings
 from django.urls import reverse
 from django.utils.html import escape
 
@@ -78,6 +79,7 @@ class RegisterTest(BaseAccountsTest):
         user = User.objects.get(username='alice', email='alice123@example.com')
         self.assertFalse(user.is_active)
 
+    @override_settings(DEFAULT_FROM_EMAIL="default_from_name@domain.edu")
     def test_email_details(self):
         self.register()
 
@@ -108,6 +110,12 @@ class RegisterTest(BaseAccountsTest):
         self.assertIn(
             settings.FORUM_LINK, activation_email.body,
             "Forum link should be in the email body")
+        self.assertIn(
+            reverse('about'), activation_email.body,
+            "About link should be in the email body")
+        self.assertIn(
+            'default_from_name@domain.edu', activation_email.body,
+            "DEFAULT_FROM_EMAIL should be in the email body")
         # Other tests should already test activation via the email's activation
         # link, so we won't check for the activation link here.
 

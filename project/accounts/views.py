@@ -51,6 +51,7 @@ class BaseRegistrationView(ThirdPartyRegistrationView):
         """
         context = super().get_email_context(activation_key)
         context['account_questions_link'] = settings.ACCOUNT_QUESTIONS_LINK
+        context['default_from_email'] = settings.DEFAULT_FROM_EMAIL
         context['forum_link'] = settings.FORUM_LINK
         return context
 
