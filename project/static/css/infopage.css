@@ -4,23 +4,14 @@ body {
     text-rendering: optimizeLegibility;
 }
 
-
-ul.indexlist {
-    border-top: 1px solid var(--faint-hr-color);
-    margin-top: 20px;
-    padding: 30px 0 30px 0;
-    text-align: center;    
+div#indexes {
+    display: flex;
+    justify-content: center;
 }
-ul.indexlist li {
-    display: inline;
-    margin-left: 30px;
-    font-size:16px;
-}
-ul.indexlist li.first-item {
-    margin-left: 0;
+div#indexes a {
+    margin: 15px;
 }
 
-.abstract {font-size:16px; margin-bottom:20px; }
 .back-to-top-arrow {
     text-align: right;
     border-bottom: 1px solid var(--faint-hr-color);
