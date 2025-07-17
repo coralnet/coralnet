@@ -4,11 +4,6 @@ body {
     text-rendering: optimizeLegibility;
 }
 
-.center {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
 
 ul.indexlist {
     border-top: 1px solid #eee;

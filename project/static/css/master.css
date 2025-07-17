@@ -903,6 +903,11 @@ div.article-body {
     line-height: 1.4em;
 }
 
+div.article-body.narrow {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
 div.article-body ul {
     /* disc is the W3-standard default */
     list-style-type: disc;
