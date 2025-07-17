@@ -4,6 +4,7 @@ from django.http import HttpResponseRedirect, HttpResponseServerError
 from django.shortcuts import render, get_object_or_404
 from django.template import loader, TemplateDoesNotExist
 from django.urls import reverse
+from django.views.generic import View
 
 from annotations.utils import cacheable_annotation_count
 from images.models import Image
@@ -34,6 +35,24 @@ def index(request):
         'total_annotations': total_annotations,
         'carousel_images': carousel_images,
     })
+
+
+class StaticMarkdownView(View):
+    """
+    View for a static page whose content is defined as Markdown.
+    The Markdown file should live in a template folder.
+    """
+    page_title = None
+    template_name = None
+
+    def get(self, request, *args, **kwargs):
+        markdown_template = loader.get_template(self.template_name)
+        html_context = {
+            'title': self.page_title,
+            'markdown_content': markdown_template.render(),
+        }
+        return render(
+            request, 'lib/markdown_article.html', html_context)
 
 
 @permission_required('is_superuser')

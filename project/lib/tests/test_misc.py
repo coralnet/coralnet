@@ -39,9 +39,15 @@ class PermissionTest(BasePermissionTest):
 
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
+    def test_privacy_policy(self):
+        url = reverse('privacy_policy')
+        template = 'lib/markdown_article.html'
+
+        self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
+
     def test_release(self):
         url = reverse('release')
-        template = 'lib/release_notes.html'
+        template = 'lib/markdown_article.html'
 
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 

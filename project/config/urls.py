@@ -44,10 +44,14 @@ urlpatterns = [
          TemplateView.as_view(template_name='lib/about.html'),
          name='about'),
     path('privacy_policy/',
-         TemplateView.as_view(template_name='lib/privacy_policy.html'),
+         lib_views.StaticMarkdownView.as_view(
+             page_title="Privacy Policy",
+             template_name='lib/privacy_policy.md'),
          name='privacy_policy'),
     path('release/',
-         TemplateView.as_view(template_name='lib/release_notes.html'),
+         lib_views.StaticMarkdownView.as_view(
+             page_title="Beta Release",
+             template_name='lib/beta_release.md'),
          name='release'),
     path('admin_tools/', lib_views.admin_tools, name='admin_tools'),
     path('error_500_test/', lib_views.error_500_test, name='error_500_test'),
