@@ -30,3 +30,12 @@ We at CoralNet highly encourage public sharing of research data for the greater 
 - We'll never ask you for your password. If you get an email asking you for your password, it didn't come from us.
 
 - The CoralNet website uses cookies for login and for analytics (via Google).
+
+
+## Changes to this Privacy Policy
+
+Changes from July 2025 onward can be found [here](https://github.com/coralnet/coralnet/commits/main/project/lib/templates/lib/privacy_policy.md).
+
+Prior to July 2025, the privacy policy was instead known as the "data policy" and was just one section of the About page. Therefore, there isn't a particularly clean change-log view for the data policy from this period. However, to view changes to the About page as a whole prior to July 2025, go [here](https://github.com/coralnet/coralnet/commits/1.22/project/lib/templates/lib/about.html); each change may or may not include changes to the data policy section.
+
+Changes take effect on the date of the subsequent [production update](https://github.com/coralnet/coralnet/blob/main/CHANGELOG.md). Changes from July 2025 onward will be announced on the Google Group and/or CoralNet's blog.
