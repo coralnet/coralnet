@@ -903,11 +903,6 @@ div.article-body {
     line-height: 1.4em;
 }
 
-div.article-body.narrow {
-    max-width: 600px;
-    margin: 0 auto;
-}
-
 div.article-body ul {
     /* disc is the W3-standard default */
     list-style-type: disc;
@@ -927,6 +922,13 @@ div.article-body h1, div.article-body h2,
 div.article-body h3, div.article-body h4 {
     margin-top: 1em;
     margin-bottom: 1em;
+
+    /*
+    When linking to a header, have the viewport stop a little bit above
+    the header so that the top of the header isn't right at the edge
+    of the viewport.
+    */
+    scroll-margin-top: 40px;
 }
 
 div.article-body p {

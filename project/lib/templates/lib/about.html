@@ -1,19 +1,18 @@
 {% extends "base.html" %}
-{% load static %}
 
 {% block page-specific-includes %}
-    {% include "static-local-include.html" with type="css" path="css/infopage.css" %}
+    {% include "static-local-include.html" with type="css" path="css/about.css" %}
 {% endblock %}
 
 {% block content %}
 
 
-<div class="article-body narrow">
+<div class="article-body">
 
     <!-- This is called heading-top because top is already taken. -->
     <h1 id="heading-top">About CoralNet</h1>
 
-    <div class="page-section" id="abstract">
+    <div class="page-section">
         <p>
             CoralNet is a resource for benthic images analysis.
             The site deploys deep neural networks which allow fully and semi automated annotation of images.
