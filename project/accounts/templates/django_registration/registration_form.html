@@ -10,8 +10,8 @@
   <legend>Register a new account</legend>
 
   <div class="line">
-    Please read our data policy on the
-    <a href="{% url 'about' %}" target="_blank">About page</a>.
+    Please read our privacy policy
+    <a href="{% url 'privacy_policy' %}" target="_blank">here</a>.
   </div>
 
   {{ main_form.non_field_errors }}
@@ -45,7 +45,7 @@
   </div>
 
   <div class="page-section">
-    {% include "form_generic_one_field.html" with field=main_form.agree_to_data_policy %}
+    {% include "form_generic_one_field.html" with field=main_form.agree_to_privacy_policy %}
   </div>
 
   <div class="submit_button_wrapper_column_form">
