@@ -10,9 +10,8 @@
 
 <div class="article-body narrow">
 
-    <a class="section-anchor section-anchor-top" data-scroll-name="#main"></a>
-
-    <h1>About CoralNet</h1>
+    <!-- This is called heading-top because top is already taken. -->
+    <h1 id="heading-top">About CoralNet</h1>
 
     <div class="page-section" id="abstract">
         <p>
@@ -36,7 +35,7 @@
 
     <hr class="light"/>
 
-    <h2 id="site">The site<a class="section-anchor" data-scroll-name="#site"></a></h2>
+    <h2 id="site">The site</h2>
     <p>
         The CoralNet website consist of several modules outlined below.
     </p>
@@ -58,9 +57,9 @@
         makes the remaining annotation work easier.
     </p>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 
-    <h2 id="story">Story<a class="section-anchor" data-scroll-name="#story"></a></h2>
+    <h2 id="story">Story</h2>
     <h4>Introduction</h4>
     <p>
         A catastrophic decline of biodiversity and coral cover is occuring at reefs across the world.
@@ -148,9 +147,9 @@
         to see what we're working on, learn how the website works, or even contribute improvements.
     </p>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 
-    <h2 id="credits">Credits<a class="section-anchor" data-scroll-name="#credits"></a></h2>
+    <h2 id="credits">Credits</h2>
     <p>
         CoralNet has been supported by:
     </p>
@@ -175,9 +174,9 @@
         </li>
     </ul>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 
-    <h2 id="people">People<a class="section-anchor" data-scroll-name="#people"></a></h2>
+    <h2 id="people">People</h2>
     <h3>Current</h3>
         <ul>
             <li>Oscar Beijbom [<a href="https://beijbom.github.io/">www</a>, <a href="https://www.nyckel.com">Nyckel</a>]
@@ -199,9 +198,9 @@
             <li>Jeff Sandvik - Developer</li>
         </ul>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 
-    <h2 id="papers">Papers<a class="section-anchor" data-scroll-name="#papers"></a></h2>
+    <h2 id="papers">Papers</h2>
     <p>
         The following papers are relevant to the development of CoralNet.
         We ask that you cite the appropriate papers if you use CoralNet in your work.
@@ -251,9 +250,9 @@
         </p></li>
     </ul>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 
-    <h2 id="press">Press<a class="section-anchor" data-scroll-name="#press"></a></h2>
+    <h2 id="press">Press</h2>
     <ul >
     <li>January 2017: Our beta launch featured in phys.org
         [<a href="https://phys.org/news/2017-01-software-coral-reef-images.html">www</a>].
@@ -279,22 +278,7 @@
         [<a href="https://subscriber.politicopro.com/article/eenews/1059986651">www</a>]. </li>
     </ul>
 
-    <div class="back-to-top-arrow"><a title="Back to top" href="#main">▲</a></div>
+    <div class="back-to-top-arrow"><a title="Back to top" href="#heading-top">▲</a></div>
 </div>
 
-<script>
-$("a[href^='#']").click(function(){
-    var clicked = $(this).attr("href");
-    var link = $('a[data-scroll-name="' + clicked + '"]');
-
-    $(".selected").attr("class","");
-
-    $('body,html').animate({
-        'scrollTop':   $(link).offset().top
-    }, 500, function() {
-    // Animation complete.
-    });
-    $(this).attr("class"," selected");
-});
-</script>
 {% endblock %}

@@ -1,7 +1,27 @@
 
+html {
+    /*
+    This SHOULD only affect navigation to headers on the page.
+    And it should only take effect when the browser settings leave
+    smooth scrolling enabled. (Which is good, since people who are
+    annoyed or disoriented by smooth scrolling should be able to turn
+    it off.)
+    */
+    scroll-behavior: smooth;
+}
+
 body {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+}
+
+h1, h2 {
+    /*
+    When scrolling to a header, aim a little bit above the header
+    so that the top of the header isn't right at the edge of the
+    viewport.
+    */
+    scroll-margin-top: 40px;
 }
 
 div#indexes {
@@ -15,15 +35,4 @@ div#indexes a {
 .back-to-top-arrow {
     text-align: right;
     border-bottom: 1px solid var(--faint-hr-color);
-}
-
-.section-anchor{
-    display: block;
-    position: relative;
-    top: -50px;
-    visibility: hidden;
-}
-
-.section-anchor-top{
-    top: -100px;
 }
