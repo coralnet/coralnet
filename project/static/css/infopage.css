@@ -6,7 +6,7 @@ body {
 
 
 ul.indexlist {
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--faint-hr-color);
     margin-top: 20px;
     padding: 30px 0 30px 0;
     text-align: center;    
@@ -23,7 +23,7 @@ ul.indexlist li.first-item {
 .abstract {font-size:16px; margin-bottom:20px; }
 .back-to-top-arrow {
     text-align: right;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--faint-hr-color);
 }
 
 .section-anchor{
