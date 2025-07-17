@@ -21,10 +21,11 @@ ul.indexlist li.first-item {
 }
 
 .abstract {font-size:16px; margin-bottom:20px; }
-.uparrow {text-align: right; margin-bottom:20px; margin-top:20px;}
-.uparrow-final {text-align: right; margin-top:40px;} 
-.border{border-bottom: 1px solid #eee;}
-    
+.back-to-top-arrow {
+    text-align: right;
+    border-bottom: 1px solid #eee;
+}
+
 .section-anchor{
     display: block;
     position: relative;
