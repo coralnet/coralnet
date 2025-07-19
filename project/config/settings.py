@@ -542,8 +542,21 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 
 # [django-storages settings]
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+
+if SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
+    # Production and staging should use some form of temporary
+    # AWS credentials such as STS. So, the credentials shouldn't be
+    # defined here.
+    AWS_ACCESS_KEY_ID = None
+    AWS_SECRET_ACCESS_KEY = None
+else:
+    # Dev environments might find it easier to use static
+    # AWS credentials, though even in that case IAM Roles Anywhere
+    # could be used instead for better security.
+    # https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds-programmatic-access.html#security-creds-alternatives-to-long-term-access-keys
+    AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
+    AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+
 AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
     # Disables using threads for S3 requests, preventing errors such as
     # `RuntimeError: cannot schedule new futures after interpreter shutdown`
