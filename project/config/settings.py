@@ -505,8 +505,8 @@ if SETTINGS_BASE == Bases.PRODUCTION:
         SpacerJobSpec.HIGH: 'production-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
-        SpacerJobSpec.MEDIUM: 'spacer-job',
-        SpacerJobSpec.HIGH: 'spacer-highspec',
+        SpacerJobSpec.MEDIUM: 'spacer-production-standard',
+        SpacerJobSpec.HIGH: 'spacer-production-highspec',
     }
 else:
     BATCH_QUEUES = {
@@ -514,8 +514,8 @@ else:
         SpacerJobSpec.HIGH: 'staging-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
-        SpacerJobSpec.MEDIUM: 'spacer-job-staging',
-        SpacerJobSpec.HIGH: 'spacer-highspec-staging',
+        SpacerJobSpec.MEDIUM: 'spacer-staging-standard',
+        SpacerJobSpec.HIGH: 'spacer-staging-highspec',
     }
 
 # How the spec level's decided for individual job types.
