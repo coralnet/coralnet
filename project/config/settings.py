@@ -501,7 +501,7 @@ else:
 # used depending on the specs of the requested job.
 if SETTINGS_BASE == Bases.PRODUCTION:
     BATCH_QUEUES = {
-        SpacerJobSpec.MEDIUM: 'production',
+        SpacerJobSpec.MEDIUM: 'production-standard',
         SpacerJobSpec.HIGH: 'production-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
@@ -510,7 +510,7 @@ if SETTINGS_BASE == Bases.PRODUCTION:
     }
 else:
     BATCH_QUEUES = {
-        SpacerJobSpec.MEDIUM: 'staging',
+        SpacerJobSpec.MEDIUM: 'staging-standard',
         SpacerJobSpec.HIGH: 'staging-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
