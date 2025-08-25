@@ -18,12 +18,6 @@ from ..queues import get_queue_class
 from .tasks.utils import BaseTaskTest
 
 
-def local_queue_decorator(func):
-    deco = override_settings(
-        SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
-    return deco(func)
-
-
 def batch_queue_decorator(func):
     deco = override_settings(
         SPACER_QUEUE_CHOICE='vision_backend.queues.BatchQueue')
@@ -173,7 +167,6 @@ class QueueBasicTest(BaseTaskTest):
             'collect_spacer_jobs', "Jobs checked/collected: 0")
 
 
-@local_queue_decorator
 class LocalQueueBasicTest(QueueBasicTest):
 
     def test_no_jobs(self):
@@ -310,7 +303,6 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         self.assertEqual(api_jobs[1].status, ApiJob.DONE)
 
 
-@local_queue_decorator
 class LocalQueueClassificationTest(QueueClassificationTest):
 
     def test_collect_classification(self):
