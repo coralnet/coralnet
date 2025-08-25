@@ -5,7 +5,6 @@ import math
 from unittest import mock
 
 from django.conf import settings
-from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 
@@ -48,8 +47,6 @@ class DeployTestMixin(APITestMixin, TaskTestMixin):
         with mock.patch(
             'spacer.storage.URLStorage.load', mock_url_storage_load
         ):
-            # Ensure the test class has a ENABLE_PERIODIC_JOBS=False
-            # settings override, for a call of this function to work.
             run_scheduled_jobs_until_empty()
 
     @staticmethod
@@ -61,7 +58,6 @@ class DeployTestMixin(APITestMixin, TaskTestMixin):
                 start_job(unit.internal_job)
 
 
-@override_settings(ENABLE_PERIODIC_JOBS=False)
 class DeployBaseTest(ClientTest, DeployTestMixin, metaclass=ABCMeta):
 
     @classmethod

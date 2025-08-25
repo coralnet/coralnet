@@ -490,9 +490,17 @@ if not FORCE_DUMMY_EXTRACTOR:
     EXTRACTORS_BUCKET = env('EXTRACTORS_BUCKET')
 
 # Type of queue to keep track of vision backend jobs.
-if SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
+if _TESTING:
+    # Unit tests should generally use LocalQueue.
+    # Specific tests can override this, like when they define mocks
+    # that allow testing the BatchQueue methods without actually
+    # calling boto.
+    SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
+elif SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
     SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
 else:
+    # For dev servers, LocalQueue is default and the env can
+    # specify otherwise.
     SPACER_QUEUE_CHOICE = env(
         'SPACER_QUEUE_CHOICE', default='vision_backend.queues.LocalQueue')
 
@@ -752,14 +760,9 @@ if (
     SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
     and
     STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
-    and
-    not _TESTING
 ):
-    # We only raise this in non-test environments, because some tests
-    # are able to use mocks to test BatchQueue while sticking with
-    # local storage.
     raise ImproperlyConfigured(
-        "Can not use Remote queue with local storage."
+        "Can not use remote queue with local storage."
         " Please use S3 storage."
     )
 
@@ -965,8 +968,13 @@ DJANGO_HUEY = {
 
 # [CoralNet settings]
 # Whether to periodically run CoralNet-managed (not huey-registered)
-# periodic jobs. Can be useful to disable for certain tests.
-ENABLE_PERIODIC_JOBS = True
+# periodic jobs.
+# Generally should be True when running a server.
+# Generally should be False when running unit tests, so they can:
+# - Use run_scheduled_jobs_until_empty() without infinite looping.
+# - Run jobs like collect_spacer_jobs only when explicitly desired.
+# Individual tests can override the value if they want.
+ENABLE_PERIODIC_JOBS = not _TESTING
 # Days until we purge old async jobs.
 JOB_MAX_DAYS = 30
 # Page size when listing async jobs.

@@ -112,7 +112,11 @@ def run_scheduled_jobs_until_empty():
     using just one call.
 
     However, this is a prime candidate for infinite looping if something is
-    wrong with jobs/tasks. So we have a safety guard for that.
+    wrong with jobs/tasks. So we have a safety guard for that, aborting
+    after enough iterations have passed.
+
+    ENABLE_PERIODIC_JOBS should be False when running this function,
+    otherwise the loop-abort case will always be hit.
     """
     iterations = 0
     while get_scheduled_jobs().exists():
