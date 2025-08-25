@@ -60,9 +60,8 @@ class Command(BaseCommand):
         use the `BatchQueue` you need to use the `dev-s3` setting. 
         
         NOTE: 
-        If you use `dev-local` you still need to have AWS_ACCESS_KEY_ID and
-        AWS_SECRET_ACCESS_KEY in your .env to allow access to fixtures and
-        spacer models from s3.
+        If you use `dev-local` you still need to have AWS configuration in
+        your .env to allow access to fixtures and spacer models from s3.
         '''
 
     latest_job_id: int

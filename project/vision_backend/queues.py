@@ -5,12 +5,12 @@ import json
 from logging import getLogger
 from typing import Type
 
-import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.utils import timezone
 from django.utils.module_loading import import_string
+from spacer.aws import create_aws_session
 from spacer.messages import JobMsg, JobReturnMsg
 from spacer.tasks import process_job
 
@@ -42,12 +42,8 @@ def get_queue_class() -> Type[BaseQueue]:
 
 
 def get_batch_client():
-    return boto3.client(
-        'batch',
-        region_name=settings.AWS_BATCH_REGION,
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY
-    )
+    session = create_aws_session()
+    return session.client('batch', region_name=settings.AWS_BATCH_REGION)
 
 
 class BatchQueue(BaseQueue):
