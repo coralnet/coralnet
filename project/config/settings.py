@@ -543,19 +543,38 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 # [django-storages settings]
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
 
+# The preferred way (for security) to authenticate to AWS is to use STS
+# to automatically get temporary access keys.
+# For production, this can be done by operating from an EC2
+# instance that's in a VPC that can access the AWS resources.
+# For development, this can be done with IAM Roles Anywhere.
+
 if SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
-    # Production and staging should use some form of temporary
-    # AWS credentials such as STS. So, the credentials shouldn't be
-    # defined here.
+
+    # Profiles shouldn't be needed for the way production would
+    # authenticate.
+    AWS_S3_SESSION_PROFILE = None
+
+    # Statically defined credentials aren't recommended for
+    # security:
+    # https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds-programmatic-access.html#security-creds-alternatives-to-long-term-access-keys
+    # So we don't allow them for production.
     AWS_ACCESS_KEY_ID = None
     AWS_SECRET_ACCESS_KEY = None
+    AWS_SESSION_TOKEN = None
+
 else:
-    # Dev environments might find it easier to use static
-    # AWS credentials, though even in that case IAM Roles Anywhere
-    # could be used instead for better security.
-    # https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds-programmatic-access.html#security-creds-alternatives-to-long-term-access-keys
+
+    # IAM Roles Anywhere will likely involve specifying a profile name.
+    # It only doesn't need to be specified if the profile configured for
+    # Roles Anywhere is named 'default'.
+    AWS_S3_SESSION_PROFILE = env('AWS_PROFILE_NAME', default=None)
+
+    # Setting up IAM Roles Anywhere can be tricky, so we allow (but still
+    # discourage) static credentials for dev.
     AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
     AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+    AWS_SESSION_TOKEN = env('AWS_SESSION_TOKEN', default=None)
 
 AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
     # Disables using threads for S3 requests, preventing errors such as
@@ -572,6 +591,8 @@ AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
 # [PySpacer settings]
 SPACER['AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
 SPACER['AWS_SECRET_ACCESS_KEY'] = AWS_SECRET_ACCESS_KEY
+SPACER['AWS_SESSION_TOKEN'] = AWS_SESSION_TOKEN
+SPACER['AWS_PROFILE_NAME'] = AWS_S3_SESSION_PROFILE
 
 # [CoralNet setting]
 # Name of the CoralNet regtests S3 bucket.
