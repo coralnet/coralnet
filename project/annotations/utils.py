@@ -6,16 +6,18 @@ from django.conf import settings
 from django.db.models import Count, Q
 from django.urls import reverse
 
-from accounts.utils import get_alleviate_user, get_robot_user, is_robot_user
+from accounts.utils import (
+    get_alleviate_user, get_imported_user, get_robot_user, is_robot_user)
 from events.models import Event
 from images.model_utils import PointGen
-from images.models import Image
+from images.models import Image, Point
 from lib.exceptions import FileProcessError
 from lib.utils import CacheableValue
 from sources.models import Source
 from upload.utils import csv_to_dicts
-from .model_utils import ImageAnnoStatuses
-from .models import Annotation, ImageAnnotationInfo
+from vision_backend.utils import reset_features
+from .model_utils import AnnotationArea, ImageAnnoStatuses
+from .models import Annotation, AnnotationUploadEvent, ImageAnnotationInfo
 
 
 def image_has_any_confirmed_annotations(image):
@@ -324,6 +326,80 @@ def annotations_preview(
         num_images_with_existing_annotations
 
     return table, details
+
+
+def import_annotations(image, event_creator_id, annotation_dicts):
+    """
+    Import the specified points and annotations for the specified image.
+    """
+
+    new_points = []
+    new_annotations = []
+
+    for num, point_dict in enumerate(annotation_dicts, 1):
+        # Create a Point.
+        point = Point(
+            row=point_dict['row'], column=point_dict['column'],
+            point_number=num, image=image)
+        new_points.append(point)
+    # Save to DB with an efficient bulk operation.
+    Point.objects.bulk_create(new_points)
+
+    # Mapping of newly-saved points.
+    point_numbers_to_ids = dict(
+        (p.point_number, p.pk) for p in new_points)
+    point_ids_to_numbers = dict(
+        (p.pk, p.point_number) for p in new_points)
+
+    for num, point_dict in enumerate(annotation_dicts, 1):
+        # The annotation-preview view should've processed annotation
+        # data to just label IDs, not codes.
+        label_id = point_dict.get('label_id')
+        # Create an Annotation if a label is specified.
+        if label_id:
+            new_annotations.append(Annotation(
+                point_id=point_numbers_to_ids[num],
+                image=image, source_id=image.source_id,
+                label_id=label_id, user=get_imported_user()))
+
+    # Bulk-create bypasses the django-reversion signals,
+    # which is what we want in this case (trying to obsolete
+    # reversion for annotations).
+    Annotation.objects.bulk_create(new_annotations)
+
+    # Instead of a django-reversion revision, we'll create our
+    # own Event.
+    event_details = dict(
+        point_count=len(new_points),
+        first_point_id=new_points[0].pk,
+        annotations=dict(
+            (point_ids_to_numbers[ann.point_id], ann.label_id)
+            for ann in new_annotations
+        ),
+    )
+    event = AnnotationUploadEvent(
+        source_id=image.source_id,
+        image_id=image.pk,
+        creator_id=event_creator_id,
+        details=event_details,
+    )
+    event.save()
+
+    # Update Image and Metadata fields.
+
+    image.point_generation_method = PointGen(
+        type=PointGen.Types.IMPORTED.value,
+        points=len(new_points)).db_value
+    # Clear previously-uploaded CPC info.
+    image.cpc_content = ''
+    image.cpc_filename = ''
+    image.save()
+
+    image.metadata.annotation_area = AnnotationArea(
+        type=AnnotationArea.TYPE_IMPORTED).db_value
+    image.metadata.save(update_fields=['annotation_area'])
+
+    reset_features(image)
 
 
 def source_image_status_counts(source: Source) -> dict:

@@ -273,7 +273,7 @@ class GeneralCasesTest(
         def raise_error(self, *args, **kwargs):
             raise ValueError
 
-        with mock.patch('annotations.views.reset_features', raise_error):
+        with mock.patch('annotations.utils.reset_features', raise_error):
             with self.assertRaises(ValueError):
                 self.upload_annotations(self.user, self.source)
 
