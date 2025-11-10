@@ -19,10 +19,8 @@ import reversion
 from reversion.revisions import create_revision
 from reversion.models import Version, Revision
 
-from accounts.utils import get_imported_user
 from events.models import Event
 from export.views import SourceCsvExportPrepView
-from images.model_utils import PointGen
 from images.models import Image, Point
 from images.utils import (
     generate_points,
@@ -70,6 +68,7 @@ from .utils import (
     annotations_preview,
     apply_alleviate,
     get_annotation_version_user_display,
+    import_annotations,
 )
 
 
@@ -713,71 +712,22 @@ class AnnotationsUploadConfirmView(View):
 
         for image_id, annotations_for_image in uploaded_annotations.items():
 
-            img = Image.objects.get(pk=image_id, source=source)
+            image = Image.objects.get(pk=image_id, source=source)
 
             # Delete previous annotations and points for this image.
             # Calling delete() on these querysets is more efficient
             # than calling delete() on each of the individual objects.
-            Annotation.objects.filter(image=img).delete()
-            Point.objects.filter(image=img).delete()
+            Annotation.objects.filter(image=image).delete()
+            Point.objects.filter(image=image).delete()
 
             # Create new points and annotations.
-            new_points = []
-            new_annotations = []
-
-            for num, point_dict in enumerate(annotations_for_image, 1):
-                # Create a Point.
-                point = Point(
-                    row=point_dict['row'], column=point_dict['column'],
-                    point_number=num, image=img)
-                new_points.append(point)
-            # Save to DB with an efficient bulk operation.
-            Point.objects.bulk_create(new_points)
-
-            # Mapping of newly-saved points.
-            point_numbers_to_ids = dict(
-                (p.point_number, p.pk) for p in new_points)
-            point_ids_to_numbers = dict(
-                (p.pk, p.point_number) for p in new_points)
-
-            for num, point_dict in enumerate(annotations_for_image, 1):
-                # The annotation-preview view should've processed annotation
-                # data to just label IDs, not codes.
-                label_id = point_dict.get('label_id')
-                # Create an Annotation if a label is specified.
-                if label_id:
-                    new_annotations.append(Annotation(
-                        point_id=point_numbers_to_ids[num],
-                        image=img, source=source,
-                        label_id=label_id, user=get_imported_user()))
-
-            # Bulk-create bypasses the django-reversion signals,
-            # which is what we want in this case (trying to obsolete
-            # reversion for annotations).
-            Annotation.objects.bulk_create(new_annotations)
-
-            # Instead of a django-reversion revision, we'll create our
-            # own Event.
-            event_details = dict(
-                point_count=len(new_points),
-                first_point_id=new_points[0].pk,
-                annotations=dict(
-                    (point_ids_to_numbers[ann.point_id], ann.label_id)
-                    for ann in new_annotations
-                ),
+            import_annotations(
+                image=image,
+                event_creator_id=request.user.pk,
+                annotation_dicts=annotations_for_image,
             )
-            event = AnnotationUploadEvent(
-                source_id=source_id,
-                image_id=image_id,
-                creator_id=request.user.pk,
-                details=event_details,
-            )
-            event.save()
 
-            # Update relevant image/metadata fields.
-            self.update_image_and_metadata_fields(img, new_points)
-
-            reset_features(img)
+            self.extra_image_level_actions(image)
 
         return JsonResponse(dict(
             success=True,
@@ -786,18 +736,8 @@ class AnnotationsUploadConfirmView(View):
     def extra_source_level_actions(self, request, source):
         pass
 
-    def update_image_and_metadata_fields(self, image, new_points):
-        image.point_generation_method = PointGen(
-            type=PointGen.Types.IMPORTED.value,
-            points=len(new_points)).db_value
-        # Clear previously-uploaded CPC info.
-        image.cpc_content = ''
-        image.cpc_filename = ''
-        image.save()
-
-        image.metadata.annotation_area = AnnotationArea(
-            type=AnnotationArea.TYPE_IMPORTED).db_value
-        image.metadata.save()
+    def extra_image_level_actions(self, image):
+        pass
 
 
 class ExportPrepView(SourceCsvExportPrepView):

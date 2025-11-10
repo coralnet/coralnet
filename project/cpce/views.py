@@ -131,9 +131,7 @@ class CpcAnnotationsUploadConfirmView(AnnotationsUploadConfirmView):
         source.cpce_image_dir = cpc.get_image_dir(image_id)
         source.save()
 
-    def update_image_and_metadata_fields(self, image, new_points):
-        super().update_image_and_metadata_fields(image, new_points)
-
+    def extra_image_level_actions(self, image):
         # Save uploaded CPC contents for future CPC exports.
         # Note: Since cpc_files went through session serialization,
         # the integer dict keys became stringified.
