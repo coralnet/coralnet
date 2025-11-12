@@ -3,11 +3,15 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.views import LoginView as DefaultLoginView
+from django.contrib.auth.views import (
+    LoginView as DefaultLoginView,
+    PasswordResetView as DefaultPasswordResetView,
+)
 from django.core import signing
 from django.core.mail import EmailMessage
 from django.shortcuts import redirect, render, get_object_or_404
 from django.template.loader import render_to_string
+from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
@@ -15,6 +19,7 @@ from django.views.generic.edit import FormView
 from django_registration.backends.activation.views \
     import RegistrationView as ThirdPartyRegistrationView
 
+from lib.decorators import mail_maintenance_off
 from lib.utils import paginate
 from .forms import (
     ActivationResendForm, EmailAllForm, EmailChangeForm,
@@ -56,6 +61,7 @@ class BaseRegistrationView(ThirdPartyRegistrationView):
         return context
 
 
+@mail_maintenance_off
 @sensitive_post_parameters()
 def register(request, *args, **kwargs):
     return RegistrationView.as_view()(request, *args, **kwargs)
@@ -133,6 +139,11 @@ class RegistrationView(BaseRegistrationView):
         already_exists_email.send()
 
 
+@method_decorator(
+    [
+        mail_maintenance_off
+    ],
+    name='dispatch')
 class ActivationResendView(BaseRegistrationView):
     """
     Activation-email sending functionality is defined in the registration view
@@ -170,6 +181,20 @@ class ActivationResendView(BaseRegistrationView):
         return FormView.get_form(self, form_class=form_class)
 
 
+@method_decorator(
+    [
+        mail_maintenance_off
+    ],
+    name='dispatch')
+class PasswordResetView(DefaultPasswordResetView):
+    pass
+
+
+@method_decorator(
+    [
+        mail_maintenance_off
+    ],
+    name='dispatch')
 class EmailChangeView(LoginRequiredMixin, FormView):
     form_class = EmailChangeForm
     success_url = 'email_change_done'

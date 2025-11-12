@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.views.generic.base import TemplateView
 from . import views
@@ -16,7 +15,7 @@ urlpatterns = [
              authentication_form=AuthenticationForm),
          name='login'),
     path('password_reset/',
-         auth_views.PasswordResetView.as_view(
+         views.PasswordResetView.as_view(
              extra_email_context=dict(
                 account_questions_link=settings.ACCOUNT_QUESTIONS_LINK)),
          name='password_reset'),

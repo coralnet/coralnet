@@ -1,4 +1,5 @@
 import time
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -57,6 +58,64 @@ class PermissionTest(BasePermissionTest):
 
         self.assertPermissionLevel(
             url, self.SIGNED_OUT, template=template)
+
+
+def mock_getenv_factory(key, value):
+    def mock_getenv(key_, _default=None):
+        if key_ == key:
+            return value
+    return mock_getenv
+
+
+class MailMaintenanceTest(BaseAccountsTest):
+
+    def assert_page_not_available(self, page_url):
+        with mock.patch(
+            'os.getenv',
+            mock_getenv_factory('CORALNET_MAIL_MAINTENANCE', 'true'),
+        ):
+            response = self.client.get(page_url)
+            self.assertTemplateUsed(
+                response, self.PERMISSION_DENIED_TEMPLATE)
+            self.assertContains(
+                response,
+                "This page is currently not available because our"
+                " email system is under maintenance.")
+
+    def assert_page_available(self, page_url):
+        with mock.patch(
+            'os.getenv',
+            mock_getenv_factory('CORALNET_MAIL_MAINTENANCE', 'true'),
+        ):
+            response = self.client.get(page_url)
+            self.assertTemplateNotUsed(
+                response, self.PERMISSION_DENIED_TEMPLATE)
+            self.assertNotContains(
+                response,
+                "This page is currently not available because our"
+                " email system is under maintenance.")
+
+    def test_register(self):
+        self.assert_page_not_available(
+            reverse('django_registration_register'))
+
+    def test_activation_resend(self):
+        self.assert_page_not_available(
+            reverse('activation_resend'))
+
+    def test_password_reset(self):
+        self.assert_page_not_available(
+            reverse('password_reset'))
+
+    def test_email_change(self):
+        self.client.force_login(self.user)
+        self.assert_page_not_available(
+            reverse('email_change'))
+
+    def test_activate(self):
+        """This view shouldn't care about mail maintenance."""
+        self.assert_page_available(
+            reverse('django_registration_activate', args=['a']))
 
 
 class RegisterTest(BaseAccountsTest):

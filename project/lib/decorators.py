@@ -1,4 +1,5 @@
 from functools import wraps
+import os
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -214,3 +215,27 @@ def session_key_required(
                 request, *args, session_data=session_data, **kwargs)
         return wraps(view_func)(_wrapped_view)
     return decorator
+
+
+def mail_maintenance_off(view_func):
+    def wrapper_func(request, *args, **kwargs):
+        # We directly read an environment variable to determine if the mail
+        # system is under maintenance. This allows us to set the value without
+        # restarting the server (unlike when we use the .env file).
+
+        # If this env var is set to pretty much anything, then this becomes
+        # True. If it's not set, this becomes False.
+        mail_is_in_maintenance = bool(
+            os.getenv('CORALNET_MAIL_MAINTENANCE', False))
+
+        if mail_is_in_maintenance:
+            return render(request, 'permission_denied.html', dict(
+                message="This page is currently not available because our"
+                        " email system is under maintenance. Sorry for the"
+                        " inconvenience. There may be an announcement about"
+                        " this on our Google Group forum."
+            ))
+        else:
+            # Else, same behavior as calling the view directly
+            return view_func(request, *args, **kwargs)
+    return wrapper_func
