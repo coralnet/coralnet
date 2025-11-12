@@ -1,5 +1,10 @@
 # CoralNet's Privacy Policy
 
+
+***Disclaimer:*** *This is not intended to serve as a legal document. This page informally describes the extent that various data on the website are considered private or not. We CoralNet administrators implement, follow, update, and communicate this policy with a best effort. We do this with the motivations of treating research communities with respect and providing a service that people will want to use. However, we do not have the resources or legal framework to make formal guarantees about keeping private data private. Your usage of this website is at your own risk.*
+
+-----
+
 We at CoralNet highly encourage public sharing of research data for the greater good. However, we realize that data privacy is preferred in some cases, especially for newer projects. So, sources have two visibility options, Public or Private.
 
 
