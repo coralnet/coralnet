@@ -7,3 +7,7 @@
 # Changelog: http://docs.gunicorn.org/en/stable/news.html
 # Compat: Python 3.7-3.12
 gunicorn==23.0.0
+
+# For sending emails.
+# Compat: Python 3.8-3.12, Django 3.2-5.0
+django-ses==4.4.0
