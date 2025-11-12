@@ -17,7 +17,7 @@ Here are some resources to help get you started with the site:
 
 3) If you have any issues with your CoralNet user account, you can post in this forum thread instead of creating a new thread: {{ account_questions_link }}
 
-4) Privacy policy: {{ request.scheme }}://{{ request.get_host }}{% url 'privacy_policy' %}
+4) Here is the privacy policy again for reference: {{ request.scheme }}://{{ request.get_host }}{% url 'privacy_policy' %}
 
 5) General information about CoralNet: {{ request.scheme }}://{{ request.get_host }}{% url 'about' %}
 
