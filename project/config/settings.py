@@ -237,6 +237,13 @@ else:
     # just print emails to the console.
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
+# [django-ses settings]
+AWS_SES_REGION_NAME = env('AWS_SES_REGION_NAME', default='us-west-2')
+AWS_SES_REGION_ENDPOINT = f'email.{AWS_SES_REGION_NAME}.amazonaws.com'
+# We don't have backward-compat obligations with v1, so we use v2.
+# https://aws.amazon.com/blogs/messaging-and-targeting/upgrade-your-email-tech-stack-with-amazon-sesv2-api/
+USE_SES_V2 = True
+
 # Any outgoing email with an element that could get very large (in bytes)
 # should truncate/limit that element according to this setting.
 # The resulting total size of the email (incorporating other elements, e.g.
