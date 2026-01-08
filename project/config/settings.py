@@ -223,16 +223,25 @@ LABELSET_COMMITTEE_EMAIL = env(
 # You'll probably want to include the trailing space.
 EMAIL_SUBJECT_PREFIX = '[CoralNet] '
 
-if SETTINGS_BASE == Bases.STAGING:
+if SETTINGS_BASE == Bases.PRODUCTION:
+    # Use Amazon SES with auth through boto3, instead of direct SMTP.
+    EMAIL_BACKEND = 'django_ses.SESBackend'
+elif SETTINGS_BASE == Bases.STAGING:
     # Instead of routing emails through a mail server,
     # just write emails to the filesystem.
     EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
     EMAIL_FILE_PATH = TMP_DIR / 'emails'
-elif SETTINGS_BASE in [Bases.DEV_LOCAL, Bases.DEV_S3]:
+else:
+    # Development environment:
     # Instead of routing emails through a mail server,
     # just print emails to the console.
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-# Else (production), use the default email backend (smtp).
+
+# [django-ses settings]
+AWS_SES_REGION_NAME = env('AWS_SES_REGION_NAME', default='us-west-2')
+# We don't have backward-compat obligations with v1, so we use v2.
+# https://aws.amazon.com/blogs/messaging-and-targeting/upgrade-your-email-tech-stack-with-amazon-sesv2-api/
+USE_SES_V2 = True
 
 # Any outgoing email with an element that could get very large (in bytes)
 # should truncate/limit that element according to this setting.

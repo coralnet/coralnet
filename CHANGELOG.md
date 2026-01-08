@@ -8,6 +8,12 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## [1.23](https://github.com/coralnet/coralnet/tree/1.23)
+
+Production: 2025-11-17~18 (hotfixes and reconfig were done over these 2 days)
+
+- New package to install (production only): django-ses==4.4.0
+
 ## [1.22](https://github.com/coralnet/coralnet/tree/1.22)
 
 Production: 2025-07-14
