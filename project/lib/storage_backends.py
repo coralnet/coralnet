@@ -8,13 +8,10 @@ import shutil
 import string
 import tempfile
 
+import boto3
 from django.conf import settings
 from django.core.files.storage import default_storage, FileSystemStorage
 from django.test import override_settings
-# `from easy_thumbnails.storage import <something>` seems to have potential
-# for issues with import timing/ordering, because that module calls
-# get_storage() at the global level. So we import this way instead.
-import easy_thumbnails.storage
 from spacer.messages import DataLocation
 from storages.backends.s3 import S3Storage
 
@@ -224,6 +221,28 @@ class MediaStorageS3(S3Storage):
     S3-bucket storage backend.
     Storage root defaults to the AWS_LOCATION directory.
     """
+    def _create_session(self):
+        """
+        This method in the parent class S3Storage would make the profile name
+        take higher auth precedence than it normally does in AWS.
+        Here we override that behavior, restoring the precedence to what AWS
+        defines:
+        https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html#cli-chap-authentication-precedence
+
+        This makes the behavior less surprising for most people who work on
+        other AWS projects.
+        Also, AWS precedence order makes it more obvious if you've left some
+        less secure auth methods lying around (like static key and secret),
+        which is good since you can clean up the keys if you're alerted to
+        them.
+        """
+        return boto3.Session(
+            aws_access_key_id=self.access_key,
+            aws_secret_access_key=self.secret_key,
+            aws_session_token=self.security_token,
+            profile_name=self.session_profile,
+        )
+
     def exists(self, name):
         # Check for existing file. This doesn't work on dirs.
         if super().exists(name):
