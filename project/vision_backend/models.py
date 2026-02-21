@@ -3,8 +3,7 @@ from collections import Counter
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import models
-from spacer.data_classes import ImageFeatures, ValResults
-from spacer.messages import DataLocation
+from spacer.data_classes import DataLocation, ImageFeatures, ValResults
 
 from config.constants import SpacerJobSpec
 from events.models import Event
@@ -126,7 +125,7 @@ class Features(models.Model):
     extracted_date = models.DateTimeField(null=True)
 
     @property
-    def data_loc(self):
+    def data_loc(self) -> DataLocation:
         return default_storage.spacer_data_loc(
             settings.FEATURE_VECTOR_FILE_PATTERN.format(
                 full_image_path=self.image.original_file.name))

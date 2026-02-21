@@ -3,7 +3,8 @@ import json
 from unittest import mock
 
 from django.test.utils import override_settings
-from spacer.messages import DataLocation, JobMsg
+from spacer.data_classes import DataLocation
+from spacer.messages import JobMsg
 from spacer.tasks import process_job
 
 from api_core.models import ApiJob, ApiJobUnit

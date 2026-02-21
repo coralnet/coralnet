@@ -12,7 +12,7 @@ import boto3
 from django.conf import settings
 from django.core.files.storage import default_storage, FileSystemStorage
 from django.test import override_settings
-from spacer.messages import DataLocation
+from spacer.data_classes import DataLocation
 from storages.backends.s3 import S3Storage
 
 from .exceptions import FileStorageUsageError

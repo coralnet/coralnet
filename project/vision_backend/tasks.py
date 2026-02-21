@@ -416,7 +416,6 @@ def submit_classifier(source_id, job_id):
         nbr_epochs=settings.NBR_TRAINING_EPOCHS,
         clf_type=CLASSIFIER_MAPPINGS[source.feature_extractor],
         labels=labels,
-        features_loc=default_storage.spacer_data_loc(''),
         previous_model_locs=[default_storage.spacer_data_loc(
             settings.ROBOT_MODEL_FILE_PATTERN.format(pk=pc.pk))
             for pc in prev_classifiers],
