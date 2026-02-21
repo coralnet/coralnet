@@ -30,10 +30,11 @@ django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+cor
 
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
+# We match whatever version of numpy pyspacer uses for development, for optimal
+# consistency.
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-# Compat: Python 3.9-3.13, and matches pyspacer dev requirements as of
-# pyspacer 0.12.0
-Pillow==11.0.0
+# Compat: Python 3.10-3.14
+Pillow==12.1.1
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they

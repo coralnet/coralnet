@@ -12,6 +12,7 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 - Updates to required packages:
   - numpy 2.1.3 -> 2.2.6
+  - Pillow 11.0.0 -> 12.1.1
 
 ## [1.23](https://github.com/coralnet/coralnet/tree/1.23)
 
