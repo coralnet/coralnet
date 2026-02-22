@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 import re
 from unittest import mock
 
+from django.test.utils import override_settings
+
 from errorlogs.tests.utils import ErrorReportTestMixin
 from lib.tests.utils import BaseTest, EmailAssertionsMixin
 from ..exceptions import JobError
@@ -214,6 +216,7 @@ class BulkCreateJobsTest(BaseTest):
 
 class FinishJobTest(BaseTest):
 
+    @override_settings(ENABLE_PERIODIC_JOBS=True)
     def test_periodic_job_schedules_another_run(self):
         """
         Test a periodic job getting another instance of it scheduled after the
