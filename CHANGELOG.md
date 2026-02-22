@@ -8,7 +8,9 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.24 (WIP)
+## [1.24](https://github.com/coralnet/coralnet/tree/1.24)
+
+Production: 2026-02-22
 
 - Updates to required packages:
   - numpy 2.1.3 -> 2.2.6
