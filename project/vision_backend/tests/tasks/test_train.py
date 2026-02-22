@@ -280,7 +280,7 @@ class TrainClassifierTest(BaseTaskTest):
             labels_data = spacer_task.labels[set_name]
             feature_location = \
                 images_with_dupe_point[set_name].features.data_loc
-            image_labels_data = labels_data[feature_location.key]
+            image_labels_data = labels_data[feature_location]
             self.assertEqual(
                 len(self.rowcols_with_dupes_included), len(image_labels_data),
                 f"{set_name} data count should include dupe points")

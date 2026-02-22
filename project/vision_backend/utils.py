@@ -1,12 +1,12 @@
 from django.conf import settings
 import numpy as np
+from spacer.data_classes import DataLocation
 from spacer.extractors import (
     DummyExtractor,
     EfficientNetExtractor,
     FeatureExtractor,
     VGG16CaffeExtractor,
 )
-from spacer.messages import DataLocation
 
 from images.models import Image, Point
 from jobs.models import Job

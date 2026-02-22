@@ -3,7 +3,6 @@ from pathlib import Path
 from unittest import mock
 
 from django.core.management.base import CommandError
-from django.test.utils import override_settings
 from spacer.data_classes import ImageFeatures
 
 from jobs.models import Job
@@ -121,7 +120,6 @@ class CheckAllSourcesTest(ManagementCommandTest):
             status=Job.Status.PENDING)
 
 
-@override_settings(ENABLE_PERIODIC_JOBS=False)
 class ResetFeaturesTest(ManagementCommandTest, TaskTestMixin):
 
     @classmethod
@@ -242,7 +240,6 @@ class ResetFeaturesTest(ManagementCommandTest, TaskTestMixin):
         )
 
 
-@override_settings(ENABLE_PERIODIC_JOBS=False)
 class InspectExtractedFeaturesTest(ManagementCommandTest, TaskTestMixin):
 
     @classmethod

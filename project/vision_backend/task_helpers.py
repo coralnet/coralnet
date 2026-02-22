@@ -10,7 +10,7 @@ import numpy as np
 from django.conf import settings
 from django.core.mail import mail_admins
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import F
 from django.utils import timezone
 from spacer.data_classes import ImageLabels
 from spacer.messages import (
@@ -206,12 +206,11 @@ def make_dataset(images: list[Image]) -> ImageLabels:
     """
     data = dict()
     for img in images:
-        feature_key = img.features.data_loc.key
         anns = Annotation.objects.filter(image=img).\
             annotate(gt_label=F('label__id')).\
             annotate(row=F('point__row')). \
             annotate(col=F('point__column'))
-        data[feature_key] = [
+        data[img.features.data_loc] = [
             (ann.row, ann.col, ann.gt_label) for ann in anns]
     return ImageLabels(data)
 

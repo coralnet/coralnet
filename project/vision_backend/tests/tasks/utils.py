@@ -1,6 +1,5 @@
 from django.conf import settings
 from django.core.files.storage import default_storage
-from django.test import override_settings
 
 from annotations.tests.utils import UploadAnnotationsCsvTestMixin
 from images.model_utils import PointGen
@@ -231,13 +230,6 @@ class TaskTestMixin(
     rowcols_with_dupes_included = [(40, 60), (50, 50), (50, 50)]
 
 
-@override_settings(
-    SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue',
-    # Setting this False allows us to:
-    # - Use run_scheduled_jobs_until_empty() without infinite looping.
-    # - Run jobs like collect_spacer_jobs only when we explicitly want to.
-    ENABLE_PERIODIC_JOBS=False,
-)
 class BaseTaskTest(ClientTest, TaskTestMixin):
     """This is more 'batteries included' than TaskTestMixin."""
 

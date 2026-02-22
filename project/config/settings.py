@@ -490,9 +490,17 @@ if not FORCE_DUMMY_EXTRACTOR:
     EXTRACTORS_BUCKET = env('EXTRACTORS_BUCKET')
 
 # Type of queue to keep track of vision backend jobs.
-if SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
+if _TESTING:
+    # Unit tests should generally use LocalQueue.
+    # Specific tests can override this, like when they define mocks
+    # that allow testing the BatchQueue methods without actually
+    # calling boto.
+    SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
+elif SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
     SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
 else:
+    # For dev servers, LocalQueue is default and the env can
+    # specify otherwise.
     SPACER_QUEUE_CHOICE = env(
         'SPACER_QUEUE_CHOICE', default='vision_backend.queues.LocalQueue')
 
@@ -501,21 +509,21 @@ else:
 # used depending on the specs of the requested job.
 if SETTINGS_BASE == Bases.PRODUCTION:
     BATCH_QUEUES = {
-        SpacerJobSpec.MEDIUM: 'production',
+        SpacerJobSpec.MEDIUM: 'production-standard',
         SpacerJobSpec.HIGH: 'production-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
-        SpacerJobSpec.MEDIUM: 'spacer-job',
-        SpacerJobSpec.HIGH: 'spacer-highspec',
+        SpacerJobSpec.MEDIUM: 'spacer-production-standard',
+        SpacerJobSpec.HIGH: 'spacer-production-highspec',
     }
 else:
     BATCH_QUEUES = {
-        SpacerJobSpec.MEDIUM: 'staging',
+        SpacerJobSpec.MEDIUM: 'staging-standard',
         SpacerJobSpec.HIGH: 'staging-highspec',
     }
     BATCH_JOB_DEFINITIONS = {
-        SpacerJobSpec.MEDIUM: 'spacer-job-staging',
-        SpacerJobSpec.HIGH: 'spacer-highspec-staging',
+        SpacerJobSpec.MEDIUM: 'spacer-staging-standard',
+        SpacerJobSpec.HIGH: 'spacer-staging-highspec',
     }
 
 # How the spec level's decided for individual job types.
@@ -542,8 +550,40 @@ AWS_BATCH_REGION = env('AWS_BATCH_REGION', default='us-west-2')
 
 # [django-storages settings]
 # http://django-storages.readthedocs.io/en/latest/backends/amazon-S3.html
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+
+# The preferred way (for security) to authenticate to AWS is to use STS
+# to automatically get temporary access keys.
+# For production, this can be done by operating from an EC2
+# instance that's in a VPC that can access the AWS resources.
+# For development, this can be done with IAM Roles Anywhere.
+
+if SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
+
+    # Profiles shouldn't be needed for the way production would
+    # authenticate.
+    AWS_S3_SESSION_PROFILE = None
+
+    # Statically defined credentials aren't recommended for
+    # security:
+    # https://docs.aws.amazon.com/IAM/latest/UserGuide/security-creds-programmatic-access.html#security-creds-alternatives-to-long-term-access-keys
+    # So we don't allow them for production.
+    AWS_ACCESS_KEY_ID = None
+    AWS_SECRET_ACCESS_KEY = None
+    AWS_SESSION_TOKEN = None
+
+else:
+
+    # IAM Roles Anywhere will likely involve specifying a profile name.
+    # It only doesn't need to be specified if the profile configured for
+    # Roles Anywhere is named 'default'.
+    AWS_S3_SESSION_PROFILE = env('AWS_PROFILE_NAME', default=None)
+
+    # Setting up IAM Roles Anywhere can be tricky, so we allow (but still
+    # discourage) static credentials for dev.
+    AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default=None)
+    AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default=None)
+    AWS_SESSION_TOKEN = env('AWS_SESSION_TOKEN', default=None)
+
 AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
     # Disables using threads for S3 requests, preventing errors such as
     # `RuntimeError: cannot schedule new futures after interpreter shutdown`
@@ -559,6 +599,8 @@ AWS_S3_TRANSFER_CONFIG = boto3.s3.transfer.TransferConfig(
 # [PySpacer settings]
 SPACER['AWS_ACCESS_KEY_ID'] = AWS_ACCESS_KEY_ID
 SPACER['AWS_SECRET_ACCESS_KEY'] = AWS_SECRET_ACCESS_KEY
+SPACER['AWS_SESSION_TOKEN'] = AWS_SESSION_TOKEN
+SPACER['AWS_PROFILE_NAME'] = AWS_S3_SESSION_PROFILE
 
 # [CoralNet setting]
 # Name of the CoralNet regtests S3 bucket.
@@ -718,14 +760,9 @@ if (
     SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
     and
     STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
-    and
-    not _TESTING
 ):
-    # We only raise this in non-test environments, because some tests
-    # are able to use mocks to test BatchQueue while sticking with
-    # local storage.
     raise ImproperlyConfigured(
-        "Can not use Remote queue with local storage."
+        "Can not use remote queue with local storage."
         " Please use S3 storage."
     )
 
@@ -931,8 +968,13 @@ DJANGO_HUEY = {
 
 # [CoralNet settings]
 # Whether to periodically run CoralNet-managed (not huey-registered)
-# periodic jobs. Can be useful to disable for certain tests.
-ENABLE_PERIODIC_JOBS = True
+# periodic jobs.
+# Generally should be True when running a server.
+# Generally should be False when running unit tests, so they can:
+# - Use run_scheduled_jobs_until_empty() without infinite looping.
+# - Run jobs like collect_spacer_jobs only when explicitly desired.
+# Individual tests can override the value if they want.
+ENABLE_PERIODIC_JOBS = not _TESTING
 # Days until we purge old async jobs.
 JOB_MAX_DAYS = 30
 # Page size when listing async jobs.

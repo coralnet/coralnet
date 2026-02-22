@@ -1,7 +1,7 @@
+from spacer.data_classes import DataLocation
 from spacer.messages import (
     ClassifyImageMsg,
     ClassifyReturnMsg,
-    DataLocation,
     JobMsg,
     JobReturnMsg,
 )

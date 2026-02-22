@@ -365,7 +365,6 @@ class AnnotationStatusTest(BaseDeleteTest):
         self.assert_confirmation_message(count=2)
 
 
-@override_settings(ENABLE_PERIODIC_JOBS=False)
 class ClassifyAfterDeleteTest(BaseDeleteTest, TaskTestMixin):
     """
     Should machine-classify the images after annotation deletion,

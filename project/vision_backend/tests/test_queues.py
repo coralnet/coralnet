@@ -3,7 +3,8 @@ import json
 from unittest import mock
 
 from django.test.utils import override_settings
-from spacer.messages import DataLocation, JobMsg
+from spacer.data_classes import DataLocation
+from spacer.messages import JobMsg
 from spacer.tasks import process_job
 
 from api_core.models import ApiJob, ApiJobUnit
@@ -16,12 +17,6 @@ from vision_backend_api.tests.utils import DeployBaseTest
 from ..models import BatchJob, Classifier
 from ..queues import get_queue_class
 from .tasks.utils import BaseTaskTest
-
-
-def local_queue_decorator(func):
-    deco = override_settings(
-        SPACER_QUEUE_CHOICE='vision_backend.queues.LocalQueue')
-    return deco(func)
 
 
 def batch_queue_decorator(func):
@@ -173,7 +168,6 @@ class QueueBasicTest(BaseTaskTest):
             'collect_spacer_jobs', "Jobs checked/collected: 0")
 
 
-@local_queue_decorator
 class LocalQueueBasicTest(QueueBasicTest):
 
     def test_no_jobs(self):
@@ -310,7 +304,6 @@ class QueueClassificationTest(DeployBaseTest, JobUtilsMixin):
         self.assertEqual(api_jobs[1].status, ApiJob.DONE)
 
 
-@local_queue_decorator
 class LocalQueueClassificationTest(QueueClassificationTest):
 
     def test_collect_classification(self):

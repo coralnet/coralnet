@@ -30,10 +30,11 @@ django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+cor
 
 # Python Imaging Library
 # (A currently active, package friendly fork of the old PIL; endorsed by Django)
+# We match whatever version of numpy pyspacer uses for development, for optimal
+# consistency.
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-# Compat: Python 3.9-3.13, and matches pyspacer dev requirements as of
-# pyspacer 0.12.0
-Pillow==11.0.0
+# Compat: Python 3.10-3.14
+Pillow==12.1.1
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
@@ -197,7 +198,7 @@ django-markdownx>=4.0.7,<4.1
 # consistency.
 # Changelog: https://numpy.org/devdocs/release.html
 # Compat: Python 3.10-3.13
-numpy==2.1.3
+numpy==2.2.6
 
 # Plotting; used in management commands.
 # Changelog: https://github.com/matplotlib/matplotlib/releases
@@ -207,5 +208,5 @@ matplotlib==3.10.0
 # Machine-learning backend behind coralnet
 # This can be installed from a local directory (not just PyPI), as long as
 # the local copy's setup.py matches this version number.
-# Compat: Python 3.10-3.12, numpy 1.22-2.1.x
-pyspacer==0.12.0
+# Compat: Python 3.10-3.12, numpy 1.25-2.3.x
+pyspacer==0.13.0
