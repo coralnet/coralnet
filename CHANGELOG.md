@@ -8,6 +8,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.25 (WIP)
+
+- New migrations to run: accounts 0013, annotations 0036-0037, api_core 0014, blog 0005, calcification 0005, errorlogs 0002, events 0005, images 0052-0054, jobs 0020, labels 0006-0007, newsfeed 0003, sources 0011-0012, vision_backend 0028-0030
+  - The longest ones to run in production are the ones that involve updating foreign-key columns in the Score table (the biggest table): images 0053-0054, labels 0007, and sources 0012.
+
 ## [1.24](https://github.com/coralnet/coralnet/tree/1.24)
 
 Production: 2026-02-22
