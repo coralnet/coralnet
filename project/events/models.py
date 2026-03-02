@@ -24,13 +24,13 @@ class Event(models.Model):
     # usernames instead of user IDs).
 
     # User who did ("created") the action, if applicable.
-    creator_id = models.IntegerField(null=True, blank=True)
+    creator_id = models.BigIntegerField(null=True, blank=True)
     # Source this event pertains to, if any.
-    source_id = models.IntegerField(null=True, blank=True)
+    source_id = models.BigIntegerField(null=True, blank=True)
     # Image this event pertains to, if any.
-    image_id = models.IntegerField(null=True, blank=True)
+    image_id = models.BigIntegerField(null=True, blank=True)
     # Classifier this event pertains to, if any.
-    classifier_id = models.IntegerField(null=True, blank=True)
+    classifier_id = models.BigIntegerField(null=True, blank=True)
 
     date = models.DateTimeField(auto_now_add=True, editable=False)
 
