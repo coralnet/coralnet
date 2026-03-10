@@ -781,7 +781,7 @@ class ExportPrepView(SourceCsvExportPrepView):
         )
 
         score_set_values = (
-            Score.objects.filter(point__image=image)
+            Score.objects.filter(image=image)
             .order_by('point', '-score')
             .values('point', 'score', 'label')
         )
