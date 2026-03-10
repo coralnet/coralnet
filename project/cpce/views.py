@@ -412,7 +412,7 @@ class ExportPrepView(View):
             'annotation__user',
         )
 
-        score_set_values = Score.objects.filter(point__image=image).values(
+        score_set_values = Score.objects.filter(image=image).values(
             'point',
             'score',
         )
