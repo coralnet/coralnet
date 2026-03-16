@@ -10,8 +10,11 @@ For info about the semantic versioning used here, see `docs/versions.rst`.
 
 ## 1.25 (WIP)
 
-- New migrations to run: accounts 0013, annotations 0036-0037, api_core 0014, blog 0005, calcification 0005, errorlogs 0002, events 0005, images 0052-0054, jobs 0020, labels 0006-0007, newsfeed 0003, sources 0011-0012, vision_backend 0028-0030
+- New migrations to run, mainly converting ID fields from 4 bytes to 8 bytes: accounts 0013, annotations 0036-0037, api_core 0014, blog 0005, calcification 0005, errorlogs 0002, events 0005, images 0052-0054, jobs 0020, labels 0006-0007, newsfeed 0003, sources 0011-0012, vision_backend 0028-0030
+
   - The longest ones to run in production are the ones that involve updating foreign-key columns in the Score table (the biggest table): images 0053-0054, labels 0007, and sources 0012.
+
+  - These ID changes involve dropping and re-creating foreign key constraints pointing to the IDs. Thus, dangling foreign keys (i.e. referencing a deleted object) will make any of these migrations fail, requiring the migration to start over from the beginning. So, check for dangling FKs before migrating. The .py files for the longest migrations listed above each have comments on how to detect relevant dangling FKs and deal with them.
 
 ## [1.24](https://github.com/coralnet/coralnet/tree/1.24)
 

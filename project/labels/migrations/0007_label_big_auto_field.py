@@ -4,15 +4,30 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    """
+    Label has FK references in large tables in production, so here we give
+    Label its own BigAutoField migration to isolate its migration-runtime
+    concerns.
+
+    Dangling foreign keys (i.e. referencing a deleted object) will make this
+    migration fail, requiring the migration to start over from the beginning.
+    So, check for dangling FKs before migrating. To do so, you can run
+    these statements in dbshell and ensure they come up with 0 rows:
+
+    select * from annotations_annotation where not exists(select from labels_label where labels_label.id = annotations_annotation.label_id);
+    select * from labels_label as t1 where t1.duplicate_id is not null and not exists(select from labels_label as t2 where t2.id = t1.duplicate_id);
+    select * from labels_locallabel where not exists(select from labels_label where labels_label.id = labels_locallabel.global_label_id);
+    select * from vision_backend_score where not exists(select from labels_label where labels_label.id = vision_backend_score.label_id);
+
+    See images 0053 and 0054 comments for examples of how to get dangling FKs
+    in the ORM in order to deal with them.
+    """
 
     dependencies = [
         ('labels', '0006_easier_big_auto_fields'),
     ]
 
     operations = [
-        # Label has FK references in large tables in production, so it
-        # gets its own BigAutoField migration to isolate its migration-runtime
-        # concerns.
         migrations.AlterField(
             model_name='label',
             name='id',
