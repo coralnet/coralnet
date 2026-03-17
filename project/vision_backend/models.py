@@ -139,9 +139,6 @@ class Score(models.Model):
     Tracks scores for each point in each image. For each point,
     scores for only the top NBR_SCORES_PER_ANNOTATION labels are saved.
     """
-    # Use BigAutoField instead of AutoField to handle IDs over (2**31)-1.
-    id = models.BigAutoField(primary_key=True)
-
     label = models.ForeignKey(Label, on_delete=models.CASCADE)
     point = models.ForeignKey('images.Point', on_delete=models.CASCADE)
     source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)

@@ -39,10 +39,6 @@ class Source(models.Model):
         PRIVATE = 'v'
         PRIVATE_VERBOSE = 'Private'
 
-    # Will change this to a BigAutoField later.
-    id = models.AutoField(primary_key=True)
-
-    # Example: 'Moorea'
     name = models.CharField(max_length=200, unique=True)
 
     VISIBILITY_CHOICES = (
@@ -549,9 +545,6 @@ class SourceInvite(models.Model):
     An invite for a user to join a source.
     Invites will be deleted once they're accepted/declined.
     """
-    # Will change this to a BigAutoField later.
-    id = models.AutoField(primary_key=True)
-
     sender = models.ForeignKey(
         User, on_delete=models.CASCADE,
         related_name='invites_sent', editable=False)
