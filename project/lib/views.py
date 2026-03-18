@@ -7,8 +7,7 @@ from django.urls import reverse
 from django.views.generic import View
 
 from annotations.utils import cacheable_annotation_count
-from images.models import Image
-from images.utils import get_carousel_images
+from images.utils import cacheable_image_count, get_carousel_images
 from map.utils import cacheable_map_sources
 from sources.models import Source
 
@@ -25,7 +24,7 @@ def index(request):
 
     # Gather some stats
     total_sources = Source.objects.all().count()
-    total_images = Image.objects.all().count()
+    total_images = cacheable_image_count.get()
     total_annotations = cacheable_annotation_count.get()
 
     return render(request, 'lib/index.html', {

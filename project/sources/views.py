@@ -15,8 +15,7 @@ from annotations.utils import (
     cacheable_annotation_count,
     source_image_status_counts,
 )
-from images.models import Image
-from images.utils import delete_images
+from images.utils import cacheable_image_count, delete_images
 from jobs.utils import schedule_job
 from lib.decorators import (
     source_permission_required,
@@ -55,7 +54,7 @@ def source_list(request):
 
     # Gather some stats
     total_sources = Source.objects.all().count()
-    total_images = Image.objects.all().count()
+    total_images = cacheable_image_count.get()
     total_annotations = cacheable_annotation_count.get()
 
     return render(request, 'sources/source_list.html', {

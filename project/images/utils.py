@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from accounts.utils import get_alleviate_user
 from annotations.model_utils import AnnotationArea
+from lib.utils import CacheableValue
 from .model_utils import PointGen
 from .models import Image, Metadata, Point
 
@@ -426,3 +427,23 @@ def get_date_and_aux_metadata_table(image):
         values=[c[1] for c in cols],
     )
     return rows
+
+
+# Image counts.
+
+def compute_sitewide_image_count():
+    """
+    Count of total images on the entire site. As of
+    coralnet 1.25, this may take about 2 seconds to run in production.
+    """
+    return Image.objects.all().count()
+
+
+# We don't update this with a periodic job, because it's not too bad
+# to recompute on-demand every so often.
+seconds_in_one_day = 60*60*24
+cacheable_image_count = CacheableValue(
+    cache_key='sitewide_image_count',
+    cache_timeout_interval=seconds_in_one_day,
+    compute_function=compute_sitewide_image_count,
+)

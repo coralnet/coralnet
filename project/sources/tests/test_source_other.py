@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.urls import reverse
 
 from lib.tests.utils import BasePermissionTest, ClientTest
@@ -89,10 +91,16 @@ class SourceListTest(ClientTest):
         # Create sources with names to ensure a certain source list order
         cls.private_source = cls.create_source(
             cls.admin, name="Source 1",
-            visibility=Source.VisibilityTypes.PRIVATE)
+            visibility=Source.VisibilityTypes.PRIVATE,
+            default_point_generation_method=dict(type='simple', points=5))
         cls.public_source = cls.create_source(
             cls.admin, name="Source 2",
-            visibility=Source.VisibilityTypes.PUBLIC)
+            visibility=Source.VisibilityTypes.PUBLIC,
+            default_point_generation_method=dict(type='simple', points=5))
+
+        cls.labels = cls.create_labels(cls.admin, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.admin, cls.private_source, cls.labels)
+        cls.create_labelset(cls.admin, cls.public_source, cls.labels)
 
     def test_anonymous(self):
         response = self.client.get(reverse('source_list'), follow=True)
@@ -176,6 +184,47 @@ class SourceListTest(ClientTest):
             list(response.context['other_public_sources']),
             []
         )
+
+    def test_sitewide_counts(self):
+        # Upload 4 images.
+        images = []
+        for _ in range(2):
+            images.append(self.upload_image(self.admin, self.private_source))
+            images.append(self.upload_image(self.admin, self.public_source))
+        # Annotate 3 of them.
+        self.add_annotations(self.admin, images[0])
+        self.add_annotations(self.admin, images[1])
+        self.add_annotations(self.admin, images[2])
+
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse('source_list'))
+
+        self.assertContains(response, "Number of sources: 2")
+        self.assertContains(response, "Number of images: 4")
+        self.assertContains(response, "Number of point annotations: 15")
+
+    def test_sitewide_count_caching(self):
+
+        self.client.force_login(self.admin)
+        with (
+            mock.patch(
+                'sources.views.cacheable_image_count.compute_function',
+                return_value=10,
+            ) as image_count_mock_obj,
+            mock.patch(
+                'sources.views.cacheable_annotation_count.compute_function',
+                return_value=100,
+            ) as annotation_count_mock_obj,
+        ):
+            self.client.get(reverse('source_list'))
+            # Called once
+            self.assertEqual(image_count_mock_obj.call_count, 1)
+            self.assertEqual(annotation_count_mock_obj.call_count, 1)
+
+            self.client.get(reverse('source_list'))
+            # Not called again
+            self.assertEqual(image_count_mock_obj.call_count, 1)
+            self.assertEqual(annotation_count_mock_obj.call_count, 1)
 
 
 class SourceDetailBoxTest(ClientTest):
