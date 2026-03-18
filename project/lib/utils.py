@@ -71,16 +71,18 @@ class CacheableValue:
         # Function that recomputes the value.
         # Should take no args and return the value.
         compute_function: Callable[[], Any],
+        # This interval (in seconds) determines when the cached value is
+        # invalidated, thus forcing an on-demand computation if that's allowed.
+        # If cache_update_interval is used and is smaller than this interval,
+        # then invalidation won't happen unless the periodic job is having
+        # trouble running on time.
+        cache_timeout_interval: int,
         # Interval (in seconds) defining how often the value should be
         # updated through a periodic job.
         # This is just a bookkeeping field; this class does not actually
         # set up the periodic job. That must be done separately in a
         # tasks.py file (where it can be found by job auto-discovery).
-        cache_update_interval: int,
-        # In case the periodic job is having trouble completing on time,
-        # this interval (in seconds) determines when we'll force an update
-        # of the value on-demand.
-        cache_timeout_interval: int,
+        cache_update_interval: int | None = None,
         # If False, then on a cache miss, get() just returns None instead of
         # attempting to compute, and it's up to the caller to deal with the
         # lack of value accordingly. This should be False when on-demand
@@ -92,9 +94,13 @@ class CacheableValue:
     ):
         self.cache_key = cache_key
         self.compute_function = compute_function
-        self.cache_update_interval = datetime.timedelta(
-            seconds=cache_update_interval)
         self.cache_timeout_interval = cache_timeout_interval
+
+        if cache_update_interval is not None:
+            self.cache_update_interval = datetime.timedelta(
+                seconds=cache_update_interval)
+        else:
+            self.cache_update_interval = None
         self.on_demand_computation_ok = on_demand_computation_ok
         self.use_context_scoped_cache = use_context_scoped_cache
 
