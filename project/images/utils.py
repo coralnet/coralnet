@@ -2,11 +2,12 @@ import datetime
 import random
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from accounts.utils import get_alleviate_user
 from annotations.model_utils import AnnotationArea
 from lib.utils import CacheableValue
+from sources.models import Source
 from .model_utils import PointGen
 from .models import Image, Metadata, Point
 
@@ -446,4 +447,29 @@ cacheable_image_count = CacheableValue(
     cache_key='sitewide_image_count',
     cache_timeout_interval=seconds_in_one_day,
     compute_function=compute_sitewide_image_count,
+)
+
+
+def compute_per_source_image_counts():
+    source_values = (
+        Source.objects.all()
+        .annotate(image_count=Count('image'))
+        .values('pk', 'image_count')
+    )
+    image_counts_dict = {v['pk']: v['image_count'] for v in source_values}
+    return image_counts_dict
+
+
+# We don't update this with a periodic job, because it's not too bad
+# to recompute on-demand every so often (probably).
+#
+# Sometimes the most up-to-date image count for a source is more
+# important, like when viewing a page in the source itself; other
+# times it's not as important, like when viewing all sources on the
+# front page. This cacheable value is appropriate for cases like the
+# latter.
+cacheable_source_image_counts = CacheableValue(
+    cache_key='per_source_image_counts',
+    cache_timeout_interval=seconds_in_one_day,
+    compute_function=compute_per_source_image_counts,
 )

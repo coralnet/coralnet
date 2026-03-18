@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest import mock
 import urllib.parse
 
 from bs4 import BeautifulSoup
@@ -181,6 +182,7 @@ class LabelMainTest(BaseLabelMainTest):
         verified_html = 'Verified: Yes {}'.format(status_icon_html)
         self.assertInHTML(verified_html, response.content.decode())
 
+    @override_settings(LABEL_DETAIL_SOURCE_SIZE_THRESHOLD=3)
     def test_usage_info(self):
         labels = self.create_labels(self.user, ['A', 'B'], "Group1")
         label_a = labels.get(name='A')
@@ -199,11 +201,30 @@ class LabelMainTest(BaseLabelMainTest):
             {1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A'})
         self.add_annotations(self.user, img, {1: 'A'})
 
+        # Public
         # No annotation, but has A in the labelset
         user2_public_s = self.create_source(
             user_2, visibility=Source.VisibilityTypes.PUBLIC,
             name="User 2's public source")
         self.create_labelset(user_2, user2_public_s, labels)
+
+        # Private, 3 or more images
+        # A in the labelset
+        user2_private_big_s = self.create_source(
+            user_2, visibility=Source.VisibilityTypes.PRIVATE,
+            name="User 2's bigger private source")
+        self.create_labelset(user_2, user2_private_big_s, labels)
+        for _ in range(3):
+            self.upload_image(user_2, user2_private_big_s)
+
+        # Private, 2 or fewer images
+        # A in the labelset
+        user2_private_small_s = self.create_source(
+            user_2, visibility=Source.VisibilityTypes.PRIVATE,
+            name="User 2's smaller private source")
+        self.create_labelset(user_2, user2_private_small_s, labels)
+        for _ in range(2):
+            self.upload_image(user_2, user2_private_small_s)
 
         # Doesn't have A in the labelset
         user_other_s = self.create_source(
@@ -218,23 +239,26 @@ class LabelMainTest(BaseLabelMainTest):
         response = self.get_label_main()
 
         # Usage stats.
+        # Does include the smaller private source that's not listed.
         self.assertInHTML(
-            'Stats: Used in 2 sources and for 1 annotations',
+            'Stats: Used in 4 sources and for 1 annotations',
             response.content.decode())
 
         # Sources using the label.
         # Viewer's private sources first, with strong links.
         # Then other public sources, with links.
-        # (Then other private sources, without links... but these need to have
-        # at least 100 images to be listed, so we won't bother testing that
-        # here unless we make that threshold flexible.)
+        # Then other private sources over LABEL_DETAIL_SOURCE_SIZE_THRESHOLD
+        # images, without links.
         self.assertInHTML(
             '<a href="{}"><strong>{}</strong></a> |'
-            ' <a href="{}">{}</a> |'.format(
+            ' <a href="{}">{}</a> |'
+            ' {} |'.format(
                 reverse('source_main', args=[user_private_s.pk]),
                 html_escape("User's private source"),
                 reverse('source_main', args=[user2_public_s.pk]),
-                html_escape("User 2's public source")),
+                html_escape("User 2's public source"),
+                html_escape("User 2's bigger private source"),
+            ),
             response.content.decode())
 
         # Popularity.
@@ -246,7 +270,7 @@ class LabelMainTest(BaseLabelMainTest):
                 popularity_str, popularity_bar_html),
             response.content.decode())
 
-    def test_cache(self):
+    def test_label_stats_caching(self):
         """
         Load page when cache entry is absent:
         Should show default stats (and not crash).
@@ -298,6 +322,28 @@ class LabelMainTest(BaseLabelMainTest):
         self.assertIn(
             "Popularity:\n  17%",
             str(basic_info_soup))
+
+    def test_big_enough_sources_caching(self):
+        """
+        Test caching of the info saying how many images each source has.
+        That shouldn't have to be re-counted on every page visit.
+        """
+        self.create_labels(self.user, ['A', 'B'], "Group1")
+
+        self.client.force_login(self.user)
+        with (
+            mock.patch(
+                'labels.views.cacheable_source_image_counts.compute_function',
+                return_value=dict(),
+            ) as compute_mock_obj,
+        ):
+            self.get_label_main()
+            # Called once
+            self.assertEqual(compute_mock_obj.call_count, 1)
+
+            self.get_label_main()
+            # Not called again
+            self.assertEqual(compute_mock_obj.call_count, 1)
 
 
 @override_settings(LABEL_EXAMPLE_PATCHES_PER_PAGE=5)
