@@ -7,7 +7,6 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -17,6 +16,7 @@ from django.views import View
 import pyexcel
 
 from annotations.model_utils import ImageAnnoStatuses
+from images.model_utils import PointGen
 from lib.decorators import (
     login_required_ajax,
     source_labelset_required,
@@ -287,10 +287,11 @@ class ImageStatsExportPrepView(SourceCsvExportPrepView, ABC):
         image_set = image_set.exclude(
             annoinfo__status=ImageAnnoStatuses.UNCLASSIFIED.value)
 
+        image_set = image_set.select_related(
+            'annoinfo', 'features', 'metadata')
+
         # One row per image
-        for image in image_set \
-                .select_related('annoinfo', 'features', 'metadata') \
-                .annotate(num_points=Count('point')):
+        for image in image_set:
 
             num_annotated_images += 1
 
@@ -310,11 +311,14 @@ class ImageStatsExportPrepView(SourceCsvExportPrepView, ABC):
             label_counter.update(annotation_labels)
             num_annotations_in_image = len(annotation_labels)
 
+            point_count = PointGen.from_db_value(
+                image.point_generation_method).total_points
+
             row = {
                 "Image ID": image.pk,
                 "Image name": image.metadata.name,
                 "Annotation status": image.annoinfo.status_display,
-                "Points": image.num_points,
+                "Points": point_count,
             }
             row = self.image_loop_main_body(
                 row, label_counter, num_annotations_in_image)
