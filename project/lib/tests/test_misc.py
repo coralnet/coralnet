@@ -1,6 +1,6 @@
 # Lib tests and non-app-specific tests.
 from email.utils import parseaddr
-from unittest import skip, skipIf
+from unittest import mock, skip, skipIf
 
 from django.conf import settings
 from django.core.mail import mail_admins
@@ -104,15 +104,24 @@ class IndexTest(ClientTest):
     """
     Test the site index page.
     """
-    def test_load_with_carousel(self):
-        user = self.create_user()
-        source = self.create_source(user)
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
 
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=5))
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+    def test_load_with_carousel(self):
         # Upload 4 images.
         for _ in range(4):
-            self.upload_image(user, source)
+            self.upload_image(self.user, self.source)
         # Get the IDs of the uploaded images.
-        uploaded_image_ids = list(source.image_set.values_list('pk', flat=True))
+        uploaded_image_ids = list(
+            self.source.image_set.values_list('pk', flat=True))
 
         # Override carousel settings.
         with self.settings(
@@ -121,6 +130,46 @@ class IndexTest(ClientTest):
             # Check for correct carousel image count.
             self.assertEqual(
                 len(list(response.context['carousel_images'])), 3)
+
+    def test_sitewide_counts(self):
+
+        # Upload 4 images.
+        images = []
+        for _ in range(4):
+            images.append(self.upload_image(self.user, self.source))
+        # Annotate 3 of them.
+        self.add_annotations(self.user, images[0])
+        self.add_annotations(self.user, images[1])
+        self.add_annotations(self.user, images[2])
+        # Create a 2nd source.
+        self.create_source(self.user)
+
+        response = self.client.get(reverse('index'))
+        self.assertContains(response, "Number of sources: 2")
+        self.assertContains(response, "Number of images: 4")
+        self.assertContains(response, "Number of point annotations: 15")
+
+    def test_sitewide_count_caching(self):
+
+        with (
+            mock.patch(
+                'lib.views.cacheable_image_count.compute_function',
+                return_value=10,
+            ) as image_count_mock_obj,
+            mock.patch(
+                'lib.views.cacheable_annotation_count.compute_function',
+                return_value=100,
+            ) as annotation_count_mock_obj,
+        ):
+            self.client.get(reverse('index'))
+            # Called once
+            self.assertEqual(image_count_mock_obj.call_count, 1)
+            self.assertEqual(annotation_count_mock_obj.call_count, 1)
+
+            self.client.get(reverse('index'))
+            # Not called again
+            self.assertEqual(image_count_mock_obj.call_count, 1)
+            self.assertEqual(annotation_count_mock_obj.call_count, 1)
 
 
 class GoogleAnalyticsTest(ClientTest):

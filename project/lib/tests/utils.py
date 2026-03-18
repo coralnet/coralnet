@@ -794,6 +794,12 @@ def spy_decorator(method_to_decorate):
     A way to track calls to a class's instance method, across all instances
     of the class. From:
     https://stackoverflow.com/a/41599695
+
+    Usage:
+    spied_method = spy_decorator(SomeClass.some_method)
+    with mock.patch.object(SomeClass, 'some_method', spied_method):
+        ...
+    self.assertEqual(spied_method.mock_obj.call_count, 3)
     """
     mock_obj = mock.MagicMock()
     def wrapper(self, *args, **kwargs):

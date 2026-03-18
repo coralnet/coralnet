@@ -1423,6 +1423,11 @@ BROWSE_PATCHES_RESULT_LIMIT = 20000
 MAP_IMAGE_COUNT_TIERS = env.list(
     'MAP_IMAGE_COUNT_TIERS', cast=int, default=[100, 500, 1500])
 
+# Image count required for private sources to appear under "Used in these
+# sources" on label-detail pages.
+LABEL_DETAIL_SOURCE_SIZE_THRESHOLD = env.int(
+    'LABEL_DETAIL_SOURCE_SIZE_THRESHOLD', default=100)
+
 GOOGLE_ANALYTICS_CODE = env('GOOGLE_ANALYTICS_CODE', default='')
 
 # Whether to disable tqdm output and processing or not. tqdm might be used

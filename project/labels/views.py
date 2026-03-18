@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core import serializers
 from django.core.paginator import Paginator, EmptyPage, InvalidPage
-from django.db.models import Count, F
+from django.db.models import F
 from django.forms import modelformset_factory
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
@@ -14,6 +14,7 @@ from django.views.decorators.http import require_POST, require_GET
 from annotations.models import Annotation
 from annotations.utils import label_ids_with_confirmed_annotations_in_source
 from calcification.utils import get_default_calcify_tables
+from images.utils import cacheable_source_image_counts
 from jobs.utils import schedule_job
 from lib.decorators import (
     login_required_ajax, source_permission_required,
@@ -403,8 +404,12 @@ def label_main(request, label_id):
     # Exclude test sources.
     other_private = filter_out_test_sources(other_private)
     # Exclude small sources.
-    other_private = other_private.annotate(image_count=Count('image'))
-    other_private = other_private.exclude(image_count__lt=100)
+    per_source_image_counts = cacheable_source_image_counts.get()
+    other_private = [
+        source for source in other_private
+        if per_source_image_counts.get(source.pk, 0)
+            >= settings.LABEL_DETAIL_SOURCE_SIZE_THRESHOLD
+    ]
 
     # Create a dict of the rates from each region, if available for this label.
     # If this label doesn't have rates defined in any region, then this is an
