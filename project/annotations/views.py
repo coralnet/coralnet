@@ -26,8 +26,8 @@ from images.utils import (
     generate_points,
     get_date_and_aux_metadata_table,
     get_image_order_placement,
-    get_next_image,
-    get_prev_image,
+    get_next_object,
+    get_prev_object,
 )
 from lib.decorators import (
     image_annotation_area_must_be_editable,
@@ -243,8 +243,8 @@ def annotation_tool(request, image_id):
         }
 
     # Get the next and previous images in the image set.
-    prev_image = get_prev_image(image, image_set, wrap=True)
-    next_image = get_next_image(image, image_set, wrap=True)
+    prev_image = get_prev_object(image, image_set, wrap=True)
+    next_image = get_next_object(image, image_set, wrap=True)
     # Get the image's ordered placement in the image set, e.g. 5th.
     image_set_order_placement = get_image_order_placement(image, image_set)
 
