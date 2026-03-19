@@ -2,7 +2,8 @@ import datetime
 import random
 
 from django.conf import settings
-from django.db.models import Count, Q
+from django.db.models import Count, Expression, F, OrderBy, Q, Value
+from django.db.models.lookups import Exact, GreaterThan, IsNull, LessThan
 
 from accounts.utils import get_alleviate_user
 from annotations.model_utils import AnnotationArea
@@ -29,43 +30,59 @@ def find_dupe_image(source, image_name):
         return metadata.image
 
 
-def _get_next_images_queryset(current_image, image_queryset):
+def _get_next_objects_queryset(current_object, queryset):
     """
-    Get the images that are ordered after current_image, based on the
+    Get the object that are ordered after current_object, based on the
     queryset's ordering.
     """
+    queryset_model_class = queryset.model
+    assert isinstance(
+        current_object, queryset_model_class), "Don't mix and match models"
+
     # Start this Q object out as 'always False' because we want to make this
     # the starting value of an 'OR' reduce chain.
-    # From: https://stackoverflow.com/questions/35893867/
-    filter_q = Q(pk__in=[])
+    filter_q = Q(Value(False))
     # Start this Q object out as 'always True' because we want to make this
     # the starting value of an 'AND' reduce chain.
-    # From: https://stackoverflow.com/questions/33517468/
-    previous_keys_equal_q = ~Q(pk__in=[])
+    previous_args_equal_q = Q(Value(True))
 
     # query.order_by example: ['metadata__name', 'pk']
     #
     # The query we want gets more complicated depending on the number of
-    # order_by keys:
-    # 1 key: key1 greater
-    # 2 keys: key1 greater OR (key1 equal AND key2 greater)
-    # 3 keys: key1 greater OR (key1 equal AND key2 greater)
-    #   OR (key1 equal AND key2 equal AND key3 greater)
+    # order_by args:
+    # 1 arg: arg1 greater
+    # 2 args: arg1 greater OR (arg1 equal AND arg2 greater)
+    # 3 args: arg1 greater OR (arg1 equal AND arg2 greater)
+    #   OR (arg1 equal AND arg2 equal AND arg3 greater)
     # Etc.
-    for ordering_key in image_queryset.query.order_by:
+    for ordering_arg in queryset.query.order_by:
 
-        descending = ordering_key.startswith('-')
-        if not image_queryset.query.standard_ordering:
+        if isinstance(ordering_arg, Expression):
+            if isinstance(ordering_arg, OrderBy):
+                # OrderBy Expression
+                descending = ordering_arg.descending
+                ordering_expr = ordering_arg.expression
+            else:
+                # Other Expression
+                descending = False
+                ordering_expr = ordering_arg
+        else:
+            # str
+            descending = ordering_arg.startswith('-')
+            ordering_field = ordering_arg.lstrip('-')
+            # Convert to Expression
+            ordering_expr = F(ordering_field)
+
+        if not queryset.query.standard_ordering:
             # The queryset's reverse() method was called.
             descending = not descending
 
-        field_name = ordering_key.lstrip('-')
+        current_object_ordering_value = (
+            queryset_model_class.objects.filter(pk=current_object.pk)
+            .values_list(ordering_expr, flat=True)[0]
+        )
 
-        current_image_ordering_value = \
-            Image.objects.filter(pk=current_image.pk) \
-            .values_list(field_name, flat=True)[0]
-
-        if current_image_ordering_value is None:
+        if current_object_ordering_value is None:
             # Nullable fields have a complication: we can't specify
             # `...__gt=None` as a filter kwarg. That gets
             # `ValueError: Cannot use None as a query value`.
@@ -74,68 +91,73 @@ def _get_next_images_queryset(current_image, image_queryset):
             # values, and 'less than None' means all non-None values.
             if descending:
                 # 'less than None' (all non-None values)
-                current_key_after_q = Q(**{field_name + '__isnull': False})
+                current_arg_after_q = Q(IsNull(ordering_expr, False))
             else:
                 # 'greater than None' (always False)
-                current_key_after_q = Q(pk__in=[])
+                current_arg_after_q = Q(Value(False))
+
+            current_arg_equal_q = Q(IsNull(ordering_expr, True))
         else:
             if descending:
                 # 'less than current value'
-                current_key_after_q = Q(**{
-                    field_name + '__lt': current_image_ordering_value})
+                current_arg_after_q = Q(
+                    LessThan(ordering_expr, current_object_ordering_value))
             else:
                 # 'greater than current value' (greater value or None)
-                current_key_after_q = (
-                    Q(**{field_name + '__gt': current_image_ordering_value})
+                current_arg_after_q = (
+                    Q(GreaterThan(ordering_expr, current_object_ordering_value))
                     |
-                    Q(**{field_name + '__isnull': True}))
+                    Q(IsNull(ordering_expr, True)))
 
-        filter_q = filter_q | (previous_keys_equal_q & current_key_after_q)
+            current_arg_equal_q = Q(
+                Exact(ordering_expr, current_object_ordering_value))
 
-        previous_keys_equal_q = previous_keys_equal_q & Q(
-            **{field_name: current_image_ordering_value})
+        filter_q = filter_q | (previous_args_equal_q & current_arg_after_q)
 
-    return image_queryset.filter(filter_q)
+        previous_args_equal_q = previous_args_equal_q & current_arg_equal_q
+
+    return queryset.filter(filter_q)
 
 
-def get_next_image(current_image, image_queryset, wrap=False):
+def get_next_object(current_object, queryset, wrap=False):
     """
-    Get the next image in the image_queryset, relative to current_image.
-    image_queryset should already be ordered, with an unambiguous ordering
+    Get the next object in the queryset, relative to current_object.
+    queryset should already be ordered, with an unambiguous ordering
     (no ties).
 
     If wrap is True, then the definition of 'next' is extended to allow
-    wrapping from the last image to the first.
+    wrapping from the last object to the first.
 
-    If there is no next image, return None.
+    If there is no next object, return None.
     """
-    if image_queryset.count() <= 1:
-        return None
+    next_objects = _get_next_objects_queryset(current_object, queryset)
 
-    next_images = _get_next_images_queryset(current_image, image_queryset)
-
-    if next_images.exists():
-        return next_images[0]
+    if next_objects.exists():
+        return next_objects[0]
     elif wrap:
-        # No matching images after this image,
-        # so we wrap around to the first image.
-        return image_queryset[0]
+        # No matching objects after this object, so we wrap around
+        # to the first object. Assuming we're not AT the first object.
+        first_object = queryset[0]
+        if first_object.pk == current_object.pk:
+            return None
+        else:
+            return first_object
     else:
-        # No matching images after this image, and we're not allowed to wrap.
+        # No matching objects after this object, and we're not allowed to wrap.
         return None
 
 
-def get_prev_image(current_image, image_queryset, wrap=False):
+def get_prev_object(current_object, queryset, wrap=False):
     """
-    Get the previous image in the image_queryset, relative to current_image.
+    Get the previous object in the queryset, relative to current_object.
     """
-    # Finding the previous image is equivalent to
-    # finding the next image in the reverse queryset.
-    return get_next_image(current_image, image_queryset.reverse(), wrap)
+    # Finding the previous object is equivalent to
+    # finding the next object in the reverse queryset.
+    return get_next_object(current_object, queryset.reverse(), wrap)
 
 
 def get_image_order_placement(current_image, image_queryset):
-    prev_images = _get_next_images_queryset(
+    prev_images = _get_next_objects_queryset(
         current_image, image_queryset.reverse())
 
     # e.g. if there's 4 images that are ordered before the current image,

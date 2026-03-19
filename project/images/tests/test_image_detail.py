@@ -6,8 +6,9 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 
 from annotations.model_utils import AnnotationArea
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, ClientTest, scrambled_run
 from ..model_utils import PointGen
+from ..models import Image
 
 
 class PermissionTest(BasePermissionTest):
@@ -78,35 +79,43 @@ class ImageDetailTest(ClientTest):
         self.assertStatusOK(response)
 
     def test_prev_next_links(self):
-        img1 = self.upload_image(
-            self.user, self.source, image_options=dict(filename='1.png'))
-        img2 = self.upload_image(
-            self.user, self.source, image_options=dict(filename='2.png'))
-        img3 = self.upload_image(
-            self.user, self.source, image_options=dict(filename='3.png'))
+        def f1(*_args):
+            return self.upload_image(
+                self.user, self.source, image_options=dict(filename='1.png'))
+        def f2(*_args):
+            return self.upload_image(
+                self.user, self.source, image_options=dict(filename='2.png'))
+        def f3(*_args):
+            return self.upload_image(
+                self.user, self.source, image_options=dict(filename='3.png'))
+        # Ensure order by name and order by pk would be different permutations.
+        scrambled_run([f1, f2, f3])
+        pk1 = Image.objects.get(metadata__name='1.png').pk
+        pk2 = Image.objects.get(metadata__name='2.png').pk
+        pk3 = Image.objects.get(metadata__name='3.png').pk
 
         self.client.force_login(self.user)
 
         # Prev/next follows alphabetical order by name. So order is 1 > 2 > 3.
 
-        response = self.client.get(reverse('image_detail', args=[img1.pk]))
+        response = self.client.get(reverse('image_detail', args=[pk1]))
         self.assertInHTML(
             '| <a href="{}" title="2.png"> Next &gt;</a>'.format(
-                reverse('image_detail', args=[img2.pk])),
+                reverse('image_detail', args=[pk2])),
             response.content.decode())
 
-        response = self.client.get(reverse('image_detail', args=[img2.pk]))
+        response = self.client.get(reverse('image_detail', args=[pk2]))
         self.assertInHTML(
             '<a href="{}" title="1.png"> &lt; Previous</a>'
             ' | <a href="{}" title="3.png"> Next &gt;</a>'.format(
-                reverse('image_detail', args=[img1.pk]),
-                reverse('image_detail', args=[img3.pk])),
+                reverse('image_detail', args=[pk1]),
+                reverse('image_detail', args=[pk3])),
             response.content.decode())
 
-        response = self.client.get(reverse('image_detail', args=[img3.pk]))
+        response = self.client.get(reverse('image_detail', args=[pk3]))
         self.assertInHTML(
             '<a href="{}" title="2.png"> &lt; Previous</a>'.format(
-                reverse('image_detail', args=[img2.pk])),
+                reverse('image_detail', args=[pk2])),
             response.content.decode())
 
     def test_point_gen_method_text(self):

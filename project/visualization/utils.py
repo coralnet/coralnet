@@ -7,8 +7,9 @@ from PIL import Image as PILImage
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
-from django.db.models import Q
+from django.db.models import Expression, Q
 import django.db.models.fields as model_fields
+from django.db.models.functions import Lower
 
 from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
 from images.models import Metadata
@@ -105,20 +106,31 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     elif sort_method == 'last_annotation_date':
         sort_fields = ['annoinfo__last_annotation__annotation_date', 'pk']
     elif sort_method == 'name':
-        # metadata__name is guaranteed unique for each image, so pk as a
-        # secondary isn't needed.
-        sort_fields = ['metadata__name']
+        # Lower('metadata__name') is guaranteed unique for each image, so pk as
+        # a secondary isn't needed.
+        # By matching the unique constraint and associated index, this should
+        # get good performance.
+        sort_fields = [Lower('metadata__name')]
     else:
         # 'upload_date'
         sort_fields = ['pk']
 
-    if sort_direction == 'asc':
-        sort_keys = sort_fields
-    else:
-        # 'desc'
-        sort_keys = ['-'+field for field in sort_fields]
+    sort_args = []
+    for field in sort_fields:
+        if isinstance(field, Expression):
+            if sort_direction == 'asc':
+                arg = field.asc()
+            else:
+                arg = field.desc()
+        else:
+            # str
+            if sort_direction == 'asc':
+                arg = field
+            else:
+                arg = '-' + field
+        sort_args.append(arg)
 
-    image_results = image_results.order_by(*sort_keys)
+    image_results = image_results.order_by(*sort_args)
 
     return image_results
 

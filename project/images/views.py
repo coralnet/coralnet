@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models.functions import Lower
 from django.http import HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
@@ -57,16 +58,17 @@ def image_detail(request, image_id):
         thumbnail_dimensions = False
 
     # Next and previous image links.
-    # Ensure the ordering is unambiguous.
-    source_images = source.image_set.order_by('metadata__name')
-    next_image = utils.get_next_image(image, source_images, wrap=False)
-    prev_image = utils.get_prev_image(image, source_images, wrap=False)
+    # This ordering should be unambiguous, and should take advantage of
+    # Metadata indexes for performance.
+    source_mds = source.metadata_set.order_by(Lower('name'))
+    next_metadata = utils.get_next_object(metadata, source_mds, wrap=False)
+    prev_metadata = utils.get_prev_object(metadata, source_mds, wrap=False)
 
     return render(request, 'images/image_detail.html', {
         'source': source,
         'image': image,
-        'next_image': next_image,
-        'prev_image': prev_image,
+        'next_image': next_metadata.image if next_metadata else None,
+        'prev_image': prev_metadata.image if prev_metadata else None,
         'metadata': metadata,
         'image_meta_table': utils.get_date_and_aux_metadata_table(image),
         'other_fields': other_fields,
