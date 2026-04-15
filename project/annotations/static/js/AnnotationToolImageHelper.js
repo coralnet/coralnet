@@ -187,7 +187,17 @@ var AnnotationToolImageHelper = (function() {
         }
 
         // Redraw the source image.
-        imageCanvas.getContext("2d").drawImage(currentSourceImage.imgBuffer, 0, 0);
+        // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
+        imageCanvas.getContext("2d").drawImage(
+            currentSourceImage.imgBuffer,
+            // Canvas coordinates at which to place the top-left corner of
+            // the source image.
+            0, 0,
+            // The dimensions to draw the image in the canvas. In some cases,
+            // browsers have problems interpreting the scaling info from
+            // image metadata, so specifying dimensions explicitly here helps.
+            // See https://github.com/coralnet/coralnet/issues/658
+            currentSourceImage.width, currentSourceImage.height);
 
         // If processing parameters are neutral values, then we just need
         // the original image, so we're done.
