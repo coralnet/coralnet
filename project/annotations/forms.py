@@ -15,12 +15,17 @@ from django.forms.fields import (
 )
 from django.forms.models import ModelForm
 from django.forms.widgets import (
-    CheckboxSelectMultiple, HiddenInput, NumberInput, RadioSelect, TextInput)
+    CheckboxSelectMultiple,
+    HiddenInput,
+    NumberInput,
+    RadioSelect,
+    TextInput,
+)
 
 from accounts.utils import is_robot_user
 from images.models import Metadata, Point
 from labels.models import LocalLabel
-from lib.forms import EnhancedMultiWidget
+from lib.forms import EnhancedMultiWidget, RowsFormRenderer
 from visualization.forms import ResultCountForm
 from .model_utils import AnnotationArea
 from .models import Annotation, AnnotationToolSettings
@@ -117,9 +122,26 @@ class AnnotationToolSettingsForm(ModelForm):
             field.widget.attrs.update({'class': 'jscolor'})
 
 
+class SliderInput(NumberInput):
+    input_type = "range"
+    template_name = "django/forms/widgets/input.html"
+
+
 class AnnotationImageOptionsForm(Form):
+
     brightness = IntegerField(initial=0, min_value=-100, max_value=100)
+    brightness_slider = IntegerField(
+        initial=0, min_value=-100, max_value=100,
+        # This slider will sit right under the corresponding text field, so it
+        # doesn't need a separate label. Instead use a title for accessibility.
+        widget=SliderInput(attrs=dict(title="Brightness")), label="")
+
     contrast = IntegerField(initial=0, min_value=-100, max_value=100)
+    contrast_slider = IntegerField(
+        initial=0, min_value=-100, max_value=100,
+        widget=SliderInput(attrs=dict(title="Contrast")), label="")
+
+    default_renderer = RowsFormRenderer
 
 
 class AnnotationAreaPercentsWidget(EnhancedMultiWidget):

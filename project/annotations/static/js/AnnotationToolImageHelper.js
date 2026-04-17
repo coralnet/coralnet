@@ -6,6 +6,12 @@ class AnnotationToolImageHelper {
     get contrastField() {
         return document.getElementById('id_contrast');
     }
+    get brightnessSlider() {
+        return document.getElementById('id_brightness_slider');
+    }
+    get contrastSlider() {
+        return document.getElementById('id_contrast_slider');
+    }
 
     get MIN_BRIGHTNESS() {
         return Number(this.brightnessField.min);
@@ -36,27 +42,25 @@ class AnnotationToolImageHelper {
 
     constructor(sourceImagesArg) {
 
-        // http://api.jqueryui.com/slider/
-        this.$brightnessSlider = $('#brightness_slider').slider({
-            value: Number(this.brightnessField.value),
-            min: this.MIN_BRIGHTNESS,
-            max: this.MAX_BRIGHTNESS,
-            step: 1,
-            slide: this.onBrightnessSlider.bind(this),
-            // When the slider value is changed, either by the user
-            // directly or a programmatic change, re-draw the source image
-            // and re-apply bri/con operations.
-            change: this.redrawImage.bind(this),
-        });
-        this.$contrastSlider = $('#contrast_slider').slider({
-            value: Number(this.contrastField.value),
-            min: this.MIN_CONTRAST,
-            max: this.MAX_CONTRAST,
-            step: 1,
-            slide: this.onContrastSlider.bind(this),
-            change: this.redrawImage.bind(this),
-        });
+        // Initialize value.
+        this.brightnessSlider.value = this.brightnessField.value;
+        // While the slider is moved by the user, update the text field too.
+        this.brightnessSlider.addEventListener(
+            'input', this.updateBrightnessTextField.bind(this));
+        // When the slider is moved by the user and then released, redraw.
+        this.brightnessSlider.addEventListener(
+            'change', this.redrawImage.bind(this));
 
+        this.contrastSlider.value = this.contrastField.value;
+        this.contrastSlider.addEventListener(
+            'input', this.updateContrastTextField.bind(this));
+        this.contrastSlider.addEventListener(
+            'change', this.redrawImage.bind(this));
+
+        /*
+        When the text fields are updated by the user: check validity of
+        input, update the sliders too, and redraw.
+        */
         this.brightnessField.addEventListener(
             'change', this.onBrightnessText.bind(this));
         this.contrastField.addEventListener(
@@ -68,19 +72,13 @@ class AnnotationToolImageHelper {
         this.sourceImages = sourceImagesArg;
     }
 
-    /*
-    When the slider is moved (by the user), update the text field too.
-    */
-    onBrightnessSlider(event, ui) {
-        this.brightnessField.value = ui.value;
+    updateBrightnessTextField(event) {
+        this.brightnessField.value = event.target.value;
     }
-    onContrastSlider(event, ui) {
-        this.contrastField.value = ui.value;
+    updateContrastTextField(event) {
+        this.contrastField.value = event.target.value;
     }
 
-    /*
-    When the text fields are updated (by the user), update the sliders too.
-    */
     onBrightnessText(event) {
         let field = event.target;
         // If the browser supports the "number" input type, with
@@ -88,13 +86,19 @@ class AnnotationToolImageHelper {
         if (field.validity && !field.validity.valid) { return; }
         // If value box is empty, return.
         if (field.value === '') { return; }
-        this.$brightnessSlider.slider('value', Number(field.value));
+
+        this.brightnessSlider.value = Number(field.value);
+
+        this.redrawImage();
     }
     onContrastText(event) {
         let field = event.target;
         if (field.validity && !field.validity.valid) { return; }
         if (field.value === '') { return; }
-        this.$contrastSlider.slider('value', Number(field.value));
+
+        this.contrastSlider.value = Number(field.value);
+
+        this.redrawImage();
     }
 
     async loadSourceImages() {
@@ -379,8 +383,8 @@ class AnnotationToolImageHelper {
     resetBriCon() {
         this.brightnessField.value = 0;
         this.contrastField.value = 0;
-        this.$brightnessSlider.slider('value', 0);
-        this.$contrastSlider.slider('value', 0);
+        this.brightnessSlider.value = 0;
+        this.contrastSlider.value = 0;
         this.redrawImage();
     }
 
