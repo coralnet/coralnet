@@ -1,25 +1,111 @@
-var AnnotationToolImageHelper = (function() {
+class AnnotationToolImageHelper {
 
-    var $resetButton = null;
-    var $applyingText = null;
+    get brightnessField() {
+        return document.getElementById('id_brightness');
+    }
+    get contrastField() {
+        return document.getElementById('id_contrast');
+    }
 
-    var brightnessField = null;
-    var contrastField = null;
-    var MIN_BRIGHTNESS = null;
-    var MAX_BRIGHTNESS = null;
-    var MIN_CONTRAST = null;
-    var MAX_CONTRAST = null;
+    get MIN_BRIGHTNESS() {
+        return Number(this.brightnessField.min);
+    }
+    get MAX_BRIGHTNESS() {
+        return Number(this.brightnessField.max);
+    }
+    get MIN_CONTRAST() {
+        return Number(this.contrastField.min);
+    }
+    get MAX_CONTRAST() {
+        return Number(this.contrastField.max);
+    }
 
-    var sourceImages = {};
-    var currentSourceImage = null;
-    var imageCanvas = null;
+    get imageCanvas() {
+        return document.getElementById('imageCanvas');
+    }
+    get resetButton() {
+        return document.getElementById('resetImageOptionsButton');
+    }
+    get applyingText() {
+        return document.getElementById('applyingText');
+    }
 
-    var nowApplyingProcessing = false;
-    var redrawSignal = false;
+    currentSourceImage = null;
+    nowApplyingProcessing = false;
+    redrawSignal = false;
 
+    constructor(sourceImagesArg) {
 
-    function resetImageExifOrientation(imageAsString) {
-        var exifObj;
+        // http://api.jqueryui.com/slider/
+        this.$brightnessSlider = $('#brightness_slider').slider({
+            value: Number(this.brightnessField.value),
+            min: this.MIN_BRIGHTNESS,
+            max: this.MAX_BRIGHTNESS,
+            step: 1,
+            slide: this.onBrightnessSlider.bind(this),
+            // When the slider value is changed, either by the user
+            // directly or a programmatic change, re-draw the source image
+            // and re-apply bri/con operations.
+            change: this.redrawImage.bind(this),
+        });
+        this.$contrastSlider = $('#contrast_slider').slider({
+            value: Number(this.contrastField.value),
+            min: this.MIN_CONTRAST,
+            max: this.MAX_CONTRAST,
+            step: 1,
+            slide: this.onContrastSlider.bind(this),
+            change: this.redrawImage.bind(this),
+        });
+
+        this.brightnessField.addEventListener(
+            'change', this.onBrightnessText.bind(this));
+        this.contrastField.addEventListener(
+            'change', this.onContrastText.bind(this));
+
+        this.resetButton.addEventListener(
+            'click', this.resetBriCon.bind(this));
+
+        this.sourceImages = sourceImagesArg;
+    }
+
+    /*
+    When the slider is moved (by the user), update the text field too.
+    */
+    onBrightnessSlider(event, ui) {
+        this.brightnessField.value = ui.value;
+    }
+    onContrastSlider(event, ui) {
+        this.contrastField.value = ui.value;
+    }
+
+    /*
+    When the text fields are updated (by the user), update the sliders too.
+    */
+    onBrightnessText(event) {
+        let field = event.target;
+        // If the browser supports the "number" input type, with
+        // validity checking and all, then return if invalid.
+        if (field.validity && !field.validity.valid) { return; }
+        // If value box is empty, return.
+        if (field.value === '') { return; }
+        this.$brightnessSlider.slider('value', Number(field.value));
+    }
+    onContrastText(event) {
+        let field = event.target;
+        if (field.validity && !field.validity.valid) { return; }
+        if (field.value === '') { return; }
+        this.$contrastSlider.slider('value', Number(field.value));
+    }
+
+    async loadSourceImages() {
+        if (this.sourceImages.hasOwnProperty('scaled')) {
+            await this.loadSourceImage('scaled');
+        }
+        await this.loadSourceImage('full');
+    }
+
+    resetImageExifOrientation(imageAsString) {
+        let exifObj;
 
         try {
             exifObj = piexif.load(imageAsString);
@@ -48,18 +134,17 @@ var AnnotationToolImageHelper = (function() {
                     }
                     else {
                         alert(
-                            "Error when loading the image: \"" + e.message
-                            + "\" If the problem persists,"
-                            + " please contact the admins.");
+                            `Error when setting up the image: "${e.message}"`
+                            + " \nIf the problem persists,"
+                            + " please notify the admins.");
                         throw e;
                     }
                 }
             }
             else {
                 alert(
-                    "Error when loading the image: \"" + e.message
-                    + "\" If the problem persists,"
-                    + " please contact the admins.");
+                    `Error when loading the image: "${e.message}"`
+                    + " \nIf the problem persists, please notify the admins.");
                 throw e;
             }
         }
@@ -67,40 +152,27 @@ var AnnotationToolImageHelper = (function() {
         // If we're here, we successfully read the exif.
         // Set the orientation tag to the default value.
         exifObj['0th'][piexif.ImageIFD.Orientation] = 1;
-        var editedExifStr = piexif.dump(exifObj);
+        let editedExifStr = piexif.dump(exifObj);
         return piexif.insert(editedExifStr, imageAsString);
     }
 
-    /* Preload a source image; once it's loaded, swap it in as the image
-     * used in the annotation tool.
-     *
-     * Parameters:
-     * code - Which version of the image it is: 'scaled' or 'full'.
-     *
-     * Basic code pattern from: http://stackoverflow.com/a/1662153/
-     */
-    function preloadAndUseSourceImage(code) {
+    /*
+    Load a source image, and swap it in as the image used in the
+    annotation tool.
+
+    Parameters:
+    code - Which version of the image it is: 'scaled' or 'full'.
+
+    Basic code pattern from: http://stackoverflow.com/a/1662153/
+    */
+    async loadSourceImage(code) {
         // Create an Image object.
-        sourceImages[code].imgBuffer = new Image();
+        this.sourceImages[code].imgBuffer = new Image();
+        let imgBuffer = this.sourceImages[code].imgBuffer;
 
         // Allow the image to be from a different domain such as S3.
         // https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image
-        sourceImages[code].imgBuffer.crossOrigin = "Anonymous";
-
-        // When image preloading is done, swap images.
-        sourceImages[code].imgBuffer.onload = function() {
-            imageCanvas.width = sourceImages[code].width;
-            imageCanvas.height = sourceImages[code].height;
-
-            currentSourceImage = sourceImages[code];
-            redrawImage();
-
-            // If we just finished loading the scaled image, then start loading
-            // the full image.
-            if (code === 'scaled') {
-                preloadAndUseSourceImage('full');
-            }
-        };
+        imgBuffer.crossOrigin = "Anonymous";
 
         // Download image from URL. Normally setting a DOM Image's src
         // attribute to the URL is a 'shortcut' for doing this, but:
@@ -112,84 +184,102 @@ var AnnotationToolImageHelper = (function() {
         // 2. The Image src route could require an intermediate usage of
         // Canvas.toDataURL(), which would re-encode the image (thus applying
         // another round of JPEG compression, for example).
-        var imageRequest = new XMLHttpRequest();
-        imageRequest.open('GET', sourceImages[code].url, true);
-        imageRequest.responseType = 'arraybuffer';
+        let response = await fetch(this.sourceImages[code].url);
 
-        imageRequest.onload = function() {
-            var arrayBuffer = imageRequest.response;
-            if (!arrayBuffer) {
-                alert(
-                    "Error when loading the image: couldn't get arrayBuffer."
-                    + " If the problem persists, please contact the admins.");
-                return;
-            }
+        let imageAsBinaryString;
+        try {
+            let blob = await response.blob();
+            imageAsBinaryString = await this.readBlob(blob);
+        }
+        catch (e) {
+            alert(
+                `Error when retrieving the ${code} image: "${e.message}"`
+                + " \nIf the problem persists, please notify the admins.");
+            return;
+        }
 
-            var blob = new Blob([arrayBuffer]);
-            var reader = new FileReader();
+        // Reset the image's EXIF orientation tag to the default value,
+        // so that the browser can't pick up the EXIF orientation and
+        // rotate the displayed image accordingly.
+        //
+        // Perhaps later, we'll give an option to respect the EXIF
+        // orientation here. But it must be done properly, rotating
+        // the point positions as well as the image itself.
+        //
+        // This overall approach of EXIF-editing may not be necessary
+        // in the future, if canvas elements respect the CSS
+        // image-orientation attribute or similar:
+        // https://image-orientation-test.now.sh/
+        let exifEditedDataString =
+            this.resetImageExifOrientation(imageAsBinaryString);
 
-            reader.onload = function(event) {
+        // Convert the data string to a base64 URL.
+        let contentType = response.headers.get('content-type');
+        let exifEditedDataURL = (
+            "data:" + contentType
+            + ";base64," + btoa(exifEditedDataString));
 
-                // Reset the image's EXIF orientation tag to the default value,
-                // so that the browser can't pick up the EXIF orientation and
-                // rotate the displayed image accordingly.
-                //
-                // Perhaps later, we'll give an option to respect the EXIF
-                // orientation here. But it must be done properly, rotating
-                // the point positions as well as the image itself.
-                //
-                // This overall approach of EXIF-editing may not be necessary
-                // in the future, if canvas elements respect the CSS
-                // image-orientation attribute or similar:
-                // https://image-orientation-test.now.sh/
-                var exifEditedDataString = resetImageExifOrientation(
-                    event.target.result);
-
-                // Convert the data string to a base64 URL.
-                var contentType = imageRequest.getResponseHeader(
-                    'content-type');
-                var exifEditedDataURL = (
-                    "data:" + contentType
-                    + ";base64," + btoa(exifEditedDataString));
-
-                // Load the EXIF-edited image into the image canvas.
-                sourceImages[code].imgBuffer.src = exifEditedDataURL;
-            };
-            reader.readAsBinaryString(blob);
-        };
-
-        imageRequest.send(null);
-
-        // For debugging, it sometimes helps to load an image that
-        // (1) has different image content, so you can tell when it's swapped in, and/or
+        // For debugging, it sometimes helps to load a full image that
+        // (1) has different image content, so you can tell when it's swapped
+        //     in, and/or
         // (2) is loaded after a delay, so you can zoom in first and then
         //     notice the resolution change when it happens.
-        // Here's (2) in action: uncomment the below code and comment out the
-        // preload line above to try it.  The second parameter to setTimeout()
-        // is milliseconds until the first-parameter function is called.
+        // Here's (2) in action: uncomment the below lines to try it.
         // NOTE: only use this for debugging, not for production.
-        //setTimeout(function() {
-        //    sourceImages[code].imgBuffer.src = sourceImages[code].url;
-        //}, 10000);
+        // if (code === 'full') {
+        //     const SECONDS = 5;
+        //     await new Promise(r => setTimeout(r, SECONDS * 1000));
+        // }
+
+        // Load the EXIF-edited image into the image canvas.
+        imgBuffer.src = exifEditedDataURL;
+
+        // Wait for image to load.
+        await imgBuffer.decode();
+
+        // Swap images.
+        this.imageCanvas.width = this.sourceImages[code].width;
+        this.imageCanvas.height = this.sourceImages[code].height;
+
+        this.currentSourceImage = this.sourceImages[code];
+        this.redrawImage();
+    }
+
+    readBlob(blob) {
+      return new Promise((resolve, reject) => {
+        let reader = new FileReader();
+
+        reader.onload = () => {
+          resolve(reader.result);
+        };
+
+        reader.onerror = reject;
+
+        // TODO: This method is deprecated. The challenge is that the format it
+        //  produces (binary string) is also pretty much deprecated in JS, and
+        //  piexif is an outdated library which pretty much depends on that
+        //  format. So it seems we need to replace piexif.
+        reader.readAsBinaryString(blob);
+      });
     }
 
     /* Redraw the source image, and apply brightness and contrast operations. */
-    function redrawImage() {
+    redrawImage() {
         // If we haven't loaded any image yet, don't do anything.
-        if (currentSourceImage === null)
+        if (this.currentSourceImage === null)
             return;
 
         // If processing is currently going on, emit the redraw signal to
         // tell it to stop processing and re-call this function.
-        if (nowApplyingProcessing === true) {
-            redrawSignal = true;
+        if (this.nowApplyingProcessing === true) {
+            this.redrawSignal = true;
             return;
         }
 
         // Redraw the source image.
         // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
-        imageCanvas.getContext("2d").drawImage(
-            currentSourceImage.imgBuffer,
+        this.imageCanvas.getContext("2d").drawImage(
+            this.currentSourceImage.imgBuffer,
             // Canvas coordinates at which to place the top-left corner of
             // the source image.
             0, 0,
@@ -197,11 +287,14 @@ var AnnotationToolImageHelper = (function() {
             // browsers have problems interpreting the scaling info from
             // image metadata, so specifying dimensions explicitly here helps.
             // See https://github.com/coralnet/coralnet/issues/658
-            currentSourceImage.width, currentSourceImage.height);
+            this.currentSourceImage.width, this.currentSourceImage.height);
 
         // If processing parameters are neutral values, then we just need
         // the original image, so we're done.
-        if (brightnessField.value === 0 && contrastField.value === 0) {
+        if (
+            this.brightnessField.value === 0
+            && this.contrastField.value === 0
+        ) {
             return;
         }
 
@@ -210,26 +303,26 @@ var AnnotationToolImageHelper = (function() {
            That way we don't lock up the browser for a really long
            time when processing a large image. */
 
-        var X_MAX = imageCanvas.width - 1;
-        var Y_MAX = imageCanvas.height - 1;
+        const X_MAX = this.imageCanvas.width - 1;
+        const Y_MAX = this.imageCanvas.height - 1;
 
-        var RECT_SIZE = 1400;
+        const RECT_SIZE = 1400;
 
-        var x1 = 0, y1 = 0, xRanges = [], yRanges = [];
+        let x1 = 0, y1 = 0, xRanges = [], yRanges = [];
         while (x1 <= X_MAX) {
-            var x2 = Math.min(x1 + RECT_SIZE - 1, X_MAX);
+            let x2 = Math.min(x1 + RECT_SIZE - 1, X_MAX);
             xRanges.push([x1, x2]);
             x1 = x2 + 1;
         }
         while (y1 <= Y_MAX) {
-            var y2 = Math.min(y1 + RECT_SIZE - 1, Y_MAX);
+            let y2 = Math.min(y1 + RECT_SIZE - 1, Y_MAX);
             yRanges.push([y1, y2]);
             y1 = y2 + 1;
         }
 
-        var rects = [];
-        for (var i = 0; i < xRanges.length; i++) {
-            for (var j = 0; j < yRanges.length; j++) {
+        let rects = [];
+        for (let i = 0; i < xRanges.length; i++) {
+            for (let j = 0; j < yRanges.length; j++) {
                 rects.push({
                     'left': xRanges[i][0],
                     'top': yRanges[j][0],
@@ -239,8 +332,8 @@ var AnnotationToolImageHelper = (function() {
             }
         }
 
-        nowApplyingProcessing = true;
-        $applyingText.css({'visibility': 'visible'});
+        this.nowApplyingProcessing = true;
+        this.applyingText.style.visibility = 'visible';
 
         // The user-defined brightness and contrast are applied as
         // 'bias' and 'gain' according to this formula:
@@ -248,21 +341,23 @@ var AnnotationToolImageHelper = (function() {
 
         // We'll say the bias can increase/decrease the pixel value by
         // as much as 150.
-        var brightness = Number(brightnessField.value);
-        var brightnessFraction =
-            (brightness - MIN_BRIGHTNESS) / (MAX_BRIGHTNESS - MIN_BRIGHTNESS);
-        var bias = (150*2)*brightnessFraction - 150;
+        let brightness = Number(this.brightnessField.value);
+        let brightnessFraction =
+            (brightness - this.MIN_BRIGHTNESS)
+            / (this.MAX_BRIGHTNESS - this.MIN_BRIGHTNESS);
+        let bias = (150*2)*brightnessFraction - 150;
 
         // We'll say the gain can multiply the pixel values by
         // a range of MIN_BIAS to MAX_BIAS.
         // The middle contrast value must map to 1.
-        var MIN_BIAS = 0.25;
-        var MAX_BIAS = 3.0;
-        var contrast = Number(contrastField.value);
-        var contrastFraction =
-            (contrast - MIN_CONTRAST) / (MAX_CONTRAST - MIN_CONTRAST);
-        var gain = null;
-        var gainFraction = null;
+        const MIN_BIAS = 0.25;
+        const MAX_BIAS = 3.0;
+        let contrast = Number(this.contrastField.value);
+        let contrastFraction =
+            (contrast - this.MIN_CONTRAST)
+            / (this.MAX_CONTRAST - this.MIN_CONTRAST);
+        let gain;
+        let gainFraction;
         if (contrastFraction > 0.5) {
             // Map 0.5~1.0 to 1.0~3.0
             gainFraction = (contrastFraction - 0.5) / (1.0 - 0.5);
@@ -274,18 +369,29 @@ var AnnotationToolImageHelper = (function() {
             gain = (1.0-MIN_BIAS)*gainFraction + MIN_BIAS;
         }
 
-        applyBriConToRemainingRects(gain, bias, rects);
+        this.applyBriConToRemainingRects(gain, bias, rects);
     }
 
-    function applyBriConToRect(gain, bias, data, numPixels) {
+    /*
+    Reset image processing parameters to default values,
+    and redraw the image.
+    */
+    resetBriCon() {
+        this.brightnessField.value = 0;
+        this.contrastField.value = 0;
+        this.$brightnessSlider.slider('value', 0);
+        this.$contrastSlider.slider('value', 0);
+        this.redrawImage();
+    }
+
+    applyBriConToRect(gain, bias, data, numPixels) {
         // Performance note: We tried having a curried function which was
         // called once for each pixel. However, this ended up taking 8-9
         // seconds for a 1400x1400 pixel rect, even if the function simply
         // returns immediately. (Firefox 50.0, 2016.11.28)
         // So the lesson is: function calls are usually cheap,
         // but don't underestimate using them by the million.
-        var px;
-        for (px = 0; px < numPixels; px++) {
+        for (let px = 0; px < numPixels; px++) {
             // 4 components per pixel, in RGBA order. We'll ignore alpha.
             data[4*px] = gain*data[4*px] + bias;
             data[4*px + 1] = gain*data[4*px + 1] + bias;
@@ -293,129 +399,46 @@ var AnnotationToolImageHelper = (function() {
         }
     }
 
-    function applyBriConToRemainingRects(gain, bias, rects) {
-        if (redrawSignal === true) {
-            nowApplyingProcessing = false;
-            redrawSignal = false;
-            $applyingText.css({'visibility': 'hidden'});
+    applyBriConToRemainingRects(gain, bias, rects) {
+        if (this.redrawSignal === true) {
+            this.nowApplyingProcessing = false;
+            this.redrawSignal = false;
+            this.applyingText.style.visibility = 'hidden';
 
-            redrawImage();
+            this.redrawImage();
             return;
         }
 
         // "Pop" the first element from rects.
-        var rect = rects.shift();
+        let rect = rects.shift();
 
         // Grab the rect from the image canvas.
-        var rectCanvasImageData = imageCanvas.getContext("2d")
+        let rectCanvasImageData = this.imageCanvas.getContext("2d")
             .getImageData(rect.left, rect.top, rect.width, rect.height);
 
         // Apply bri/con to the rect.
-        applyBriConToRect(
+        this.applyBriConToRect(
             gain, bias, rectCanvasImageData.data,
             rect['width']*rect['height']);
 
         // Put the post-bri/con data on the image canvas.
-        imageCanvas.getContext("2d").putImageData(
+        this.imageCanvas.getContext("2d").putImageData(
             rectCanvasImageData, rect.left, rect.top);
 
         if (rects.length > 0) {
             // Slightly delay the processing of the next rect, so we
             // don't lock up the browser for an extended period of time.
-            // Note the use of curry() to produce a function.
             setTimeout(
-                applyBriConToRemainingRects.curry(gain, bias, rects), 50
+                this.applyBriConToRemainingRects.bind(this, gain, bias, rects),
+                50,
             );
         }
         else {
-            nowApplyingProcessing = false;
-            $applyingText.css({'visibility': 'hidden'});
+            this.nowApplyingProcessing = false;
+            this.applyingText.style.visibility = 'hidden';
         }
     }
+}
 
 
-    /* Public methods.
-     * These are the only methods that need to be referred to as
-     * <SingletonClassName>.<methodName>. */
-    return {
-        init: function (sourceImagesArg) {
-            $resetButton = $('#resetImageOptionsButton');
-            $applyingText = $('#applyingText');
-
-            brightnessField = $('#id_brightness')[0];
-            contrastField = $('#id_contrast')[0];
-            MIN_BRIGHTNESS = Number(brightnessField.min);
-            MAX_BRIGHTNESS = Number(brightnessField.max);
-            MIN_CONTRAST = Number(contrastField.min);
-            MAX_CONTRAST = Number(contrastField.max);
-
-            // http://api.jqueryui.com/slider/
-            var $brightnessSlider = $('#brightness_slider').slider({
-                value: Number(brightnessField.value),
-                min: MIN_BRIGHTNESS,
-                max: MAX_BRIGHTNESS,
-                step: 1,
-                // When the slider is moved (by the user),
-                // update the text field too.
-                slide: function(event, ui) {
-                    brightnessField.value = ui.value;
-                },
-                // When the slider value is changed, either by the user
-                // directly or a programmatic change, re-draw the source image
-                // and re-apply bri/con operations.
-                change: redrawImage
-            });
-            var $contrastSlider = $('#contrast_slider').slider({
-                value: Number(contrastField.value),
-                min: MIN_CONTRAST,
-                max: MAX_CONTRAST,
-                step: 1,
-                slide: function(event, ui) {
-                    contrastField.value = ui.value;
-                },
-                change: redrawImage
-            });
-
-            // When the text fields are updated (by the user),
-            // update the sliders too.
-            brightnessField.addEventListener('change', function() {
-                // If the browser supports the "number" input type, with
-                // validity checking and all, then return if invalid.
-                if (this.validity && !this.validity.valid) { return; }
-                // If value box is empty, return.
-                if (this.value === '') { return; }
-                $brightnessSlider.slider('value', Number(this.value));
-            });
-            contrastField.addEventListener('change', function() {
-                if (this.validity && !this.validity.valid) { return; }
-                if (this.value === '') { return; }
-                $contrastSlider.slider('value', Number(this.value));
-            });
-
-            sourceImages = sourceImagesArg;
-
-            imageCanvas = $('#imageCanvas')[0];
-
-            if (sourceImages.hasOwnProperty('scaled')) {
-                preloadAndUseSourceImage('scaled');
-            }
-            else {
-                preloadAndUseSourceImage('full');
-            }
-
-            // When the Reset button is clicked, reset image processing
-            // parameters to default values, and redraw the image.
-            $resetButton.click(function () {
-                brightnessField.value = 0;
-                contrastField.value = 0;
-                $brightnessSlider.slider('value', 0);
-                $contrastSlider.slider('value', 0);
-                redrawImage();
-            });
-        },
-
-        getImageCanvas: function () {
-            return imageCanvas;
-        }
-    }
-})();
+export default AnnotationToolImageHelper;

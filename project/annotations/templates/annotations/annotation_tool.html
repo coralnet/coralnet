@@ -22,7 +22,6 @@
     {% include "static-local-include.html" with type="js" path="js/piexif.js" %}
 
     {% include "static-local-include.html" with type="js" path="js/AnnotationToolSettingsHelper.js" %}
-    {% include "static-local-include.html" with type="js" path="js/AnnotationToolImageHelper.js" %}
     {% include "static-local-include.html" with type="js" path="js/AnnotationToolAutocomplete.js" %}
     {% include "static-local-include.html" with type="js" path="js/AnnotationToolHelper.js" %}
 {% endblock %}
@@ -243,14 +242,17 @@
     
 
 <!-- Script in the body will run on page load. -->
-<script type="text/javascript">
+<script type="module">
     // Initialize the Annotation Tool Settings helper object.
     ATS.init({
         annotationToolSettingsSaveUrl:
             "{% url 'annotation_tool_settings_save' %}"
     });
+
     // Initialize the Annotation Tool Image helper object.
-    AnnotationToolImageHelper.init({{ source_images|jsonify }});
+    import AnnotationToolImageHelper from "{% static 'js/AnnotationToolImageHelper.js' %}";
+    let imageHelper = new AnnotationToolImageHelper({{ source_images|jsonify }});
+
     // Initialize the Annotation Tool Helper object.
     AnnotationToolHelper.init({
         fullHeight: {{ image.original_height }},
@@ -261,8 +263,11 @@
         labels: {{ labels|jsonify }},
         machineSuggestions: {{ label_scores|jsonify }},
         saveAnnotationsUrl: "{% url 'save_annotations_ajax' image.id %}",
-        isAnnotationAllDoneUrl: "{% url 'is_annotation_all_done_ajax' image.id %}"
+        isAnnotationAllDoneUrl: "{% url 'is_annotation_all_done_ajax' image.id %}",
+        imageHelper: imageHelper,
     });
+
+    await imageHelper.loadSourceImages();
 </script>
 
 {% endblock %}
