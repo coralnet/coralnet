@@ -6,4 +6,5 @@ def coralnet_settings(request):
         account_questions_link=settings.ACCOUNT_QUESTIONS_LINK,
         forum_link=settings.FORUM_LINK,
         dark_colors_available=settings.DARK_COLORS_AVAILABLE,
+        javascript_debugging=settings.JAVASCRIPT_DEBUGGING,
     )

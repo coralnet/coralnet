@@ -251,7 +251,11 @@
 
     // Initialize the Annotation Tool Image helper object.
     import AnnotationToolImageHelper from "{% static 'js/AnnotationToolImageHelper.js' %}";
-    let imageHelper = new AnnotationToolImageHelper({{ source_images|jsonify }});
+    let imageHelper = new AnnotationToolImageHelper(
+        {{ source_images|jsonify }},
+        "{% static 'img/placeholders/media-loading__150x150.png' %}",
+        {{ javascript_debugging|jsonify }}['AnnotationToolImageHelper'],
+    );
 
     // Initialize the Annotation Tool Helper object.
     AnnotationToolHelper.init({

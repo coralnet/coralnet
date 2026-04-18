@@ -1388,6 +1388,14 @@ FORUM_LINK = 'https://groups.google.com/forum/#!forum/coralnet-users'
 #    dark theme kicks in.
 DARK_COLORS_AVAILABLE = env.bool('DARK_COLORS_AVAILABLE', default=False)
 
+# Debugging options for Javascript modules.
+# The idea is that a Javascript module called MyClass.js would have a key
+# ['MyClass'] in this hash, and the value under that key would be whatever
+# format that module wants.
+# Not including a particular key should result in no debug stuff being enabled
+# for that module.
+JAVASCRIPT_DEBUGGING = env.json('JAVASCRIPT_DEBUGGING', default={})
+
 # Media filepath patterns
 IMAGE_FILE_PATTERN = 'images/{name}{extension}'
 LABEL_THUMBNAIL_FILE_PATTERN = 'labels/{name}{extension}'

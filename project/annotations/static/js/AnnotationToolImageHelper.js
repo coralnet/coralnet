@@ -40,7 +40,7 @@ class AnnotationToolImageHelper {
     nowApplyingProcessing = false;
     redrawSignal = false;
 
-    constructor(sourceImagesArg) {
+    constructor(sourceImagesArg, dummyScaledImage, debuggingOptions) {
 
         // Initialize value.
         this.brightnessSlider.value = this.brightnessField.value;
@@ -70,6 +70,8 @@ class AnnotationToolImageHelper {
             'click', this.resetBriCon.bind(this));
 
         this.sourceImages = sourceImagesArg;
+        this.dummyScaledImage = dummyScaledImage;
+        this.debugging = debuggingOptions || {};
     }
 
     updateBrightnessTextField(event) {
@@ -224,19 +226,22 @@ class AnnotationToolImageHelper {
             + ";base64," + btoa(exifEditedDataString));
 
         // For debugging, it sometimes helps to load a full image that
-        // (1) has different image content, so you can tell when it's swapped
-        //     in, and/or
-        // (2) is loaded after a delay, so you can zoom in first and then
-        //     notice the resolution change when it happens.
-        // Here's (2) in action: uncomment the below lines to try it.
-        // NOTE: only use this for debugging, not for production.
-        // if (code === 'full') {
-        //     const SECONDS = 5;
-        //     await new Promise(r => setTimeout(r, SECONDS * 1000));
-        // }
+        // is loaded after a delay, so you can zoom in first and then
+        // notice the resolution change when it happens.
+        if (this.debugging['fullImageDelaySeconds'] && code === 'full') {
+            const SECONDS = this.debugging['fullImageDelaySeconds'];
+            await new Promise(r => setTimeout(r, SECONDS * 1000));
+        }
 
-        // Load the EXIF-edited image into the image canvas.
-        imgBuffer.src = exifEditedDataURL;
+        // For debugging, it sometimes helps if the scaled image has different
+        // content entirely, so you can tell when the full image is swapped in.
+        if (this.debugging['useDummyScaledImage'] && code === 'scaled') {
+            imgBuffer.src = this.dummyScaledImage;
+        }
+        else {
+            // Load the EXIF-edited image into the image canvas.
+            imgBuffer.src = exifEditedDataURL;
+        }
 
         // Wait for image to load.
         await imgBuffer.decode();
