@@ -296,8 +296,8 @@ class AnnotationToolImageHelper {
         // If processing parameters are neutral values, then we just need
         // the original image, so we're done.
         if (
-            this.brightnessField.value === 0
-            && this.contrastField.value === 0
+            this.brightnessField.value === '0'
+            && this.contrastField.value === '0'
         ) {
             return;
         }
