@@ -195,7 +195,7 @@ class AnnotationToolImageHelper {
         let imageAsBinaryString;
         try {
             let blob = await response.blob();
-            imageAsBinaryString = await this.readBlob(blob);
+            imageAsBinaryString = await this.constructor.readBlob(blob);
         }
         catch (e) {
             alert(
@@ -254,7 +254,7 @@ class AnnotationToolImageHelper {
         this.redrawImage();
     }
 
-    readBlob(blob) {
+    static readBlob(blob) {
       return new Promise((resolve, reject) => {
         let reader = new FileReader();
 
