@@ -5,10 +5,14 @@ import AnnotationToolImageHelper from '/static/js/AnnotationToolImageHelper.js';
 import { useFixture } from '/static/js/test-utils.js';
 
 let imageHelper;
-let SCALED_WIDTH = 800;
-let SCALED_HEIGHT = 600;
-let FULL_WIDTH = 3200;
-let FULL_HEIGHT = 2400;
+// These numbers are from a specific example in this issue regarding
+// EXIF resolution detection:
+// https://github.com/coralnet/coralnet/issues/658
+// See "EXIF scaling" QUnit module below.
+let SCALED_WIDTH = 770;
+let SCALED_HEIGHT = 775;
+let FULL_WIDTH = 2568;
+let FULL_HEIGHT = 2583;
 
 
 function instantiate() {
@@ -46,21 +50,79 @@ function instantiateFullOnly() {
 }
 
 
+/*
+If you want to download a test's crafted image to check its contents manually,
+you can temporarily add a call to this function in the test code.
+It should pop up a standard download dialog.
+Credit: https://gist.github.com/philipstanislaus/c7de1f43b52531001412
+
+Once downloaded, you can check the EXIF data with a web tool like this:
+https://framebird.io/exif-metadata-viewer/jfif
+Or with Python, like this function that checks scaling data (uses Pillow):
+from PIL import Image
+from PIL.ExifTags import IFD
+def info(filepath):
+    with Image.open(filepath) as im:
+        exif = im.getexif()
+    ifd = exif.get_ifd(IFD.Exif)
+    print(f"Pixel data dimensions: {im.width} x {im.height}")
+    print(f"EXIF IFD PixelX/YDimension: {ifd.get(40962)} x {ifd.get(40963)}")
+    print(f"EXIF X/YResolution: {exif.get(282)} x {exif.get(283)}")
+    print(f"EXIF ResolutionUnit: {exif.get(296)}")
+*/
+function downloadBlob(blob, filename) {
+    let anchor = document.createElement('a');
+    document.body.appendChild(anchor);
+    anchor.style = 'display: none';
+
+    let url = window.URL.createObjectURL(blob);
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+}
+
+
 async function setImage(
-    filename, width, height, color, toAwaitBeforeLoad=null)
+    filename, width, height, pattern, color,
+    {toAwaitBeforeLoad = null, exifObj = null} = {})
 {
     let canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     let context = canvas.getContext('2d');
     context.fillStyle = color;
-    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (pattern === 'solid') {
+        // Fill entire image with this color.
+        context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (pattern === 'first_pixel') {
+        // Fill just the upper left pixel with this color.
+        // This can help to check that an image wasn't rotated
+        // unexpectedly.
+        context.fillRect(0, 0, 1, 1);
+    }
+    if (pattern === 'border') {
+        // Draw a thin outer border with this color.
+        // This can help to check that an image wasn't scaled down or up
+        // unexpectedly.
+        context.fillRect(0, 0, canvas.width, 1);
+        context.fillRect(0, 0, 1, canvas.height);
+        context.fillRect(0, canvas.height-1, canvas.width, 1);
+        context.fillRect(canvas.width-1, 0, 1, canvas.height);
+    }
 
     let imageContentType = 'image/jpeg';
     let blob = await new Promise(
         resolve => canvas.toBlob(resolve, imageContentType));
     let imageAsBinaryString =
         await AnnotationToolImageHelper.readBlob(blob);
+
+    if (exifObj) {
+        let exifStr = piexif.dump(exifObj);
+        imageAsBinaryString = piexif.insert(exifStr, imageAsBinaryString);
+    }
 
     let uint8Array = Uint8Array.from(
         imageAsBinaryString, c => c.charCodeAt(0));
@@ -103,7 +165,7 @@ QUnit.module("Load basic images", (hooks) => {
     });
 
     test("full image only", async function(assert) {
-        await setImage('full.jpg', FULL_WIDTH, FULL_HEIGHT, 'red');
+        await setImage('full.jpg', FULL_WIDTH, FULL_HEIGHT, 'solid', 'red');
         instantiateFullOnly();
         await imageHelper.loadSourceImages();
 
@@ -125,10 +187,11 @@ QUnit.module("Load basic images", (hooks) => {
         let {promise: checkedScaledImagePromise, resolve: csipResolve, reject}
             = Promise.withResolvers();
 
-        await setImage('scaled.jpg', SCALED_WIDTH, SCALED_HEIGHT, 'blue');
+        await setImage(
+            'scaled.jpg', SCALED_WIDTH, SCALED_HEIGHT, 'solid', 'blue');
         let {promise: fullImageAboutToLoadPromise} = await setImage(
-            'full.jpg', FULL_WIDTH, FULL_HEIGHT, 'red',
-            checkedScaledImagePromise,
+            'full.jpg', FULL_WIDTH, FULL_HEIGHT, 'solid', 'red',
+            {toAwaitBeforeLoad: checkedScaledImagePromise},
         );
         instantiate();
         let fullImageLoadedPromise = imageHelper.loadSourceImages();
@@ -154,5 +217,201 @@ QUnit.module("Load basic images", (hooks) => {
             red - green - blue > 200,
             "Should have loaded the full image, so an arbitrary pixel" +
             " should be close to red");
+    });
+});
+
+
+async function doExifRotationTest(assert, exifObj) {
+    await setImage(
+        'scaled.jpg', SCALED_WIDTH, SCALED_HEIGHT, 'first_pixel', 'blue');
+    await setImage(
+        'full.jpg', FULL_WIDTH, FULL_HEIGHT, 'first_pixel', 'red',
+        {exifObj: exifObj},
+    );
+
+    instantiate();
+    await imageHelper.loadSourceImages();
+
+    let pixelData = imageHelper.imageCanvas
+        .getContext('2d')
+        .getImageData(0, 0, 1, 1).data;
+    let [red, green, blue, _alpha] = pixelData;
+    assert.true(
+        red - green - blue > 200,
+        "Image should be loaded unrotated,"
+        + " so the upper left corner pixel should be close to red");
+}
+
+
+QUnit.module("EXIF rotation", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+    });
+    hooks.afterEach(() => {
+        fetchMock.reset();
+    });
+
+    test("No EXIF rotation", async function(assert) {
+        await doExifRotationTest(assert, {});
+    });
+
+    test("90 degree EXIF rotation in full image", async function(assert) {
+        let zeroth = {};
+        zeroth[piexif.ImageIFD.Orientation] = 6;
+        let exifObj = {'0th': zeroth};
+        await doExifRotationTest(assert, exifObj);
+    });
+});
+
+
+async function doExifScalingTest(assert, exifObj) {
+    await setImage(
+        'scaled.jpg', SCALED_WIDTH, SCALED_HEIGHT, 'border', 'blue');
+    await setImage(
+        'full.jpg', FULL_WIDTH, FULL_HEIGHT, 'border', 'red',
+        {exifObj: exifObj},
+    );
+
+    instantiate();
+    await imageHelper.loadSourceImages();
+
+    let pixelData = imageHelper.imageCanvas
+        .getContext('2d')
+        .getImageData(FULL_WIDTH-1, FULL_HEIGHT-1, 1, 1).data;
+    let [red, green, blue, _alpha] = pixelData;
+    assert.true(
+        red - green - blue > 200,
+        "Image should be loaded with full dimensions, faithful to the"
+        + " pixel data, so the far corner pixel should be close to red");
+}
+
+
+/*
+These test cases are based on Virtlink's comment here:
+https://github.com/coralnet/coralnet/issues/658#issuecomment-4268345016
+*/
+QUnit.module("EXIF scaling", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+    });
+    hooks.afterEach(() => {
+        fetchMock.reset();
+    });
+
+    test("No EXIF scaling fields present", async function(assert) {
+        await doExifScalingTest(assert, {});
+    });
+
+    /*
+    Lightroom Classic can produce images like this.
+    Not known to be a special case in any image viewers, but just making sure
+    our EXIF-related code doesn't do anything weird with it.
+    */
+    test("EXIF resolution fields present, but not dimension fields", async function(assert) {
+        let zeroth = {};
+        // Rational: array of numerator and denominator
+        zeroth[piexif.ImageIFD.XResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.YResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.ResolutionUnit] = 2;
+        let exifObj = {'0th': zeroth};
+
+        await doExifScalingTest(assert, exifObj);
+    });
+
+    /*
+    This test is for the following case in the HTML spec:
+    https://html.spec.whatwg.org/multipage/images.html#preparing-an-image-for-presentation
+    - dimX is a positive integer;
+    - dimY is a positive integer;
+    - resX is a positive floating-point number;
+    - resY is a positive floating-point number;
+    - physicalWidth × 72 / resX is dimX; [72 CSS points = 1 inch, per spec]
+    - physicalHeight × 72 / resY is dimY;
+    - resUnit is 2 (Inch)
+
+    PhotoPea can produce images like this. In this case, browsers use the
+    dimensions given in EXIF when displaying the image, per the spec.
+    However, it doesn't make sense for the annotation tool to respect these
+    EXIF dimensions: the canvas is already being scaled to the annotation
+    tool's interactable area.
+    So we make sure the annotation tool ignores these EXIF dimensions.
+
+    (For the record, this test's equivalent for centimeters instead
+    of inches did not get interpreted the same way by browsers. Not sure why
+    the spec only stipulates inches, but that's indeed how it is.)
+    */
+    test("EXIF resolution and dimension fields present, with dimensions * resolution / pixel data dimensions = 72", async function(assert) {
+        let zeroth = {};
+        // Rational: array of numerator and denominator
+        zeroth[piexif.ImageIFD.XResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.YResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.ResolutionUnit] = 2;
+        let exif = {};
+        exif[piexif.ExifIFD.PixelXDimension] = SCALED_WIDTH;
+        exif[piexif.ExifIFD.PixelYDimension] = SCALED_HEIGHT;
+        let exifObj = {'0th': zeroth, 'Exif': exif};
+
+        await doExifScalingTest(assert, exifObj);
+    });
+
+    /*
+    Images like this can come from Photoshop on Windows, or can come directly
+    from cameras.
+    Not known to be a special case in any image viewers, but just making sure
+    our EXIF-related code doesn't do anything weird with it.
+    */
+    test("EXIF resolution and dimension fields present, with dimensions = pixel data dimensions", async function(assert) {
+        let zeroth = {};
+        // Rational: array of numerator and denominator
+        zeroth[piexif.ImageIFD.XResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.YResolution] = [240, 1];
+        zeroth[piexif.ImageIFD.ResolutionUnit] = 2;
+        let exif = {};
+        exif[piexif.ExifIFD.PixelXDimension] = FULL_WIDTH;
+        exif[piexif.ExifIFD.PixelYDimension] = FULL_HEIGHT;
+        let exifObj = {'0th': zeroth, 'Exif': exif};
+
+        await doExifScalingTest(assert, exifObj);
+    });
+});
+
+
+QUnit.module("EXIF error cases", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+    });
+    hooks.afterEach(() => {
+        fetchMock.reset();
+    });
+
+    test("Invalid file data", async function(assert) {
+    });
+
+    test("Unpack error", async function(assert) {
+    });
+
+    test("Incorrect value type to decode", async function(assert) {
+    });
+
+    test("Not jpeg", async function(assert) {
+    });
+
+    test("Error when setting up", async function(assert) {
+    });
+
+    test("Error when loading", async function(assert) {
+    });
+});
+
+
+QUnit.module("Other error cases", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+    });
+    hooks.afterEach(() => {
+        fetchMock.reset();
+    });
+
+    test("Error when retrieving image", async function(assert) {
     });
 });

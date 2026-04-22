@@ -292,9 +292,15 @@ class AnnotationToolImageHelper {
             // Canvas coordinates at which to place the top-left corner of
             // the source image.
             0, 0,
-            // The dimensions to draw the image in the canvas. In some cases,
-            // browsers have problems interpreting the scaling info from
-            // image metadata, so specifying dimensions explicitly here helps.
+            // The dimensions to draw the image in the canvas.
+            //
+            // In some cases, browsers use the dimensions given in EXIF when
+            // displaying an image, per the HTML spec. However, it doesn't
+            // make sense for the annotation tool to respect these EXIF
+            // dimensions: the canvas is already being scaled to the annotation
+            // tool's interactable area. So, here we specify our preferred
+            // image dimensions explicitly, favoring the pixel-data dims over
+            // the EXIF dims.
             // See https://github.com/coralnet/coralnet/issues/658
             this.currentSourceImage.width, this.currentSourceImage.height);
 
