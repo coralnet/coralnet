@@ -110,7 +110,7 @@ class AnnotationToolImageHelper {
         await this.loadSourceImage('full');
     }
 
-    resetImageExifOrientation(imageAsString) {
+    static resetImageExifOrientation(imageAsString) {
         let exifObj;
 
         try {
@@ -181,7 +181,7 @@ class AnnotationToolImageHelper {
         imgBuffer.crossOrigin = "Anonymous";
 
         // Download image from URL. Normally setting a DOM Image's src
-        // attribute to the URL is a 'shortcut' for doing this, but:
+        // attribute to the URL is a 'shortcut' for loading the image, but:
         //
         // 1. Since we are concerned about EXIF orientation screwing up
         // dimensions assumptions, we want to edit the EXIF before loading the
@@ -190,10 +190,11 @@ class AnnotationToolImageHelper {
         // 2. The Image src route could require an intermediate usage of
         // Canvas.toDataURL(), which would re-encode the image (thus applying
         // another round of JPEG compression, for example).
-        let response = await fetch(this.sourceImages[code].url);
 
+        let response;
         let imageAsBinaryString;
         try {
+            response = await fetch(this.sourceImages[code].url);
             let blob = await response.blob();
             imageAsBinaryString = await this.constructor.readBlob(blob);
         }
@@ -217,7 +218,7 @@ class AnnotationToolImageHelper {
         // image-orientation attribute or similar:
         // https://image-orientation-test.now.sh/
         let exifEditedDataString =
-            this.resetImageExifOrientation(imageAsBinaryString);
+            this.constructor.resetImageExifOrientation(imageAsBinaryString);
 
         // Convert the data string to a base64 URL.
         let contentType = response.headers.get('content-type');

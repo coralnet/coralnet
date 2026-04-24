@@ -14,17 +14,21 @@ let SCALED_HEIGHT = 775;
 let FULL_WIDTH = 2568;
 let FULL_HEIGHT = 2583;
 
+let originalWindowAlert = window.alert;
+let originalPiexifLoad = piexif.load;
+let originalPiexifRemove = piexif.remove;
 
-function instantiate() {
+
+function instantiate({scaled_name = 'scaled.jpg', full_name = 'full.jpg'} = {}) {
     imageHelper = new AnnotationToolImageHelper(
         {
             'scaled': {
-                'url': 'scaled.jpg',
+                'url': scaled_name,
                 'width': SCALED_WIDTH,
                 'height': SCALED_HEIGHT,
             },
             'full': {
-                'url': 'full.jpg',
+                'url': full_name,
                 'width': FULL_WIDTH,
                 'height': FULL_HEIGHT,
             },
@@ -83,10 +87,7 @@ function downloadBlob(blob, filename) {
 }
 
 
-async function setImage(
-    filename, width, height, pattern, color,
-    {toAwaitBeforeLoad = null, exifObj = null} = {})
-{
+function makeCanvas(width, height, pattern, color) {
     let canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -113,20 +114,33 @@ async function setImage(
         context.fillRect(canvas.width-1, 0, 1, canvas.height);
     }
 
-    let imageContentType = 'image/jpeg';
+    return canvas;
+}
+
+
+async function setImage(
+    filename, width, height, pattern, color,
+    {toAwaitBeforeLoad = null, exifObj = null,
+     imageContentType = 'image/jpeg'} = {})
+{
+    let canvas = makeCanvas(width, height, pattern, color);
+
     let blob = await new Promise(
         resolve => canvas.toBlob(resolve, imageContentType));
-    let imageAsBinaryString =
-        await AnnotationToolImageHelper.readBlob(blob);
 
     if (exifObj) {
+        // Convert to string for piexif
+        let imageAsBinaryString =
+            await AnnotationToolImageHelper.readBlob(blob);
+
         let exifStr = piexif.dump(exifObj);
         imageAsBinaryString = piexif.insert(exifStr, imageAsBinaryString);
-    }
 
-    let uint8Array = Uint8Array.from(
-        imageAsBinaryString, c => c.charCodeAt(0));
-    blob = new Blob([uint8Array], {type: imageContentType});
+        // Back to a blob
+        let uint8Array = Uint8Array.from(
+            imageAsBinaryString, c => c.charCodeAt(0));
+        blob = new Blob([uint8Array], {type: imageContentType});
+    }
 
     if (toAwaitBeforeLoad) {
         // A Promise has been given which allows the fetch-caller and
@@ -376,30 +390,220 @@ QUnit.module("EXIF scaling", (hooks) => {
 });
 
 
+async function makeImageWithExif(exifObj) {
+    let canvas = makeCanvas(FULL_WIDTH, FULL_HEIGHT, 'solid', 'red');
+    let blob = await new Promise(
+        resolve => canvas.toBlob(resolve, 'image/jpeg'));
+    let imageAsString =
+        await AnnotationToolImageHelper.readBlob(blob);
+    let editedExifStr = piexif.dump(exifObj);
+    return piexif.insert(editedExifStr, imageAsString);
+}
+
+
+async function makeImageWithResolutionExif() {
+    let zeroth = {};
+    zeroth[piexif.ImageIFD.XResolution] = [240, 1];
+    zeroth[piexif.ImageIFD.YResolution] = [240, 1];
+    zeroth[piexif.ImageIFD.ResolutionUnit] = 2;
+    let exifObj = {'0th': zeroth};
+
+    return makeImageWithExif(exifObj);
+}
+
+
+async function assertExifIntact(assert, imageAsString, message) {
+    let exifObj = piexif.load(imageAsString);
+    let zeroth = exifObj['0th']
+    assert.deepEqual(
+        // These are the resolution fields.
+        [zeroth['282'], zeroth['283'], zeroth['296']],
+        [[240, 1], [240, 1], 2],
+        message,
+    );
+}
+
+
 QUnit.module("EXIF error cases", (hooks) => {
     hooks.beforeEach(async () => {
         useFixture('main');
     });
     hooks.afterEach(() => {
         fetchMock.reset();
+        window.alert = originalWindowAlert;
+        piexif.load = originalPiexifLoad;
+        piexif.remove = originalPiexifRemove;
+    });
+
+    /*
+    This test ensures that the general pattern of the following tests,
+    excluding the mocking of piexif.load() to throw certain errors,
+    results in the EXIF remaining intact.
+    */
+    test("No error leaves EXIF intact", async function(assert) {
+        let imageWithExifAsString = await makeImageWithResolutionExif();
+
+        let processedImageAsString = AnnotationToolImageHelper
+            .resetImageExifOrientation(imageWithExifAsString);
+
+        await assertExifIntact(
+            assert, processedImageAsString,
+            "EXIF should be intact after loading into canvas");
+    });
+
+    /*
+    Ensure that this piexif error results in the EXIF being stripped
+    before further processing.
+
+    This test deals directly with the image binary data, because
+    testing at the canvas level instead does not preserve EXIF. That is,
+    while writing image data to a canvas takes the EXIF into account when
+    writing the pixels to the canvas, the canvas does not contain
+    EXIF data in it. So going back out from canvas to image binary data
+    cannot get any EXIF, which makes it impossible to test the specific
+    thing we want to test.
+    */
+    test("Unpack error", async function(assert) {
+        let imageWithExifAsString = await makeImageWithResolutionExif();
+
+        // Ideally we'd be able to construct some EXIF data which actually
+        // gets this error, but that seemingly requires either an externally
+        // constructed fixture or substantial duplication of low-level
+        // piexif logic.
+        // We'll just go simpler and fake it.
+
+        piexif.load = () => {
+            throw new Error("'unpack' error. Got invalid type argument.");
+        };
+        let processedImageAsString = AnnotationToolImageHelper
+            .resetImageExifOrientation(imageWithExifAsString);
+        piexif.load = originalPiexifLoad;
+
+        let processedImageExifObj = piexif.load(processedImageAsString);
+        assert.equal(
+            Object.keys(processedImageExifObj['0th']).length, 0,
+            "Entire EXIF should be stripped after detecting an invalid type",
+        );
     });
 
     test("Invalid file data", async function(assert) {
-    });
+        let imageWithExifAsString = await makeImageWithResolutionExif();
 
-    test("Unpack error", async function(assert) {
+        // Ideally we'd be able to construct an image with "EXIF" data which
+        // actually gets this error, but that seemingly requires either an
+        // externally constructed fixture or substantial duplication of
+        // low-level piexif logic.
+        // We'll just go simpler and fake it.
+
+        piexif.load = () => {
+            throw new Error("'load' gots invalid file data.");
+        };
+        let processedImageAsString = AnnotationToolImageHelper
+            .resetImageExifOrientation(imageWithExifAsString);
+        piexif.load = originalPiexifLoad;
+
+        let processedImageExifObj = piexif.load(processedImageAsString);
+        assert.equal(
+            Object.keys(processedImageExifObj['0th']).length, 0,
+            "Entire EXIF should be stripped after detecting invalid data",
+        );
     });
 
     test("Incorrect value type to decode", async function(assert) {
+        let imageWithExifAsString = await makeImageWithResolutionExif();
+
+        // Ideally we'd be able to construct some EXIF data which actually
+        // gets this error, but that seemingly requires either a fixture or
+        // substantial duplication of low-level piexif logic.
+        // We'll just go simpler and fake it.
+        piexif.load = () => {
+            throw new Error(
+                "Exif might be wrong. Got incorrect value type to decode." +
+                " type:0");
+        };
+        let processedImageAsString = AnnotationToolImageHelper
+            .resetImageExifOrientation(imageWithExifAsString);
+        piexif.load = originalPiexifLoad;
+
+        let processedImageExifObj = piexif.load(processedImageAsString);
+        assert.equal(
+            Object.keys(processedImageExifObj['0th']).length, 0,
+            "Entire EXIF should be stripped after detecting an incorrect" +
+            " value type",
+        );
     });
 
+    /*
+    A more meaningful version of this test would involve using a PNG that
+    actually has EXIF data. However, that would currently require an externally
+    constructed fixture, which we haven't bothered to make yet.
+    */
     test("Not jpeg", async function(assert) {
-    });
+        let canvas = makeCanvas(
+            FULL_WIDTH, FULL_HEIGHT, 'first_pixel', 'red',
+        );
 
-    test("Error when setting up", async function(assert) {
+        let blob = await new Promise(
+            resolve => canvas.toBlob(resolve, 'image/png'));
+        let originalImageString =
+            await AnnotationToolImageHelper.readBlob(blob);
+        let processedImageString = AnnotationToolImageHelper
+            .resetImageExifOrientation(originalImageString);
+        assert.strictEqual(
+            originalImageString, processedImageString,
+            "PNG should be unedited");
     });
 
     test("Error when loading", async function(assert) {
+        // Mock window.alert() so that we don't actually have to interact
+        // with an alert dialog. Also, so we can assert its contents.
+        let alertMessage;
+        window.alert = (message) => {alertMessage = message;};
+
+        try {
+            // It's expecting the image as a string, and we're giving
+            // a Number.
+            AnnotationToolImageHelper
+                .resetImageExifOrientation(10);
+        }
+        catch {
+            // We could get the thrown error's message here, but
+            // we're just asserting on the alert message which
+            // contains that already.
+        }
+
+        assert.strictEqual(
+            alertMessage,
+            `Error when loading the image: "'load' gots invalid`
+            + ` type argument."`
+            + ` \nIf the problem persists, please notify the admins.`);
+    });
+
+    test("Error when setting up", async function(assert) {
+        // This case shouldn't happen unless there's a possible situation we
+        // don't know about. But we want to ensure the user is alerted in
+        // this case.
+        // resetImageExifOrientation() has a piexif.load() call and a
+        // piexif.remove() call, both taking the same arg. To test this case,
+        // we want the arg to be invalid for only the second call.
+        // To fake this, we mock piexif.remove() to just throw an unexpected
+        // error.
+        piexif.remove = () => {throw new Error("Unexpected error");};
+
+        let alertMessage;
+        window.alert = (message) => {alertMessage = message;};
+
+        try {
+            // We get to the remove() call using the invalid file data case.
+            AnnotationToolImageHelper.resetImageExifOrientation('test');
+        }
+        catch {
+        }
+
+        assert.strictEqual(
+            alertMessage,
+            `Error when setting up the image: "Unexpected error"`
+            + ` \nIf the problem persists, please notify the admins.`);
     });
 });
 
@@ -410,8 +614,25 @@ QUnit.module("Other error cases", (hooks) => {
     });
     hooks.afterEach(() => {
         fetchMock.reset();
+        window.alert = originalWindowAlert;
     });
 
     test("Error when retrieving image", async function(assert) {
+        fetchMock.get('full.jpg', () => {throw new Error("An error");});
+        instantiateFullOnly();
+
+        let alertMessage;
+        window.alert = (message) => {alertMessage = message;};
+
+        try {
+            await imageHelper.loadSourceImages();
+        }
+        catch {
+        }
+
+        assert.strictEqual(
+            alertMessage,
+            `Error when retrieving the full image: "An error"`
+            + ` \nIf the problem persists, please notify the admins.`);
     });
 });
