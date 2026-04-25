@@ -273,6 +273,8 @@ class AnnotationToolImageHelper {
       });
     }
 
+    RECT_SIZE = 1400;
+
     /* Redraw the source image, and apply brightness and contrast operations. */
     redrawImage() {
         // If we haven't loaded any image yet, don't do anything.
@@ -322,16 +324,14 @@ class AnnotationToolImageHelper {
         const X_MAX = this.imageCanvas.width - 1;
         const Y_MAX = this.imageCanvas.height - 1;
 
-        const RECT_SIZE = 1400;
-
         let x1 = 0, y1 = 0, xRanges = [], yRanges = [];
         while (x1 <= X_MAX) {
-            let x2 = Math.min(x1 + RECT_SIZE - 1, X_MAX);
+            let x2 = Math.min(x1 + this.RECT_SIZE - 1, X_MAX);
             xRanges.push([x1, x2]);
             x1 = x2 + 1;
         }
         while (y1 <= Y_MAX) {
-            let y2 = Math.min(y1 + RECT_SIZE - 1, Y_MAX);
+            let y2 = Math.min(y1 + this.RECT_SIZE - 1, Y_MAX);
             yRanges.push([y1, y2]);
             y1 = y2 + 1;
         }

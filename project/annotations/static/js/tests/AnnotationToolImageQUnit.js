@@ -19,7 +19,12 @@ let originalPiexifLoad = piexif.load;
 let originalPiexifRemove = piexif.remove;
 
 
-function instantiate({scaled_name = 'scaled.jpg', full_name = 'full.jpg'} = {}) {
+function instantiate(
+        {
+            scaled_name = 'scaled.jpg', full_name = 'full.jpg',
+            full_width = FULL_WIDTH, full_height = FULL_HEIGHT,
+        } = {}) {
+
     imageHelper = new AnnotationToolImageHelper(
         {
             'scaled': {
@@ -29,8 +34,8 @@ function instantiate({scaled_name = 'scaled.jpg', full_name = 'full.jpg'} = {}) 
             },
             'full': {
                 'url': full_name,
-                'width': FULL_WIDTH,
-                'height': FULL_HEIGHT,
+                'width': full_width,
+                'height': full_height,
             },
         },
         null,
@@ -92,26 +97,44 @@ function makeCanvas(width, height, pattern, color) {
     canvas.width = width;
     canvas.height = height;
     let context = canvas.getContext('2d');
-    context.fillStyle = color;
 
     if (pattern === 'solid') {
         // Fill entire image with this color.
+        context.fillStyle = color;
         context.fillRect(0, 0, canvas.width, canvas.height);
     }
     if (pattern === 'first_pixel') {
         // Fill just the upper left pixel with this color.
         // This can help to check that an image wasn't rotated
         // unexpectedly.
+        context.fillStyle = color;
         context.fillRect(0, 0, 1, 1);
     }
     if (pattern === 'border') {
         // Draw a thin outer border with this color.
         // This can help to check that an image wasn't scaled down or up
         // unexpectedly.
+        context.fillStyle = color;
         context.fillRect(0, 0, canvas.width, 1);
         context.fillRect(0, 0, 1, canvas.height);
         context.fillRect(0, canvas.height-1, canvas.width, 1);
         context.fillRect(canvas.width-1, 0, 1, canvas.height);
+    }
+    if (pattern === 'checker') {
+        // Draw four quadrants of the image, each in a different color.
+        // Having multiple explicit colors allows contrast testing;
+        // two at an absolute minimum, but more makes the contrast changes
+        // truer to 'real' scenarios.
+        let [color1, color2, color3, color4] = color;
+        context.fillStyle = color1;
+        context.fillRect(0, 0, canvas.width/2, canvas.height/2);
+        context.fillStyle = color2;
+        context.fillRect(canvas.width/2, 0, canvas.width/2, canvas.height/2);
+        context.fillStyle = color3;
+        context.fillRect(
+            canvas.width/2, canvas.height/2, canvas.width/2, canvas.height/2);
+        context.fillStyle = color4;
+        context.fillRect(0, canvas.height/2, canvas.width/2, canvas.height/2);
     }
 
     return canvas;
@@ -231,6 +254,394 @@ QUnit.module("Load basic images", (hooks) => {
             red - green - blue > 200,
             "Should have loaded the full image, so an arbitrary pixel" +
             " should be close to red");
+    });
+});
+
+
+function setupBriConTest({perRectAction = null} = {}) {
+
+    let {promise: doneProcessingPromise, resolve: dppResolve, reject}
+        = Promise.withResolvers();
+    let originalApplyToRects =
+        imageHelper.applyBriConToRemainingRects.bind(imageHelper);
+    let newApply = (gain, bias, rects) => {
+        originalApplyToRects(gain, bias, rects);
+        if (perRectAction) {
+            // Some kind of bookkeeping, etc. for the test's purposes.
+            perRectAction();
+        }
+        // Resolve the Promise when the image is fully processed.
+        if (rects.length === 0) {
+            dppResolve();
+        }
+    };
+    imageHelper.applyBriConToRemainingRects = newApply.bind(imageHelper);
+    return doneProcessingPromise;
+}
+
+
+/* https://css-tricks.com/converting-color-spaces-in-javascript/ */
+function rgbToHsl(r, g, b) {
+    // Make r, g, and b fractions of 1
+    r /= 255;
+    g /= 255;
+    b /= 255;
+
+    // Find greatest and smallest channel values
+    let cmin = Math.min(r,g,b),
+        cmax = Math.max(r,g,b),
+        delta = cmax - cmin,
+        h,
+        s,
+        l;
+
+    // Calculate hue
+    // No difference
+    if (delta === 0)
+        h = 0;
+    // Red is max
+    else if (cmax === r)
+        h = ((g - b) / delta) % 6;
+    // Green is max
+    else if (cmax === g)
+        h = (b - r) / delta + 2;
+    // Blue is max
+    else
+        h = (r - g) / delta + 4;
+
+    h = Math.round(h * 60);
+
+    // Make negative hues positive behind 360°
+    if (h < 0)
+        h += 360;
+
+    // Calculate lightness
+    l = (cmax + cmin) / 2;
+
+    // Calculate saturation
+    s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+
+    // Multiply l and s by 100
+    s = +(s * 100).toFixed(1);
+    l = +(l * 100).toFixed(1);
+
+    return [h, s, l];
+}
+
+
+function assertCanvasColors(assert, expectedColors) {
+
+    // Pixels close to each of the four corners.
+    let context = imageHelper.imageCanvas.getContext('2d');
+    let pixelDatas = [
+        context.getImageData(10, 10, 1, 1).data,
+        context.getImageData(imageHelper.imageCanvas.width-10, 10, 1, 1).data,
+        context.getImageData(
+            imageHelper.imageCanvas.width-10,
+            imageHelper.imageCanvas.height-10, 1, 1).data,
+        context.getImageData(10, imageHelper.imageCanvas.height-10, 1, 1).data,
+    ];
+    let pixelNames = [
+        "Upper left", "Upper right", "Lower right", "Lower left"];
+    let index = 0;
+
+    for (let pixelData of pixelDatas) {
+        let [red, green, blue, _alpha] = pixelData;
+        let [hue, sat, light] = rgbToHsl(red, green, blue);
+        let [xhue, xsat, xlight] = expectedColors[index];
+
+        assert.true(
+            // We won't be exacting, due to the rgb -> hsl conversion
+            // and jpeg compression.
+            Math.abs(hue - xhue) < 4,
+            `${pixelNames[index]} pixel's hue should be close to expected`
+            + `(${hue} vs. ${xhue}`);
+        assert.true(
+            Math.abs(sat - xsat) < 4,
+            `${pixelNames[index]} pixel's saturation should be close to expected`
+            + `(${sat} vs. ${xsat}`);
+        assert.true(
+            Math.abs(light - xlight) < 4,
+            `${pixelNames[index]} pixel's lightness should be close to expected`
+            + `(${light} vs. ${xlight}`);
+
+        index++;
+    }
+}
+
+
+QUnit.module("Brightness and contrast", (hooks) => {
+    hooks.beforeEach(async () => {
+        useFixture('main');
+
+        await setImage(
+            'scaled.jpg', SCALED_WIDTH, SCALED_HEIGHT, 'solid', 'blue');
+        // Multicolor pattern, with nontrivial saturation and lightness, so
+        // that contrast and brightness adjustment do different nontrivial
+        // things.
+        await setImage(
+            'full.jpg', 2400, 1500, 'checker',
+            ['hsl(90 30% 70%)', 'hsl(140 70% 30%)',
+             'hsl(190 30% 30%)', 'hsl(240 70% 70%)'],
+        );
+        instantiate({full_width: 2400, full_height: 1500});
+
+        // Individual tests can overwrite this to increase/decrease the number
+        // of rectangles to process.
+        imageHelper.RECT_SIZE = 500;
+
+        imageHelper.brightnessSlider.value = 0;
+        imageHelper.brightnessField.value = 0;
+        imageHelper.contrastSlider.value = 0;
+        imageHelper.contrastField.value = 0;
+
+        await imageHelper.loadSourceImages();
+    });
+    hooks.afterEach(() => {
+        fetchMock.reset();
+    });
+
+    test.each(
+            "rect count",
+            [
+                [500, 5*3],
+                [480, 5*4],
+                [460, 6*4],
+            ],
+            async (assert, [rectSize, expectedRects]) => {
+
+        imageHelper.RECT_SIZE = rectSize;
+        let rectsProcessed = 0;
+        let perRectAction = () => {rectsProcessed++;}
+        let doneProcessingPromise =
+            setupBriConTest({perRectAction: perRectAction});
+
+        imageHelper.brightnessSlider.value = 20;
+        // Although redrawing happens on our change listener, we need to fire
+        // an input event first so that the updated slider value is recognized.
+        imageHelper.brightnessSlider.dispatchEvent(new Event('input'));
+        imageHelper.brightnessSlider.dispatchEvent(new Event('change'));
+        // Wait for the brightness application to finish on the whole image
+        await doneProcessingPromise;
+        assert.equal(
+            rectsProcessed, expectedRects,
+            "Number of rectangles processed for bri/con should be as" +
+            " expected, given the image width/height and rectangle size");
+    });
+
+    test("brightness slider", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.brightnessSlider.value = 20;
+        assert.equal(
+            imageHelper.brightnessField.value, 0,
+            "Field value should not have changed yet");
+        // Should not have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.brightnessSlider.dispatchEvent(new Event('input'));
+        assert.equal(
+            imageHelper.brightnessField.value, 20,
+            "Field value should have changed");
+        // Should not have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.brightnessSlider.dispatchEvent(new Event('change'));
+        // Wait for the brightness application to finish on the whole image
+        await doneProcessingPromise;
+        // Should have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[90,49,82], [140,50,42], [190,22,42], [240,100,80]]);
+    });
+
+    test("contrast slider", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.contrastSlider.value = 20;
+        assert.equal(
+            imageHelper.contrastField.value, 0,
+            "Field value should not have changed yet");
+        // Should not have redrawn with new contrast
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.contrastSlider.dispatchEvent(new Event('input'));
+        assert.equal(
+            imageHelper.contrastField.value, 20,
+            "Field value should have changed");
+        // Should not have redrawn with new contrast
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.contrastSlider.dispatchEvent(new Event('change'));
+        // Wait for the contrast application to finish on the whole image
+        await doneProcessingPromise;
+        // Should have redrawn with new contrast
+        assertCanvasColors(
+            assert, [[66,100,93], [140,70,42], [190,30,42], [240,100,84]]);
+    });
+
+    test("negative brightness", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.brightnessSlider.value = -30;
+        imageHelper.brightnessSlider.dispatchEvent(new Event('input'));
+        imageHelper.brightnessSlider.dispatchEvent(new Event('change'));
+
+        assert.equal(
+            imageHelper.brightnessField.value, -30,
+            "Field value should have changed");
+
+        await doneProcessingPromise;
+        assertCanvasColors(
+            assert, [[89,19,52], [131,100,17], [190,74,12], [240,44,52]]);
+    });
+
+    test("negative contrast", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.contrastSlider.value = -30;
+        imageHelper.contrastSlider.dispatchEvent(new Event('input'));
+        imageHelper.contrastSlider.dispatchEvent(new Event('change'));
+
+        assert.equal(
+            imageHelper.contrastField.value, -30,
+            "Field value should have changed");
+
+        await doneProcessingPromise;
+        assertCanvasColors(
+            assert, [[88,15,54], [140,70,23], [190,30,23], [240,35,54]]);
+    });
+
+    test("brightness text field", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.brightnessField.value = 120;
+        imageHelper.brightnessField.dispatchEvent(new Event('change'));
+        assert.equal(
+            imageHelper.brightnessSlider.value, 0,
+            "Slider value should not have updated, due to out-of-range input");
+        // Should not have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.brightnessField.value = 100;
+        imageHelper.brightnessField.dispatchEvent(new Event('change'));
+        assert.equal(
+            imageHelper.brightnessSlider.value, 100,
+            "Slider value should have updated");
+        // Wait for the brightness application to finish on the whole image
+        await doneProcessingPromise;
+        // Should have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[0,0,100], [147,100,84], [190,79,89], [0,0,100]]);
+    });
+
+    test("contrast text field", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.contrastField.value = -120;
+        imageHelper.contrastField.dispatchEvent(new Event('change'));
+        assert.equal(
+            imageHelper.contrastSlider.value, 0,
+            "Slider value should not have updated, due to out-of-range input");
+        // Should not have redrawn with new contrast
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+
+        imageHelper.contrastField.value = -100;
+        imageHelper.contrastField.dispatchEvent(new Event('change'));
+        assert.equal(
+            imageHelper.contrastSlider.value, -100,
+            "Slider value should have updated");
+        // Wait for the contrast application to finish on the whole image
+        await doneProcessingPromise;
+        // Should have redrawn with new contrast
+        assertCanvasColors(
+            assert, [[87,12,18], [140,70,8], [190,30,8], [240,30,18]]);
+    });
+
+    test("reset button", async function(assert) {
+        let doneProcessingPromise = setupBriConTest();
+
+        imageHelper.brightnessSlider.value = 20;
+        imageHelper.brightnessSlider.dispatchEvent(new Event('input'));
+        imageHelper.brightnessSlider.dispatchEvent(new Event('change'));
+        await doneProcessingPromise;
+        // Should have redrawn with new brightness
+        assertCanvasColors(
+            assert, [[90,49,82], [140,50,42], [190,22,42], [240,100,80]]);
+
+        imageHelper.resetButton.dispatchEvent(new Event('click'));
+        // Should have reset; this should happen synchronously
+        assertCanvasColors(
+            assert, [[90,30,70], [140,70,30], [190,30,30], [240,70,70]]);
+    });
+
+    test("overlapping actions", async function(assert) {
+        // We expect 5*3 = 15 rectangles.
+        imageHelper.RECT_SIZE = 500;
+
+        let updatedContrast = false;
+        let {promise: updatedContrastPromise, resolve: ucpResolve, reject1}
+            = Promise.withResolvers();
+
+        let {promise: halfDoneBrightnessPromise, resolve: hdbpResolve, reject2}
+            = Promise.withResolvers();
+        let {promise: doneBriAndConPromise, resolve: dbacpResolve, reject3}
+            = Promise.withResolvers();
+        let originalApplyToRects =
+            imageHelper.applyBriConToRemainingRects.bind(imageHelper);
+        let applyCalls = 0;
+        let newApply = (gain, bias, rects) => {
+            if (!updatedContrast && rects.length === 7) {
+                // 7 rectangles left (8 processed) in the brightness-only phase.
+                hdbpResolve();
+                // Do not proceed until we update the contrast slider.
+                updatedContrastPromise.then(
+                    originalApplyToRects.bind(imageHelper, gain, bias, rects));
+            }
+            else {
+                originalApplyToRects(gain, bias, rects);
+
+                if (updatedContrast && rects.length === 0) {
+                    // 0 rectangles left (15 processed) in the
+                    // brightness-and-contrast phase.
+                    dbacpResolve();
+                }
+            }
+            applyCalls++;
+        };
+        imageHelper.applyBriConToRemainingRects = newApply.bind(imageHelper);
+
+        // Set brightness to 20 and trigger the events to start processing it.
+        imageHelper.brightnessSlider.value = 20;
+        imageHelper.brightnessSlider.dispatchEvent(new Event('input'));
+        imageHelper.brightnessSlider.dispatchEvent(new Event('change'));
+        // Wait for half the rectangles to be processed.
+        await halfDoneBrightnessPromise;
+
+        // At this point processing should be paused halfway (we forced it to
+        // wait for a Promise).
+        // Set contrast to 20 and trigger the events to start processing it.
+        imageHelper.contrastSlider.value = 20;
+        imageHelper.contrastSlider.dispatchEvent(new Event('input'));
+        imageHelper.contrastSlider.dispatchEvent(new Event('change'));
+        updatedContrast = true;
+        // Unpause processing. This should interrupt the previous half-done
+        // processing, and start a new round of processing.
+        ucpResolve();
+        // Wait for all the rectangles to be processed.
+        await doneBriAndConPromise;
+
+        assert.equal(
+            applyCalls, 8+1+15,
+            "24 apply calls should have been processed: 8 for processing" +
+            " rects in the brightness-only phase, 1 to exit that phase," +
+            " and 15 in the bri+con phase (of note, phase 1 should have run" +
+            " only partially, so it shouldn't be 15 or 30 calls)");
     });
 });
 
