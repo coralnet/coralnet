@@ -1008,6 +1008,7 @@ INSTALLED_APPS = [
     'api_core',
     'api_management',
     'async_media',
+    'aws',
     'blog',
     'calcification',
     # Uploading from and exporting to Coral Point Count file formats
