@@ -991,8 +991,18 @@ JOB_MAX_MINUTES = 10
 # Other Django stuff
 #
 
-# [Helper variable]
-CORALNET_APPS = [
+# A list of strings designating all applications that are enabled in this
+# Django installation.
+#
+# When several applications provide different versions of the same resource
+# (template, static file, management command, translation), the application
+# listed first in INSTALLED_APPS has precedence.
+# We do have cases where we want to override default templates with our own
+# (e.g. auth and registration pages), so we'll put our apps first.
+#
+# If an app has an application configuration class, specify the dotted path
+# to that class here, rather than just specifying the app package.
+INSTALLED_APPS = [
     'accounts',
     'annotations',
     'api_core',
@@ -1024,21 +1034,6 @@ CORALNET_APPS = [
     'visualization',
     'vision_backend',
     'vision_backend_api',
-]
-
-# A list of strings designating all applications that are enabled in this
-# Django installation.
-#
-# When several applications provide different versions of the same resource
-# (template, static file, management command, translation), the application
-# listed first in INSTALLED_APPS has precedence.
-# We do have cases where we want to override default templates with our own
-# (e.g. auth and registration pages), so we'll put our apps first.
-#
-# If an app has an application configuration class, specify the dotted path
-# to that class here, rather than just specifying the app package.
-INSTALLED_APPS = [
-    *CORALNET_APPS,
 
     # Admin site (<domain>/admin)
     'django.contrib.admin',
@@ -1201,10 +1196,25 @@ FORM_RENDERER = 'lib.forms.GridFormRenderer'
 SITE_ID = 1
 
 # [Helper variable]
+# We defined INSTALLED_APPS in the order of 1) CoralNet-defined apps,
+# 2) Django apps, and 3) third-party apps. Here we just want 1).
+#
+# Note: although it would've been cleaner to define CORALNET_APPS first and
+# then INSTALLED_APPS based on that, we want to define INSTALLED_APPS
+# entirely statically so that PyCharm can know what our apps are, helping
+# with code navigation and completion.
+# https://intellij-support.jetbrains.com/hc/en-us/community/posts/205805119-How-to-make-custom-template-tags-resolve
+CORALNET_APPS = []
+for app_spec in INSTALLED_APPS:
+    if app_spec.startswith('django.'):
+        break
+    CORALNET_APPS.append(app_spec)
+
+# [Helper variable]
 # CORALNET_APPS elements are either just the app dir's name, or are dotted
 # Python paths to the app's custom AppConfig class.
 # This code grabs just the app dir's name in both cases.
-CORALNET_APP_DIRS = [app_config.split('.')[0] for app_config in CORALNET_APPS]
+CORALNET_APP_DIRS = [app_spec.split('.')[0] for app_spec in CORALNET_APPS]
 
 # https://docs.djangoproject.com/en/dev/topics/logging/#configuring-logging
 LOGGING = {
