@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+  <canvas id="imageCanvas"></canvas>
+
+  {% include "annotations/annotation_image_options.html" with image_options_form=image_options_form %}
+
+{% endblock %}

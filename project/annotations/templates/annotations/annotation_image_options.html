@@ -1,19 +1,4 @@
-{% comment %}
-TODO: Make an abbreviated version of this with
-icons instead of "brightness" and "contrast".
-{% endcomment %}
-
-{% for field in image_options_form %}
-    {# Should only have the brightness and contrast fields here, for now... #}
-    <div class="field_wrapper">
-        <label for="{{ field.id_for_label }}" class="column_form_text_field">
-            {{ field.label }}:
-        </label>
-        {{ field }}
-        <br/>
-        <div id="{{ field.name }}_slider"></div>
-    </div>
-{% endfor %}
+{{ image_options_form }}
 
 <button id="resetImageOptionsButton" type="button">Reset</button>
 <span id="applyingText">Applying...</span>

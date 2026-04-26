@@ -255,14 +255,18 @@ td.annotationFormLabelCell {
 #image-tools-wrapper label {
     width: auto;
 }
-#image-tools-wrapper input {
+/* Text fields */
+#image-tools-wrapper input[type="number"] {
     margin: 1px 0;
     padding: 1px 1px;
 
     width: 48px;
 }
-
-/* Place for "Applying..." text for image options/tools form */
+/* Sliders */
+#image-tools-wrapper input[type="range"] {
+    width: 130px;
+}
+/* Place for "Applying..." text */
 #applyingText {
     display: inline-block;
 
@@ -303,10 +307,4 @@ td.annotationFormLabelCell {
 .ui-autocomplete.semi-transparent .ui-menu-item .ui-widget-content .ui-state-focus,
 .ui-autocomplete.semi-transparent .ui-menu-item .ui-widget-header .ui-state-focus {
     background: rgba(255,255,255,1.0);
-}
-
-/* jQuery-UI sliders. */
-.ui-slider {
-    width: 130px;
-    display: inline-block;
 }

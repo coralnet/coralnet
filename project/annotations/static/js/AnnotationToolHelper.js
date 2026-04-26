@@ -7,6 +7,9 @@ var AnnotationToolHelper = (function() {
     var saveAnnotationsUrl = null;
     var isAnnotationAllDoneUrl = null;
 
+    // Helper instances
+    var imageHelper = null;
+
     // HTML elements
     var annotationArea = null;
     var annotationList = null;
@@ -119,7 +122,7 @@ var AnnotationToolHelper = (function() {
     //
 
     function getImageCanvas() {
-        return AnnotationToolImageHelper.getImageCanvas();
+        return imageHelper.imageCanvas;
     }
 
     /*
@@ -1400,7 +1403,8 @@ var AnnotationToolHelper = (function() {
 
         /* Params:
          * fullHeight, fullWidth, IMAGE_AREA_WIDTH, IMAGE_AREA_HEIGHT,
-         * imagePoints, labels, machineSuggestions */
+         * imagePoints, labels, machineSuggestions,
+         * saveAnnotationsUrl, isAnnotationAllDoneUrl, imageHelper */
         init: function(params) {
             var i, j, n;    // Loop variables...
 
@@ -1408,6 +1412,10 @@ var AnnotationToolHelper = (function() {
 
             saveAnnotationsUrl = params.saveAnnotationsUrl;
             isAnnotationAllDoneUrl = params.isAnnotationAllDoneUrl;
+
+            /* Helpers */
+
+            imageHelper = params.imageHelper;
 
             /*
              * Initialize styling, sizing, and positioning for various elements

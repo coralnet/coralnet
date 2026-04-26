@@ -1,10 +1,15 @@
 from django.urls import include, path
 from . import views
+from .tests.js import views as js_test_views
 
 general_urlpatterns = [
     path('tool_settings_save_ajax/',
          views.annotation_tool_settings_save,
          name="annotation_tool_settings_save"),
+
+    path('js_test_annotation_tool_image/',
+         js_test_views.AnnotationToolImageQUnitView.as_view(),
+         name="js_test_annotation_tool_image"),
 ]
 
 image_urlpatterns = [

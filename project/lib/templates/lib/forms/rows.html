@@ -15,9 +15,12 @@
       </div>
 
       <div>
-        <label for="{{ field.id_for_label }}">
-          {{ field.label }}:
-        </label>
+        {% if field.label %}
+          <label for="{{ field.id_for_label }}">
+            {{ field.label }}:
+          </label>
+        {% endif %}
+        {# Most fields should specify labels, but they can choose not to by specifying as "". In that case they should have a comparable accessibility feature such as a title attribute (which would be specified in field widget attrs): https://www.w3.org/WAI/WCAG22/Techniques/html/H65 #}
 
         {{ field }}
         {% include "lib/forms/field_help_text.html" with field=field %}
