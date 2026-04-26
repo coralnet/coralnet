@@ -36,5 +36,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(populate_has_rowcols, migrations.RunPython.noop),
+        migrations.RunPython(
+            populate_has_rowcols,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

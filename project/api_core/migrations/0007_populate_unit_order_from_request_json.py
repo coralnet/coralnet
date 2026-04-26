@@ -28,5 +28,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             order_from_request_json_to_field,
-            order_from_field_to_request_json),
+            order_from_field_to_request_json,
+            elidable=True,
+        ),
     ]

@@ -110,5 +110,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(content_type_to_sources, content_type_to_images),
+        migrations.RunPython(
+            content_type_to_sources,
+            content_type_to_images,
+            elidable=True,
+        ),
     ]

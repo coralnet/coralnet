@@ -39,5 +39,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(
-            port_status_values_forwards, port_status_values_backwards),
+            port_status_values_forwards,
+            port_status_values_backwards,
+            elidable=True,
+        ),
     ]

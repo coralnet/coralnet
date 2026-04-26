@@ -26,5 +26,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(populate_extractor, migrations.RunPython.noop),
+        migrations.RunPython(
+            populate_extractor,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

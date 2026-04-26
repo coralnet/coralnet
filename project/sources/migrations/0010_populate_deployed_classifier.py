@@ -34,5 +34,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(
-            populate_deployed_classifier, migrations.RunPython.noop),
+            populate_deployed_classifier,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]
