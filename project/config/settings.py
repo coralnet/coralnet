@@ -671,7 +671,7 @@ else:
 
     # Default file storage mechanism that holds media.
     _STORAGES_DEFAULT = dict(
-        BACKEND='lib.storage_backends.MediaStorageS3',
+        BACKEND='aws.storage.MediaStorageS3',
     )
 
 
@@ -764,6 +764,20 @@ if (
         "Can not use remote queue with local storage."
         " Please use S3 storage."
     )
+
+# Mapping from storage backends to storage managers.
+#
+# It could arguably be cleaner to ask each app to register storage
+# managers in their storage.py files, but autodiscover would add some
+# complexity and failure possibilities. That design might make sense if we had
+# more manager choices.
+
+STORAGE_MANAGERS = {
+    'lib.storage_backends.MediaStorageLocal':
+        'lib.storage_backends.StorageManagerLocal',
+    'aws.storage.MediaStorageS3':
+        'aws.storage.StorageManagerS3',
+}
 
 
 #

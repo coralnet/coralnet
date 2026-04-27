@@ -64,7 +64,7 @@ class AsyncMediaTest(ClientTest):
 @skipIf(
     os.name == 'nt'
     and settings.STORAGES['default']['BACKEND']
-        == 'lib.storage_backends.MediaStorageS3',
+        == 'aws.storage.MediaStorageS3',
     "Fetching existing thumbnails doesn't work with Windows + S3, because"
     " easy-thumbnails uses os.path for storage path separators")
 class ThumbnailsTest(AsyncMediaTest):

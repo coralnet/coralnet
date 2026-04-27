@@ -1,19 +1,15 @@
 from abc import ABCMeta
 from contextlib import contextmanager
+from importlib import import_module
 import os
 from pathlib import Path
-import posixpath
-import random
 import shutil
-import string
 import tempfile
 
-import boto3
 from django.conf import settings
 from django.core.files.storage import default_storage, FileSystemStorage
 from django.test import override_settings
 from spacer.data_classes import DataLocation
-from storages.backends.s3 import S3Storage
 
 from .exceptions import FileStorageUsageError
 
@@ -93,91 +89,6 @@ class StorageManager(object, metaclass=ABCMeta):
         self._remove_dir(dir_to_remove)
 
 
-class StorageManagerS3(StorageManager):
-
-    def copy_dir(self, src, dst):
-        s3_root_storage = get_s3_root_storage()
-
-        # List directories and files in this directory.
-        subdirs, filenames = s3_root_storage.listdir(src)
-        for filename in filenames:
-            # Copy the file from src to dst.
-            f = s3_root_storage.open(s3_root_storage.path_join(src, filename))
-            s3_root_storage.save(s3_root_storage.path_join(dst, filename), f)
-        for subdir in subdirs:
-            # Copy the subdir from src to dst using recursion.
-            self.copy_dir(
-                s3_root_storage.path_join(src, subdir),
-                s3_root_storage.path_join(dst, subdir))
-
-    @contextmanager
-    def override_default_storage_dir(self, storage_dir):
-        # We have an aws_location_changed() signal receiver which ensures that,
-        # when overriding the AWS_LOCATION setting, the relevant storages get
-        # their location attributes updated for the duration of the test.
-        aws_location = default_storage.path_join(
-            storage_dir, settings.AWS_S3_MEDIA_SUBDIR)
-
-        # If the storage's base_url attribute is set, then it's used; else,
-        # MEDIA_URL is read. Not at instantiation time, but any time it's
-        # relevant. So might as well do the easier change: MEDIA_URL.
-        # Also, it's good to keep MEDIA_URL synced up with the storage dir,
-        # since MEDIA_URL is used unconditionally in places like
-        # LiveServerThread.
-        # So we favor overriding MEDIA_URL instead of base_url.
-        media_url = 'https://{domain}/{storage_dir}/{subdir}/'.format(
-            domain=settings.AWS_S3_DOMAIN,
-            storage_dir=storage_dir.strip('/'),
-            subdir=settings.AWS_S3_MEDIA_SUBDIR,
-        )
-
-        with override_settings(AWS_LOCATION=aws_location, MEDIA_URL=media_url):
-            yield
-
-    def create_temp_dir(self):
-        s3_root_storage = get_s3_root_storage()
-
-        # Doubtful that S3 has any concept of temporary directories, since
-        # directories are already kind of a nebulous concept in S3: they
-        # can't be created manually, but they automatically get created as you
-        # save new filepaths, and automatically get deleted when emptied.
-        #
-        # So, we'll just create any old directory and attempt to clean it up
-        # later. We just have to identify a free directory name to create files
-        # in.
-        #
-        # get_available_name() already adds a random suffix as necessary
-        # (like `_123abCD`) to avoid clashing with an existing name.
-        # However, since S3 directories don't 'exist' until they contain files,
-        # clashing can easily happen if we start off trying to create 2 temp
-        # directories in a row (both will be be the non-suffixed name).
-        # So, we just add our own random suffix to begin with.
-        suffix = ''.join([
-            random.choice(string.digits + string.ascii_letters)
-            for _ in range(10)])
-        dir_path = 'tmp/tmp_' + suffix
-        return s3_root_storage.get_available_name(dir_path)
-
-    def _empty_dir(self, dir_to_empty):
-        # Emptying an S3 dir is equivalent to removing the dir. Empty dirs
-        # shouldn't persist.
-        self._remove_dir(dir_to_empty)
-
-    def _remove_dir(self, dir_to_remove):
-        # List directories and files in this directory.
-        s3_root_storage = get_s3_root_storage()
-        subdirs, filenames = s3_root_storage.listdir(dir_to_remove)
-
-        for filename in filenames:
-            # Remove the file.
-            s3_root_storage.delete(
-                s3_root_storage.path_join(dir_to_remove, filename))
-        for subdir in subdirs:
-            # Delete the subdir using recursion.
-            self._remove_dir(
-                s3_root_storage.path_join(dir_to_remove, subdir))
-
-
 class StorageManagerLocal(StorageManager):
 
     def copy_dir(self, src, dst):
@@ -216,71 +127,6 @@ class StorageManagerLocal(StorageManager):
         shutil.rmtree(dir_to_remove)
 
 
-class MediaStorageS3(S3Storage):
-    """
-    S3-bucket storage backend.
-    Storage root defaults to the AWS_LOCATION directory.
-    """
-    def _create_session(self):
-        """
-        This method in the parent class S3Storage would make the profile name
-        take higher auth precedence than it normally does in AWS.
-        Here we override that behavior, restoring the precedence to what AWS
-        defines:
-        https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html#cli-chap-authentication-precedence
-
-        This makes the behavior less surprising for most people who work on
-        other AWS projects.
-        Also, AWS precedence order makes it more obvious if you've left some
-        less secure auth methods lying around (like static key and secret),
-        which is good since you can clean up the keys if you're alerted to
-        them.
-        """
-        return boto3.Session(
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
-            aws_session_token=self.security_token,
-            profile_name=self.session_profile,
-        )
-
-    def exists(self, name):
-        # Check for existing file. This doesn't work on dirs.
-        if super().exists(name):
-            return True
-
-        # Check for existing dir (Django's local storage class also returns
-        # True on dirs). We do this by checking if listdir() returns any
-        # dirs or files.
-        dirs, files = self.listdir(name)
-        return bool(dirs or files)
-
-    def get_available_name(self, name, max_length=None):
-        available_name = super().get_available_name(
-            name, max_length=max_length)
-
-        # Django's suffix-appending code uses os.path.join(), so if we're
-        # running on Windows, the path will end up with backslash separators.
-        # We want to change the backslashes to forward slashes, since S3 uses
-        # forward slashes.
-        # However, on the off chance that a dir/file name legitimately uses a
-        # backslash, we'll only make this correction on Windows.
-        if os.name == 'nt':
-            available_name = available_name.replace('\\', '/')
-
-        return available_name
-
-    @staticmethod
-    def path_join(*args):
-        # For S3 paths, we join with forward slashes.
-        return posixpath.join(*args)
-
-    def spacer_data_loc(self, key) -> DataLocation:
-        """ Returns a spacer DataLocation object """
-        return DataLocation(storage_type='s3',
-                            key=self._normalize_name(key),
-                            bucket_name=self.bucket_name)
-
-
 class MediaStorageLocal(FileSystemStorage):
     """
     Local-filesystem storage backend.
@@ -297,33 +143,28 @@ class MediaStorageLocal(FileSystemStorage):
                             key=self.path(key))
 
 
-_s3_root_storage = None
- 
-
-def get_s3_root_storage():
-    """
-    Returns an S3 storage backend which accepts operations throughout an
-    entire bucket, rather than only within a settings-specified directory.
-    """
-    global _s3_root_storage
-
-    if _s3_root_storage is None:
-        # S3 storage's __init__() accepts kwargs to override default
-        # attributes. `location` is the path from the bucket root which will
-        # be used as the storage root. We want to use bucket root as storage
-        # root, so we pass ''.
-        _s3_root_storage = MediaStorageS3(location='')
-    return _s3_root_storage
-
-
 def get_storage_manager():
     """
-    Returns the StorageManager applicable to the default storage backend.
+    Returns an instance of the StorageManager that's applicable to the default
+    storage backend.
     """
-    match settings.STORAGES['default']['BACKEND']:
-        case 'lib.storage_backends.MediaStorageS3':
-            return StorageManagerS3()
-        case 'lib.storage_backends.MediaStorageLocal':
-            return StorageManagerLocal()
-        case _:
-            raise FileStorageUsageError("Unrecognized storage backend.")
+    backend_class_path = settings.STORAGES['default']['BACKEND']
+    if backend_class_path not in settings.STORAGE_MANAGERS:
+        raise FileStorageUsageError(
+            f"No manager for the storage backend {backend_class_path}.")
+
+    manager_class_path = settings.STORAGE_MANAGERS[backend_class_path]
+    module_path, class_name = manager_class_path.rsplit('.', 1)
+    module = import_module(module_path)
+    manager_class = getattr(module, class_name)
+
+    if not (
+        isinstance(manager_class, type)
+        and issubclass(manager_class, StorageManager)
+    ):
+        raise TypeError(
+            f"{manager_class_path} is not a StorageManager subclass."
+        )
+
+    manager = manager_class()
+    return manager
