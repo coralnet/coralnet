@@ -52,7 +52,7 @@ class Command(BaseCommand):
         This uses the AWS Batch to process the jobs. 
         ```
         HUEY_IMMEDIATE=False
-        SPACER_QUEUE_CHOICE=vision_backend.queues.BatchQueue
+        SPACER_QUEUE_CHOICE=aws.queues.BatchQueue
         SETTINGS_BASE=dev-s3
         ```
         

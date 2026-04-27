@@ -496,7 +496,7 @@ if _TESTING:
     # calling boto.
     SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
 elif SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
-    SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
+    SPACER_QUEUE_CHOICE = 'aws.queues.BatchQueue'
 else:
     # For dev servers, LocalQueue is default and the env can
     # specify otherwise.
@@ -756,7 +756,7 @@ STORAGES = {
 }
 
 if (
-    SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
+    SPACER_QUEUE_CHOICE == 'aws.queues.BatchQueue'
     and
     STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
 ):
