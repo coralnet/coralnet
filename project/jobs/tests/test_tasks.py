@@ -7,9 +7,9 @@ from django.test.utils import override_settings
 from django.utils import timezone
 
 from api_core.models import ApiJob, ApiJobUnit
+from aws.models import BatchJob
 from config.constants import SpacerJobSpec
 from lib.tests.utils import BaseTest
-from vision_backend.models import BatchJob
 from ..models import Job
 from ..tasks import (
     clean_up_old_jobs,

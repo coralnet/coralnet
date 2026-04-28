@@ -9,10 +9,10 @@ from spacer.tasks import process_job
 
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
-from vision_backend.models import BatchJob
 from vision_backend.tests.tasks.utils import BaseTaskTest
 from vision_backend.tests.base_queues import (
     QueueBasicTest, QueueClassificationTest)
+from ..models import BatchJob
 
 
 def batch_queue_decorator(func):

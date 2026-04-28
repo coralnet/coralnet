@@ -414,7 +414,7 @@ ROBOT_MODEL_TRAINDATA_PATTERN = 'classifiers/{pk}.traindata'
 ROBOT_MODEL_VALDATA_PATTERN = 'classifiers/{pk}.valdata'
 ROBOT_MODEL_VALRESULT_PATTERN = 'classifiers/{pk}.valresult'
 
-# Naming for vision_backend.models.BatchJob
+# Naming for aws.models.BatchJob
 BATCH_JOB_PATTERN = 'batch_jobs/{pk}_job_msg.json'
 BATCH_RES_PATTERN = 'batch_jobs/{pk}_job_res.json'
 

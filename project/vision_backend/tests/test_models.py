@@ -5,11 +5,10 @@ import numpy as np
 from spacer.messages import ClassifyReturnMsg
 
 from images.models import Point
-from jobs.utils import schedule_job
 from lib.tests.utils import ClientTest
 from lib.tests.utils_data import sample_image_as_file
 from ..common import Extractors
-from ..models import BatchJob, Score
+from ..models import Score
 from ..task_helpers import add_scores
 
 
@@ -83,24 +82,6 @@ class CascadeDeleteTest(ClientTest):
         self.assertEqual(Score.objects.filter(image=img).count(),
                          (nbr_points - 1) * expected_nbr_scores)
 
-    def test_job_batchjob_cascade(self):
-        """
-        BatchJobs should be deleted when their corresponding Jobs are
-        deleted.
-        """
-        job, _ = schedule_job('test')
-
-        batch_job = BatchJob(internal_job=job)
-        batch_job.save()
-        batch_job_id = batch_job.pk
-
-        job.delete()
-
-        with self.assertRaises(
-            BatchJob.DoesNotExist, msg="batch_job should be gone"
-        ):
-            BatchJob.objects.get(pk=batch_job_id)
-
 
 class PopulateClassifierStatusTest(MigrationTest):
 
@@ -163,7 +144,7 @@ class DeletePreMigrationBatchJobsTest(MigrationTest):
 
         # Manually delete the BatchJobs, so that the test's tearDown()
         # (which tries to get to the latest migrations) doesn't get an error.
-        BatchJob.objects.all().delete()
+        BatchJobBefore.objects.all().delete()
 
     def test_delete_all(self):
         BatchJobBefore = self.get_model_before('vision_backend.BatchJob')

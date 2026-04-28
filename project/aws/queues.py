@@ -11,8 +11,8 @@ from spacer.messages import JobMsg, JobReturnMsg
 from config.constants import SpacerJobSpec
 from jobs.models import Job
 from jobs.utils import finish_jobs
-from vision_backend.models import BatchJob
 from vision_backend.queues import BaseQueue
+from .models import BatchJob
 
 
 def get_batch_client():
