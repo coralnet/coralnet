@@ -129,9 +129,10 @@ class HardcodedFlatpagesMigrationTest(MigrationTest):
 
     before = [('flatpages', '0001_initial'), ('sites', '0001_initial')]
     after = [('flatpages_custom', '0001_add_help_page_if_not_present')]
-    # app_name = 'flatpages_custom'
-    # before = 'zero'
-    # after = '0001'
+    available_apps = [
+        'django.contrib.flatpages', 'django.contrib.sites',
+        'flatpages_custom',
+    ]
 
     def test_migration_when_help_flatpage_already_exists(self):
         FlatPage = self.get_model_before('flatpages.FlatPage')

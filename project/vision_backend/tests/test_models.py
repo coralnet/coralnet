@@ -93,7 +93,8 @@ class PopulateClassifierStatusTest(MigrationTest):
         Source = self.get_model_before('images.Source')
         Classifier = self.get_model_before('vision_backend.Classifier')
 
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         classifier_accepted = Classifier(
             source=source, valid=True, accuracy=0.50)
@@ -179,7 +180,8 @@ class PopulateLoadedRemotelyTest(MigrationTest):
 
         user = User(username='testuser')
         user.save()
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         images = []
         for value in [True, False, None]:
@@ -232,7 +234,8 @@ class PopulateHasRowcolsTest(MigrationTest):
 
         user = User(username='testuser')
         user.save()
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         images = []
         for extracted, extracted_dt_args in [

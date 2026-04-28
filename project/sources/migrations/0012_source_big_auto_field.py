@@ -30,6 +30,7 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
+        ('annotations', '0033_annoinfo_source_schema2'),
         ('sources', '0011_sourceinvite_big_auto_field'),
     ]
 

@@ -91,6 +91,7 @@ class MigrateClassifyImageEventToOtherAppTest(MigrationTest):
     after = [
         ('events', '0003_delete_classifyimageevent'),
     ]
+    available_apps = ['events']
 
     def test_dont_delete_events(self):
         """
