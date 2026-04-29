@@ -19,6 +19,7 @@ from lib.decorators import (
     source_permission_required, source_visibility_required)
 from lib.utils import paginate
 from sources.models import Source
+from .common import ClassifierStatuses
 from .confmatrix import ConfMatrix
 from .forms import BackendMainForm, CmTestForm
 from .models import Classifier, SourceCheckRequestEvent
@@ -90,7 +91,8 @@ def backend_overview(request):
 
     all_sources = Source.objects.all()
     all_classifiers = Classifier.objects.all()
-    accepted_classifiers = all_classifiers.filter(status=Classifier.ACCEPTED)
+    accepted_classifiers = all_classifiers.filter(
+        status=ClassifierStatuses.ACCEPTED.value)
     accepted_ratio = format(
         accepted_classifiers.count() / all_sources.count(), '.1f')
     clf_stats = {

@@ -8,8 +8,7 @@ from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
-from vision_backend.common import Extractors
-from vision_backend.models import Classifier
+from vision_backend.common import ClassifierStatuses, Extractors
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, source_check_is_scheduled)
 from ..models import Source
@@ -740,10 +739,10 @@ class SourceNewTest(BaseSourceTest):
 
     def test_deployed_classifier_not_accepted(self):
         for status in [
-            Classifier.LACKING_UNIQUE_LABELS,
-            Classifier.TRAIN_PENDING,
-            Classifier.TRAIN_ERROR,
-            Classifier.REJECTED_ACCURACY,
+            ClassifierStatuses.LACKING_UNIQUE_LABELS.value,
+            ClassifierStatuses.TRAIN_PENDING.value,
+            ClassifierStatuses.TRAIN_ERROR.value,
+            ClassifierStatuses.REJECTED_ACCURACY.value,
         ]:
             classifier = self.create_robot(self.source_ab)
             classifier.status = status

@@ -7,7 +7,7 @@ from spacer.data_classes import DataLocation, ImageFeatures, ValResults
 
 from events.models import Event
 from labels.models import Label, LocalLabel
-from .common import Extractors
+from .common import ClassifierStatuses, Extractors
 
 
 class Classifier(models.Model):
@@ -18,22 +18,9 @@ class Classifier(models.Model):
     # Source this classifier belongs to and is trained on.
     source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
 
-    TRAIN_PENDING = 'PN'
-    LACKING_UNIQUE_LABELS = 'UQ'
-    TRAIN_ERROR = 'ER'
-    REJECTED_ACCURACY = 'RJ'
-    ACCEPTED = 'AC'
-    STATUS_CHOICES = [
-        (TRAIN_PENDING, "Training pending"),
-        (LACKING_UNIQUE_LABELS,
-         "Declined because the training labelset only had one unique label"),
-        (TRAIN_ERROR, "Training got an error"),
-        (REJECTED_ACCURACY, "Rejected because accuracy didn't improve enough"),
-        (ACCEPTED, "Accepted as new classifier"),
-    ]
     # Training status of the classifier.
     status = models.CharField(
-        max_length=2, choices=STATUS_CHOICES, default=TRAIN_PENDING)
+        max_length=2, choices=ClassifierStatuses.choices, default=ClassifierStatuses.TRAIN_PENDING.value)
 
     # Training runtime in seconds.
     runtime_train = models.BigIntegerField(default=0)

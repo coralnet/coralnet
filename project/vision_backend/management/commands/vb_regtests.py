@@ -7,6 +7,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs
 from jobs.tests.utils import do_job
 from lib.regtest_utils import VisionBackendRegressionTest
+from ...common import ClassifierStatuses
 from ...models import Classifier
 
 reg_test_config = {
@@ -134,7 +135,8 @@ class Command(BaseCommand):
             do_job('collect_spacer_jobs')
             print("-> No classifier trained yet.")
             has_classifier = Classifier.objects.filter(
-                source=s.source, status=Classifier.ACCEPTED).count() > 0
+                source=s.source,
+                status=ClassifierStatuses.ACCEPTED.value).exists()
             self.check_for_failed_jobs()
 
         print("-> Classifier trained!")

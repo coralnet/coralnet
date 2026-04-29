@@ -18,7 +18,7 @@ from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from labels.models import LabelSet
 from lib.utils import date_display
-from vision_backend.common import SourceExtractorChoices
+from vision_backend.common import ClassifierStatuses, SourceExtractorChoices
 from vision_backend.models import Classifier
 
 
@@ -439,8 +439,8 @@ class Source(models.Model):
         """
         try:
             return self.classifier_set.filter(
-                status=Classifier.ACCEPTED).latest('pk')
-        except Classifier.DoesNotExist:
+                status=ClassifierStatuses.ACCEPTED.value).latest('pk')
+        except models.ObjectDoesNotExist:
             return None
 
     def get_accepted_robots(self):
@@ -449,7 +449,7 @@ class Source(models.Model):
         source
         """
         return self.classifier_set.filter(
-            status=Classifier.ACCEPTED).order_by('pk')
+            status=ClassifierStatuses.ACCEPTED.value).order_by('pk')
 
     def ready_to_train(self) -> Tuple[bool, str]:
         """
@@ -469,11 +469,14 @@ class Source(models.Model):
 
         try:
             latest_classifier_attempt = self.classifier_set.exclude(
-                status=Classifier.TRAIN_PENDING).latest('pk')
-        except Classifier.DoesNotExist:
+                status=ClassifierStatuses.TRAIN_PENDING.value).latest('pk')
+        except models.ObjectDoesNotExist:
             return True, "No classifier yet"
 
-        if latest_classifier_attempt.status == Classifier.TRAIN_ERROR:
+        if (
+            latest_classifier_attempt.status
+            == ClassifierStatuses.TRAIN_ERROR.value
+        ):
             return True, "Last training resulted in an error"
 
         # Check whether there are enough newly annotated images

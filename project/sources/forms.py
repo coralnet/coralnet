@@ -10,7 +10,7 @@ from annotations.forms import AnnotationAreaPercentsField
 from images.forms import PointGenField
 from images.utils import get_aux_label_field_names
 from lib.forms import FieldsetsFormComponent, GridFormRenderer
-from vision_backend.models import Classifier
+from vision_backend.common import ClassifierStatuses
 from .models import Source, SourceInvite
 from .utils import aux_label_name_collisions
 
@@ -248,7 +248,7 @@ class SourceForm(FieldsetsFormComponent, ModelForm):
 
         if deployed_classifier is not None:
 
-            if deployed_classifier.status != Classifier.ACCEPTED:
+            if deployed_classifier.status != ClassifierStatuses.ACCEPTED.value:
                 raise ValidationError(
                     "This isn't a valid classifier ID.",
                     code='classifier_not_accepted',

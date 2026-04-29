@@ -24,7 +24,8 @@ from lib.decorators import (
 from lib.utils import date_display, datetime_display
 from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
-from vision_backend.models import Classifier, Features
+from vision_backend.common import ClassifierStatuses
+from vision_backend.models import Features
 from vision_backend.utils import schedule_source_check_on_commit
 from .forms import (
     SourceChangePermissionForm,
@@ -172,7 +173,10 @@ def source_main(request, source_id):
     if source.trains_own_classifiers and last_accepted_classifier:
 
         trained_classifiers = source.classifier_set.filter(
-            status__in=[Classifier.ACCEPTED, Classifier.REJECTED_ACCURACY])
+            status__in=[
+                ClassifierStatuses.ACCEPTED.value,
+                ClassifierStatuses.REJECTED_ACCURACY.value,
+            ])
         classifier_details = [
             ("Last classifier saved",
              datetime_display(last_accepted_classifier.train_completion_date)),

@@ -30,6 +30,7 @@ from jobs.exceptions import JobError
 from jobs.models import Job
 from jobs.utils import finish_jobs
 from labels.models import Label
+from .common import ClassifierStatuses
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, ClassifyImageEvent, Features, Score
 from .utils import (
@@ -522,7 +523,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
 
         if spacer_error:
             # Error from spacer when running the spacer job.
-            classifier.status = Classifier.TRAIN_ERROR
+            classifier.status = ClassifierStatuses.TRAIN_ERROR.value
             classifier.save()
 
             error_class, error_message = spacer_error
@@ -568,7 +569,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
                 # This isn't really an error case; it just means we tried to
                 # improve on the last classifier and we couldn't improve.
 
-                classifier.status = Classifier.REJECTED_ACCURACY
+                classifier.status = ClassifierStatuses.REJECTED_ACCURACY.value
                 classifier.save()
 
                 return (
@@ -586,7 +587,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             pc.save()
 
         # Accept and save the current model
-        classifier.status = Classifier.ACCEPTED
+        classifier.status = ClassifierStatuses.ACCEPTED.value
         classifier.save()
 
         # Set as the deployed classifier, if applicable

@@ -32,7 +32,7 @@ from jobs.utils import job_runner, job_starter, schedule_job
 from labels.models import Label
 from sources.models import Source
 from . import task_helpers as th
-from .common import CLASSIFIER_MAPPINGS
+from .common import CLASSIFIER_MAPPINGS, ClassifierStatuses
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
@@ -391,7 +391,7 @@ def submit_classifier(source_id, job_id):
         #
         # We can get stuck in an error loop if we proceed to submit training
         # (see issue #412), so we don't submit training.
-        classifier.status = Classifier.LACKING_UNIQUE_LABELS
+        classifier.status = ClassifierStatuses.LACKING_UNIQUE_LABELS.value
         classifier.save()
         raise JobError(
             f"{classifier} was declined training, because there weren't enough"

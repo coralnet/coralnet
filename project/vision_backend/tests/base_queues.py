@@ -5,7 +5,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs_until_empty
 from jobs.tests.utils import JobUtilsMixin
 from vision_backend_api.tests.utils import DeployBaseTest
-from ..models import Classifier
+from ..common import ClassifierStatuses
 from .tasks.utils import BaseTaskTest
 
 
@@ -43,7 +43,8 @@ class QueueBasicTest(BaseTaskTest):
             'collect_spacer_jobs', "Jobs checked/collected: 1 SUCCEEDED")
         # Check for successful result handling
         latest_classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(latest_classifier.status, Classifier.ACCEPTED)
+        self.assertEqual(
+            latest_classifier.status, ClassifierStatuses.ACCEPTED.value)
 
     def do_test_job_gets_consumed(self):
         """

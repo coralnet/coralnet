@@ -11,8 +11,7 @@ from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest, HtmlAssertionsMixin
 from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
-from vision_backend.common import Extractors
-from vision_backend.models import Classifier
+from vision_backend.common import ClassifierStatuses, Extractors
 from vision_backend.tests.tasks.utils import BaseTaskTest
 from ..models import Source
 
@@ -278,7 +277,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         self.upload_data_and_train_classifier()
 
         classifier_1 = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier_1.status, Classifier.ACCEPTED)
+        self.assertEqual(classifier_1.status, ClassifierStatuses.ACCEPTED.value)
 
         # Train and reject a classifier. Override settings so that
         # 1) we don't need more images to train a new classifier, and
@@ -294,7 +293,8 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         classifier_2 = self.source.classifier_set.latest('pk')
         # Sanity checks
         self.assertNotEqual(classifier_1.pk, classifier_2.pk)
-        self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)
+        self.assertEqual(
+            classifier_2.status, ClassifierStatuses.REJECTED_ACCURACY.value)
 
         soup = self.source_main_soup(self.source)
         backend_soup = soup.find(id='backend-column')
@@ -326,7 +326,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         self.upload_data_and_train_classifier()
 
         classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier.status, Classifier.ACCEPTED)
+        self.assertEqual(classifier.status, ClassifierStatuses.ACCEPTED.value)
 
         # Delete the train job associated with the classifier,
         # so that the classifier's create date must be used as

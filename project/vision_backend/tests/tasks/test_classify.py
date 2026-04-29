@@ -18,9 +18,9 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.utils import schedule_job
 from jobs.tests.utils import do_job
-from ...common import Extractors
+from ...common import ClassifierStatuses, Extractors
 from ...exceptions import RowColumnMismatchError
-from ...models import Classifier, ClassifyImageEvent, Score
+from ...models import ClassifyImageEvent, Score
 from ...utils import clear_features
 from .utils import BaseTaskTest, source_check_is_scheduled
 
@@ -697,7 +697,7 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
             clf_2 = self.upload_data_and_train_classifier(
                 new_train_images_count=0)
         self.assertNotEqual(clf_1.pk, clf_2.pk)
-        self.assertEqual(clf_2.status, Classifier.ACCEPTED)
+        self.assertEqual(clf_2.status, ClassifierStatuses.ACCEPTED.value)
 
         # Actually use the first classifier.
         self.source.trains_own_classifiers = False

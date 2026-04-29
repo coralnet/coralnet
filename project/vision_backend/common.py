@@ -16,6 +16,17 @@ class Extractors(models.TextChoices):
     DUMMY = 'dummy', "Dummy"
 
 
+class ClassifierStatuses(models.TextChoices):
+    TRAIN_PENDING = 'PN', "Training pending"
+    LACKING_UNIQUE_LABELS = (
+        'UQ',
+        "Declined because the training labelset only had one unique label")
+    TRAIN_ERROR = 'ER', "Training got an error"
+    REJECTED_ACCURACY = (
+        'RJ', "Rejected because accuracy didn't improve enough")
+    ACCEPTED = 'AC', "Accepted as new classifier"
+
+
 # Hard-coded shallow learners for each deep model.
 # MLP is the better newer shallow learner, but we stayed with
 # LR for the old extractor for backwards compatibility.
