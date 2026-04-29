@@ -88,7 +88,7 @@ class TrainClassifierTest(BaseTaskTest):
         self.assertEqual(classifier.status, Classifier.ACCEPTED)
         # Classifier acceptance is immaterial to Job success, but still,
         # should have succeeded.
-        self.assertEqual(classifier.train_job.status, Job.Status.SUCCESS)
+        self.assertEqual(classifier.get_train_job().status, Job.Status.SUCCESS)
 
         # Check other fields.
         self.assertEqual(classifier.nbr_train_images, 3 + 1)

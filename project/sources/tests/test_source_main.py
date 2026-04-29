@@ -300,11 +300,11 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         backend_soup = soup.find(id='backend-column')
 
         self.assertIsNotNone(backend_soup.find(id=self.acc_overview_id))
-        save_date = classifier_1.train_job.modify_date
+        save_date = classifier_1.get_train_job().modify_date
         self.assert_detail(
             backend_soup,
             f"Last classifier saved: {datetime_display(save_date)}")
-        train_date = classifier_2.train_job.modify_date
+        train_date = classifier_2.get_train_job().modify_date
         self.assert_detail(
             backend_soup,
             f"Last classifier trained: {datetime_display(train_date)}")
@@ -331,7 +331,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         # Delete the train job associated with the classifier,
         # so that the classifier's create date must be used as
         # a fallback for the train-finish date.
-        classifier.train_job.delete()
+        classifier.get_train_job().delete()
 
         soup = self.source_main_soup(self.source)
         backend_soup = soup.find(id='backend-column')

@@ -350,8 +350,7 @@ def submit_classifier(source_id, job_id):
             f" Feature extractions will be redone to fix this.")
 
     # Create new classifier
-    classifier = Classifier(
-        source=source, train_job_id=job_id, nbr_train_images=len(images))
+    classifier = Classifier(source=source, nbr_train_images=len(images))
     classifier.save()
 
     # Create training datasets.

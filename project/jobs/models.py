@@ -4,6 +4,9 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Q
 
+from sources.models import Source
+from vision_backend.models import Classifier
+
 
 class JobQuerySet(models.QuerySet):
 
@@ -36,10 +39,14 @@ class Job(models.Model):
 
     # Source this Job applies to, if applicable.
     source = models.ForeignKey(
-        'sources.Source', null=True, on_delete=models.CASCADE)
+        Source, null=True, on_delete=models.CASCADE)
 
     # User who initiated this Job, if applicable.
     user = models.ForeignKey(User, null=True, on_delete=models.SET_NULL)
+
+    # Classifier this Job applies to, if applicable.
+    classifier = models.ForeignKey(
+        Classifier, null=True, on_delete=models.SET_NULL)
 
     class Status(models.TextChoices):
         PENDING = 'pending', "Pending"

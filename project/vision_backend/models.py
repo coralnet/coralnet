@@ -6,7 +6,6 @@ from django.db import models
 from spacer.data_classes import DataLocation, ImageFeatures, ValResults
 
 from events.models import Event
-from jobs.models import Job
 from labels.models import Label, LocalLabel
 from .common import Extractors
 
@@ -18,9 +17,6 @@ class Classifier(models.Model):
 
     # Source this classifier belongs to and is trained on.
     source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
-
-    # Job that tracks the training status of this classifier.
-    train_job = models.ForeignKey(Job, null=True, on_delete=models.SET_NULL)
 
     TRAIN_PENDING = 'PN'
     LACKING_UNIQUE_LABELS = 'UQ'
@@ -62,15 +58,24 @@ class Classifier(models.Model):
 
         return ValResults.load(valres_loc)
 
+    def get_train_job(self):
+        from jobs.models import Job
+        try:
+            return self.job_set.get(job_name='train_classifier')
+        except Job.DoesNotExist:
+            # Most likely this classifier was trained before the introduction
+            # of the Job model.
+            return None
+
     @property
     def train_completion_date(self):
-        if self.train_job:
-            return self.train_job.modify_date
-
-        # Else: Most likely this classifier was trained before the introduction
-        # of the Job model.
-        # Use the Classifier's create date as a less-accurate fallback.
-        return self.create_date
+        train_job = self.get_train_job()
+        if train_job:
+            # The date the train job's status was updated to success/failure.
+            return train_job.modify_date
+        else:
+            # Use the Classifier's create date as a less-accurate fallback.
+            return self.create_date
 
     def get_process_date_short_str(self):
         """
