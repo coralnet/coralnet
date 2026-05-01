@@ -9,7 +9,7 @@ source_general_urlpatterns = [
     path('new/', views.source_new, name="source_new"),
     path('invites/', views.invites_manage, name="invites_manage"),
 
-    path('js_test_async_media/',
+    path('js_test_source_edit/',
          js_test_views.SourceEditQUnitView.as_view(),
          name="js_test_source_edit"),
 ]
