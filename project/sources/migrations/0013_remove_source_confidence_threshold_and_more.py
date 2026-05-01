@@ -7,7 +7,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('sources', '0012_source_big_auto_field'),
-        ('vision_backend', '0036_sourceclassifieroptions_populate'),
+        # Commenting out this dep to make the squash process happy.
+        # ('vision_backend', '0036_sourceclassifieroptions_populate'),
     ]
 
     operations = [

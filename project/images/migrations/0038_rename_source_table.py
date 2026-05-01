@@ -13,12 +13,13 @@ class Migration(migrations.Migration):
         # Anything that assumes the table is still images_source should
         # be a dependency here. This way, that assumption will hold
         # during those migrations.
-        ('annotations', '0024_source_fk_app_change'),
-        ('calcification', '0003_source_fk_app_change'),
-        ('images', '0037_source_fk_app_change'),
-        ('jobs', '0016_source_fk_app_change'),
+        # But, commenting out these deps to make the squash process happy.
+        # ('annotations', '0024_source_fk_app_change'),
+        # ('calcification', '0003_source_fk_app_change'),
+        # ('jobs', '0016_source_fk_app_change'),
+        # ('vision_backend', '0022_source_fk_app_change'),
         ('sources', '0003_source_fk_app_change'),
-        ('vision_backend', '0022_source_fk_app_change'),
+        ('images', '0037_source_fk_app_change'),
     ]
 
     database_operations = [

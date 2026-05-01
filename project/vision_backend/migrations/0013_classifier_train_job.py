@@ -7,7 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('jobs', '0010_unique_constraint_update_inprogress_code'),
+        # Commenting out this dep to make the squash process happy.
+        # ('jobs', '0010_unique_constraint_update_inprogress_code'),
         ('vision_backend', '0012_rename_model_was_cashed_features_model_was_cached'),
     ]
 

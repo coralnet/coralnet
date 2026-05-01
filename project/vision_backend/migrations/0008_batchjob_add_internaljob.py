@@ -7,7 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('jobs', '0006_rename_to_result_message'),
+        # Commenting out this dep to make the squash process happy.
+        # ('jobs', '0006_rename_to_result_message'),
         ('vision_backend', '0007_batchjob_jobtoken_nullable'),
     ]
 

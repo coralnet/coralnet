@@ -16,7 +16,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         # This migration fails if the batchjob table is already renamed.
-        ('jobs', '0020_big_auto_fields'),
+        # But, commenting out this dep to make the squash process happy.
+        # ('jobs', '0020_big_auto_fields'),
         ('sources', '0012_source_big_auto_field'),
         ('vision_backend', '0030_classifier_big_auto_field'),
     ]

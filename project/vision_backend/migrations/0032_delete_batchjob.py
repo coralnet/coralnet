@@ -15,7 +15,8 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ('aws', '0001_initial'),
+        # Commenting out this dep to make the squash process happy.
+        # ('aws', '0001_initial'),
         ('vision_backend', '0031_rename_batchjob_table'),
     ]
 
