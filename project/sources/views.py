@@ -24,7 +24,9 @@ from lib.decorators import (
 from lib.utils import date_display, datetime_display
 from map.utils import cacheable_map_sources
 from newsfeed.models import NewsItem
-from vision_backend.models import Classifier, Features
+from vision_backend.common import ClassifierStatuses
+from vision_backend.forms import SourceClassifierOptionsForm
+from vision_backend.models import Features
 from vision_backend.utils import schedule_source_check_on_commit
 from .forms import (
     SourceChangePermissionForm,
@@ -96,14 +98,21 @@ def source_new(request):
     # page, or we just submitted the form.  If POST, we submitted; if
     # GET, we just got here.
     if request.method == 'POST':
-        # Bind the form to the submitted POST data.
-        source_form = SourceForm(request.POST, request=request)
+
+        # There are two models whose fields are shown on the form page, so
+        # that corresponds to two ModelForm classes. Instantiate both with the
+        # submitted POST data.
+        source_form = SourceForm(request.POST)
+        classifier_options_form = SourceClassifierOptionsForm(
+            request.POST, request=request)
 
         # <form>.is_valid() calls <form>.clean() and checks field validity.
-        if source_form.is_valid():
+        if source_form.is_valid() and classifier_options_form.is_valid():
 
             # Save a new Source model instance and retrieve it.
             new_source = source_form.save()
+            # Save a SourceClassifierOptions model instance.
+            classifier_options_form.save_new(new_source)
 
             # Make the current user an admin of the new source
             new_source.assign_role(request.user, Source.PermTypes.ADMIN.code)
@@ -115,14 +124,16 @@ def source_new(request):
             return HttpResponseRedirect(
                 reverse('source_main', args=[new_source.id]))
         else:
-            # Show the form again, with error message
+            # Show the form page again, with error messages.
             messages.error(request, "Please correct the errors below.")
     else:
-        # Unbound (empty) form
+        # Unbound (empty) forms
         source_form = SourceForm()
+        classifier_options_form = SourceClassifierOptionsForm()
 
     return render(request, 'sources/source_new.html', {
         'source_form': source_form,
+        'classifier_options_form': classifier_options_form,
         'map_minimum_images': settings.MAP_IMAGE_COUNT_TIERS[0],
     })
 
@@ -134,6 +145,7 @@ def source_main(request, source_id):
     """
 
     source = get_object_or_404(Source, id=source_id)
+    classifier_options = source.classifier_options
 
     # Users who are members of the source
     members = source.get_members_ordered_by_role()
@@ -169,10 +181,16 @@ def source_main(request, source_id):
     classifier_plot_data = []
     last_accepted_classifier = source.last_accepted_classifier
 
-    if source.trains_own_classifiers and last_accepted_classifier:
+    if (
+        classifier_options.trains_own_classifiers
+        and last_accepted_classifier
+    ):
 
         trained_classifiers = source.classifier_set.filter(
-            status__in=[Classifier.ACCEPTED, Classifier.REJECTED_ACCURACY])
+            status__in=[
+                ClassifierStatuses.ACCEPTED.value,
+                ClassifierStatuses.REJECTED_ACCURACY.value,
+            ])
         classifier_details = [
             ("Last classifier saved",
              datetime_display(last_accepted_classifier.train_completion_date)),
@@ -180,9 +198,9 @@ def source_main(request, source_id):
              datetime_display(
                  trained_classifiers.latest('pk').train_completion_date)),
             ("Feature extractor",
-             source.get_feature_extractor_setting_display()),
+             classifier_options.get_feature_extractor_setting_display()),
             ("Confidence threshold",
-             f'{source.confidence_threshold}%'),
+             f'{classifier_options.confidence_threshold}%'),
         ]
 
         clfs = source.get_accepted_robots()
@@ -196,7 +214,7 @@ def source_main(request, source_id):
                 'pk': str(clf.pk),
             })
 
-    elif source.trains_own_classifiers:
+    elif classifier_options.trains_own_classifiers:
 
         classifier_details = [
             ("Classifier status",
@@ -204,23 +222,23 @@ def source_main(request, source_id):
              f" {settings.TRAINING_MIN_IMAGES} Confirmed images"
              f" to train a classifier."),
             ("Feature extractor",
-             source.get_feature_extractor_setting_display()),
+             classifier_options.get_feature_extractor_setting_display()),
         ]
 
-    elif source.deployed_classifier:
+    elif classifier_options.deployed_classifier:
 
         classifier_details = [
             ("Active classifier",
-             source.get_deployed_classifier_html()),
+             classifier_options.get_deployed_classifier_html()),
             ("Confidence threshold",
-             f'{source.confidence_threshold}%'),
+             f'{classifier_options.confidence_threshold}%'),
         ]
 
     else:
 
         classifier_details = [
             ("Active classifier",
-             source.get_deployed_classifier_html()),
+             classifier_options.get_deployed_classifier_html()),
         ]
 
     return render(request, 'sources/source_main.html', {
@@ -247,17 +265,23 @@ def source_edit(request, source_id):
     if request.method == 'POST':
 
         source_form = SourceForm(
-            request.POST, request=request, instance=source)
+            request.POST, instance=source)
+        classifier_options_form = SourceClassifierOptionsForm(
+            request.POST, request=request, instance=source.classifier_options)
 
-        if source_form.is_valid():
+        if source_form.is_valid() and classifier_options_form.is_valid():
 
-            # Save the edits to the Source.
+            # Save the edits.
             source_form.save()
+            classifier_options_form.save()
 
             resetting_something = False
 
             # Schedule classifier reset if needed.
-            if 'feature_extractor_setting' in source_form.changed_data:
+            if (
+                'feature_extractor_setting'
+                in classifier_options_form.changed_data
+            ):
                 # Changed the feature extractor setting for train-classifiers
                 # mode. Wipe this source's trained classifiers.
                 schedule_job(
@@ -276,7 +300,8 @@ def source_edit(request, source_id):
                 image__source=source_form.instance, extracted=True)
             if (
                 source_form.instance.feature_extractor is not None
-                and source_features.exclude(
+                and
+                source_features.exclude(
                     extractor=source_form.instance.feature_extractor).exists()
             ):
                 # There exist features in the source that don't match
@@ -290,8 +315,10 @@ def source_edit(request, source_id):
                 resetting_something = True
 
             classifier_settings_changed = (
-                ('trains_own_classifiers' in source_form.changed_data)
-                or ('deployed_classifier' in source_form.changed_data)
+                ('trains_own_classifiers'
+                 in classifier_options_form.changed_data)
+                or
+                ('deployed_classifier' in classifier_options_form.changed_data)
             )
             if classifier_settings_changed and not resetting_something:
                 # A source check may be warranted, and may not be scheduled
@@ -307,10 +334,13 @@ def source_edit(request, source_id):
     else:
         # Just reached this form page
         source_form = SourceForm(instance=source)
+        classifier_options_form = SourceClassifierOptionsForm(
+            instance=source.classifier_options)
 
     return render(request, 'sources/source_edit.html', {
         'source': source,
         'edit_source_form': source_form,
+        'edit_classifier_options_form': classifier_options_form,
         'map_minimum_images': settings.MAP_IMAGE_COUNT_TIERS[0],
     })
 

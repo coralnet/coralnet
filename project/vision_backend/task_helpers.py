@@ -30,6 +30,7 @@ from jobs.exceptions import JobError
 from jobs.models import Job
 from jobs.utils import finish_jobs
 from labels.models import Label
+from .common import ClassifierStatuses
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, ClassifyImageEvent, Features, Score
 from .utils import (
@@ -308,7 +309,7 @@ class SpacerResultHandler(abc.ABC):
         return int(spacer_task.job_token)
 
     @classmethod
-    def get_internal_jobs(cls, spacer_tasks):
+    def get_internal_jobs(cls, spacer_tasks) -> dict[int, Job]:
         job_ids = [cls.get_internal_job_id(task) for task in spacer_tasks]
         jobs_by_id = Job.objects.in_bulk(job_ids)
         return jobs_by_id
@@ -326,9 +327,7 @@ class SpacerResultHandler(abc.ABC):
             result_message = None
 
             job_id = self.get_internal_job_id(task)
-            try:
-                job = self.jobs_by_id[job_id]
-            except KeyError:
+            if job_id not in self.jobs_by_id:
                 # Job doesn't exist anymore. There shouldn't be anything
                 # else to do regarding this result.
                 continue
@@ -341,15 +340,14 @@ class SpacerResultHandler(abc.ABC):
                 result_message = str(e)
             finally:
                 finish_jobs_args.append(dict(
-                    job=job,
+                    job=self.jobs_by_id[job_id],
                     success=success,
                     result_message=result_message,
                 ))
 
         finish_jobs(finish_jobs_args)
 
-    @classmethod
-    def handle_spacer_task_result(cls, task, job_res, spacer_error):
+    def handle_spacer_task_result(self, task, job_res, spacer_error):
         """
         Handles the result of a spacer task (a sub-unit within a spacer job)
         and raises a JobError if an error is found.
@@ -482,9 +480,8 @@ class SpacerTrainResultHandler(SpacerResultHandler):
                 # check if the source has any next steps.
                 schedule_source_check_on_commit(job.source_id)
 
-    @classmethod
     def handle_spacer_task_result(
-            cls,
+            self,
             task: TrainClassifierMsg,
             job_res: JobReturnMsg,
             spacer_error: tuple[str, str] | None) -> str | None:
@@ -512,16 +509,21 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             match = model_filepath_regex.search(model_loc.key)
             prev_classifier_ids.append(int(match.groups()[0]))
 
-        # Check that Classifier still exists.
+        # Check that the Classifier still exists.
         try:
             classifier = Classifier.objects.get(pk=classifier_id)
         except Classifier.DoesNotExist:
             raise JobError(
                 f"Classifier {classifier_id} doesn't exist anymore.")
 
+        # Associate the Classifier with its Job for bookkeeping.
+        job_id = self.get_internal_job_id(task)
+        self.jobs_by_id[job_id].classifier = classifier
+        self.jobs_by_id[job_id].save()
+
         if spacer_error:
             # Error from spacer when running the spacer job.
-            classifier.status = Classifier.TRAIN_ERROR
+            classifier.status = ClassifierStatuses.TRAIN_ERROR.value
             classifier.save()
 
             error_class, error_message = spacer_error
@@ -567,7 +569,7 @@ class SpacerTrainResultHandler(SpacerResultHandler):
                 # This isn't really an error case; it just means we tried to
                 # improve on the last classifier and we couldn't improve.
 
-                classifier.status = Classifier.REJECTED_ACCURACY
+                classifier.status = ClassifierStatuses.REJECTED_ACCURACY.value
                 classifier.save()
 
                 return (
@@ -585,14 +587,14 @@ class SpacerTrainResultHandler(SpacerResultHandler):
             pc.save()
 
         # Accept and save the current model
-        classifier.status = Classifier.ACCEPTED
+        classifier.status = ClassifierStatuses.ACCEPTED.value
         classifier.save()
 
         # Set as the deployed classifier, if applicable
-        source = classifier.source
-        if source.trains_own_classifiers:
-            source.deployed_classifier = classifier
-            source.save()
+        classifier_options = classifier.source.classifier_options
+        if classifier_options.trains_own_classifiers:
+            classifier_options.deployed_classifier = classifier
+            classifier_options.save()
 
         return f"New classifier accepted: {classifier.pk}"
 

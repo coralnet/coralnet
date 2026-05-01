@@ -19,6 +19,7 @@ from lib.decorators import (
     source_permission_required, source_visibility_required)
 from lib.utils import paginate
 from sources.models import Source
+from .common import ClassifierStatuses
 from .confmatrix import ConfMatrix
 from .forms import BackendMainForm, CmTestForm
 from .models import Classifier, SourceCheckRequestEvent
@@ -42,11 +43,11 @@ def backend_overview(request):
     images_unclassified = images_all.unclassified()
     images_need_features = \
         images_unclassified.without_features().exclude(
-            source__deployed_classifier__isnull=True,
-            source__trains_own_classifiers=False)
+            source__classifier_options__deployed_classifier__isnull=True,
+            source__classifier_options__trains_own_classifiers=False)
     images_need_classification = \
         images_unclassified.with_features().exclude(
-            source__deployed_classifier__isnull=True)
+            source__classifier_options__deployed_classifier__isnull=True)
     need_features = images_need_features.count()
     need_classification = images_need_classification.count()
     not_ready = \
@@ -90,7 +91,8 @@ def backend_overview(request):
 
     all_sources = Source.objects.all()
     all_classifiers = Classifier.objects.all()
-    accepted_classifiers = all_classifiers.filter(status=Classifier.ACCEPTED)
+    accepted_classifiers = all_classifiers.filter(
+        status=ClassifierStatuses.ACCEPTED.value)
     accepted_ratio = format(
         accepted_classifiers.count() / all_sources.count(), '.1f')
     clf_stats = {
@@ -189,14 +191,14 @@ def backend_main(request, source_id):
     source = Source.objects.get(id=source_id)
 
     # Make sure that there is a classifier for this source.
-    if not source.deployed_classifier:
+    if not source.classifier_options.deployed_classifier:
         return render(request, 'vision_backend/backend_main.html', {
             'form': form,
             'has_classifier': False,
             'source': source,
         })
 
-    classifier = source.deployed_classifier
+    classifier = source.classifier_options.deployed_classifier
     if 'valres' in request.session.keys() and \
             'classifier_id' in request.session.keys() and \
             request.session['classifier_id'] == classifier.pk:

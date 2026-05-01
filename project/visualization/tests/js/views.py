@@ -46,7 +46,8 @@ class BrowseImagesActionsQUnitView(QUnitView):
     @property
     def default_test_template_context(self):
         return {
-            'source': dict(pk=1, confidence_threshold=80),
+            'source': dict(
+                pk=1, classifier_options=dict(confidence_threshold=80)),
             'page_results': paginate(
                 results=[1, 2, 3, 4], items_per_page=3, request_args=dict())[0],
             'links': dict(

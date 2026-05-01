@@ -189,8 +189,8 @@ class ExtractFeaturesTest(BaseTaskTest):
         run_scheduled_jobs_until_empty()
         self.do_collect_spacer_jobs()
         # It's intermittently failing to train. See if we can debug why.
-        self.source.refresh_from_db()
-        if not self.source.deployed_classifier:
+        self.source.classifier_options.refresh_from_db()
+        if not self.source.classifier_options.deployed_classifier:
             completed_jobs = Job.objects.filter(
                 source=self.source).completed().order_by('pk')
             completed_job_details = '\n'.join([
@@ -228,9 +228,9 @@ class AbortCasesTest(
     end.
     """
     def test_classification_not_configured_at_source_check(self):
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = None
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = None
+        self.source.classifier_options.save()
 
         self.upload_image(self.user, self.source)
 
@@ -289,9 +289,9 @@ class AbortCasesTest(
     def test_classification_not_configured_at_extract(self):
         image = self.upload_image(self.user, self.source)
 
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = None
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = None
+        self.source.classifier_options.save()
 
         # Try to extract features.
         do_job('extract_features', image.pk, source_id=self.source.pk)
@@ -515,9 +515,10 @@ class CollectJobsQueriesTest(BaseTaskTest):
         # Submit feature extraction.
         run_scheduled_jobs_until_empty()
 
-        # Should run less than 4 queries per image.
-        # (Expecting 3: points, source extractor-options, and source-checks)
-        with self.assert_queries_less_than(image_count*4):
+        # Should run less than 5 queries per image.
+        # (Expecting 4: 1 for points, 2 for source extractor-options
+        # (Source and SourceClassifierOptions), 1 for source-checks)
+        with self.assert_queries_less_than(image_count*5):
             self.do_collect_spacer_jobs()
 
         for image in images:

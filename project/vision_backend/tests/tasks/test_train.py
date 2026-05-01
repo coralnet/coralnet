@@ -13,7 +13,7 @@ from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
 from jobs.tests.utils import do_job
 from lib.tests.utils import EmailAssertionsMixin
-from ...common import Extractors
+from ...common import ClassifierStatuses, Extractors
 from ...models import Classifier
 from ...queues import get_queue_class
 from ...task_helpers import handle_spacer_results
@@ -22,6 +22,13 @@ from .utils import (
     ensure_source_check_not_scheduled,
     source_check_is_scheduled,
 )
+
+
+ACCEPTED = ClassifierStatuses.ACCEPTED.value
+LACKING_UNIQUE_LABELS = ClassifierStatuses.LACKING_UNIQUE_LABELS.value
+REJECTED_ACCURACY = ClassifierStatuses.REJECTED_ACCURACY.value
+TRAIN_ERROR = ClassifierStatuses.TRAIN_ERROR.value
+TRAIN_PENDING = ClassifierStatuses.TRAIN_PENDING.value
 
 
 def mock_training_results(
@@ -85,10 +92,10 @@ class TrainClassifierTest(BaseTaskTest):
         # far (due to having no previous classifiers), and thus it should have
         # been marked as accepted.
         classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier.status, Classifier.ACCEPTED)
+        self.assertEqual(classifier.status, ACCEPTED)
         # Classifier acceptance is immaterial to Job success, but still,
         # should have succeeded.
-        self.assertEqual(classifier.train_job.status, Job.Status.SUCCESS)
+        self.assertEqual(classifier.get_train_job().status, Job.Status.SUCCESS)
 
         # Check other fields.
         self.assertEqual(classifier.nbr_train_images, 3 + 1)
@@ -122,9 +129,10 @@ class TrainClassifierTest(BaseTaskTest):
 
         self.assert_job_persist_value('train_classifier', True)
 
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier.pk, classifier.pk,
+            self.source.classifier_options.deployed_classifier.pk,
+            classifier.pk,
             msg="Should auto-populate deployed_classifier",
         )
 
@@ -171,12 +179,12 @@ class TrainClassifierTest(BaseTaskTest):
 
         self.assertNotEqual(clf_1.pk, clf_2.pk, "Should have a new classifier")
         self.assertEqual(
-            clf_2.status, Classifier.ACCEPTED, "Should be accepted")
+            clf_2.status, ACCEPTED, "Should be accepted")
         self.assertEqual(clf_2.nbr_train_images, clf_1.nbr_train_images + 2)
 
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier.pk, clf_2.pk,
+            self.source.classifier_options.deployed_classifier.pk, clf_2.pk,
             msg="Should auto-populate deployed_classifier"
         )
 
@@ -190,7 +198,7 @@ class TrainClassifierTest(BaseTaskTest):
             classifier = Classifier(
                 source=self.source,
                 nbr_train_images=1,
-                status=Classifier.ACCEPTED,
+                status=ACCEPTED,
             )
             classifier.save()
             self.add_robot_annotations(classifier, image)
@@ -300,7 +308,7 @@ class TrainClassifierTest(BaseTaskTest):
         # Check that there's an accepted classifier.
 
         latest_classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(latest_classifier.status, Classifier.ACCEPTED)
+        self.assertEqual(latest_classifier.status, ACCEPTED)
 
 
 @override_settings(
@@ -324,7 +332,7 @@ class RetrainLogicTest(BaseTaskTest):
         run_scheduled_jobs_until_empty()
         cls.do_collect_spacer_jobs()
         first_classifier = cls.source.last_accepted_classifier
-        assert first_classifier.status == Classifier.ACCEPTED
+        assert first_classifier.status == ACCEPTED
 
         # Another classifier. Tests can change the status of this one to try
         # different 'previous classifier status' cases.
@@ -339,7 +347,7 @@ class RetrainLogicTest(BaseTaskTest):
             cls.do_collect_spacer_jobs()
 
         cls.previous_classifier = cls.source.last_accepted_classifier
-        assert cls.previous_classifier.status == Classifier.ACCEPTED
+        assert cls.previous_classifier.status == ACCEPTED
 
     def do_test_retrain_logic(
         self, previous_status, meets_retrain_threshold,
@@ -379,40 +387,40 @@ class RetrainLogicTest(BaseTaskTest):
 
     def test_previous_accepted_and_below_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.ACCEPTED, False, False,
+            ACCEPTED, False, False,
             "Source seems to be all caught up."
             " Need 6 annotated images for next training, and currently have 5",
         )
 
     def test_previous_accepted_and_above_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.ACCEPTED, True, True,
+            ACCEPTED, True, True,
             "Scheduled training",
         )
 
     def test_previous_rejected_and_below_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.REJECTED_ACCURACY, False, False,
+            REJECTED_ACCURACY, False, False,
             "Source seems to be all caught up."
             " Need 6 annotated images for next training, and currently have 5",
         )
 
     def test_previous_rejected_and_above_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.REJECTED_ACCURACY, True, True,
+            REJECTED_ACCURACY, True, True,
             "Scheduled training",
         )
 
     def test_previous_lacking_unique_and_below_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.LACKING_UNIQUE_LABELS, False, False,
+            LACKING_UNIQUE_LABELS, False, False,
             "Source seems to be all caught up."
             " Need 6 annotated images for next training, and currently have 5",
         )
 
     def test_previous_lacking_unique_and_above_threshold(self):
         self.do_test_retrain_logic(
-            Classifier.LACKING_UNIQUE_LABELS, True, True,
+            LACKING_UNIQUE_LABELS, True, True,
             "Scheduled training",
         )
 
@@ -424,7 +432,7 @@ class RetrainLogicTest(BaseTaskTest):
         active job (which isn't allowed).
         """
         self.do_test_retrain_logic(
-            Classifier.TRAIN_PENDING, False, True,
+            TRAIN_PENDING, False, True,
             "Scheduled training",
         )
 
@@ -434,7 +442,7 @@ class RetrainLogicTest(BaseTaskTest):
         even if the next threshold hasn't been met.
         """
         self.do_test_retrain_logic(
-            Classifier.TRAIN_ERROR, False, True,
+            TRAIN_ERROR, False, True,
             "Scheduled training",
         )
 
@@ -460,9 +468,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         classifier = self.create_robot(other_source)
 
         # Disable training, opting to deploy the existing classifier instead.
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = classifier
+        self.source.classifier_options.save()
 
         self.source_check_and_assert(
             f"Source seems to be all caught up."
@@ -506,9 +514,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         classifier = self.create_robot(other_source)
 
         # Disable training, opting to deploy the existing classifier instead.
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = classifier
+        self.source.classifier_options.save()
 
         # Try to train
         do_job('train_classifier', self.source.pk, source_id=self.source.pk)
@@ -628,7 +636,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
 
         classifier = self.source.classifier_set.latest('pk')
         self.assertEqual(
-            classifier.status, Classifier.LACKING_UNIQUE_LABELS,
+            classifier.status, LACKING_UNIQUE_LABELS,
             msg="Classifier status should be correct")
 
         self.assert_job_failure_message(
@@ -872,7 +880,7 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
             self.do_collect_spacer_jobs()
 
         classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier.status, Classifier.REJECTED_ACCURACY)
+        self.assertEqual(classifier.status, REJECTED_ACCURACY)
 
         self.assert_job_result_message(
             'train_classifier',

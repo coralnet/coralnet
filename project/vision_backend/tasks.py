@@ -32,7 +32,7 @@ from jobs.utils import job_runner, job_starter, schedule_job
 from labels.models import Label
 from sources.models import Source
 from . import task_helpers as th
-from .common import CLASSIFIER_MAPPINGS
+from .common import CLASSIFIER_MAPPINGS, ClassifierStatuses
 from .exceptions import RowColumnMismatchError
 from .models import Classifier, Score
 from .queues import get_queue_class
@@ -182,7 +182,7 @@ def check_source(source_id):
 
     # Image classification
 
-    if not source.deployed_classifier:
+    if not source.classifier_options.deployed_classifier:
         # Can't classify without a classifier.
         #
         # For the message, we know that we must be in train mode here. If we
@@ -198,7 +198,7 @@ def check_source(source_id):
     extracted_images = source.image_set.with_features()
     images_to_classify = (
         extracted_images.incomplete().exclude(
-            annoinfo__classifier=source.deployed_classifier)
+            annoinfo__classifier=source.classifier_options.deployed_classifier)
         |
         extracted_images.unclassified()
     )
@@ -325,7 +325,7 @@ def submit_classifier(source_id, job_id):
     # and deleting the Source would've cascade-deleted the Job.
     source = Source.objects.get(pk=source_id)
 
-    if not source.trains_own_classifiers:
+    if not source.classifier_options.trains_own_classifiers:
         raise JobError("Training is disabled for this source")
 
     images = source.image_set.confirmed().with_features().order_by('pk')
@@ -350,8 +350,7 @@ def submit_classifier(source_id, job_id):
             f" Feature extractions will be redone to fix this.")
 
     # Create new classifier
-    classifier = Classifier(
-        source=source, train_job_id=job_id, nbr_train_images=len(images))
+    classifier = Classifier(source=source, nbr_train_images=len(images))
     classifier.save()
 
     # Create training datasets.
@@ -392,7 +391,7 @@ def submit_classifier(source_id, job_id):
         #
         # We can get stuck in an error loop if we proceed to submit training
         # (see issue #412), so we don't submit training.
-        classifier.status = Classifier.LACKING_UNIQUE_LABELS
+        classifier.status = ClassifierStatuses.LACKING_UNIQUE_LABELS.value
         classifier.save()
         raise JobError(
             f"{classifier} was declined training, because there weren't enough"
@@ -525,7 +524,7 @@ def classify_image(image_id):
             f"Image {image_id} needs to have features extracted"
             f" before being classified.")
 
-    classifier = img.source.deployed_classifier
+    classifier = img.source.classifier_options.deployed_classifier
     if not classifier:
         raise JobError(
             f"Image {image_id} can't be classified;"

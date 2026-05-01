@@ -177,7 +177,8 @@ class ExportPrepView(View):
 
         self.cpc_prefs = cpc_export_form.cleaned_data
         self.labelset_dict = source.labelset.global_pk_to_code_dict()
-        self.confidence_threshold = source.confidence_threshold
+        self.confidence_threshold = (
+            source.classifier_options.confidence_threshold)
         # Create a dict of filenames to CPC-file-content strings
         cpc_strings = self.create_cpc_strings()
         # Create a zip

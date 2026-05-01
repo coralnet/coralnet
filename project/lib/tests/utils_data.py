@@ -17,7 +17,7 @@ from images.model_utils import PointGen
 from images.models import Image, Point
 from labels.models import LabelGroup, Label
 from sources.models import Source
-from vision_backend.common import Extractors
+from vision_backend.common import ClassifierStatuses, Extractors
 from vision_backend.models import Classifier
 import vision_backend.task_helpers as backend_task_helpers
 
@@ -464,13 +464,13 @@ def create_robot(source, set_as_deployed=True):
         nbr_train_images=50,
         runtime_train=100,
         accuracy=0.50,
-        status=Classifier.ACCEPTED,
+        status=ClassifierStatuses.ACCEPTED.value,
     )
     classifier.save()
 
     if set_as_deployed:
-        source.deployed_classifier = classifier
-        source.save()
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.save()
 
     return classifier
 

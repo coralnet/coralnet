@@ -11,8 +11,7 @@ from jobs.tests.utils import do_job
 from lib.tests.utils import ClientTest, HtmlAssertionsMixin
 from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
-from vision_backend.common import Extractors
-from vision_backend.models import Classifier
+from vision_backend.common import ClassifierStatuses, Extractors
 from vision_backend.tests.tasks.utils import BaseTaskTest
 from ..models import Source
 
@@ -278,7 +277,7 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         self.upload_data_and_train_classifier()
 
         classifier_1 = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier_1.status, Classifier.ACCEPTED)
+        self.assertEqual(classifier_1.status, ClassifierStatuses.ACCEPTED.value)
 
         # Train and reject a classifier. Override settings so that
         # 1) we don't need more images to train a new classifier, and
@@ -294,17 +293,18 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         classifier_2 = self.source.classifier_set.latest('pk')
         # Sanity checks
         self.assertNotEqual(classifier_1.pk, classifier_2.pk)
-        self.assertEqual(classifier_2.status, Classifier.REJECTED_ACCURACY)
+        self.assertEqual(
+            classifier_2.status, ClassifierStatuses.REJECTED_ACCURACY.value)
 
         soup = self.source_main_soup(self.source)
         backend_soup = soup.find(id='backend-column')
 
         self.assertIsNotNone(backend_soup.find(id=self.acc_overview_id))
-        save_date = classifier_1.train_job.modify_date
+        save_date = classifier_1.get_train_job().modify_date
         self.assert_detail(
             backend_soup,
             f"Last classifier saved: {datetime_display(save_date)}")
-        train_date = classifier_2.train_job.modify_date
+        train_date = classifier_2.get_train_job().modify_date
         self.assert_detail(
             backend_soup,
             f"Last classifier trained: {datetime_display(train_date)}")
@@ -326,12 +326,12 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         self.upload_data_and_train_classifier()
 
         classifier = self.source.classifier_set.latest('pk')
-        self.assertEqual(classifier.status, Classifier.ACCEPTED)
+        self.assertEqual(classifier.status, ClassifierStatuses.ACCEPTED.value)
 
         # Delete the train job associated with the classifier,
         # so that the classifier's create date must be used as
         # a fallback for the train-finish date.
-        classifier.train_job.delete()
+        classifier.get_train_job().delete()
 
         soup = self.source_main_soup(self.source)
         backend_soup = soup.find(id='backend-column')
@@ -430,9 +430,9 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             trains_own_classifiers=True,
         )
         classifier = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.save()
 
         soup = self.source_main_soup(source)
         backend_soup = soup.find(id='backend-column')
@@ -455,9 +455,9 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         )
         classifier_1 = self.create_robot(source)
         classifier_2 = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier_1
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier_1
+        source.classifier_options.save()
 
         soup = self.source_main_soup(source)
         backend_soup = soup.find(id='backend-column')
@@ -529,10 +529,10 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             trains_own_classifiers=True,
         )
         classifier = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier
-        source.deployed_source_id = classifier.source_id
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.deployed_source_id = classifier.source_id
+        source.classifier_options.save()
 
         classifier.delete()
 

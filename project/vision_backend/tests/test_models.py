@@ -5,11 +5,10 @@ import numpy as np
 from spacer.messages import ClassifyReturnMsg
 
 from images.models import Point
-from jobs.utils import schedule_job
 from lib.tests.utils import ClientTest
 from lib.tests.utils_data import sample_image_as_file
-from ..common import Extractors
-from ..models import BatchJob, Score
+from ..common import Extractors, SourceExtractorChoices
+from ..models import Score
 from ..task_helpers import add_scores
 
 
@@ -83,24 +82,6 @@ class CascadeDeleteTest(ClientTest):
         self.assertEqual(Score.objects.filter(image=img).count(),
                          (nbr_points - 1) * expected_nbr_scores)
 
-    def test_job_batchjob_cascade(self):
-        """
-        BatchJobs should be deleted when their corresponding Jobs are
-        deleted.
-        """
-        job, _ = schedule_job('test')
-
-        batch_job = BatchJob(internal_job=job)
-        batch_job.save()
-        batch_job_id = batch_job.pk
-
-        job.delete()
-
-        with self.assertRaises(
-            BatchJob.DoesNotExist, msg="batch_job should be gone"
-        ):
-            BatchJob.objects.get(pk=batch_job_id)
-
 
 class PopulateClassifierStatusTest(MigrationTest):
 
@@ -112,7 +93,8 @@ class PopulateClassifierStatusTest(MigrationTest):
         Source = self.get_model_before('images.Source')
         Classifier = self.get_model_before('vision_backend.Classifier')
 
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         classifier_accepted = Classifier(
             source=source, valid=True, accuracy=0.50)
@@ -163,7 +145,7 @@ class DeletePreMigrationBatchJobsTest(MigrationTest):
 
         # Manually delete the BatchJobs, so that the test's tearDown()
         # (which tries to get to the latest migrations) doesn't get an error.
-        BatchJob.objects.all().delete()
+        BatchJobBefore.objects.all().delete()
 
     def test_delete_all(self):
         BatchJobBefore = self.get_model_before('vision_backend.BatchJob')
@@ -198,7 +180,8 @@ class PopulateLoadedRemotelyTest(MigrationTest):
 
         user = User(username='testuser')
         user.save()
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         images = []
         for value in [True, False, None]:
@@ -251,7 +234,8 @@ class PopulateHasRowcolsTest(MigrationTest):
 
         user = User(username='testuser')
         user.save()
-        source = Source(name="Test source")
+        source = Source(
+            name="Test source", image_annotation_area='0;100;0;100')
         source.save()
         images = []
         for extracted, extracted_dt_args in [
@@ -352,3 +336,182 @@ class PopulateFeaturesExtractorTest(MigrationTest):
         self.assertEqual(extractor_values[1], Extractors.VGG16.value)
         self.assertEqual(extractor_values[2], '')
         self.assertEqual(extractor_values[3], '')
+
+
+class PopulateClassifierOptionsFieldsTest(MigrationTest):
+
+    before = [
+        ('vision_backend', '0035_sourceclassifieroptions'),
+        ('sources', '0012_source_big_auto_field'),
+    ]
+    after = [
+        ('vision_backend', '0036_sourceclassifieroptions_populate'),
+        ('sources', '0012_source_big_auto_field'),
+    ]
+
+    def test_migration(self):
+        Source = self.get_model_before('sources.Source')
+        Classifier = self.get_model_before('vision_backend.Classifier')
+
+        # Trains own classifiers.
+        source1 = Source(
+            name="S1",
+            confidence_threshold=80,
+            trains_own_classifiers=True,
+            feature_extractor_setting=SourceExtractorChoices.EFFICIENTNET.value,
+        )
+        source1.save()
+        classifier1 = Classifier(source=source1)
+        classifier1.save()
+        classifier2 = Classifier(source=source1)
+        classifier2.save()
+        source1.deployed_classifier = classifier2
+        # This is normally auto-set by form save(), not model save().
+        source1.deployed_source_id = source1.pk
+        source1.save()
+
+        # Deploys other source's classifier.
+        source2 = Source(
+            name="S2",
+            confidence_threshold=0,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier1,
+            deployed_source_id=source1.pk,
+            feature_extractor_setting=SourceExtractorChoices.EFFICIENTNET.value,
+        )
+        source2.save()
+
+        # Doesn't use classifiers.
+        source3 = Source(
+            name="S3",
+            confidence_threshold=100,
+            trains_own_classifiers=False,
+            deployed_classifier=None,
+            deployed_source_id=None,
+            feature_extractor_setting=SourceExtractorChoices.VGG16.value,
+        )
+        source3.save()
+
+        self.run_migration()
+
+        SourceClassifierOptions = self.get_model_after('vision_backend.SourceClassifierOptions')
+
+        options1 = SourceClassifierOptions.objects.get(source_id=source1.pk)
+        self.assertEqual(options1.confidence_threshold, 80)
+        self.assertTrue(options1.trains_own_classifiers)
+        self.assertEqual(options1.deployed_classifier_id, classifier2.pk)
+        self.assertEqual(options1.deployed_source_id, source1.pk)
+        self.assertEqual(
+            options1.feature_extractor_setting,
+            SourceExtractorChoices.EFFICIENTNET.value)
+
+        options2 = SourceClassifierOptions.objects.get(source_id=source2.pk)
+        self.assertEqual(options2.confidence_threshold, 0)
+        self.assertFalse(options2.trains_own_classifiers)
+        self.assertEqual(options2.deployed_classifier_id, classifier1.pk)
+        self.assertEqual(options2.deployed_source_id, source1.pk)
+        self.assertEqual(
+            options2.feature_extractor_setting,
+            SourceExtractorChoices.EFFICIENTNET.value)
+
+        options3 = SourceClassifierOptions.objects.get(source_id=source3.pk)
+        self.assertEqual(options3.confidence_threshold, 100)
+        self.assertFalse(options3.trains_own_classifiers)
+        self.assertIsNone(options3.deployed_classifier_id)
+        self.assertIsNone(options3.deployed_source_id)
+        self.assertEqual(
+            options3.feature_extractor_setting,
+            SourceExtractorChoices.VGG16.value)
+
+
+class PopulateClassifierOptionsFieldsBackwardsTest(MigrationTest):
+
+    before = [
+        ('vision_backend', '0036_sourceclassifieroptions_populate'),
+        ('sources', '0012_source_big_auto_field'),
+    ]
+    after = [
+        # We're mainly testing 0036 -> 0035, but going back to 0034 smooths
+        # out this test because it deletes the SCOptions table, meaning
+        # that the next phase where all other migrations are run forwards
+        # won't re-create the SCOptions (leading to FK dupe errors).
+        ('vision_backend', '0034_remove_classifier_train_job'),
+        ('sources', '0012_source_big_auto_field'),
+    ]
+
+    def test_migration(self):
+        Source = self.get_model_before('sources.Source')
+        SourceClassifierOptions = self.get_model_before('vision_backend.SourceClassifierOptions')
+        Classifier = self.get_model_before('vision_backend.Classifier')
+
+        source1 = Source(name="S1")
+        source1.save()
+        classifier1 = Classifier(source=source1)
+        classifier1.save()
+        classifier2 = Classifier(source=source1)
+        classifier2.save()
+        options1 = SourceClassifierOptions(
+            source=source1,
+            confidence_threshold=80,
+            trains_own_classifiers=True,
+            deployed_classifier=classifier2,
+            deployed_source_id=source1.pk,
+            feature_extractor_setting=SourceExtractorChoices.EFFICIENTNET.value,
+        )
+        options1.save()
+
+        source2 = Source(name="S2")
+        source2.save()
+        options2 = SourceClassifierOptions(
+            source=source2,
+            confidence_threshold=0,
+            trains_own_classifiers=False,
+            deployed_classifier=classifier1,
+            deployed_source_id=source1.pk,
+            feature_extractor_setting=SourceExtractorChoices.EFFICIENTNET.value,
+        )
+        options2.save()
+
+        source3 = Source(name="S3")
+        source3.save()
+        options3 = SourceClassifierOptions(
+            source=source3,
+            confidence_threshold=100,
+            trains_own_classifiers=False,
+            deployed_classifier=None,
+            deployed_source_id=None,
+            feature_extractor_setting=SourceExtractorChoices.VGG16.value,
+        )
+        options3.save()
+
+        self.run_migration()
+
+        # Not bothering to use get_model_after() because it's
+        # just a data migration being run.
+
+        source1.refresh_from_db()
+        self.assertEqual(source1.confidence_threshold, 80)
+        self.assertTrue(source1.trains_own_classifiers)
+        self.assertEqual(source1.deployed_classifier_id, classifier2.pk)
+        self.assertEqual(source1.deployed_source_id, source1.pk)
+        self.assertEqual(
+            source1.feature_extractor_setting,
+            SourceExtractorChoices.EFFICIENTNET.value)
+
+        source2.refresh_from_db()
+        self.assertEqual(source2.confidence_threshold, 0)
+        self.assertFalse(source2.trains_own_classifiers)
+        self.assertEqual(source2.deployed_classifier_id, classifier1.pk)
+        self.assertEqual(source2.deployed_source_id, source1.pk)
+        self.assertEqual(
+            source2.feature_extractor_setting,
+            SourceExtractorChoices.EFFICIENTNET.value)
+
+        source3.refresh_from_db()
+        self.assertEqual(source3.confidence_threshold, 100)
+        self.assertFalse(source3.trains_own_classifiers)
+        self.assertIsNone(source3.deployed_classifier_id)
+        self.assertIsNone(source3.deployed_source_id)
+        self.assertEqual(
+            source3.feature_extractor_setting,
+            SourceExtractorChoices.VGG16.value)

@@ -2,14 +2,17 @@ from collections import Counter
 
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from spacer.data_classes import DataLocation, ImageFeatures, ValResults
 
-from config.constants import SpacerJobSpec
 from events.models import Event
-from jobs.models import Job
+from images.models import Image, Point
 from labels.models import Label, LocalLabel
-from .common import Extractors
+from lib.utils import date_display
+from sources.models import Source
+from .common import ClassifierStatuses, Extractors, SourceExtractorChoices
 
 
 class Classifier(models.Model):
@@ -18,27 +21,11 @@ class Classifier(models.Model):
     """
 
     # Source this classifier belongs to and is trained on.
-    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
 
-    # Job that tracks the training status of this classifier.
-    train_job = models.ForeignKey(Job, null=True, on_delete=models.SET_NULL)
-
-    TRAIN_PENDING = 'PN'
-    LACKING_UNIQUE_LABELS = 'UQ'
-    TRAIN_ERROR = 'ER'
-    REJECTED_ACCURACY = 'RJ'
-    ACCEPTED = 'AC'
-    STATUS_CHOICES = [
-        (TRAIN_PENDING, "Training pending"),
-        (LACKING_UNIQUE_LABELS,
-         "Declined because the training labelset only had one unique label"),
-        (TRAIN_ERROR, "Training got an error"),
-        (REJECTED_ACCURACY, "Rejected because accuracy didn't improve enough"),
-        (ACCEPTED, "Accepted as new classifier"),
-    ]
     # Training status of the classifier.
     status = models.CharField(
-        max_length=2, choices=STATUS_CHOICES, default=TRAIN_PENDING)
+        max_length=2, choices=ClassifierStatuses.choices, default=ClassifierStatuses.TRAIN_PENDING.value)
 
     # Training runtime in seconds.
     runtime_train = models.BigIntegerField(default=0)
@@ -63,15 +50,24 @@ class Classifier(models.Model):
 
         return ValResults.load(valres_loc)
 
+    def get_train_job(self):
+        from jobs.models import Job
+        try:
+            return self.job_set.get(job_name='train_classifier')
+        except Job.DoesNotExist:
+            # Most likely this classifier was trained before the introduction
+            # of the Job model.
+            return None
+
     @property
     def train_completion_date(self):
-        if self.train_job:
-            return self.train_job.modify_date
-
-        # Else: Most likely this classifier was trained before the introduction
-        # of the Job model.
-        # Use the Classifier's create date as a less-accurate fallback.
-        return self.create_date
+        train_job = self.get_train_job()
+        if train_job:
+            # The date the train job's status was updated to success/failure.
+            return train_job.modify_date
+        else:
+            # Use the Classifier's create date as a less-accurate fallback.
+            return self.create_date
 
     def get_process_date_short_str(self):
         """
@@ -99,7 +95,7 @@ class Features(models.Model):
 
     Most fields are nullable for the case where `extracted` is False.
     """
-    image = models.OneToOneField('images.Image', on_delete=models.CASCADE)
+    image = models.OneToOneField(Image, on_delete=models.CASCADE)
 
     # Indicates whether the features are extracted. Set when jobs are collected
     extracted = models.BooleanField(default=False)
@@ -140,9 +136,9 @@ class Score(models.Model):
     scores for only the top NBR_SCORES_PER_ANNOTATION labels are saved.
     """
     label = models.ForeignKey(Label, on_delete=models.CASCADE)
-    point = models.ForeignKey('images.Point', on_delete=models.CASCADE)
-    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
-    image = models.ForeignKey('images.Image', on_delete=models.CASCADE)
+    point = models.ForeignKey(Point, on_delete=models.CASCADE)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
+    image = models.ForeignKey(Image, on_delete=models.CASCADE)
 
     # Integer between 0 and 99, representing the percent probability
     # that this point is this label according to the backend. Although
@@ -161,68 +157,129 @@ class Score(models.Model):
             self.image, self.point.point_number, self.label_code, self.score)
 
 
-class BatchJob(models.Model):
-    """
-    Simple table that tracks the AWS Batch job tokens and status.
-    """
-    STATUS_CHOICES = [
-        ('SUBMITTED', 'SUBMITTED'),
-        ('PENDING', 'PENDING'),
-        ('RUNNABLE', 'RUNNABLE'),
-        ('STARTING', 'STARTING'),
-        ('RUNNING', 'RUNNING'),
-        ('SUCCEEDED', 'SUCCEEDED'),
-        ('FAILED', 'FAILED'),
-    ]
+class SourceClassifierOptions(models.Model):
 
-    def __str__(self):
-        return (
-            f"BatchJob {self.pk}, for Job {self.internal_job}")
+    source = models.OneToOneField(
+        Source, on_delete=models.CASCADE, related_name='classifier_options')
 
-    # The status taxonomy is from AWS Batch.
-    status = models.CharField(
-        max_length=12, choices=STATUS_CHOICES, default='SUBMITTED')
-
-    # Unique job identifier returned by Batch.
-    batch_token = models.CharField(max_length=128, null=True)
-
-    # Job instance that this BatchJob is associated with.
-    # When the Job is cleaned up, this BatchJob also gets cleaned up via
-    # cascade-delete.
-    internal_job = models.OneToOneField(Job, on_delete=models.CASCADE)
-
-    # Level of resource specs assigned to the job.
-    spec_level = models.CharField(
-        max_length=20,
-        choices=[(s.value, s.name) for s in SpacerJobSpec],
-        # This default accommodates legacy BatchJobs.
-        default='',
+    confidence_threshold = models.IntegerField(
+        "Confidence threshold (%)",
+        validators=[MinValueValidator(0),
+                    MaxValueValidator(100)],
+        default=100,
     )
 
-    # This can be used to see long the BatchJob is taking.
-    create_date = models.DateTimeField("Date created", auto_now_add=True)
+    trains_own_classifiers = models.BooleanField(
+        "Source trains its own classifiers",
+        default=True,
+    )
+    # Classifier selected for classification in this source. May be from
+    # another source.
+    deployed_classifier = models.ForeignKey(
+        Classifier,
+        # This field should not place any restrictions on the other source's
+        # ability to manage its classifiers. So, for example, this shouldn't
+        # be PROTECT.
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='deploying_sources',
+    )
+    # In case the selected classifier gets deleted, this is a 'backup' pointer
+    # to the source that the classifier was from.
+    # This is a BigIntegerField instead of a ForeignKey because:
+    # 1) This way, if the selected-classifier's source also gets deleted,
+    #    this field remains populated; thus we can still distinguish that
+    #    situation vs. intentionally not selecting a classifier.
+    # 2) This way we don't worry about any complexities regarding
+    #    self-referential FKs.
+    # 3) This is just a backup pointer. Generally,
+    #    `deployed_classifier__source` can be used to get the same
+    #    relationship.
+    #
+    # Since this is a redundant field, we automatically set it in save().
+    deployed_source_id = models.BigIntegerField(
+        null=True, blank=True,
+    )
+
+    feature_extractor_setting = models.CharField(
+        "Feature extractor",
+        max_length=50,
+        choices=SourceExtractorChoices.choices,
+        default=SourceExtractorChoices.EFFICIENTNET.value)
 
     @property
-    def job_key(self):
-        return settings.BATCH_JOB_PATTERN.format(pk=self.id)
+    def feature_extractor(self) -> str | None:
+        if not self.trains_own_classifiers and not self.deployed_classifier:
+            # We consider this source to have no feature extraction config.
+            return None
 
-    @property
-    def res_key(self):
-        return settings.BATCH_RES_PATTERN.format(pk=self.id)
+        if settings.FORCE_DUMMY_EXTRACTOR:
+            # Use dummy extractor for tests.
+            # The real extractors are relatively slow.
+            return 'dummy'
 
-    def make_batch_job_name(self):
-        """
-        This is just a name that can be useful for identifying Batch jobs
-        when browsing the AWS Batch console.
-        However, the Batch token is what's actually used to retrieve
-        previously-submitted Batch jobs.
-        """
-        # Using the SPACER_JOB_HASH allows us to differentiate between
-        # submissions from production, staging, and different dev setups.
-        return (
-            f'{settings.SPACER_JOB_HASH}'
-            f'-{self.internal_job.job_name}'
-            f'-{self.internal_job.pk}')
+        if self.trains_own_classifiers:
+            # Read feature extractor name from this source's field.
+            return self.feature_extractor_setting
+
+        # Else, using deployed_classifier.
+        # Read feature extractor name from the classifier's source's field.
+        return self.deployed_classifier.source.feature_extractor
+
+    def get_deployed_classifier_html(self):
+
+        if self.deployed_classifier:
+
+            if self.deployed_classifier.source.pk == self.source.pk:
+                deployed_source = self.source
+                html = (
+                    f"{self.deployed_classifier.pk},"
+                    f" from this source")
+            else:
+                deployed_source = self.deployed_classifier.source
+                deployed_source_link = reverse(
+                    'source_main', args=[deployed_source.pk])
+
+                html = (
+                    f'{self.deployed_classifier.pk}, from'
+                    f' <a href="{deployed_source_link}" target="_blank">'
+                    f'{deployed_source.name}</a>'
+                )
+
+            date = date_display(
+                self.deployed_classifier.train_completion_date)
+            html += f", trained {date}"
+
+            last_accepted = deployed_source.last_accepted_classifier
+            if last_accepted.pk != self.deployed_classifier.pk:
+                date = date_display(last_accepted.train_completion_date)
+                html += f" (latest: {last_accepted.pk}, trained {date})"
+
+            return html
+
+        if self.deployed_source_id:
+
+            if self.deployed_source_id == self.source.pk:
+                return "None. Previously used a classifier from this source"
+
+            try:
+                deployed_source = Source.objects.get(
+                    pk=self.deployed_source_id)
+            except Source.DoesNotExist:
+                return (
+                    f"None. Previously used a classifier from source"
+                    f" {self.deployed_source_id} (now deleted)"
+                )
+
+            deployed_source_link = reverse(
+                'source_main', args=[deployed_source.pk])
+            return (
+                f'None. Previously used a classifier from'
+                f' <a href="{deployed_source_link}" target="_blank">'
+                f'{deployed_source.name}</a>'
+            )
+
+        return "None"
 
 
 class ClassifyImageEvent(Event):

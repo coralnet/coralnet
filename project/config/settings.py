@@ -414,7 +414,7 @@ ROBOT_MODEL_TRAINDATA_PATTERN = 'classifiers/{pk}.traindata'
 ROBOT_MODEL_VALDATA_PATTERN = 'classifiers/{pk}.valdata'
 ROBOT_MODEL_VALRESULT_PATTERN = 'classifiers/{pk}.valresult'
 
-# Naming for vision_backend.models.BatchJob
+# Naming for aws.models.BatchJob
 BATCH_JOB_PATTERN = 'batch_jobs/{pk}_job_msg.json'
 BATCH_RES_PATTERN = 'batch_jobs/{pk}_job_res.json'
 
@@ -496,7 +496,7 @@ if _TESTING:
     # calling boto.
     SPACER_QUEUE_CHOICE = 'vision_backend.queues.LocalQueue'
 elif SETTINGS_BASE in [Bases.PRODUCTION, Bases.STAGING]:
-    SPACER_QUEUE_CHOICE = 'vision_backend.queues.BatchQueue'
+    SPACER_QUEUE_CHOICE = 'aws.queues.BatchQueue'
 else:
     # For dev servers, LocalQueue is default and the env can
     # specify otherwise.
@@ -671,7 +671,7 @@ else:
 
     # Default file storage mechanism that holds media.
     _STORAGES_DEFAULT = dict(
-        BACKEND='lib.storage_backends.MediaStorageS3',
+        BACKEND='aws.storage.MediaStorageS3',
     )
 
 
@@ -756,7 +756,7 @@ STORAGES = {
 }
 
 if (
-    SPACER_QUEUE_CHOICE == 'vision_backend.queues.BatchQueue'
+    SPACER_QUEUE_CHOICE == 'aws.queues.BatchQueue'
     and
     STORAGES['default']['BACKEND'] == 'lib.storage_backends.MediaStorageLocal'
 ):
@@ -764,6 +764,20 @@ if (
         "Can not use remote queue with local storage."
         " Please use S3 storage."
     )
+
+# Mapping from storage backends to storage managers.
+#
+# It could arguably be cleaner to ask each app to register storage
+# managers in their storage.py files, but autodiscover would add some
+# complexity and failure possibilities. That design might make sense if we had
+# more manager choices.
+
+STORAGE_MANAGERS = {
+    'lib.storage_backends.MediaStorageLocal':
+        'lib.storage_backends.StorageManagerLocal',
+    'aws.storage.MediaStorageS3':
+        'aws.storage.StorageManagerS3',
+}
 
 
 #
@@ -1008,6 +1022,7 @@ INSTALLED_APPS = [
     'api_core',
     'api_management',
     'async_media',
+    'aws',
     'blog',
     'calcification',
     # Uploading from and exporting to Coral Point Count file formats

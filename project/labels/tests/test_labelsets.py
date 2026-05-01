@@ -219,8 +219,8 @@ class LabelsetAddRemoveAvailabilityBasedOnDeploy(LabelTest):
         self.assert_can_post_submit()
 
     def test_training_disabled_without_classifier(self):
-        self.source.trains_own_classifiers = False
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.save()
 
         self.assert_can_reach_page()
         self.assert_can_post_submit()
@@ -228,9 +228,9 @@ class LabelsetAddRemoveAvailabilityBasedOnDeploy(LabelTest):
     def test_training_disabled_with_classifier(self):
         source_2 = self.create_source(self.user)
         source_2_robot = self.create_robot(source_2)
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = source_2_robot
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = source_2_robot
+        self.source.classifier_options.save()
 
         self.assert_cannot_reach_page()
         self.assert_cannot_post_submit()

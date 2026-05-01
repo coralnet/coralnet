@@ -130,7 +130,7 @@
             <li>{{ key }}: {{ value|safe }}</li>
           {% endfor %}
 
-          {% if source.trains_own_classifiers %}
+          {% if source.classifier_options.trains_own_classifiers %}
             {% if "source_edit" in source_perms %}
               <li>
                 To see backend-job status,

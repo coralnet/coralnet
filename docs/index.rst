@@ -15,6 +15,7 @@ Contents:
    server-operation
    versions
    design/index
+   tips
 
 
 
