@@ -469,8 +469,8 @@ def create_robot(source, set_as_deployed=True):
     classifier.save()
 
     if set_as_deployed:
-        source.deployed_classifier = classifier
-        source.save()
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.save()
 
     return classifier
 

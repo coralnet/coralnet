@@ -2,12 +2,17 @@ from collections import Counter
 
 from django.conf import settings
 from django.core.files.storage import default_storage
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.urls import reverse
 from spacer.data_classes import DataLocation, ImageFeatures, ValResults
 
 from events.models import Event
+from images.models import Image, Point
 from labels.models import Label, LocalLabel
-from .common import ClassifierStatuses, Extractors
+from lib.utils import date_display
+from sources.models import Source
+from .common import ClassifierStatuses, Extractors, SourceExtractorChoices
 
 
 class Classifier(models.Model):
@@ -16,7 +21,7 @@ class Classifier(models.Model):
     """
 
     # Source this classifier belongs to and is trained on.
-    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
 
     # Training status of the classifier.
     status = models.CharField(
@@ -90,7 +95,7 @@ class Features(models.Model):
 
     Most fields are nullable for the case where `extracted` is False.
     """
-    image = models.OneToOneField('images.Image', on_delete=models.CASCADE)
+    image = models.OneToOneField(Image, on_delete=models.CASCADE)
 
     # Indicates whether the features are extracted. Set when jobs are collected
     extracted = models.BooleanField(default=False)
@@ -131,9 +136,9 @@ class Score(models.Model):
     scores for only the top NBR_SCORES_PER_ANNOTATION labels are saved.
     """
     label = models.ForeignKey(Label, on_delete=models.CASCADE)
-    point = models.ForeignKey('images.Point', on_delete=models.CASCADE)
-    source = models.ForeignKey('sources.Source', on_delete=models.CASCADE)
-    image = models.ForeignKey('images.Image', on_delete=models.CASCADE)
+    point = models.ForeignKey(Point, on_delete=models.CASCADE)
+    source = models.ForeignKey(Source, on_delete=models.CASCADE)
+    image = models.ForeignKey(Image, on_delete=models.CASCADE)
 
     # Integer between 0 and 99, representing the percent probability
     # that this point is this label according to the backend. Although
@@ -150,6 +155,131 @@ class Score(models.Model):
     def __str__(self):
         return "%s - %s - %s - %s" % (
             self.image, self.point.point_number, self.label_code, self.score)
+
+
+class SourceClassifierOptions(models.Model):
+
+    source = models.OneToOneField(
+        Source, on_delete=models.CASCADE, related_name='classifier_options')
+
+    confidence_threshold = models.IntegerField(
+        "Confidence threshold (%)",
+        validators=[MinValueValidator(0),
+                    MaxValueValidator(100)],
+        default=100,
+    )
+
+    trains_own_classifiers = models.BooleanField(
+        "Source trains its own classifiers",
+        default=True,
+    )
+    # Classifier selected for classification in this source. May be from
+    # another source.
+    deployed_classifier = models.ForeignKey(
+        Classifier,
+        # This field should not place any restrictions on the other source's
+        # ability to manage its classifiers. So, for example, this shouldn't
+        # be PROTECT.
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='deploying_sources',
+    )
+    # In case the selected classifier gets deleted, this is a 'backup' pointer
+    # to the source that the classifier was from.
+    # This is a BigIntegerField instead of a ForeignKey because:
+    # 1) This way, if the selected-classifier's source also gets deleted,
+    #    this field remains populated; thus we can still distinguish that
+    #    situation vs. intentionally not selecting a classifier.
+    # 2) This way we don't worry about any complexities regarding
+    #    self-referential FKs.
+    # 3) This is just a backup pointer. Generally,
+    #    `deployed_classifier__source` can be used to get the same
+    #    relationship.
+    #
+    # Since this is a redundant field, we automatically set it in save().
+    deployed_source_id = models.BigIntegerField(
+        null=True, blank=True,
+    )
+
+    feature_extractor_setting = models.CharField(
+        "Feature extractor",
+        max_length=50,
+        choices=SourceExtractorChoices.choices,
+        default=SourceExtractorChoices.EFFICIENTNET.value)
+
+    @property
+    def feature_extractor(self) -> str | None:
+        if not self.trains_own_classifiers and not self.deployed_classifier:
+            # We consider this source to have no feature extraction config.
+            return None
+
+        if settings.FORCE_DUMMY_EXTRACTOR:
+            # Use dummy extractor for tests.
+            # The real extractors are relatively slow.
+            return 'dummy'
+
+        if self.trains_own_classifiers:
+            # Read feature extractor name from this source's field.
+            return self.feature_extractor_setting
+
+        # Else, using deployed_classifier.
+        # Read feature extractor name from the classifier's source's field.
+        return self.deployed_classifier.source.feature_extractor
+
+    def get_deployed_classifier_html(self):
+
+        if self.deployed_classifier:
+
+            if self.deployed_classifier.source.pk == self.source.pk:
+                deployed_source = self.source
+                html = (
+                    f"{self.deployed_classifier.pk},"
+                    f" from this source")
+            else:
+                deployed_source = self.deployed_classifier.source
+                deployed_source_link = reverse(
+                    'source_main', args=[deployed_source.pk])
+
+                html = (
+                    f'{self.deployed_classifier.pk}, from'
+                    f' <a href="{deployed_source_link}" target="_blank">'
+                    f'{deployed_source.name}</a>'
+                )
+
+            date = date_display(
+                self.deployed_classifier.train_completion_date)
+            html += f", trained {date}"
+
+            last_accepted = deployed_source.last_accepted_classifier
+            if last_accepted.pk != self.deployed_classifier.pk:
+                date = date_display(last_accepted.train_completion_date)
+                html += f" (latest: {last_accepted.pk}, trained {date})"
+
+            return html
+
+        if self.deployed_source_id:
+
+            if self.deployed_source_id == self.source.pk:
+                return "None. Previously used a classifier from this source"
+
+            try:
+                deployed_source = Source.objects.get(
+                    pk=self.deployed_source_id)
+            except Source.DoesNotExist:
+                return (
+                    f"None. Previously used a classifier from source"
+                    f" {self.deployed_source_id} (now deleted)"
+                )
+
+            deployed_source_link = reverse(
+                'source_main', args=[deployed_source.pk])
+            return (
+                f'None. Previously used a classifier from'
+                f' <a href="{deployed_source_link}" target="_blank">'
+                f'{deployed_source.name}</a>'
+            )
+
+        return "None"
 
 
 class ClassifyImageEvent(Event):

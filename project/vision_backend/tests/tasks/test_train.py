@@ -129,9 +129,10 @@ class TrainClassifierTest(BaseTaskTest):
 
         self.assert_job_persist_value('train_classifier', True)
 
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier.pk, classifier.pk,
+            self.source.classifier_options.deployed_classifier.pk,
+            classifier.pk,
             msg="Should auto-populate deployed_classifier",
         )
 
@@ -181,9 +182,9 @@ class TrainClassifierTest(BaseTaskTest):
             clf_2.status, ACCEPTED, "Should be accepted")
         self.assertEqual(clf_2.nbr_train_images, clf_1.nbr_train_images + 2)
 
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier.pk, clf_2.pk,
+            self.source.classifier_options.deployed_classifier.pk, clf_2.pk,
             msg="Should auto-populate deployed_classifier"
         )
 
@@ -467,9 +468,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         classifier = self.create_robot(other_source)
 
         # Disable training, opting to deploy the existing classifier instead.
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = classifier
+        self.source.classifier_options.save()
 
         self.source_check_and_assert(
             f"Source seems to be all caught up."
@@ -513,9 +514,9 @@ class AbortCasesTest(BaseTaskTest, EmailAssertionsMixin, ErrorReportTestMixin):
         classifier = self.create_robot(other_source)
 
         # Disable training, opting to deploy the existing classifier instead.
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = classifier
+        self.source.classifier_options.save()
 
         # Try to train
         do_job('train_classifier', self.source.pk, source_id=self.source.pk)

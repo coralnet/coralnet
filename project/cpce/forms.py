@@ -109,7 +109,7 @@ class CpcExportForm(Form):
 
         # annotation_filter
 
-        if source.confidence_threshold == 100:
+        if source.classifier_options.confidence_threshold == 100:
 
             # Don't need to show this field, since there can be no unconfirmed
             # annotations above 100% confidence.
@@ -121,7 +121,7 @@ class CpcExportForm(Form):
             confirmed_and_confident_label = (
                 f"Confirmed annotations AND Unconfirmed annotations"
                 f" above the machine confidence threshold of"
-                f" {source.confidence_threshold}%")
+                f" {source.classifier_options.confidence_threshold}%")
 
             self.fields['annotation_filter'] = ChoiceField(
                 label="Annotations to include",

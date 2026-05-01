@@ -212,6 +212,8 @@ class SourceCheckImageCasesTest(BaseTaskTest):
         cls.img2 = cls.upload_image_for_classification()
         cls.img3 = cls.upload_image_for_classification()
 
+        cls.classifier_options = cls.source.classifier_options
+
     def classify(
         self,
         images,
@@ -226,9 +228,9 @@ class SourceCheckImageCasesTest(BaseTaskTest):
         fill_classifier_field: bool,
     ):
 
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.classifier_options.trains_own_classifiers = False
+        self.classifier_options.deployed_classifier = classifier
+        self.classifier_options.save()
 
         for image in images:
 
@@ -257,9 +259,9 @@ class SourceCheckImageCasesTest(BaseTaskTest):
     def source_check_and_assert_scheduled_classifications(
         self, classifier, images
     ):
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = classifier
-        self.source.save()
+        self.classifier_options.trains_own_classifiers = False
+        self.classifier_options.deployed_classifier = classifier
+        self.classifier_options.save()
 
         self.source_check_and_assert(
             f"Scheduled {len(images)} image classification(s)")
@@ -700,9 +702,9 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         self.assertEqual(clf_2.status, ClassifierStatuses.ACCEPTED.value)
 
         # Actually use the first classifier.
-        self.source.trains_own_classifiers = False
-        self.source.deployed_classifier = clf_1
-        self.source.save()
+        self.source.classifier_options.trains_own_classifiers = False
+        self.source.classifier_options.deployed_classifier = clf_1
+        self.source.classifier_options.save()
 
         img = self.upload_image_and_machine_classify()
 

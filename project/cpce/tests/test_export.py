@@ -886,22 +886,22 @@ class AnnotationFilterTest(CPCExportBaseTest):
         self.client.force_login(self.user)
 
         # 0 confidence: the field is shown, no special styling
-        self.source.confidence_threshold = 0
-        self.source.save()
+        self.source.classifier_options.confidence_threshold = 0
+        self.source.classifier_options.save()
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]))
         self.assert_field_not_hidden(response, 'annotation_filter')
 
         # 99 confidence: the field is shown, no special styling
-        self.source.confidence_threshold = 99
-        self.source.save()
+        self.source.classifier_options.confidence_threshold = 99
+        self.source.classifier_options.save()
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]))
         self.assert_field_not_hidden(response, 'annotation_filter')
 
         # 100 confidence: the field is hidden via inline style
-        self.source.confidence_threshold = 100
-        self.source.save()
+        self.source.classifier_options.confidence_threshold = 100
+        self.source.classifier_options.save()
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]))
         self.assert_field_hidden(response, 'annotation_filter')

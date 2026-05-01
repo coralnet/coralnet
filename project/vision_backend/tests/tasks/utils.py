@@ -248,3 +248,4 @@ class BaseTaskTest(ClientTest, TaskTestMixin):
     def setUp(self):
         super().setUp()
         self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()

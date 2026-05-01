@@ -239,11 +239,13 @@ class SourceNewTest(BaseSourceTest):
         )
         self.assertEqual(new_source.latitude, '-17.3776')
         self.assertEqual(new_source.longitude, '25.1982')
-        self.assertEqual(new_source.trains_own_classifiers, True)
+        self.assertEqual(
+            new_source.classifier_options.trains_own_classifiers, True)
 
         # Fields that aren't in the form.
         self.assertEqual(new_source.labelset, None)
-        self.assertEqual(new_source.confidence_threshold, 100)
+        self.assertEqual(
+            new_source.classifier_options.confidence_threshold, 100)
 
         # Check that the source creation date is reasonable:
         # - a timestamp taken before creation should be before the creation
@@ -702,11 +704,12 @@ class SourceNewTest(BaseSourceTest):
 
         new_source = self.get_and_assert_new_source(response)
 
-        self.assertFalse(new_source.trains_own_classifiers)
+        self.assertFalse(new_source.classifier_options.trains_own_classifiers)
         self.assertEqual(
-            new_source.deployed_classifier_id, self.source_ab_robot_1.pk)
+            new_source.classifier_options.deployed_classifier_id,
+            self.source_ab_robot_1.pk)
         self.assertEqual(
-            new_source.deployed_source_id,
+            new_source.classifier_options.deployed_source_id,
             self.source_ab.pk)
 
     def test_deployed_classifier_blank(self):
@@ -716,9 +719,9 @@ class SourceNewTest(BaseSourceTest):
 
         new_source = self.get_and_assert_new_source(response)
 
-        self.assertFalse(new_source.trains_own_classifiers)
-        self.assertEqual(new_source.deployed_classifier, None)
-        self.assertEqual(new_source.deployed_source_id, None)
+        self.assertFalse(new_source.classifier_options.trains_own_classifiers)
+        self.assertIsNone(new_source.classifier_options.deployed_classifier)
+        self.assertIsNone(new_source.classifier_options.deployed_source_id)
 
     def test_deployed_classifier_nonexistent(self):
         # IDs start from 1, so this shouldn't exist.
@@ -819,6 +822,7 @@ class SourceEditTest(BaseSourceTest):
         )
 
         self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(self.source.name, "Test Source 2")
         self.assertEqual(self.source.visibility, Source.VisibilityTypes.PUBLIC)
         self.assertEqual(self.source.affiliation, "Testing Association")
@@ -840,9 +844,11 @@ class SourceEditTest(BaseSourceTest):
                 type='stratified', cell_rows=4,
                 cell_columns=6, per_cell=3).db_value,
         )
-        self.assertEqual(self.source.confidence_threshold, 80)
         self.assertEqual(
-            self.source.feature_extractor_setting, Extractors.VGG16.value)
+            self.source.classifier_options.confidence_threshold, 80)
+        self.assertEqual(
+            self.source.classifier_options.feature_extractor_setting,
+            Extractors.VGG16.value)
         self.assertEqual(self.source.latitude, '5.789')
         self.assertEqual(self.source.longitude, '-50')
 
@@ -865,12 +871,13 @@ class SourceEditTest(BaseSourceTest):
             trains_own_classifiers=False,
             deployed_classifier=self.source_ab_robot_1.pk)
 
-        self.source.refresh_from_db()
-        self.assertFalse(self.source.trains_own_classifiers)
+        self.source.classifier_options.refresh_from_db()
+        self.assertFalse(self.source.classifier_options.trains_own_classifiers)
         self.assertEqual(
-            self.source.deployed_classifier_id, self.source_ab_robot_1.pk)
+            self.source.classifier_options.deployed_classifier_id,
+            self.source_ab_robot_1.pk)
         self.assertEqual(
-            self.source.deployed_source_id,
+            self.source.classifier_options.deployed_source_id,
             self.source_ab.pk)
 
     def test_mode_to_deploy_with_no_labelset(self):
@@ -895,27 +902,27 @@ class SourceEditTest(BaseSourceTest):
             trains_own_classifiers=False,
             deployed_classifier='')
 
-        self.source.refresh_from_db()
-        self.assertFalse(self.source.trains_own_classifiers)
-        self.assertIsNone(self.source.deployed_classifier)
-        self.assertIsNone(self.source.deployed_source_id)
+        self.source.classifier_options.refresh_from_db()
+        self.assertFalse(self.source.classifier_options.trains_own_classifiers)
+        self.assertIsNone(self.source.classifier_options.deployed_classifier)
+        self.assertIsNone(self.source.classifier_options.deployed_source_id)
 
     def test_mode_to_train_without_trained_classifier(self):
         # First be in deploy mode...
         self.edit_source(
             trains_own_classifiers=False,
             deployed_classifier=self.source_ab_robot_1.pk)
-        self.source.refresh_from_db()
-        self.assertFalse(self.source.trains_own_classifiers)
+        self.source.classifier_options.refresh_from_db()
+        self.assertFalse(self.source.classifier_options.trains_own_classifiers)
 
         # Then switch back to train mode
         self.edit_source(
             trains_own_classifiers=True,
             deployed_classifier='')
-        self.source.refresh_from_db()
-        self.assertTrue(self.source.trains_own_classifiers)
-        self.assertIsNone(self.source.deployed_classifier)
-        self.assertIsNone(self.source.deployed_source_id)
+        self.source.classifier_options.refresh_from_db()
+        self.assertTrue(self.source.classifier_options.trains_own_classifiers)
+        self.assertIsNone(self.source.classifier_options.deployed_classifier)
+        self.assertIsNone(self.source.classifier_options.deployed_source_id)
 
     def test_mode_to_train_with_trained_classifier(self):
         own_robot = self.create_robot(self.source)
@@ -924,32 +931,36 @@ class SourceEditTest(BaseSourceTest):
         self.edit_source(
             trains_own_classifiers=False,
             deployed_classifier=self.source_ab_robot_1.pk)
-        self.source.refresh_from_db()
-        self.assertFalse(self.source.trains_own_classifiers)
+        self.source.classifier_options.refresh_from_db()
+        self.assertFalse(self.source.classifier_options.trains_own_classifiers)
 
         # Then switch back to train mode
         self.edit_source(
             trains_own_classifiers=True,
             deployed_classifier='')
-        self.source.refresh_from_db()
-        self.assertTrue(self.source.trains_own_classifiers)
-        self.assertEqual(self.source.deployed_classifier.pk, own_robot.pk)
-        self.assertEqual(self.source.deployed_source_id, self.source.pk)
+        self.source.classifier_options.refresh_from_db()
+        self.assertTrue(self.source.classifier_options.trains_own_classifiers)
+        self.assertEqual(
+            self.source.classifier_options.deployed_classifier.pk, own_robot.pk)
+        self.assertEqual(
+            self.source.classifier_options.deployed_source_id, self.source.pk)
 
     def test_deployed_classifier_different(self):
         self.edit_source(
             trains_own_classifiers=False,
             deployed_classifier=self.source_ab_robot_1.pk)
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier_id, self.source_ab_robot_1.pk)
+            self.source.classifier_options.deployed_classifier_id,
+            self.source_ab_robot_1.pk)
 
         self.edit_source(
             trains_own_classifiers=False,
             deployed_classifier=self.source_ab_robot_2.pk)
-        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
         self.assertEqual(
-            self.source.deployed_classifier_id, self.source_ab_robot_2.pk)
+            self.source.classifier_options.deployed_classifier_id,
+            self.source_ab_robot_2.pk)
 
     def test_deployed_classifier_nonexistent(self):
         # IDs start from 1, so this shouldn't exist.
@@ -1050,8 +1061,9 @@ class SourceFormFieldAvailability(ClientTest):
             'source_edit', args=[cls.source_with_training.pk])
 
         cls.source_without_training = cls.create_source(cls.user)
-        cls.source_without_training.trains_own_classifiers = False
-        cls.source_without_training.save()
+        cls.source_without_training.classifier_options.trains_own_classifiers \
+            = False
+        cls.source_without_training.classifier_options.save()
         cls.without_training_url = reverse(
             'source_edit', args=[cls.source_without_training.pk])
 
@@ -1123,10 +1135,11 @@ class SourceEditBackendStatusTest(BaseTaskTest):
             do_job('check_source', self.source.pk)
 
         # Directly set initial state of fields.
-        self.source.trains_own_classifiers = trains_own_classifiers[0]
-        self.source.feature_extractor_setting = feature_extractor_setting[0]
-        self.source.deployed_classifier = deployed_classifier[0]
-        self.source.save()
+        classifier_options = self.source.classifier_options
+        classifier_options.trains_own_classifiers = trains_own_classifiers[0]
+        classifier_options.feature_extractor_setting = feature_extractor_setting[0]
+        classifier_options.deployed_classifier = deployed_classifier[0]
+        classifier_options.save()
 
         # Set final state of fields through the edit-source view, and return
         # response.

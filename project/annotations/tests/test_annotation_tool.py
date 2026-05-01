@@ -1411,8 +1411,8 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
                 " annotation tool"))
 
         # Trigger Alleviate on point 2
-        self.source.confidence_threshold = 75
-        self.source.save()
+        self.source.classifier_options.confidence_threshold = 75
+        self.source.classifier_options.save()
         self.client.force_login(self.user)
         self.client.get(self.tool_url)
 

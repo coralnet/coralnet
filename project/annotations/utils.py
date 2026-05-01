@@ -110,7 +110,7 @@ def apply_alleviate(img, label_scores_all_points):
     """
     source = img.source
     
-    if source.confidence_threshold > 99:
+    if source.classifier_options.confidence_threshold > 99:
         return
 
     alleviate_was_applied = False
@@ -123,7 +123,7 @@ def apply_alleviate(img, label_scores_all_points):
         top_score = descending_scores[0]['score']
         top_confidence = top_score
 
-        if top_confidence >= source.confidence_threshold:
+        if top_confidence >= source.classifier_options.confidence_threshold:
             # Save the annotation under the username Alleviate, so that it's no
             # longer a robot annotation.
             anno.user = get_alleviate_user()

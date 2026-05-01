@@ -149,7 +149,7 @@ $(document).ready(function() {
   </div>
 
   {% if has_classifier %}
-    <p>Active classifier: {{ source.get_deployed_classifier_html|safe }}</p>
+    <p>Active classifier: {{ source.classifier_options.get_deployed_classifier_html|safe }}</p>
     <p>
       This page contains the active classifier's evaluation results, computed on the date it was trained. The classifier is evaluated on a random 1/8ths-subset of the confirmed point annotations (the other 7/8ths are used for training). For more info, click the '?' button above.
     </p>

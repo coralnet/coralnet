@@ -591,10 +591,10 @@ class SpacerTrainResultHandler(SpacerResultHandler):
         classifier.save()
 
         # Set as the deployed classifier, if applicable
-        source = classifier.source
-        if source.trains_own_classifiers:
-            source.deployed_classifier = classifier
-            source.save()
+        classifier_options = classifier.source.classifier_options
+        if classifier_options.trains_own_classifiers:
+            classifier_options.deployed_classifier = classifier
+            classifier_options.save()
 
         return f"New classifier accepted: {classifier.pk}"
 

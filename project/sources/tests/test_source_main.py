@@ -430,9 +430,9 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             trains_own_classifiers=True,
         )
         classifier = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.save()
 
         soup = self.source_main_soup(source)
         backend_soup = soup.find(id='backend-column')
@@ -455,9 +455,9 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         )
         classifier_1 = self.create_robot(source)
         classifier_2 = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier_1
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier_1
+        source.classifier_options.save()
 
         soup = self.source_main_soup(source)
         backend_soup = soup.find(id='backend-column')
@@ -529,10 +529,10 @@ class SourceMainBackendColumnTest(BaseTaskTest):
             trains_own_classifiers=True,
         )
         classifier = self.create_robot(source)
-        source.trains_own_classifiers = False
-        source.deployed_classifier = classifier
-        source.deployed_source_id = classifier.source_id
-        source.save()
+        source.classifier_options.trains_own_classifiers = False
+        source.classifier_options.deployed_classifier = classifier
+        source.classifier_options.deployed_source_id = classifier.source_id
+        source.classifier_options.save()
 
         classifier.delete()
 
