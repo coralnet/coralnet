@@ -131,7 +131,7 @@ class HardcodedFlatpagesMigrationTest(MigrationTest):
     after = [('flatpages_custom', '0001_add_help_page_if_not_present')]
     available_apps = [
         'django.contrib.flatpages', 'django.contrib.sites',
-        'flatpages_custom',
+        'flatpages_custom', 'lib',
     ]
 
     def test_migration_when_help_flatpage_already_exists(self):
