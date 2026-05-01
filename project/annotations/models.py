@@ -133,7 +133,7 @@ class ImageAnnotationInfo(models.Model):
     # necessary for performance of queries such as 'find the 20 most recently
     # annotated images'.
     last_annotation = models.ForeignKey(
-        'annotations.Annotation', on_delete=models.SET_NULL,
+        Annotation, on_delete=models.SET_NULL,
         editable=False, null=True,
         # + means don't define a reverse relation. It wouldn't be helpful in
         # this case.
