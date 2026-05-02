@@ -44,11 +44,15 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ('api_core', '0004_port_unit_data_to_internal_jobs'),
+        # Commenting out this dep to make the squash process happy.
+        # ('api_core', '0004_port_unit_data_to_internal_jobs'),
         ('jobs', '0011_alter_job_result_message'),
     ]
 
     operations = [
         migrations.RunPython(
-            port_status_values_forwards, port_status_values_backwards),
+            port_status_values_forwards,
+            port_status_values_backwards,
+            elidable=True,
+        ),
     ]

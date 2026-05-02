@@ -7,7 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('vision_backend', '0023_source_fk_restore_constraint'),
+        # Commenting out this dep to make the squash process happy.
+        # ('vision_backend', '0023_source_fk_restore_constraint'),
         ('sources', '0008_source_annoarea_and_pointgen_defaults'),
     ]
 

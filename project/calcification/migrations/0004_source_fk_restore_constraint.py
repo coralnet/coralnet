@@ -8,7 +8,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('calcification', '0003_source_fk_app_change'),
-        ('images', '0038_rename_source_table'),
+        # Commenting out this dep to make the squash process happy.
+        # ('images', '0038_rename_source_table'),
     ]
 
     operations = [

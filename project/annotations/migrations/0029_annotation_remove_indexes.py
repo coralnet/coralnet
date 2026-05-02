@@ -79,5 +79,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(remove_indexes, migrations.RunPython.noop),
+        migrations.RunPython(
+            remove_indexes,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

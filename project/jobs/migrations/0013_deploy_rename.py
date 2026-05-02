@@ -39,5 +39,6 @@ class Migration(migrations.Migration):
         migrations.RunPython(
             deploy_to_classify_image,
             classify_image_to_deploy,
+            elidable=True,
         )
     ]

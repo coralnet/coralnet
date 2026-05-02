@@ -29,5 +29,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             delete_old_batch_jobs,
-            migrations.RunPython.noop),
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

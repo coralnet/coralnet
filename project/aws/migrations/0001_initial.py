@@ -5,15 +5,6 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
-    """
-    Part of moving the BatchJob model from vision_backend to aws.
-
-    1. Define a database-only rename of the Postgres table
-    2. Define a state-only model creation (i.e. doesn't actually
-       create a Postgres table) in aws (this migration)
-    3. Define a state-only model deletion (i.e. doesn't actually
-       delete a Postgres table) in vision_backend
-    """
 
     initial = True
 
@@ -22,7 +13,7 @@ class Migration(migrations.Migration):
         ('vision_backend', '0031_rename_batchjob_table'),
     ]
 
-    state_operations = [
+    operations = [
         migrations.CreateModel(
             name='BatchJob',
             fields=[
@@ -34,8 +25,4 @@ class Migration(migrations.Migration):
                 ('internal_job', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='jobs.job')),
             ],
         ),
-    ]
-
-    operations = [
-        migrations.SeparateDatabaseAndState(state_operations=state_operations),
     ]

@@ -50,5 +50,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(populate_status_field, migrations.RunPython.noop),
+        migrations.RunPython(
+            populate_status_field,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

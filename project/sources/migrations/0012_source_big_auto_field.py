@@ -30,7 +30,8 @@ class Migration(migrations.Migration):
     """
 
     dependencies = [
-        ('annotations', '0033_annoinfo_source_schema2'),
+        # Commenting out this dep to make the squash process happy.
+        # ('annotations', '0033_annoinfo_source_schema2'),
         ('sources', '0011_sourceinvite_big_auto_field'),
     ]
 

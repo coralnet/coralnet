@@ -10,7 +10,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('vision_backend', '0033_classifier_train_job_related_name'),
-        ('jobs', '0022_job_classifier_populate'),
+        # Commenting out this dep to make the squash process happy.
+        # ('jobs', '0022_job_classifier_populate'),
     ]
 
     operations = [

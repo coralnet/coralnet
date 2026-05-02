@@ -9,7 +9,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('images', '0001_squashed_0033_remove_image_annotation_progress'),
+        # Commenting out this dep to make the squash process happy.
+        # ('images', '0001_squashed_0033_remove_image_annotation_progress'),
     ]
 
     operations = [

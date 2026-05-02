@@ -7,7 +7,8 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('images', '0038_rename_source_table'),
+        # Commenting out this dep to make the squash process happy.
+        # ('images', '0038_rename_source_table'),
         ('jobs', '0016_source_fk_app_change'),
     ]
 

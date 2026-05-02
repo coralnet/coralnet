@@ -30,5 +30,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(
-            hide_old_source_checks, migrations.RunPython.noop),
+            hide_old_source_checks,
+            migrations.RunPython.noop,
+            elidable=True,
+        ),
     ]

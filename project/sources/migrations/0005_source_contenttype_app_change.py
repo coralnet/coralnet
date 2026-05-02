@@ -101,14 +101,19 @@ class Migration(migrations.Migration):
     dependencies = [
         ('contenttypes', '0002_remove_content_type_name'),
 
-        ('annotations', '0025_source_fk_restore_constraint'),
-        ('calcification', '0004_source_fk_restore_constraint'),
-        ('images', '0039_source_fk_restore_constraint'),
-        ('jobs', '0017_source_fk_restore_constraint'),
+        # Commenting out these deps to make the squash process happy.
+        # ('annotations', '0025_source_fk_restore_constraint'),
+        # ('calcification', '0004_source_fk_restore_constraint'),
+        # ('images', '0039_source_fk_restore_constraint'),
+        # ('jobs', '0017_source_fk_restore_constraint'),
+        # ('vision_backend', '0023_source_fk_restore_constraint'),
         ('sources', '0004_source_fk_restore_constraint'),
-        ('vision_backend', '0023_source_fk_restore_constraint'),
     ]
 
     operations = [
-        migrations.RunPython(content_type_to_sources, content_type_to_images),
+        migrations.RunPython(
+            content_type_to_sources,
+            content_type_to_images,
+            elidable=True,
+        ),
     ]

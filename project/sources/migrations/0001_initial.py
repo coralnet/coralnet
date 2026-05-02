@@ -11,7 +11,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('images', '0035_rename_sourceinvite_table'),
+        # Commenting out this dep to make the squash process happy.
+        # ('images', '0035_rename_sourceinvite_table'),
     ]
 
     state_operations = [

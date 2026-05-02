@@ -68,5 +68,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             data_from_units_to_internal_jobs,
-            data_from_internal_jobs_to_units),
+            data_from_internal_jobs_to_units,
+            elidable=True,
+        ),
     ]
