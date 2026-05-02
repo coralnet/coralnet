@@ -9,8 +9,6 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [('annotations', '0001_squashed_0021_populate_imageannotationinfo'), ('annotations', '0022_annoinfo_confirmed_to_status'), ('annotations', '0023_populate_annoinfo_status'), ('annotations', '0024_source_fk_app_change'), ('annotations', '0025_source_fk_restore_constraint'), ('annotations', '0026_annoinfo_add_classifier'), ('annotations', '0027_annoinfo_populate_classifier'), ('annotations', '0028_annotationuploadevent'), ('annotations', '0029_annotation_remove_indexes'), ('annotations', '0030_annotation_new_indexes'), ('annotations', '0031_annoinfo_source_schema1'), ('annotations', '0032_annoinfo_source_data1'), ('annotations', '0033_annoinfo_source_schema2'), ('annotations', '0034_annoinfo_to_src_status_index'), ('annotations', '0035_annotation_fields_db_index_false'), ('annotations', '0036_easier_big_auto_fields'), ('annotations', '0037_annotation_big_auto_field')]
-
     initial = True
 
     dependencies = [

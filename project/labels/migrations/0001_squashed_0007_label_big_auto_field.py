@@ -58,8 +58,6 @@ def delete_labelset_committee_user_group(apps, schema_editor):
 
 class Migration(migrations.Migration):
 
-    replaces = [('labels', '0001_squashed_0012_field_string_attributes_to_unicode'), ('labels', '0002_duplicate_limitchoices_global_ondelete'), ('labels', '0003_label_constraints_helptext'), ('labels', '0004_more_concise_regex_validators'), ('labels', '0005_locallabel_unique_label_within_labelset'), ('labels', '0006_easier_big_auto_fields'), ('labels', '0007_label_big_auto_field')]
-
     initial = True
 
     dependencies = [

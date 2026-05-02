@@ -9,8 +9,6 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [('sources', '0001_initial'), ('sources', '0002_create_source'), ('sources', '0003_source_fk_app_change'), ('sources', '0004_source_fk_restore_constraint'), ('sources', '0005_source_contenttype_app_change'), ('sources', '0006_remove_long_help_texts'), ('sources', '0007_source_annotation_area_non_null'), ('sources', '0008_source_annoarea_and_pointgen_defaults'), ('sources', '0009_add_deployed_classifier_and_more'), ('sources', '0010_populate_deployed_classifier'), ('sources', '0011_sourceinvite_big_auto_field'), ('sources', '0012_source_big_auto_field'), ('sources', '0013_remove_source_confidence_threshold_and_more')]
-
     initial = True
 
     dependencies = [

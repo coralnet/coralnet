@@ -7,8 +7,6 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [('calcification', '0001_initial'), ('calcification', '0002_use_new_jsonfield'), ('calcification', '0003_source_fk_app_change'), ('calcification', '0004_source_fk_restore_constraint'), ('calcification', '0005_big_auto_fields')]
-
     initial = True
 
     dependencies = [

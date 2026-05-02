@@ -9,8 +9,6 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [('api_core', '0001_initial'), ('api_core', '0002_unit_rename_job_to_parent'), ('api_core', '0003_apijobunit_internal_job'), ('api_core', '0004_port_unit_data_to_internal_jobs'), ('api_core', '0005_remove_fields_covered_by_internal_job'), ('api_core', '0006_apijobunit_order_in_parent'), ('api_core', '0007_populate_unit_order_from_request_json'), ('api_core', '0008_unit_order_required_and_unique'), ('api_core', '0009_use_new_jsonfield'), ('api_core', '0010_apijobunit_size'), ('api_core', '0011_userapilimits'), ('api_core', '0012_apijob_finish_date'), ('api_core', '0013_apijob_finish_date_populate'), ('api_core', '0014_big_auto_fields')]
-
     initial = True
 
     dependencies = [

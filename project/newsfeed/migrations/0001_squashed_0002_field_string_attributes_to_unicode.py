@@ -6,8 +6,6 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
-    replaces = [('newsfeed', '0001_initial'), ('newsfeed', '0002_field_string_attributes_to_unicode')]
-
     initial = True
 
     dependencies = [

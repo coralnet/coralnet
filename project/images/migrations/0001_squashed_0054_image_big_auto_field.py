@@ -11,8 +11,6 @@ import images.models
 
 class Migration(migrations.Migration):
 
-    replaces = [('images', '0001_squashed_0033_remove_image_annotation_progress'), ('images', '0034_image_unprocessable_reason'), ('images', '0035_rename_sourceinvite_table'), ('images', '0036_delete_sourceinvite'), ('images', '0037_source_fk_app_change'), ('images', '0038_rename_source_table'), ('images', '0039_source_fk_restore_constraint'), ('images', '0040_delete_source'), ('images', '0041_metadata_image_onetoone_schema1'), ('images', '0042_metadata_image_onetoone_data1'), ('images', '0043_metadata_image_onetoone_schema2'), ('images', '0044_metadata_image_onetoone_data2'), ('images', '0045_metadata_image_onetoone_schema3'), ('images', '0046_metadata_source_schema1'), ('images', '0047_metadata_source_data1'), ('images', '0048_metadata_source_schema2'), ('images', '0049_metadata_aux_and_name_indexes'), ('images', '0050_rename_dupe_image_names'), ('images', '0051_unique_metadata_names_in_source'), ('images', '0052_metadata_big_auto_field'), ('images', '0053_point_big_auto_field'), ('images', '0054_image_big_auto_field')]
-
     initial = True
 
     dependencies = [

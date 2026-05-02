@@ -9,8 +9,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('jobs', '0020_big_auto_fields'),
-        ('vision_backend', '0031_rename_batchjob_table'),
+        ('jobs', '0001_squashed_0022_job_classifier_populate'),
+        ('vision_backend', '0001_squashed_0036_sourceclassifieroptions_populate'),
     ]
 
     operations = [
