@@ -5,8 +5,26 @@ For general instructions on how to update a development environment of CoralNet,
 
 For info about the semantic versioning used here, see `docs/versions.rst`.
 
+When updating a CoralNet environment through multiple versions, make sure to not skip the versions marked with an \* (asterisk). For example, when updating from 1.20 to 1.28, make sure to update like 1.20 > 1.26 > 1.27 > 1.28, and catch up with all the update instructions at each step before moving on.
+
 "Production:" dates under each version indicate when the production server was updated to that version.
 
+
+## [1.28](https://github.com/coralnet/coralnet/tree/1.28)
+
+- Before updating to this version or beyond, first update to 1.27 and catch up with all the migrations there.
+
+## [1.27](https://github.com/coralnet/coralnet/tree/1.27) \*
+
+- Before updating to this version, first update to 1.26 and catch up with all the migrations there.
+
+- Once you're on this version, run `manage.py migrate` to mark the new squashed migrations as completed. There are new squashed migrations for: annotations, api_core, calcification, images, jobs, sources, and vision_backend. 
+
+## [1.26](https://github.com/coralnet/coralnet/tree/1.26) \*
+
+- New migrations to run: aws 0001, jobs 0021-0022, sources 0012-0013, vision_backend 0031-0036
+
+- When specifying BatchQueue as your `SPACER_QUEUE_CHOICE` in `.env`, you should now use `aws.queues.BatchQueue` instead of `vision_backend.queues.BatchQueue`.
 
 ## [1.25.3](https://github.com/coralnet/coralnet/tree/1.25.3)
 
