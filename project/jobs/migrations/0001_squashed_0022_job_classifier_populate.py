@@ -9,8 +9,6 @@ import django.utils.timezone
 
 class Migration(migrations.Migration):
 
-    replaces = [('jobs', '0001_initial'), ('jobs', '0002_alter_status_and_modify_time'), ('jobs', '0003_scheduled_start_default'), ('jobs', '0004_rename_times_to_dates'), ('jobs', '0005_dates_verbose_names'), ('jobs', '0006_rename_to_result_message'), ('jobs', '0007_job_persist'), ('jobs', '0008_job_status_change_value_choices'), ('jobs', '0009_job_status_port_values'), ('jobs', '0010_unique_constraint_update_inprogress_code'), ('jobs', '0011_alter_job_result_message'), ('jobs', '0012_status_port_values_redo'), ('jobs', '0013_deploy_rename'), ('jobs', '0014_job_user'), ('jobs', '0015_unique_incomplete_jobs_and_more'), ('jobs', '0016_source_fk_app_change'), ('jobs', '0017_source_fk_restore_constraint'), ('jobs', '0018_job_hidden'), ('jobs', '0019_hide_old_source_checks'), ('jobs', '0020_big_auto_fields'), ('jobs', '0021_job_classifier'), ('jobs', '0022_job_classifier_populate')]
-
     initial = True
 
     dependencies = [
