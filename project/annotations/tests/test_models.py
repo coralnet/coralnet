@@ -1,15 +1,13 @@
-from django_migration_testcase import MigrationTest
-
 from accounts.utils import get_robot_user
 from images.models import Point
 from lib.tests.utils import ClientTest
-from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
-    ImageAnnoStatuses,
     image_annotation_status,
     image_annotation_verbose_status,
 )
 from ..models import Annotation
+from .utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
 
 
 image_defaults = dict(
@@ -205,3 +203,64 @@ class AnnoInfoUpdateTest(ClientTest):
         # ]
         # Annotation.objects.bulk_create(annotations)
         # self.assertStatusEqual('unconfirmed')
+
+
+class ScrambledSortKeyTest(ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.source.refresh_from_db()
+
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_basic(self):
+        with controlled_sort_hashes(seed=10, pk_sequence=[5,6]):
+            anno_1 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=1),
+                label=self.labels.get(default_code='A'),
+            )
+            anno_1.save()
+            anno_2 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=2),
+                label=self.labels.get(default_code='B'),
+            )
+            anno_2.save()
+
+        anno_1.refresh_from_db()
+        self.assertEqual(anno_1.scrambled_sort_key, EXPECTED_HASHES[15])
+        anno_2.refresh_from_db()
+        self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[16])
+
+    def test_id_larger_than_max_small_integer(self):
+        """
+        If the annotation ID is greater than the max small integer value,
+        it should get modded by 2**16 before continuing as normal.
+        """
+        pk_sequence = [(65536*10)+6, (65536*10)+7]
+
+        with controlled_sort_hashes(seed=10, pk_sequence=pk_sequence):
+            anno_1 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=1),
+                label=self.labels.get(default_code='A'),
+            )
+            anno_1.save()
+            anno_2 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=2),
+                label=self.labels.get(default_code='B'),
+            )
+            anno_2.save()
+
+        anno_1.refresh_from_db()
+        self.assertEqual(anno_1.scrambled_sort_key, EXPECTED_HASHES[16])
+        anno_2.refresh_from_db()
+        self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[17])

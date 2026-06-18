@@ -10,6 +10,8 @@ from django.utils import timezone
 from django.utils.html import escape as html_escape
 
 from accounts.utils import is_alleviate_user, is_robot_user
+from annotations.tests.utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
 from lib.tests.utils import BasePermissionTest, ClientTest
 from sources.models import Source
 from visualization.tests.utils import BaseBrowseActionTest
@@ -1161,6 +1163,31 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
         self.assertEqual(
             self.img.annoinfo.last_annotation.point.point_number, 2,
             msg="Last annotation should be updated")
+
+    def test_set_scrambled_sort_keys(self):
+        """
+        When the save function creates Annotations, their sort keys should get
+        set as expected.
+        """
+        data = dict(
+            label_1='A', label_2='B', label_3='B',
+            robot_1='false', robot_2='false', robot_3='false',
+        )
+        self.client.force_login(self.user)
+
+        with controlled_sort_hashes(
+            seed=10, pk_sequence=[5,6,7],
+        ):
+            self.client.post(self.url, data)
+
+        for point_number, sum in zip([1, 2, 3], [15, 16, 17]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                self.img.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
 
     def test_label_code_missing(self):
         """This isn't supposed to happen unless we screwed up or the user

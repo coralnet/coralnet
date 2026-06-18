@@ -10,7 +10,8 @@ from sources.models import Source
 from vision_backend.models import Classifier
 from vision_backend.utils import schedule_source_check_on_commit
 from .managers import AnnotationManager, AnnotationQuerySet
-from .model_utils import ImageAnnoStatuses, image_annotation_status
+from .model_utils import (
+    ImageAnnoStatuses, image_annotation_status, scrambled_sort_hash)
 
 
 class Annotation(models.Model):
@@ -34,6 +35,24 @@ class Annotation(models.Model):
     label = models.ForeignKey(Label, on_delete=models.PROTECT, db_index=False)
     source = models.ForeignKey(
         Source, on_delete=models.CASCADE, editable=False, db_index=False)
+
+    # A cached pseudo-random ordering for Annotations. Motivations:
+    # 1) In some production cases, naive random ordering is too expensive to do
+    #    on-demand. For example, Browse Patches in a source with millions of
+    #    Annotations.
+    # 2) This prevents Annotations from re-randomizing as you scroll through
+    #    pages of the 'same' results (which could mean seeing repeat results).
+    #
+    # The ordering doesn't have to be perfectly unambiguous, and storage space
+    # is somewhat of a concern with this table, so we use a SmallIntegerField.
+    # For this field, values from -32768 to 32767 are compatible in
+    # all databases supported by Django.
+    #
+    # Although PositiveSmallIntegerField could potentially be less confusing
+    # by avoiding negative numbers, that field would only have a guaranteed
+    # range of 0 to 32767, and we prefer to guarantee the full 16 bits since
+    # that's what our hash function takes.
+    scrambled_sort_key = models.SmallIntegerField(default=0)
 
     class Meta:
         # Due to the sheer number of Annotations there can be in a source
@@ -84,7 +103,15 @@ class Annotation(models.Model):
         return local_label.code
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
         super().save(*args, **kwargs)
+
+        if is_new:
+            # Newly created; set scrambled_sort_key
+            self.scrambled_sort_key = scrambled_sort_hash(self)
+            super().save(update_fields=['scrambled_sort_key'])
+
         self.image.annoinfo.update_annotation_progress_fields()
 
     def delete(self, *args, **kwargs):

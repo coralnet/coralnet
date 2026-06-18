@@ -1,17 +1,88 @@
 from abc import ABC
+from contextlib import contextmanager
 import csv
 from io import StringIO
+from typing import Callable
+from unittest import mock
 
 from bs4 import BeautifulSoup
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from accounts.utils import get_imported_user
-from annotations.model_utils import AnnotationArea
-from annotations.models import Annotation, AnnotationUploadEvent
 from images.model_utils import PointGen
 from images.models import Point
 from lib.tests.utils import ClientTest
+from ..model_utils import (
+    AnnotationArea, cacheable_annotation_hash_salt, scrambled_sort_hash)
+from ..models import Annotation, AnnotationUploadEvent
+
+
+class FakeInstance:
+    def __init__(self, pk):
+        self.pk = pk
+
+
+class AnnotationIdFixerForSortHashes:
+    """
+    The first time scrambled_sort_hash_mock is called, the first element
+    of pk_sequence is used to generate a hash. On the second call, the second
+    element is used; etc.
+
+    So, by mocking scrambled_sort_hash() with that function, and mocking
+    randint (which creates the seed), this lets us completely control the
+    hashes that are generated for any created annotations.
+    We just need to know what order the annotations are created in,
+    to draw a correspondence between them and the elements of pk_sequence.
+    """
+    scrambled_sort_hash_mock: Callable
+
+    def __init__(self, pk_sequence: list):
+        self.pk_sequence = pk_sequence
+
+        def wrapper(_passed_model_instance):
+            """
+            Wrapper around scrambled_sort_hash() which swaps the
+            model_instance arg so we can control the pk.
+            """
+            pk = self.pk_sequence.pop(0)
+            return scrambled_sort_hash(FakeInstance(pk=pk))
+
+        self.scrambled_sort_hash_mock = wrapper
+
+
+@contextmanager
+def controlled_sort_hashes(
+    seed: int, pk_sequence: list,
+    mock_target_module: str = 'annotations.models',
+):
+    id_fixer = AnnotationIdFixerForSortHashes(pk_sequence)
+
+    with (
+        mock.patch(
+            f'{mock_target_module}.scrambled_sort_hash',
+            id_fixer.scrambled_sort_hash_mock),
+        mock.patch('random.randint') as mock_randint,
+    ):
+        mock_randint.return_value = seed
+
+        cache_key = cacheable_annotation_hash_salt.cache_key
+        if cache.has_key(cache_key):
+            # Ensure the seed gets regenerated while we're mocking randint.
+            cache.delete(cache_key)
+
+        yield
+
+
+# Sum of pk + randint result -> scrambled_sort_key that we expect.
+EXPECTED_HASHES = {
+    14: -16466,
+    15: 8073,
+    16: -20394,
+    17: -29972,
+    18: 16743,
+}
 
 
 class AnnotationHistoryTestMixin:
@@ -506,6 +577,17 @@ class UploadAnnotationsGeneralCasesTest(
                 ['Point 1: A<br/>Point 3: B', 'Imported'],
             ]
         )
+
+    def check_scrambled_sort_keys(self):
+
+        for point_number, sum in zip([1, 2, 3], [15, 16, 17]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                self.img1.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
 
     def check_transaction_rollback(self):
 

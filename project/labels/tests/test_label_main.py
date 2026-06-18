@@ -7,6 +7,8 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 
+from annotations.tests.utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
 from calcification.tests.utils import create_global_calcify_table
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
@@ -422,6 +424,42 @@ class LabelMainPatchesTest(BaseLabelMainTest):
 
         response = self.get_example_patches_guest()
         self.assertEqual(self.patch_img_element_count(response), 3)
+
+    def test_patch_order(self):
+        with controlled_sort_hashes(seed=10, pk_sequence=[5,6,7,8]):
+            self.add_annotations(
+                self.user, self.image,
+                annotations={1:'A', 2:'A', 3:'A', 4:'A'},
+            )
+
+        for point_number, sum in zip([1, 2, 3, 4], [15, 16, 17, 18]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                self.image.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
+
+        # Check patch order.
+
+        response = self.get_example_patches()
+        patches_soup = BeautifulSoup(response['patchesHtml'], 'html.parser')
+        # This is based on the values in EXPECTED_HASHES.
+        expected_order = [3, 2, 1, 4]
+
+        for patch_index, thumbnail in enumerate(patches_soup.find_all('img')):
+            patch_thumbnail_url = thumbnail.attrs['src']
+            expected_point = self.image.point_set.get(
+                point_number=expected_order[patch_index])
+            expected_patch_path = get_patch_path(expected_point)
+
+            self.assertIn(
+                expected_patch_path, patch_thumbnail_url,
+                f"The thumbnail URL at index {patch_index} should contain"
+                f" (specifically, should end with) the patch path of the"
+                f" expected point"
+            )
 
     def test_cache(self):
         """

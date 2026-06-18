@@ -12,7 +12,8 @@ from reversion.models import Revision
 
 from accounts.utils import get_robot_user, is_robot_user
 from annotations.models import Annotation, ImageAnnotationInfo
-from annotations.tests.utils import AnnotationHistoryTestMixin
+from annotations.tests.utils import (
+    AnnotationHistoryTestMixin, controlled_sort_hashes, EXPECTED_HASHES)
 from images.models import Point
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
@@ -687,6 +688,28 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
                 scores[int(np.argmax(posteriors))].label, ann.label,
                 "Max score label should match the annotation label."
                 " Posteriors: {}".format(posteriors))
+
+    def test_set_scrambled_sort_keys(self):
+        """
+        When classification creates Annotations, their sort keys should get
+        set as expected.
+        """
+        self.upload_data_and_train_classifier()
+
+        with controlled_sort_hashes(
+            seed=10, pk_sequence=[4,5,6,7,8],
+            mock_target_module='annotations.managers',
+        ):
+            image = self.upload_image_and_machine_classify()
+
+        for point_number, sum in zip([1, 2, 3, 4, 5], [14, 15, 16, 17, 18]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                image.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
 
     def test_use_old_classifier_from_this_source(self):
         clf_1 = self.upload_data_and_train_classifier()

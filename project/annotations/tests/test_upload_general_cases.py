@@ -12,6 +12,7 @@ from django.urls import reverse
 from images.models import Point
 from lib.tests.utils import BasePermissionTest, ClientTest
 from .utils import (
+    controlled_sort_hashes,
     UploadAnnotationsCsvTestMixin,
     UploadAnnotationsFormatTest,
     UploadAnnotationsGeneralCasesTest,
@@ -255,6 +256,28 @@ class GeneralCasesTest(
         self.upload_annotations(self.user, self.source)
 
         self.check_annotation_history()
+
+    def test_set_scrambled_sort_keys(self):
+        """
+        When the upload creates Annotations, their sort keys should get
+        set as expected.
+        """
+        rows = [
+            ['Name', 'Column', 'Row', 'Label code'],
+            ['1.png', 10, 10, 'A'],
+            ['1.png', 20, 20, 'B'],
+            ['1.png', 30, 30, 'B'],
+        ]
+        csv_file = self.make_annotations_file('A.csv', rows)
+        self.preview_annotations(self.user, self.source, csv_file)
+
+        with controlled_sort_hashes(
+            seed=10, pk_sequence=[5,6,7],
+            mock_target_module='annotations.managers',
+        ):
+            self.upload_annotations(self.user, self.source)
+
+        self.check_scrambled_sort_keys()
 
     def test_transaction_rollback(self):
         """

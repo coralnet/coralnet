@@ -4,9 +4,12 @@ from unittest import skip
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
+from annotations.tests.utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
 from jobs.tests.utils import do_job
 from lib.tests.utils import BasePermissionTest, ClientTest
-from ..model_utils import AnnotationArea
+from ..model_utils import (
+    AnnotationArea, cacheable_annotation_hash_salt)
 from ..utils import cacheable_annotation_count
 
 
@@ -65,6 +68,51 @@ class SitewideAnnotationCountTest(ClientTest):
         self.assertEqual(cacheable_annotation_count.get(), 3)
         self.add_annotations(self.user, self.img, {4: 'B'})
         self.assertEqual(cacheable_annotation_count.get(), 3)
+
+
+class PatchOrderingUpdateTaskTest(ClientTest):
+    """
+    Test the task which updates the pseudo-random hashes used for ordering
+    annotation patches.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
+        cls.create_labelset(cls.user, cls.source, labels)
+        cls.image = cls.upload_image(cls.user, cls.source)
+        cls.add_annotations(cls.user, cls.image, {1: 'A', 2: 'B', 3: 'A'})
+
+    def test(self):
+        with controlled_sort_hashes(
+            seed=10, pk_sequence=[6,7,8],
+            mock_target_module='annotations.tasks',
+        ):
+            job = do_job('update_annotation_scrambled_sort_keys')
+
+        self.assertEqual(
+            job.result_message,
+            f"Updated annotation scrambled-sort salt to 10,"
+            f" and updated 3 scrambled_sort_key values"
+        )
+
+        self.assertEqual(
+            cacheable_annotation_hash_salt.get(), 10,
+            "Not only should the salt of 10 have been used for the created"
+            " Annotations, that salt should also be set in the cache as a"
+            " result of the task"
+        )
+
+        for point_number, sum in zip([1, 2, 3], [16, 17, 18]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                self.image.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
 
 
 class AnnotationAreaEditTest(ClientTest):
