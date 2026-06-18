@@ -27,7 +27,8 @@ from labels.models import LabelGroup, Label
 from lib.forms import (
     BoxFormRenderer, EnhancedMultiWidget, FieldsetsFormComponent)
 from sources.models import Source
-from .utils import get_annotation_tool_users, image_search_kwargs_to_queryset
+from .utils import (
+    get_annotator_dropdown_choices, image_search_kwargs_to_queryset)
 
 tz = timezone.get_current_timezone()
 
@@ -328,7 +329,7 @@ class AnnotatorFilterField(MultiValueField):
         self.annotator_lookup = kwargs.pop('annotator_lookup')
 
         self.annotation_tool_user = forms.ModelChoiceField(
-            queryset=get_annotation_tool_users(source),
+            queryset=get_annotator_dropdown_choices(source),
             required=False,
             empty_label="Any user",
         )
