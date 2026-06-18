@@ -5,7 +5,6 @@ import re
 from django.conf import settings
 from django.db.models import Count, Q
 
-from accounts.utils import get_robot_user
 from annotations.models import Annotation
 from lib.utils import CacheableValue
 from sources.models import Source
@@ -83,7 +82,7 @@ def compute_label_details():
     values = (
         Label.objects.all().annotate(
             num_confirmed_annotations=Count(
-                "annotation", filter=~Q(annotation__user=get_robot_user()))
+                "annotation", filter=Q(annotation__confirmed=True))
         )
         .values('pk', 'num_confirmed_annotations')
     )

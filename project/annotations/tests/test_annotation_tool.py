@@ -898,6 +898,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
             image__pk=self.img.pk, point__point_number=3)
         self.assertEqual(annotation_3.label_code, 'B')
         self.assertEqual(annotation_3.user.username, self.user.username)
+        self.assertTrue(annotation_3.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -925,6 +926,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
             image__pk=self.img.pk, point__point_number=1)
         self.assertEqual(annotation_1.label_code, 'A')
         self.assertEqual(annotation_1.user.username, self.user.username)
+        self.assertTrue(annotation_1.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -954,6 +956,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
             image__pk=self.img.pk, point__point_number=1)
         self.assertEqual(annotation_1.label_code, 'B')
         self.assertEqual(annotation_1.user.username, self.user.username)
+        self.assertTrue(annotation_1.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -982,6 +985,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
             image__pk=self.img.pk, point__point_number=1)
         self.assertEqual(annotation_1.label_code, 'B')
         self.assertEqual(annotation_1.user.username, self.user.username)
+        self.assertTrue(annotation_1.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -1016,6 +1020,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
             image__pk=self.img.pk, point__point_number=1)
         self.assertEqual(annotation_1.label_code, 'B')
         self.assertEqual(annotation_1.user.username, other_user.username)
+        self.assertTrue(annotation_1.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -1346,9 +1351,11 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
         annotation_1 = Annotation.objects.get(
             image__pk=self.img.pk, point__point_number=1)
         self.assertTrue(is_robot_user(annotation_1.user))
+        self.assertFalse(annotation_1.confirmed)
         annotation_2 = Annotation.objects.get(
             image__pk=self.img.pk, point__point_number=2)
         self.assertTrue(is_robot_user(annotation_2.user))
+        self.assertFalse(annotation_2.confirmed)
 
     def test_point_confidence_high_enough(self):
         robot = self.create_robot(self.source)
@@ -1363,9 +1370,11 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
         annotation_1 = Annotation.objects.get(
             image__pk=self.img.pk, point__point_number=1)
         self.assertTrue(is_alleviate_user(annotation_1.user))
+        self.assertTrue(annotation_1.confirmed)
         annotation_2 = Annotation.objects.get(
             image__pk=self.img.pk, point__point_number=2)
         self.assertTrue(is_alleviate_user(annotation_2.user))
+        self.assertTrue(annotation_2.confirmed)
 
     def test_dont_change_confirmed(self):
         robot = self.create_robot(self.source)

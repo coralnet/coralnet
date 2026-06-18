@@ -309,6 +309,7 @@ class UploadAnnotationsGeneralCasesTest(
             self.assertEqual(annotation.source.pk, self.source.pk)
             self.assertEqual(annotation.user.pk, get_imported_user().pk)
             self.assertEqual(annotation.robot_version, None)
+            self.assertTrue(annotation.confirmed)
             self.assertLess(
                 self.source.create_date, annotation.annotation_date)
 
@@ -383,6 +384,7 @@ class UploadAnnotationsGeneralCasesTest(
             self.assertEqual(annotation.source.pk, self.source.pk)
             self.assertEqual(annotation.user.pk, get_imported_user().pk)
             self.assertEqual(annotation.robot_version, None)
+            self.assertTrue(annotation.confirmed)
             self.assertLess(
                 self.source.create_date, annotation.annotation_date)
 

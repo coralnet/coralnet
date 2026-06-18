@@ -379,6 +379,8 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
             self.assertTrue(
                 is_robot_user(point.annotation.user),
                 "Image should have robot annotations")
+            self.assertFalse(
+                point.annotation.confirmed, "Points should be unconfirmed")
             # Score count per point should be label count or 5,
             # whichever is less. (In this case it's label count)
             self.assertEqual(
@@ -624,9 +626,15 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
                 self.assertFalse(
                     is_robot_user(point.annotation.user),
                     "The confirmed annotation should still be confirmed")
+                self.assertTrue(
+                    point.annotation.confirmed,
+                    "The confirmed annotation should still be confirmed")
             else:
                 self.assertTrue(
                     is_robot_user(point.annotation.user),
+                    "The other annotations should be unconfirmed")
+                self.assertFalse(
+                    point.annotation.confirmed,
                     "The other annotations should be unconfirmed")
             self.assertEqual(
                 2, point.score_set.count(), "Each point should have scores")
@@ -659,6 +667,9 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
         for point in Point.objects.filter(image__id=img.id):
             self.assertFalse(
                 is_robot_user(point.annotation.user),
+                "Image should still have confirmed annotations")
+            self.assertTrue(
+                point.annotation.confirmed,
                 "Image should still have confirmed annotations")
             self.assertFalse(
                 point.score_set.exists(), "Points should not have scores")
@@ -820,6 +831,9 @@ class ClassifyImageTest(BaseTaskTest, AnnotationHistoryTestMixin):
                 self.fail("New image's points should be classified")
             self.assertTrue(
                 is_robot_user(point.annotation.user),
+                "Image should have robot annotations")
+            self.assertFalse(
+                point.annotation.confirmed,
                 "Image should have robot annotations")
             # Score count per point should be label count or 5,
             # whichever is less. (In this case it's label count)

@@ -13,11 +13,11 @@ class AnnotationQuerySet(models.QuerySet):
 
     def confirmed(self):
         """Confirmed annotations only."""
-        return self.exclude(user=get_robot_user())
+        return self.filter(confirmed=True)
 
     def unconfirmed(self):
         """Unconfirmed annotations only."""
-        return self.filter(user=get_robot_user())
+        return self.filter(confirmed=False)
 
     def delete_in_chunks(self):
         """
@@ -62,6 +62,11 @@ class AnnotationQuerySet(models.QuerySet):
         Only use this for annotation creation cases where
         django-reversion isn't needed, since this skips save() signals.
         """
+        for obj in objs:
+            # confirmed field is generally expected to be set here instead of
+            # by the caller.
+            obj.confirmed = obj.user != get_robot_user()
+
         new_annotations = super().bulk_create(objs, *args, **kwargs)
 
         # Once saved, the objs have IDs. Set scrambled_sort_key using

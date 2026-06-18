@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from accounts.utils import get_robot_user
 from events.models import Event
 from images.models import Image, Point
 from labels.models import Label, LocalLabel
@@ -54,6 +55,10 @@ class Annotation(models.Model):
     # that's what our hash function takes.
     scrambled_sort_key = models.SmallIntegerField(default=0)
 
+    # This is a redundant field, equivalent to 'not robot user', but is meant
+    # to help with index utilization and query speed.
+    confirmed = models.BooleanField()
+
     class Meta:
         # Due to the sheer number of Annotations there can be in a source
         # in practice (e.g. 50k images, 400 points per image), performance
@@ -103,12 +108,27 @@ class Annotation(models.Model):
         return local_label.code
 
     def save(self, *args, **kwargs):
+
+        # confirmed field is generally expected to be set here instead of by
+        # the caller.
+        confirmed_based_on_user = self.user != get_robot_user()
+        if self.confirmed != confirmed_based_on_user:
+            self.confirmed = confirmed_based_on_user
+            # Custom save() methods which update field values should add those
+            # field names to the update_fields kwarg.
+            # https://docs.djangoproject.com/en/4.2/topics/db/models/#overriding-predefined-model-methods
+            if (update_fields := kwargs.get('update_fields')) is not None:
+                kwargs['update_fields'] = (
+                    {'confirmed'}.union(update_fields))
+
         is_new = self.pk is None
 
         super().save(*args, **kwargs)
 
         if is_new:
-            # Newly created; set scrambled_sort_key
+            # Newly created; set scrambled_sort_key.
+            # Its value depends on the pk, which is why this is done after
+            # creation.
             self.scrambled_sort_key = scrambled_sort_hash(self)
             super().save(update_fields=['scrambled_sort_key'])
 
