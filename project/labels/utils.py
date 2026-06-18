@@ -90,12 +90,13 @@ def compute_label_details():
         d['pk']: d['num_confirmed_annotations'] for d in values}
 
     random_annotations_per_label = defaultdict(list)
-    # Scramble the order.
-    # Another idea is ordering by label and then scrambled, but couldn't think
-    # of how to leverage that to optimize the below code.
+    # Scramble the order within each label.
+    # The code that follows this doesn't really take advantage of the label
+    # ordering, but ordering by label and sort-key lets us take advantage of
+    # a database index.
     confirmed_annotations = (
         Annotation.objects.confirmed()
-        .order_by('scrambled_sort_key')
+        .order_by('label', 'scrambled_sort_key')
         .values('pk', 'label')
     )
     target_num_patches = settings.LABEL_EXAMPLE_PATCHES_PER_PAGE

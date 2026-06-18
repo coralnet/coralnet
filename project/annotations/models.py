@@ -84,21 +84,29 @@ class Annotation(models.Model):
         # to be automatically defined (since the constraint isn't allowed to
         # exist without the index).
         indexes = [
+            # Get annotations of an image, and potentially by confirmed
+            # / unconfirmed
             models.Index(
-                fields=['image', 'user'],
-                name='annotation_to_img_usr_i'),
+                fields=['image', 'confirmed'],
+                name='annotation_to_img_confirm_i'),
+            # Example patches
             models.Index(
-                fields=['image', 'label', 'user'],
-                name='annotation_to_img_lbl_usr_i'),
-            models.Index(
-                fields=['label', 'source'],
-                name='annotation_to_lbl_src_i'),
+                fields=['label', 'confirmed', 'scrambled_sort_key'],
+                name='anno_to_lbl_confirm_hsh_i'),
+            # Browse Patches, filtering by unconfirmed or filtering by
+            # individual user / Have at least one index with robot version
             models.Index(
                 fields=['source', 'user', 'robot_version'],
                 name='annotation_to_src_usr_rbtv_i'),
+            # Browse Patches, filtering by a single label / See which of a
+            # source's labels are used by any confirmed annotations
             models.Index(
-                fields=['source', 'label', 'user'],
-                name='annotation_to_src_lbl_usr_i'),
+                fields=['source', 'label', 'confirmed'],
+                name='anno_to_src_lbl_confirm_i'),
+            # Browse Patches
+            models.Index(
+                fields=['source', 'scrambled_sort_key'],
+                name='annotation_to_src_hsh_i'),
         ]
 
     @property
