@@ -256,6 +256,7 @@ class DataTransferReader {
     }
 
     isFileAccepted(file) {
+        if (file.name.startsWith('._')) return false;
         if (!this.acceptedExtensions) {
             // All extensions are accepted.
             return true;
