@@ -5,7 +5,6 @@ import re
 from django.conf import settings
 from django.db.models import Count, Q
 
-from accounts.utils import get_robot_user
 from annotations.models import Annotation
 from lib.utils import CacheableValue
 from sources.models import Source
@@ -83,7 +82,7 @@ def compute_label_details():
     values = (
         Label.objects.all().annotate(
             num_confirmed_annotations=Count(
-                "annotation", filter=~Q(annotation__user=get_robot_user()))
+                "annotation", filter=Q(annotation__confirmed=True))
         )
         .values('pk', 'num_confirmed_annotations')
     )
@@ -91,13 +90,13 @@ def compute_label_details():
         d['pk']: d['num_confirmed_annotations'] for d in values}
 
     random_annotations_per_label = defaultdict(list)
-    # Order randomly.
-    # Another idea is ('label', '?') which would order by label and then
-    # randomly, but couldn't think of how to leverage that to optimize
-    # the below code.
+    # Scramble the order within each label.
+    # The code that follows this doesn't really take advantage of the label
+    # ordering, but ordering by label and sort-key lets us take advantage of
+    # a database index.
     confirmed_annotations = (
         Annotation.objects.confirmed()
-        .order_by('?')
+        .order_by('label', 'scrambled_sort_key')
         .values('pk', 'label')
     )
     target_num_patches = settings.LABEL_EXAMPLE_PATCHES_PER_PAGE

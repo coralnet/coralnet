@@ -6,17 +6,18 @@ from django.db import models
 
 from accounts.utils import get_robot_user, is_robot_user
 from images.models import Image
+from .model_utils import scrambled_sort_hash
 
 
 class AnnotationQuerySet(models.QuerySet):
 
     def confirmed(self):
         """Confirmed annotations only."""
-        return self.exclude(user=get_robot_user())
+        return self.filter(confirmed=True)
 
     def unconfirmed(self):
         """Unconfirmed annotations only."""
-        return self.filter(user=get_robot_user())
+        return self.filter(confirmed=False)
 
     def delete_in_chunks(self):
         """
@@ -56,12 +57,23 @@ class AnnotationQuerySet(models.QuerySet):
 
         return return_values
 
-    def bulk_create(self, *args, **kwargs):
+    def bulk_create(self, objs, *args, **kwargs):
         """
         Only use this for annotation creation cases where
         django-reversion isn't needed, since this skips save() signals.
         """
-        new_annotations = super().bulk_create(*args, **kwargs)
+        for obj in objs:
+            # confirmed field is generally expected to be set here instead of
+            # by the caller.
+            obj.confirmed = obj.user != get_robot_user()
+
+        new_annotations = super().bulk_create(objs, *args, **kwargs)
+
+        # Once saved, the objs have IDs. Set scrambled_sort_key using
+        # scrambled_sort_hash(), which uses the objs' IDs.
+        for anno in new_annotations:
+            anno.scrambled_sort_key = scrambled_sort_hash(anno)
+        self.bulk_update(new_annotations, ['scrambled_sort_key'])
 
         images = Image.objects.filter(
             annotation__in=new_annotations).distinct()

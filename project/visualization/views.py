@@ -267,7 +267,7 @@ def browse_patches(request, source_id):
         )
 
     # Random order
-    annotation_results = annotation_results.order_by('?')
+    annotation_results = annotation_results.order_by('scrambled_sort_key')
 
     page_results = paginate(
         annotation_results,

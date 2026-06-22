@@ -138,6 +138,11 @@ class CacheableValue:
         return value
 
 
+# Cache intervals are commonly some number of days, so this constant can be
+# useful when specifying intervals.
+ONE_DAY_IN_SECONDS = 60*60*24
+
+
 def date_display(dt):
     return date_template_filter(timezone.localtime(dt))
 

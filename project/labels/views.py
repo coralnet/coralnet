@@ -473,7 +473,7 @@ def label_example_patches_ajax(request, label_id):
     else:
         all_annotations = Annotation.objects.confirmed() \
             .filter(label=label) \
-            .order_by('?')
+            .order_by('scrambled_sort_key')
         paginator = Paginator(all_annotations, page_size)
 
         try:

@@ -11,8 +11,8 @@ from django.db.models import Expression, Q
 import django.db.models.fields as model_fields
 from django.db.models.functions import Lower
 
-from accounts.utils import get_alleviate_user, get_imported_user, get_robot_user
 from images.models import Metadata
+from sources.models import Source
 
 User = get_user_model()
 
@@ -135,22 +135,25 @@ def image_search_kwargs_to_queryset(search_kwargs, source):
     return image_results
 
 
-def get_annotation_tool_users(source):
+def get_annotator_dropdown_choices(source):
     """
-    Return a queryset of users who have made annotations using the annotation
-    tool in the given source.
+    Return a queryset of users who are admins/editors in the source.
+
+    This may not necessarily include all who have made annotations using
+    the annotation tool in the given source; there may be former members.
+    However, it may be too expensive to do that lookup.
+    TODO: Ensure that, if one really wanted to search for annotations of a
+     former member, it'd still be possible by entering that user's ID in the
+     URL query arg manually, instead of using this dropdown. The issue is
+     that the validation on this field would currently make the whole form
+     get an error if one tried that.
     """
-    annotations = source.annotation_set.all()
-    tool_annotations = annotations.exclude(
-        user__in=[get_robot_user(), get_alleviate_user(), get_imported_user()])
-    # Beware of changing this query; it's performance sensitive. Any changes
-    # should be tried on a source with 100,000s of annotations.
-    tool_user_pks = (
-        tool_annotations.order_by('user')
-        .values_list('user', flat=True)
-        .distinct()
-    )
-    return User.objects.filter(pk__in=tool_user_pks).order_by('username')
+    likely_annotator_ids = []
+    for member in source.get_members():
+        if member.has_perm(Source.PermTypes.EDIT.code, source):
+            likely_annotator_ids.append(member.pk)
+    return User.objects.filter(
+        pk__in=likely_annotator_ids).order_by('username')
 
 
 def get_patch_path(point):

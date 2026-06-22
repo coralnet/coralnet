@@ -5,6 +5,7 @@ import urllib.parse
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
@@ -792,6 +793,12 @@ class ExportPrepView(SourceCsvExportPrepView):
 
         return point_set_values, score_set_values_per_point
 
+    def user_id_to_username(self, user_id):
+        if user_id not in self.username_dict:
+            user = User.objects.get(pk=user_id)
+            self.username_dict[user_id] = user.username
+        return self.username_dict[user_id]
+
     def write_csv(self, stream, source, image_set, export_form_data):
         # List of string keys indicating optional column sets to add.
         self.optional_columns = export_form_data['optional_columns']
@@ -816,12 +823,21 @@ class ExportPrepView(SourceCsvExportPrepView):
 
         self.labelset_dict = source.labelset.global_pk_to_code_dict()
 
-        users_values = (
-            Annotation.objects.filter(image__source=source)
-            .values('user', 'user__username').distinct()
-        )
+        # username_dict keeps us from having to do one username lookup per
+        # Annotation.
+        # However, we only pre-populate the dict with the current admin/edit
+        # members of the source. If there are any former admins/editors,
+        # they will need extra queries later (should be one per user, so not
+        # too bad).
+        likely_annotators = []
+        for member in source.get_members():
+            if member.has_perm(Source.PermTypes.EDIT.code, source):
+                likely_annotators.append(member)
+        likely_annotators_qs = User.objects.filter(
+            pk__in=[user.pk for user in likely_annotators])
         self.username_dict = dict(
-            (v['user'], v['user__username']) for v in users_values)
+            (v['pk'], v['username'])
+            for v in likely_annotators_qs.values('pk', 'username'))
 
         if 'annotator_info' in self.optional_columns:
             fieldnames.extend(["Annotator", "Date annotated"])
@@ -899,8 +915,8 @@ class ExportPrepView(SourceCsvExportPrepView):
                 'annotation__annotation_date']
             date_annotated = annotation_date.replace(
                 microsecond=0)
-            annotator = (
-                self.username_dict[point_values['annotation__user']])
+            annotator = self.user_id_to_username(
+                point_values['annotation__user'])
             row.update({
                 "Annotator": annotator,
                 "Date annotated": date_annotated,

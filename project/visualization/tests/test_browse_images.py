@@ -906,13 +906,14 @@ class LastAnnotatorSearchTest(BaseBrowseImagesTest):
             self.user, self.source, user3, Source.PermTypes.EDIT.code)
 
         response = self.get_browse()
-        # Choices should be based on existing annotations in the source, not
-        # based on the source's member list. So, no user3.
+        # Choices should be based on the source's member list, not on existing
+        # annotations in the source. So, includes user3.
         self.assert_search_field_choices(
             response, 'last_annotator_1',
             [('', "Any user"),
              (str(self.user.pk), self.user.username),
-             (str(user2.pk), user2.username)],
+             (str(user2.pk), user2.username),
+             (str(user3.pk), user3.username)],
         )
 
     def test_filter_by_annotator_alleviate(self):

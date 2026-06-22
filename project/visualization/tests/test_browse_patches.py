@@ -9,6 +9,9 @@ from django.utils import timezone
 
 from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
+from annotations.tests.utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
+from images.models import Image
 from lib.tests.utils import BasePermissionTest
 from sources.models import Source
 from .utils import BaseBrowsePageTest
@@ -69,14 +72,12 @@ class BaseBrowsePatchesTest(BaseBrowsePageTest):
     def assert_browse_results(
         self, response,
         # Tuples of (Image instance/number, point number)
-        expected_results: list[tuple['Image|int', int]],
+        expected_results: list[tuple[Image|int, int]],
         msg_prefix=None,
     ):
         response_soup = BeautifulSoup(response.content, 'html.parser')
         thumb_wrappers = response_soup.find_all('span', class_='thumb_wrapper')
         actual_results = [
-            # The only number in the thumbnail's link should be the
-            # image ID.
             self.thumb_wrapper_to_annotation_result(thumb_wrapper)
             for thumb_wrapper in thumb_wrappers
         ]
@@ -91,7 +92,8 @@ class BaseBrowsePatchesTest(BaseBrowsePageTest):
                 image = image_repr
             expected_results_2.append((image.pk, point_number))
 
-        # Patches are ordered randomly, so can't compare ordered lists.
+        # Patch order is complex to test for, so here we don't bother.
+        # That is, we compare sets instead of ordered lists.
         self.assertSetEqual(
             set(actual_results), set(expected_results_2),
             # This is a message prefix, not a message replacement,
@@ -463,6 +465,49 @@ class FormInitializationTest(BaseBrowsePatchesTest):
         self.assertEqual(
             search_field.attrs.get('value'), 'DSC',
             msg="Field value should be present in the search form")
+
+
+class SortTest(BaseBrowsePatchesTest):
+
+    setup_image_count = 1
+    points_per_image = 4
+
+    def test(self):
+        image = self.images[0]
+
+        with controlled_sort_hashes(seed=10, pk_sequence=[5,6,7,8]):
+            self.add_annotations(
+                self.user, image,
+                annotations={1:'A', 2:'A', 3:'A', 4:'A'},
+            )
+
+        for point_number, sum in zip([1, 2, 3, 4], [15, 16, 17, 18]):
+            expected_hash = EXPECTED_HASHES[sum]
+            self.assertEqual(
+                image.annotation_set.get(
+                    point__point_number=point_number).scrambled_sort_key,
+                expected_hash,
+                f"Sort hash for point {point_number} should be as expected",
+            )
+
+        # Check patch order.
+
+        response = self.get_browse(**self.default_search_params)
+        response_soup = BeautifulSoup(response.content, 'html.parser')
+        thumb_wrappers = response_soup.find_all('span', class_='thumb_wrapper')
+        actual_results = [
+            self.thumb_wrapper_to_annotation_result(thumb_wrapper)
+            for thumb_wrapper in thumb_wrappers
+        ]
+        # This is based on the values in EXPECTED_HASHES.
+        expected_order = [3, 2, 1, 4]
+        expected_results = [
+            (image.pk, point_number) for point_number in expected_order]
+
+        self.assertListEqual(
+            actual_results, expected_results,
+            "Patches should be in the expected order",
+        )
 
 
 @override_settings(

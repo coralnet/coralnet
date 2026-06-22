@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from accounts.utils import get_robot_user
 from events.models import Event
 from images.models import Image, Point
 from labels.models import Label, LocalLabel
@@ -10,7 +11,8 @@ from sources.models import Source
 from vision_backend.models import Classifier
 from vision_backend.utils import schedule_source_check_on_commit
 from .managers import AnnotationManager, AnnotationQuerySet
-from .model_utils import ImageAnnoStatuses, image_annotation_status
+from .model_utils import (
+    ImageAnnoStatuses, image_annotation_status, scrambled_sort_hash)
 
 
 class Annotation(models.Model):
@@ -34,6 +36,28 @@ class Annotation(models.Model):
     label = models.ForeignKey(Label, on_delete=models.PROTECT, db_index=False)
     source = models.ForeignKey(
         Source, on_delete=models.CASCADE, editable=False, db_index=False)
+
+    # A cached pseudo-random ordering for Annotations. Motivations:
+    # 1) In some production cases, naive random ordering is too expensive to do
+    #    on-demand. For example, Browse Patches in a source with millions of
+    #    Annotations.
+    # 2) This prevents Annotations from re-randomizing as you scroll through
+    #    pages of the 'same' results (which could mean seeing repeat results).
+    #
+    # The ordering doesn't have to be perfectly unambiguous, and storage space
+    # is somewhat of a concern with this table, so we use a SmallIntegerField.
+    # For this field, values from -32768 to 32767 are compatible in
+    # all databases supported by Django.
+    #
+    # Although PositiveSmallIntegerField could potentially be less confusing
+    # by avoiding negative numbers, that field would only have a guaranteed
+    # range of 0 to 32767, and we prefer to guarantee the full 16 bits since
+    # that's what our hash function takes.
+    scrambled_sort_key = models.SmallIntegerField(default=0)
+
+    # This is a redundant field, equivalent to 'not robot user', but is meant
+    # to help with index utilization and query speed.
+    confirmed = models.BooleanField()
 
     class Meta:
         # Due to the sheer number of Annotations there can be in a source
@@ -60,21 +84,29 @@ class Annotation(models.Model):
         # to be automatically defined (since the constraint isn't allowed to
         # exist without the index).
         indexes = [
+            # Get annotations of an image, and potentially by confirmed
+            # / unconfirmed
             models.Index(
-                fields=['image', 'user'],
-                name='annotation_to_img_usr_i'),
+                fields=['image', 'confirmed'],
+                name='annotation_to_img_confirm_i'),
+            # Example patches
             models.Index(
-                fields=['image', 'label', 'user'],
-                name='annotation_to_img_lbl_usr_i'),
-            models.Index(
-                fields=['label', 'source'],
-                name='annotation_to_lbl_src_i'),
+                fields=['label', 'confirmed', 'scrambled_sort_key'],
+                name='anno_to_lbl_confirm_hsh_i'),
+            # Browse Patches, filtering by unconfirmed or filtering by
+            # individual user / Have at least one index with robot version
             models.Index(
                 fields=['source', 'user', 'robot_version'],
                 name='annotation_to_src_usr_rbtv_i'),
+            # Browse Patches, filtering by a single label / See which of a
+            # source's labels are used by any confirmed annotations
             models.Index(
-                fields=['source', 'label', 'user'],
-                name='annotation_to_src_lbl_usr_i'),
+                fields=['source', 'label', 'confirmed'],
+                name='anno_to_src_lbl_confirm_i'),
+            # Browse Patches
+            models.Index(
+                fields=['source', 'scrambled_sort_key'],
+                name='annotation_to_src_hsh_i'),
         ]
 
     @property
@@ -84,7 +116,30 @@ class Annotation(models.Model):
         return local_label.code
 
     def save(self, *args, **kwargs):
+
+        # confirmed field is generally expected to be set here instead of by
+        # the caller.
+        confirmed_based_on_user = self.user != get_robot_user()
+        if self.confirmed != confirmed_based_on_user:
+            self.confirmed = confirmed_based_on_user
+            # Custom save() methods which update field values should add those
+            # field names to the update_fields kwarg.
+            # https://docs.djangoproject.com/en/4.2/topics/db/models/#overriding-predefined-model-methods
+            if (update_fields := kwargs.get('update_fields')) is not None:
+                kwargs['update_fields'] = (
+                    {'confirmed'}.union(update_fields))
+
+        is_new = self.pk is None
+
         super().save(*args, **kwargs)
+
+        if is_new:
+            # Newly created; set scrambled_sort_key.
+            # Its value depends on the pk, which is why this is done after
+            # creation.
+            self.scrambled_sort_key = scrambled_sort_hash(self)
+            super().save(update_fields=['scrambled_sort_key'])
+
         self.image.annoinfo.update_annotation_progress_fields()
 
     def delete(self, *args, **kwargs):

@@ -6,8 +6,11 @@
 # file, utils.py.
 from decimal import Decimal
 import math
+import random
 
 from django.db import models
+
+from lib.utils import CacheableValue, ONE_DAY_IN_SECONDS
 
 
 class AnnotationArea:
@@ -238,3 +241,57 @@ def image_annotation_verbose_status(image):
 def image_annotation_verbose_status_label(image):
     return VerboseImageAnnoStatuses(
         image_annotation_verbose_status(image)).label
+
+
+POSSIBLE_VALS_16BIT = 2**16
+MAX_16BIT_UINT = 2**16 - 1
+MIN_16BIT_SIGNED_INT = -(2**15)
+
+
+def compute_annotation_hash_salt():
+    return random.randint(0, MAX_16BIT_UINT)
+
+
+cacheable_annotation_hash_salt = CacheableValue(
+    cache_key='annotation_sort_hash_salt',
+    # By rotating the salt (and recomputing all hashes) every so often,
+    # we ensure that we're not putting the same patches at the top
+    # of the ordering for all time.
+    # But at the same time, it's not that important to re-scramble the
+    # order very often, so we don't do it very often.
+    cache_update_interval=ONE_DAY_IN_SECONDS*30,
+    cache_timeout_interval=ONE_DAY_IN_SECONDS*60,
+    compute_function=compute_annotation_hash_salt,
+)
+
+
+def truncate_int_to_2bytes(num: int) -> int:
+    return num % POSSIBLE_VALS_16BIT
+
+
+def hash_2byte_int(n: int) -> int:
+    """
+    This is hash16_xm2() from https://github.com/skeeto/hash-prospector
+
+    Our goal is to map a sequential ordering to an ordering that appears
+    random, with a function that's fast to run. A good hash function fits
+    that requirement.
+    """
+    n ^= n >> 8
+    n = truncate_int_to_2bytes(n * 0x88b5)
+    n ^= n >> 7
+    n = truncate_int_to_2bytes(n * 0xdb2d)
+    n ^= n >> 9
+    return n
+
+
+def scrambled_sort_hash(model_instance) -> int:
+    # pk + salt, mapped to range 0~65535.
+    salted_pk = (
+        (model_instance.pk + cacheable_annotation_hash_salt.get())
+        % POSSIBLE_VALS_16BIT)
+    # Use a hash function to scramble the value, so that higher pks don't
+    # necessarily map to lower or higher values.
+    instance_hash = hash_2byte_int(salted_pk)
+    # Map from range 0~65535 to -32768~32767.
+    return instance_hash + MIN_16BIT_SIGNED_INT

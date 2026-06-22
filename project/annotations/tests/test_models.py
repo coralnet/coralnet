@@ -1,3 +1,4 @@
+from django.conf import settings
 from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
@@ -5,11 +6,12 @@ from images.models import Point
 from lib.tests.utils import ClientTest
 from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
-    ImageAnnoStatuses,
     image_annotation_status,
     image_annotation_verbose_status,
 )
 from ..models import Annotation
+from .utils import (
+    controlled_sort_hashes, EXPECTED_HASHES)
 
 
 image_defaults = dict(
@@ -205,3 +207,145 @@ class AnnoInfoUpdateTest(ClientTest):
         # ]
         # Annotation.objects.bulk_create(annotations)
         # self.assertStatusEqual('unconfirmed')
+
+
+class ScrambledSortKeyTest(ClientTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.source.refresh_from_db()
+
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_basic(self):
+        with controlled_sort_hashes(seed=10, pk_sequence=[5,6]):
+            anno_1 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=1),
+                label=self.labels.get(default_code='A'),
+            )
+            anno_1.save()
+            anno_2 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=2),
+                label=self.labels.get(default_code='B'),
+            )
+            anno_2.save()
+
+        anno_1.refresh_from_db()
+        self.assertEqual(anno_1.scrambled_sort_key, EXPECTED_HASHES[15])
+        anno_2.refresh_from_db()
+        self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[16])
+
+    def test_id_larger_than_max_small_integer(self):
+        """
+        If the annotation ID is greater than the max small integer value,
+        it should get modded by 2**16 before continuing as normal.
+        """
+        pk_sequence = [(65536*10)+6, (65536*10)+7]
+
+        with controlled_sort_hashes(seed=10, pk_sequence=pk_sequence):
+            anno_1 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=1),
+                label=self.labels.get(default_code='A'),
+            )
+            anno_1.save()
+            anno_2 = Annotation(
+                user=self.user, source=self.source, image=self.image,
+                point=self.image.point_set.get(point_number=2),
+                label=self.labels.get(default_code='B'),
+            )
+            anno_2.save()
+
+        anno_1.refresh_from_db()
+        self.assertEqual(anno_1.scrambled_sort_key, EXPECTED_HASHES[16])
+        anno_2.refresh_from_db()
+        self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[17])
+
+
+class PopulateConfirmedMigrationTest(MigrationTest):
+
+    before = [
+        ('accounts', '0001_squashed_0012_field_string_attributes_to_unicode'),
+        ('annotations', '0039_annotation_confirmed'),
+    ]
+    after = [('annotations', '0040_annotation_confirmed_populate')]
+
+    def test_migration(self):
+        User = self.get_model_before('auth.User')
+        Source = self.get_model_before('sources.Source')
+        LabelGroup = self.get_model_before('labels.LabelGroup')
+        Label = self.get_model_before('labels.Label')
+        Image = self.get_model_before('images.Image')
+        Point = self.get_model_before('images.Point')
+        Annotation = self.get_model_before('annotations.Annotation')
+
+        user1 = User(username='user1')
+        user1.save()
+        user2 = User(username='user2')
+        user2.save()
+        robot_user = User.objects.get(username=settings.ROBOT_USERNAME)
+
+        group = LabelGroup(name="Group 1")
+        group.save()
+        label = Label(group=group, name="A", default_code='A')
+        label.save()
+
+        source = Source(name="Test source")
+        source.save()
+        image = Image(
+            source=source,
+            original_file=sample_image_as_file('a.png'),
+            uploaded_by=user1,
+            point_generation_method=source.default_point_generation_method,
+        )
+        image.save()
+
+        p1 = Point(image=image, row=1, column=1, point_number=1)
+        p1.save()
+        p2 = Point(image=image, row=2, column=2, point_number=2)
+        p2.save()
+        p3 = Point(image=image, row=3, column=3, point_number=3)
+        p3.save()
+        p4 = Point(image=image, row=4, column=4, point_number=4)
+        p4.save()
+        p5 = Point(image=image, row=5, column=5, point_number=5)
+        p5.save()
+
+        a1 = Annotation(
+            point=p1, image=image, source=source, label=label, user=user1)
+        a1.save()
+        a2 = Annotation(
+            point=p2, image=image, source=source, label=label, user=user1)
+        a2.save()
+        a3 = Annotation(
+            point=p3, image=image, source=source, label=label, user=robot_user)
+        a3.save()
+        a4 = Annotation(
+            point=p4, image=image, source=source, label=label, user=user2)
+        a4.save()
+        a5 = Annotation(
+            point=p5, image=image, source=source, label=label, user=robot_user)
+        a5.save()
+
+        self.run_migration()
+
+        Annotation = self.get_model_after('annotations.Annotation')
+
+        self.assertTrue(
+            Annotation.objects.get(pk=a1.pk).confirmed)
+        self.assertTrue(
+            Annotation.objects.get(pk=a2.pk).confirmed)
+        self.assertFalse(
+            Annotation.objects.get(pk=a3.pk).confirmed)
+        self.assertTrue(
+            Annotation.objects.get(pk=a4.pk).confirmed)
+        self.assertFalse(
+            Annotation.objects.get(pk=a5.pk).confirmed)

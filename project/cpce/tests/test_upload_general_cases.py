@@ -9,6 +9,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 from annotations.tests.utils import (
+    controlled_sort_hashes,
     UploadAnnotationsFormatTest,
     UploadAnnotationsGeneralCasesTest,
     UploadAnnotationsMultipleSourcesTest,
@@ -315,6 +316,29 @@ class GeneralCasesTest(
         self.upload_annotations(self.user, self.source)
 
         self.check_annotation_history()
+
+    def test_set_scrambled_sort_keys(self):
+        """
+        When the upload creates Annotations, their sort keys should get
+        set as expected.
+        """
+        cpc_files = [
+            self.make_annotations_file(
+                self.image_dimensions, '1.cpc',
+                r"C:\My Photos\2017-05-13 GBR\1.png", [
+                    (9*15, 9*15, 'A'),
+                    (19*15, 19*15, 'B'),
+                    (29*15, 29*15, 'B')]),
+        ]
+        self.preview_annotations(self.user, self.source, cpc_files)
+
+        with controlled_sort_hashes(
+            seed=10, pk_sequence=[5,6,7],
+            mock_target_module='annotations.managers',
+        ):
+            self.upload_annotations(self.user, self.source)
+
+        self.check_scrambled_sort_keys()
 
     def test_transaction_rollback(self):
         """
