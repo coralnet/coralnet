@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.datastructures import MultiValueDict
 
 from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
@@ -14,6 +15,7 @@ from annotations.tests.utils import (
 from images.models import Image
 from lib.tests.utils import BasePermissionTest
 from sources.models import Source
+from ..forms import PatchSearchForm
 from .utils import BaseBrowsePageTest
 
 tz = timezone.get_current_timezone()
@@ -663,3 +665,50 @@ class QueriesTest(BaseBrowsePatchesTest):
             [(i, p) for i in range(1, 5+1) for p in range(1, 20+1)],
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class PatchFormTest(BaseBrowsePatchesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_get_annotations_query(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3'),
+             (self.img3, 'Site3')])
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(search=['true'])), source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertNotIn(
+            'images_image', str(annotation_queryset.query),
+            "Should not have to reference the Image table when there are"
+            " no search args")
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(aux1=['Site3'])),
+            source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertIn(
+            'images_image', str(annotation_queryset.query),
+            "Since there is an image-level search arg, should have to"
+            " reference the Image table instead of just using the"
+            " Annotation.source relation")
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(
+                patch_label=[self.labels.get(name='A').pk])),
+            source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertNotIn(
+            'images_image', str(annotation_queryset.query),
+            "Should not have to reference the Image table when there are"
+            " only annotation-level search args, not image-level")

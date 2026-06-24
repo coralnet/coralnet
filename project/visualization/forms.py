@@ -1,9 +1,14 @@
 import datetime
+from functools import reduce
+import operator
+import re
 
 from django import forms
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import int_list_validator
+from django.db.models import Expression, Q, QuerySet
+import django.db.models.fields as model_fields
 from django.db.models.functions import Lower
 from django.forms import Form
 from django.forms.fields import (
@@ -27,8 +32,7 @@ from labels.models import LabelGroup, Label
 from lib.forms import (
     BoxFormRenderer, EnhancedMultiWidget, FieldsetsFormComponent)
 from sources.models import Source
-from .utils import (
-    get_annotator_dropdown_choices, image_search_kwargs_to_queryset)
+from .utils import get_annotator_dropdown_choices
 
 tz = timezone.get_current_timezone()
 
@@ -606,12 +610,141 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
         return min_id, max_id
 
-    def get_images(self):
+    def get_image_filters_besides_source(self) -> list[Q]:
+        """
+        Call this after cleaning the form to get the image search kwargs
+        (except source) as individual Q objects.
+        """
+
+        qs = []
+        search_kwargs = self.cleaned_data
+
+        # Multi-value fields already have the search kwargs passed in
+        for field_name in ['photo_date', 'last_annotated', 'last_annotator']:
+            field_kwargs = search_kwargs.get(field_name, None)
+            if field_kwargs:
+                qs.append(Q(**field_kwargs))
+
+        # Metadata fields
+        metadata_kwargs = dict()
+        metadata_field_names = [
+            'aux1', 'aux2', 'aux3', 'aux4', 'aux5',
+            'height_in_cm', 'latitude', 'longitude', 'depth',
+            'camera', 'photographer', 'water_quality',
+            'strobes', 'framing', 'balance',
+        ]
+
+        for field_name in metadata_field_names:
+            value = search_kwargs.get(field_name, '')
+            if value == '':
+                # Don't filter by this field
+                pass
+            elif value == '(none)':
+                # Get images with an empty value for this field
+                if isinstance(Metadata._meta.get_field(field_name),
+                              model_fields.CharField):
+                    metadata_kwargs['metadata__' + field_name] = ''
+                else:
+                    metadata_kwargs['metadata__' + field_name] = None
+            else:
+                # Filter by the given non-empty value (case insensitive)
+                metadata_kwargs[f'metadata__{field_name}__iexact'] = value
+        if len(metadata_kwargs) > 0:
+            qs.append(Q(**metadata_kwargs))
+
+        # Image-name search field; all punctuation is allowed
+        search_value = search_kwargs.get('image_name', '')
+        # Strip whitespace from both ends
+        search_value = search_value.strip()
+        # Replace multi-spaces with one space
+        search_value = re.sub(r'\s{2,}', ' ', search_value)
+        # Get space-separated tokens
+        search_tokens = search_value.split(' ')
+        # Discard blank tokens
+        search_tokens = [t for t in search_tokens if t != '']
+        # Require all tokens to be found
+        for token in search_tokens:
+            qs.append(Q(metadata__name__icontains=token))
+
+        image_id_list = search_kwargs.get('image_id_list', '')
+        if image_id_list == '':
+            # Don't filter
+            pass
+        else:
+            qs.append(Q(pk__in=image_id_list))
+
+        image_id_range = search_kwargs.get('image_id_range', '')
+        if image_id_range == '':
+            # Don't filter
+            pass
+        else:
+            min_id, max_id = image_id_range
+            qs.append(Q(pk__gte=min_id, pk__lte=max_id))
+
+        # Annotation status
+        annotation_status = search_kwargs.get('annotation_status', '')
+        if annotation_status == '':
+            # Don't filter
+            pass
+        else:
+            qs.append(Q(annoinfo__status=annotation_status))
+
+        return qs
+
+    def get_images(self) -> QuerySet:
         """
         Call this after cleaning the form to get the image search results
         specified by the fields.
         """
-        return image_search_kwargs_to_queryset(self.cleaned_data, self.source)
+
+        qs = self.get_image_filters_besides_source()
+        search_kwargs = self.cleaned_data
+
+        # AND all of the image filters, and remember to search within
+        # the source
+        image_results = self.source.image_set.filter(
+            reduce(operator.and_, qs, Q()))
+
+        # Sorting
+
+        sort_method = search_kwargs.get('sort_method') or 'name'
+        sort_direction = search_kwargs.get('sort_direction') or 'asc'
+
+        # Add pk as a secondary key when needed to create an unambiguous ordering.
+        # This secondary key slows down ordering, but the consistency is important
+        # for things like prev/next links.
+        if sort_method == 'photo_date':
+            sort_fields = ['metadata__photo_date', 'pk']
+        elif sort_method == 'last_annotation_date':
+            sort_fields = ['annoinfo__last_annotation__annotation_date', 'pk']
+        elif sort_method == 'name':
+            # Lower('metadata__name') is guaranteed unique for each image, so pk as
+            # a secondary isn't needed.
+            # By matching the unique constraint and associated index, this should
+            # get good performance.
+            sort_fields = [Lower('metadata__name')]
+        else:
+            # 'upload_date'
+            sort_fields = ['pk']
+
+        sort_args = []
+        for field in sort_fields:
+            if isinstance(field, Expression):
+                if sort_direction == 'asc':
+                    arg = field.asc()
+                else:
+                    arg = field.desc()
+            else:
+                # str
+                if sort_direction == 'asc':
+                    arg = field
+                else:
+                    arg = '-' + field
+            sort_args.append(arg)
+
+        image_results = image_results.order_by(*sort_args)
+
+        return image_results
 
     def get_choice_verbose(self, field_name):
         choices = self.fields[field_name].choices
@@ -855,10 +988,17 @@ class PatchSearchForm(BaseImageSearchForm):
         data = self.cleaned_data
 
         image_results = self.get_images()
+        has_image_filters = len(self.get_image_filters_besides_source()) > 0
 
-        # Only get patches corresponding to annotated points of the
-        # given images.
-        results = Annotation.objects.filter(image__in=image_results)
+        if has_image_filters:
+            # Only get patches corresponding to annotated points of the
+            # given images.
+            results = Annotation.objects.filter(image__in=image_results)
+        else:
+            # Use the Annotation-Source relation instead of going through
+            # Image. This simpler query should be faster, especially since
+            # it has a chance of using the annotation_to_src_hsh_i DB index.
+            results = self.source.annotation_set.all()
 
         # Empty value is None for ModelChoiceFields, '' for other fields.
         # (If we could use None for every field, we would, but there seems to
