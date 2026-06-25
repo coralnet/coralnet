@@ -27,11 +27,16 @@ def get_original_image_upload_path(instance, filename):
     for try_number in range(1, max_tries+1):
         base_name = rand_string(10)
 
-        # The base name should come after the directory separator (forward
-        # slash even on Windows) and before the extension in the full path.
-        pattern = '/' + base_name + '.'
+        # Check for filepath collision. We count it as a collision if
+        # everything besides the extension matches.
+        #
+        # This should take advantage of the image_original_file_i index.
+        starts_with_pattern = settings.IMAGE_FILE_PATTERN.format(
+            name=base_name, extension='')
+        colliding_images = Image.objects.filter(
+            original_file__startswith=starts_with_pattern)
 
-        if Image.objects.filter(original_file__contains=pattern).exists():
+        if colliding_images.exists():
 
             # We have a base name collision with an existing image.
 
@@ -113,6 +118,19 @@ class Image(models.Model):
     # For example, if the image's points were generated while the
     # point-count-limit checks were buggy/deficient.
     unprocessable_reason = models.CharField(default="", max_length=200)
+
+    class Meta:
+        indexes = [
+            # Check if filename-base is taken when uploading a new image /
+            # check if file found in storage corresponds to an image in the DB.
+            # text_pattern_ops supports 'starts with' searches.
+            # https://stackoverflow.com/questions/69332403/postgres-not-using-index-for-start-with-query
+            models.Index(
+                fields=['original_file'],
+                name='image_original_file_i',
+                opclasses=['text_pattern_ops'],
+            ),
+        ]
 
     @property
     def valset(self):
