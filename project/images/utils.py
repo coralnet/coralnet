@@ -132,18 +132,23 @@ def get_next_object(current_object, queryset, wrap=False):
     """
     next_objects = _get_next_objects_queryset(current_object, queryset)
 
-    if next_objects.exists():
+    try:
         return next_objects[0]
-    elif wrap:
-        # No matching objects after this object, so we wrap around
-        # to the first object. Assuming we're not AT the first object.
+    except IndexError:
+        pass
+
+    # No matching objects after this object.
+
+    if wrap:
+        # We wrap around to the first object.
+        # Assuming we're not AT the first object.
         first_object = queryset[0]
         if first_object.pk == current_object.pk:
             return None
         else:
             return first_object
     else:
-        # No matching objects after this object, and we're not allowed to wrap.
+        # We're not allowed to wrap.
         return None
 
 
