@@ -12,7 +12,7 @@ from django.utils.html import escape as html_escape
 from accounts.utils import is_alleviate_user, is_robot_user
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, ClientTest, IndexesMixin
 from sources.models import Source
 from visualization.tests.utils import BaseBrowseActionTest
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
@@ -779,6 +779,81 @@ class AnnotationToolQueriesTest(BaseBrowseActionTest):
 
         # Sanity check that the page was loaded
         self.assertTemplateUsed(response, 'annotations/annotation_tool.html')
+
+
+class AnnotationToolIndexesTest(BaseBrowseActionTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def load_annotation_tool(self, image, search_kwargs):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('annotation_tool', args=[image.pk]), search_kwargs)
+
+    def test_prev_next_sort_by_name_by_default(self):
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(self.images[2], dict())
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") >',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") <',
+                'SELECT "images_metadata"',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+
+    def test_prev_next_sort_by_name_explicitly(self):
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                # Here we have at least one non-default form field value, which
+                # should end up being a separate code path in the view function
+                # compared to not having that. (And said separate code path has
+                # a different line to assign the sort field)
+                dict(sort_direction='desc'),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") >',
+                'SELECT "images_metadata"',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") <',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") >',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
 
 
 class IsAnnotationAllDoneTest(ClientTest):

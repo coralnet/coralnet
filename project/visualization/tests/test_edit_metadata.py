@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 from django.utils import timezone
 
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
 from .utils import BaseBrowsePageTest
 
@@ -751,3 +751,26 @@ class QueriesTest(BaseBrowseMetadataTest):
             self.images,
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowseMetadataTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def test_sort_by_name(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # No sort option; it's always sorted by name.
+        response = self.get_browse(search='true')
+        metadata_formset = response.context['metadata_formset']
+        results_query = metadata_formset.queryset.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', results_query)
+
+    # Since this page always sorts by name, the metadata index used will
+    # always be the name-sorting index, regardless of whatever metadata-field
+    # filters are applied in the search.

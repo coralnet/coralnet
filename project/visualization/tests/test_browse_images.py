@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.utils import get_alleviate_user, get_imported_user
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
 from .utils import (
     BaseBrowsePageTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
@@ -1346,6 +1346,45 @@ class QueriesTest(BaseBrowseImagesTest):
             self.images,
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowseImagesTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def test_sort_by_name_by_default(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # Default sort method is by name.
+        response = self.get_browse()
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', results_query)
+
+    def test_sort_by_name_explicitly(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # Here we have at least one non-default form field value, which should
+        # end up being a separate code path in the view function compared to
+        # not having that. (And said separate code path has a different line
+        # to assign the sort field)
+        response = self.get_browse(
+            sort_method='',
+            sort_direction='desc',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', image_query)
 
 
 class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):
