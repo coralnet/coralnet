@@ -2,7 +2,9 @@ import datetime
 import random
 
 from django.conf import settings
-from django.db.models import Count, Expression, F, OrderBy, Q, Value
+from django.db.models import (
+    Count, Expression, F, Model, OrderBy, Q, Value)
+from django.db.models.functions import Lower
 from django.db.models.lookups import Exact, GreaterThan, IsNull, LessThan
 
 from accounts.utils import get_alleviate_user
@@ -28,6 +30,13 @@ def find_dupe_image(source, image_name):
         return None
     else:
         return metadata.image
+
+
+NON_NULL_ORDERING_EXPRS: list[tuple[type, Expression]] = [
+    # pk of any model
+    (Model, F('pk')),
+    (Metadata, Lower(F('name'))),
+]
 
 
 def _get_next_objects_queryset(current_object, queryset):
@@ -82,6 +91,17 @@ def _get_next_objects_queryset(current_object, queryset):
             .values_list(ordering_expr, flat=True)[0]
         )
 
+        # Only complicate the query with NULL handling when the field can
+        # actually take on NULL values.
+        # NULL handling can make PostgreSQL unable to use indexes for
+        # certain queries, hurting performance.
+        non_nullable = any([
+            (issubclass(queryset_model_class, cls)
+             and str(ordering_expr) == str(expr))
+            for cls, expr in NON_NULL_ORDERING_EXPRS
+        ])
+        nullable = not non_nullable
+
         if current_object_ordering_value is None:
             # Nullable fields have a complication: we can't specify
             # `...__gt=None` as a filter kwarg. That gets
@@ -104,10 +124,10 @@ def _get_next_objects_queryset(current_object, queryset):
                     LessThan(ordering_expr, current_object_ordering_value))
             else:
                 # 'greater than current value' (greater value or None)
-                current_arg_after_q = (
-                    Q(GreaterThan(ordering_expr, current_object_ordering_value))
-                    |
-                    Q(IsNull(ordering_expr, True)))
+                current_arg_after_q = Q(
+                    GreaterThan(ordering_expr, current_object_ordering_value))
+                if nullable:
+                    current_arg_after_q |= Q(IsNull(ordering_expr, True))
 
             current_arg_equal_q = Q(
                 Exact(ordering_expr, current_object_ordering_value))
