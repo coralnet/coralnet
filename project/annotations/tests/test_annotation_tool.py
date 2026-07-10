@@ -166,11 +166,11 @@ class NavigationTest(BaseBrowseActionTest):
 
         if expected_prev is not None:
             self.assertEqual(
-                response.context['prev_image'].pk, expected_prev.pk)
+                response.context['prev_metadata'].image_id, expected_prev.pk)
 
         if expected_next is not None:
             self.assertEqual(
-                response.context['next_image'].pk, expected_next.pk)
+                response.context['next_metadata'].image_id, expected_next.pk)
 
         if expected_x_of_y_display is not None:
             span = response_soup.find('span', dict(id='image-set-info'))

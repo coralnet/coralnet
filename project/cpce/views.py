@@ -6,7 +6,6 @@ from pathlib import PureWindowsPath
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import QuerySet
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
@@ -20,6 +19,7 @@ from annotations.views import AnnotationsUploadConfirmView
 from export.utils import file_to_session_data, get_request_images
 from export.views import ExportServeView
 from images.models import Image
+from images.utils import ImageLevelQuerySetBuilder
 from lib.decorators import (
     login_required_ajax,
     source_permission_required,
@@ -156,20 +156,23 @@ class ExportPrepView(View):
     """
     confidence_threshold: float
     cpc_prefs: dict
-    image_set: QuerySet
+    queryset_builder: ImageLevelQuerySetBuilder
     labelset_dict: dict
 
     def post(self, request, source_id):
         source = get_object_or_404(Source, id=source_id)
 
         try:
-            self.image_set, _ = get_request_images(request, source)
+            self.queryset_builder, _ = get_request_images(request, source)
         except ValidationError as e:
             return JsonResponse(dict(
                 error=e.message
             ))
 
-        cpc_export_form = CpcExportForm(source, self.image_set, request.POST)
+        cpc_export_form = CpcExportForm(
+            source,
+            self.queryset_builder.get_unordered_image_queryset(),
+            request.POST)
         if not cpc_export_form.is_valid():
             return JsonResponse(dict(
                 error=get_one_form_error(cpc_export_form),
@@ -206,7 +209,7 @@ class ExportPrepView(View):
         # Dict mapping from cpc filenames to cpc file contents as strings.
         cpc_strings = dict()
 
-        for img in self.image_set:
+        for img in self.queryset_builder.iterator_of_model(Image):
             # Write .cpc contents to a stream.
             cpc_stream = StringIO()
 

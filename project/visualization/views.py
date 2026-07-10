@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models.functions import Lower
 from django.forms import modelformset_factory
 from django.forms.formsets import formset_factory
 from django.http import HttpResponseRedirect, JsonResponse
@@ -10,6 +11,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from annotations.forms import ExportAnnotationsForm
+from annotations.model_utils import ImageAnnoStatuses
 from annotations.models import Annotation
 from calcification.forms import CalcifyRateTableForm, ExportCalcifyStatsForm
 from calcification.utils import (
@@ -18,7 +20,11 @@ from cpce.forms import CpcExportForm
 from export.forms import ExportImageCoversForm
 from images.forms import MetadataFormForGrid, BaseMetadataFormSet
 from images.models import Image, Metadata
-from images.utils import delete_images
+from images.utils import (
+    delete_images,
+    image_level_instance_swap,
+    image_level_queryset_iterator,
+)
 from labels.models import LabelGroup, Label
 from lib.decorators import source_visibility_required, source_permission_required
 from lib.forms import get_one_form_error
@@ -56,30 +62,40 @@ def browse_images(request, source_id):
 
     if image_search_form.searched_or_filtered():
         if image_search_form.is_valid():
-            image_results = image_search_form.get_images()
+            search_results = (
+                image_search_form.get_ordered_image_level_queryset())
             hidden_image_form = image_search_form.get_hidden_version()
         else:
             empty_message = "Search parameters were invalid."
             # If this isn't ordered, paginate() emits a warning.
-            image_results = Image.objects.none().order_by('pk')
+            search_results = Image.objects.none().order_by('pk')
     else:
         # Page landing without filter params
-        image_results = source.image_set.order_by('metadata__name', 'pk')
+        search_results = source.metadata_set.order_by(Lower('name'))
 
     page_results = paginate(
-        image_results,
+        search_results,
         settings.BROWSE_DEFAULT_THUMBNAILS_PER_PAGE,
         request.GET)
-    page_results.object_list = page_results.object_list.select_related(
-        'annoinfo', 'metadata')
+
+    # page_results can be Image, Metadata, or ImageAnnotationInfo. Earlier we
+    # favored the one that most closely matches the way we're sorting, to
+    # improve performance when we may have thousands of results.
+    #
+    # But now that we've narrowed it to one lightweight page of results, we
+    # change to Image for ease of use (with metadata and annoinfo relations
+    # also available). We also just evaluate the page's results right now.
+    page_images = [
+        image for image
+        in image_level_queryset_iterator(page_results.object_list, Image)]
 
     if page_results.paginator.count > 0:
-        page_image_ids = [
-            int(pk)
-            for pk in page_results.object_list.values_list('pk', flat=True)]
+        page_image_ids = [int(image.pk) for image in page_images]
+        first_image_in_search = image_level_instance_swap(
+            search_results[0], Image)
         links = dict(
             annotation_tool_first_result=
-                reverse('annotation_tool', args=[image_results[0].pk]),
+                reverse('annotation_tool', args=[first_image_in_search.pk]),
             annotation_tool_page_results=
                 [reverse('annotation_tool', args=[pk])
                  for pk in page_image_ids],
@@ -109,6 +125,7 @@ def browse_images(request, source_id):
     return render(request, 'visualization/browse_images.html', {
         'source': source,
         'page_results': page_results,
+        'page_images': page_images,
         'page_image_ids': page_image_ids,
         'links': links,
         'empty_message': empty_message,
@@ -140,7 +157,7 @@ def browse_images(request, source_id):
         'default_calcification_tables': get_default_calcify_tables(),
 
         'cpc_export_form': CpcExportForm(
-            source=source, image_results=image_results),
+            source=source, image_results=source.image_set.all()),  # TODO: Fix
     })
 
 
@@ -159,12 +176,15 @@ def edit_metadata(request, source_id):
     source = get_object_or_404(Source, id=source_id)
 
     # Default
-    image_results = Image.objects.none()
+    metadata_results = Metadata.objects.none()
 
     image_search_form = MetadataEditSearchForm(request.GET, source=source)
     if image_search_form.searched_or_filtered():
         if image_search_form.is_valid():
-            image_results = image_search_form.get_images()
+            # Due to always sorting by metadata name, this should always come
+            # up with a Metadata QuerySet.
+            metadata_results = (
+                image_search_form.get_ordered_image_level_queryset())
             empty_message = "No image results."
         else:
             empty_message = "Search parameters were invalid."
@@ -182,16 +202,7 @@ def edit_metadata(request, source_id):
             " click Search without applying any filters."
         )
 
-    # Sort options aren't supported for Edit Metadata for now. The part we
-    # can't (efficiently) do yet is the transformation from a sorted image
-    # queryset to a sorted metadata queryset. Maybe if Image-Metadata were
-    # defined as a one-to-one relationship, it'd be possible, because we'd
-    # be able to do Metadata lookups like `image__last_annotation`.
-    #
-    # But for now, we always just sort by image name.
-    image_results = image_results.order_by('metadata__name', 'pk')
-    image_results = image_results.select_related('annoinfo')
-    num_images = image_results.count()
+    num_images = metadata_results.count()
 
     # Formset of MetadataForms.
     MetadataFormSet = modelformset_factory(
@@ -201,10 +212,8 @@ def edit_metadata(request, source_id):
 
     # Initialize the form set with the existing metadata values.
     # Ensure that each form gets the source.
-    metadata_objs = \
-        Metadata.objects.filter(image__in=image_results).order_by('name')
     metadata_formset = MetadataFormSet(
-        queryset=metadata_objs,
+        queryset=metadata_results,
         form_kwargs={'source': source})
 
     # Initialize the checkbox parts.
@@ -214,12 +223,17 @@ def edit_metadata(request, source_id):
     }
     checkbox_formset = CheckboxFormSet(initValues)
 
-    statuses = [img.annoinfo.status_display for img in image_results]
+    other_values = metadata_results.values(
+        'image_id', 'image__annoinfo__status')
+    image_ids = [value_dict['image_id'] for value_dict in other_values]
+    statuses = [
+        ImageAnnoStatuses(value_dict['image__annoinfo__status']).label
+        for value_dict in other_values]
     # Put all the formset table stuff together in an iterable
     metadata_rows = zip(
         metadata_formset.forms,
         checkbox_formset.forms,
-        image_results,
+        image_ids,
         statuses,
     )
 
@@ -275,13 +289,27 @@ def browse_patches(request, source_id):
         request.GET,
         count_limit=settings.BROWSE_PATCHES_RESULT_LIMIT,
     )
-    page_results.object_list = page_results.object_list.select_related(
-        'point', 'point__image', 'point__image__metadata')
+
+    # Using select_related() on object_list greatly complicates the
+    # object_list query, to the point that it doesn't even want to use the
+    # annotation_to_src_hsh_i index for some reason, which could be very bad
+    # for performance.
+    #
+    # So we instead just figure out this page's Annotation IDs first, then
+    # use a separately query to grab the Annotations themselves along with
+    # related objects we need.
+    page_annotation_ids = [anno.pk for anno in page_results.object_list]
+    page_annotations = (
+        Annotation.objects.filter(pk__in=page_annotation_ids)
+        .select_related('point', 'point__image', 'point__image__metadata')
+        .order_by('scrambled_sort_key')
+    )
 
     return render(request, 'visualization/browse_patches.html', {
         'source': source,
         'patch_search_form': patch_form,
         'page_results': page_results,
+        'page_annotations': page_annotations,
         'empty_message': empty_message,
     })
 
@@ -391,7 +419,7 @@ def browse_delete_ajax(request, source_id):
             )
         ))
 
-    image_set = image_form.get_images()
+    image_set = image_form.get_unordered_image_queryset()
 
     try:
         # atomic() ensures that any error raised within the block triggers

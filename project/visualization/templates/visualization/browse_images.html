@@ -31,7 +31,7 @@
     {% async_media_batch_key request as media_batch_key %}
 
     {# Grid of images #}
-    {% for image in page_results.object_list %}
+    {% for image in page_images %}
       {% thumbnail_async image.original_file '150x150' media_batch_key request as thumb_dict %}
 
       <span class="thumb_wrapper">

@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models.functions import Lower
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
@@ -22,13 +23,14 @@ from reversion.models import Version, Revision
 
 from events.models import Event
 from export.views import SourceCsvExportPrepView
-from images.models import Image, Point
+from images.models import Image, Metadata, Point
 from images.utils import (
     generate_points,
     get_date_and_aux_metadata_table,
-    get_image_order_placement,
     get_next_object,
     get_prev_object,
+    get_queryset_order_placement,
+    image_level_instance_swap,
 )
 from lib.decorators import (
     image_annotation_area_must_be_editable,
@@ -193,7 +195,7 @@ def batch_delete_annotations_ajax(request, source_id):
             )
         ))
 
-    image_set = image_form.get_images()
+    image_set = image_form.get_unordered_image_queryset()
     image_count = image_set.count()
 
     try:
@@ -227,7 +229,7 @@ def annotation_tool(request, image_id):
 
     # The set of images we're annotating.
     # Ensure it has an unambiguous ordering.
-    image_set = source.image_set.order_by('metadata__name')
+    queryset = source.metadata_set.order_by(Lower('name'))
     hidden_image_set_form = None
     applied_search_display = None
 
@@ -235,7 +237,7 @@ def annotation_tool(request, image_id):
     browse_query_args = None
 
     if image_form.searched_or_filtered() and image_form.is_valid():
-        image_set = image_form.get_images()
+        queryset = image_form.get_ordered_image_level_queryset()
         hidden_image_set_form = image_form.get_hidden_version()
         applied_search_display = image_form.get_applied_search_display()
         browse_query_args = {
@@ -244,10 +246,16 @@ def annotation_tool(request, image_id):
         }
 
     # Get the next and previous images in the image set.
-    prev_image = get_prev_object(image, image_set, wrap=True)
-    next_image = get_next_object(image, image_set, wrap=True)
+    image_as_queryset_model = image_level_instance_swap(image, queryset.model)
+    prev_metadata = image_level_instance_swap(
+        get_prev_object(image_as_queryset_model, queryset, wrap=True),
+        Metadata)
+    next_metadata = image_level_instance_swap(
+        get_next_object(image_as_queryset_model, queryset, wrap=True),
+        Metadata)
     # Get the image's ordered placement in the image set, e.g. 5th.
-    image_set_order_placement = get_image_order_placement(image, image_set)
+    image_set_order_placement = get_queryset_order_placement(
+       image_as_queryset_model, queryset)
 
     return_to_browse_link = reverse('browse_images', args=[source.pk])
     if browse_query_args:
@@ -338,9 +346,9 @@ def annotation_tool(request, image_id):
         'source': source,
         'image': image,
         'hidden_image_set_form': hidden_image_set_form,
-        'next_image': next_image,
-        'prev_image': prev_image,
-        'image_set_size': image_set.count(),
+        'next_metadata': next_metadata,
+        'prev_metadata': prev_metadata,
+        'image_set_size': queryset.count(),
         'image_set_order_placement': image_set_order_placement,
         'applied_search_display': applied_search_display,
         'return_to_browse_link': return_to_browse_link,
@@ -799,7 +807,7 @@ class ExportPrepView(SourceCsvExportPrepView):
             self.username_dict[user_id] = user.username
         return self.username_dict[user_id]
 
-    def write_csv(self, stream, source, image_set, export_form_data):
+    def write_csv(self, stream, source, queryset_builder, export_form_data):
         # List of string keys indicating optional column sets to add.
         self.optional_columns = export_form_data['optional_columns']
 
@@ -877,7 +885,7 @@ class ExportPrepView(SourceCsvExportPrepView):
         self.writer.writeheader()
 
         # One image at a time.
-        for image in image_set:
+        for image in queryset_builder.iterator_of_model(Image):
 
             # point_set_values should be in point-number order (as ensured
             # by the method we call here).
