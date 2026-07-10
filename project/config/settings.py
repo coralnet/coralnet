@@ -272,7 +272,7 @@ else:
     _DEFAULT_DATABASE_ENGINE = 'django.db.backends.postgresql'
     _DATABASE_NAME = env('DATABASE_NAME')
 
-_DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
+DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
 
 # Whether to run migrations as part of the test runner's database setup.
 #
@@ -284,7 +284,7 @@ _DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
 # The JSONFields in some of the earlier migrations are Postgres-only, hence
 # our definition of the default value.
 TEST_DATABASE_MIGRATE = env.bool(
-    'TEST_DATABASE_MIGRATE', default='postgresql' in _DATABASE_ENGINE)
+    'TEST_DATABASE_MIGRATE', default='postgresql' in DATABASE_ENGINE)
 
 # https://docs.djangoproject.com/en/5.1/ref/models/querysets/#distinct
 # "On PostgreSQL only, you can pass positional arguments (*fields) in order
@@ -292,12 +292,12 @@ TEST_DATABASE_MIGRATE = env.bool(
 # This translates to a SELECT DISTINCT ON SQL query."
 # If we can't use DISTINCT ON, we won't necessarily take the trouble to aim
 # for correctness, but we'll at least return something of the expected type.
-USE_DISTINCT_ON = 'postgresql' in _DATABASE_ENGINE
+USE_DISTINCT_ON = 'postgresql' in DATABASE_ENGINE
 
 # Django's database connection info setting.
 DATABASES = {
     'default': {
-        'ENGINE': _DATABASE_ENGINE,
+        'ENGINE': DATABASE_ENGINE,
         # If True, wraps each request (view function) in a transaction by
         # default. Individual view functions can override this behavior with
         # the non_atomic_requests decorator.

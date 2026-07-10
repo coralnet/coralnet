@@ -1,6 +1,6 @@
 # Utility classes and functions for tests.
 from io import StringIO
-from unittest import mock
+from unittest import mock, skipIf
 import urllib.parse
 from urllib.parse import (
     parse_qsl, quote as url_quote, urlencode, urlsplit, urlunsplit)
@@ -12,6 +12,7 @@ from django.core import mail, management
 from django.core.cache import cache
 from django.conf import settings
 from django.db import connections
+from django.db.models.sql import RawQuery, Query
 from django.db.utils import DEFAULT_DB_ALIAS
 from django.test import override_settings, TestCase
 from django.test.client import Client
@@ -26,6 +27,11 @@ from ..storage_backends import get_storage_manager
 from .utils_data import DataTestMixin
 
 User = get_user_model()
+
+
+def run_raw_query(query_str, using=DEFAULT_DB_ALIAS):
+    query = RawQuery(query_str, using)
+    return query._execute_query()
 
 
 class CustomTestRunner(DiscoverRunner):
@@ -693,6 +699,180 @@ class EmailAssertionsMixin(TestCase):
                 set(bcc), set(email.bcc),
                 "Contents of 'bcc' field should be as expected",
             )
+
+
+@skipIf(
+    'postgresql' not in settings.DATABASE_ENGINE,
+    reason="EXPLAIN output is database-specific; we only aim to match"
+           " PostgreSQL's output",
+)
+class IndexesMixin(TestCase):
+    """
+    Testing tools for checking that a database query of interest would use a
+    specific index.
+
+    This works by running EXPLAIN on the query's text, and checking that
+    EXPLAIN's query-plan output contains the name of the index.
+
+    The two main concerns we have are:
+
+    1. The closeness of this test-environment EXPLAIN output to what actually
+       happens in production
+
+    As a table accumulates data, PostgreSQL intends to automatically ANALYZE
+    the table, so that subsequent EXPLAIN outputs are informed by the
+    updated stats that ANALYZE comes up with.
+
+    However, when ANALYZE is run on low amounts of data (like what
+    any of our tests would have), the EXPLAIN outputs tend to not use
+    indexes, as they mainly help with higher amounts of data.
+
+    For example, when filtering metadatas by source and aux1, we
+    could only get EXPLAIN to use a source-based index starting at
+    around 1600 images, and couldn't get EXPLAIN to use an index
+    based on both source and aux1 even with 10,000 images. That's
+    already prohibitively expensive for an automated test.
+
+    Interestingly, compared to the above experiments, the EXPLAIN output
+    actually was more adherent to production amounts of data when the
+    database was still fresh and ANALYZE had not been run yet.
+    Perhaps PostgreSQL anticipates that some database servers might not be
+    set up properly to automatically ANALYZE tables, and still aims to get
+    reasonable performance in those cases.
+
+    2. The consistency of this EXPLAIN output, so that the tests don't fail
+       intermittently when run alongside different subsets of other tests
+
+    During a test suite run, it's a challenge to keep the database 'fresh' in
+    the sense described above. At one point, the tests were running fine if
+    the class was tested by itself, but when moving up to all tests in the
+    app, or all tests of multiple apps, some failures would crop up.
+
+    For some reason it wasn't enough to use the usual TestCase transactions to
+    reset data between tests. Explicitly turning off autovacuum (i.e.
+    automatic runs of VACUUM ANALYZE) for all relevant tables wasn't enough
+    either.
+
+    What did finally work was flushing (TRUNCATE-ing) all data from the
+    relevant tables in the test class's setUpTestData().
+
+    So far we have not needed to flush before every test function; only before
+    every (indexes-relevant) test class. It probably helps that each class is
+    wrapped in a transaction, so any separate process that would attempt to
+    analyze the table shouldn't see what's been done in the transaction.
+    https://stackoverflow.com/questions/71651378/what-does-analyze-do-when-used-within-a-transaction
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        """
+        If:
+        - We have a class C(A, IndexesMixin)
+        - A is a descendant of TestCase
+        - Every setUpTestData() definition from C to A to TestCase's child
+          has a super().setUpTestData() call at its start
+
+        Then the way the MRO works, the first actual functionality that
+        C.setUpTestData() runs is the below for-loop, which is what we want.
+        This is the intended use of this mixin.
+        """
+        # Flush all data from the Source table, and cascade to Images,
+        # Points, Annotations, etc.
+        #
+        # This helps to make those tables' EXPLAIN outputs consistent for the
+        # duration of this test class.
+        for table_name in [
+            'sources_source',
+        ]:
+            run_raw_query(f"TRUNCATE {table_name} CASCADE")
+
+        # Then really set up test data.
+        super().setUpTestData()
+
+    @staticmethod
+    def capture_queries(using=DEFAULT_DB_ALIAS):
+        """
+        Example usage:
+
+        with self.capture_queries() as cm:
+            ...
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        """
+        conn = connections[using]
+        return CaptureQueriesContext(conn)
+
+    def assert_in_sql_explain(
+        self,
+        expected_explain_substring: str,
+        query: Query,
+        using=DEFAULT_DB_ALIAS,
+    ):
+        """
+        Assert that an expected substring is present in the EXPLAIN output
+        for the given Query (the .query attribute of a QuerySet).
+        """
+
+        explain_result = query.explain(using=using)
+
+        self.assertIn(
+            expected_explain_substring, explain_result,
+            msg=f"Didn't find expected content in the EXPLAIN result for"
+                f" this query: {query}",
+        )
+
+    def assert_in_raw_query_explain(
+        self,
+        queries: list[dict[str, str]],
+        query_substrings: str | list[str],
+        expected_explain_substring: str,
+        using=DEFAULT_DB_ALIAS,
+    ):
+        """
+        Assert that an expected substring is present in the EXPLAIN output
+        for a particular SQL query (for which a Query instance isn't
+        available).
+
+        `queries` is meant to be from the capture_queries() context manager;
+        `query_substrings` is for picking out the desired query from `queries`.
+        Often a single substring suffices, but can also be a list of substrings
+        (all of which must be found in the query) when that's warranted to
+        ensure we're getting the correct query.
+        """
+        if isinstance(query_substrings, str):
+            query_substrings = [query_substrings]
+
+        query_str_candidates = [
+            query['sql'] for query in queries
+            if all([
+                substr in query['sql']
+                for substr in query_substrings
+            ])
+        ]
+        self.assertEqual(
+            len(query_str_candidates), 1,
+            "Should have uniquely identified the query we want")
+        query_str_of_interest = (
+            query_str_candidates[0]
+            # Escape % signs. The SQL might have % signs which are meant as
+            # wildcards for text matching. However, % signs are also used for
+            # RawQuery's parameter substitution.
+            .replace('%', '%%')
+        )
+        explain_query = RawQuery(f"EXPLAIN {query_str_of_interest}", using)
+
+        # Iterating over the query executes it and gets the result.
+        explain_result = '\n'.join([
+            result_tuple[0] for result_tuple in explain_query])
+
+        self.assertIn(
+            expected_explain_substring, explain_result,
+            msg=f"Didn't find expected content in the EXPLAIN result for"
+                f" this query: {query_str_of_interest}",
+        )
 
 
 class ManagementCommandTest(ClientTest):
