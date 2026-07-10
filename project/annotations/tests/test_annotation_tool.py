@@ -750,6 +750,37 @@ class LoadAnnotationFormTest(ClientTest):
             response, [('A', 'false'), ('B', 'false'), ('A', 'false')])
 
 
+class AnnotationToolQueriesTest(BaseBrowseActionTest):
+
+    setup_image_count = 2
+    points_per_image = 80
+
+    def test_confirmed(self):
+        self.add_annotations(self.user, self.images[0])
+
+        # Should be less than 1 query per point
+        with self.assert_queries_less_than(80):
+            self.client.force_login(self.user)
+            response = self.client.post(
+                reverse('annotation_tool', args=[self.images[0].pk]))
+
+        # Sanity check that the page was loaded
+        self.assertTemplateUsed(response, 'annotations/annotation_tool.html')
+
+    def test_unconfirmed(self):
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.images[0])
+
+        # Should be less than 1 query per point
+        with self.assert_queries_less_than(80):
+            self.client.force_login(self.user)
+            response = self.client.post(
+                reverse('annotation_tool', args=[self.images[0].pk]))
+
+        # Sanity check that the page was loaded
+        self.assertTemplateUsed(response, 'annotations/annotation_tool.html')
+
+
 class IsAnnotationAllDoneTest(ClientTest):
     @classmethod
     def setUpTestData(cls):

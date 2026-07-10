@@ -283,7 +283,7 @@ def annotation_tool(request, image_id):
     label_scores = None
 
     if settings_obj.show_machine_annotations and image.score_set.exists():
-        label_scores = get_label_scores_for_image(image_id)
+        label_scores = get_label_scores_for_image(image)
 
         # Apply Alleviate.
         #
