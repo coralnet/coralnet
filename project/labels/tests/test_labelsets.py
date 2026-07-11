@@ -4,7 +4,7 @@ from django.utils.html import escape
 
 from calcification.models import CalcifyRateTable
 from jobs.tasks import run_scheduled_jobs_until_empty
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from ..models import Label
 from .utils import LabelTest
 
@@ -488,6 +488,49 @@ class LabelsetAddRemoveInfoPopupTest(LabelTest):
         self.assertIn(
             "Calcification rate data: Not available", str(detail_box),
             "Should say B does not have rates available")
+
+
+class LabelsetAddRemoveIndexesTest(LabelTest, IndexesMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+        # Create labels and group
+        cls.group = cls.create_label_group("Group1")
+        cls.create_label(cls.user, "Label A", 'A', cls.group)
+        cls.create_label(cls.user, "Label B", 'B', cls.group)
+        cls.create_label(cls.user, "Label C", 'C', cls.group)
+        cls.create_label(cls.user, "Label D", 'D', cls.group)
+        cls.create_label(cls.user, "Label E", 'E', cls.group)
+
+        # Create source and labelset
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=1))
+        cls.create_labelset(cls.user, cls.source, Label.objects.filter(
+            default_code__in=['A', 'B', 'C']))
+
+        cls.url = reverse('labelset_add', args=[cls.source.pk])
+
+    def test_detect_removable_labels(self):
+        # Annotate with C
+        img = self.upload_image(self.user, self.source)
+        self.add_annotations(self.user, img, {1: 'C'})
+
+        self.client.force_login(self.user)
+
+        with self.capture_queries() as cm:
+            self.client.get(self.url)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=
+                'SELECT DISTINCT "annotations_annotation"."label_id"',
+            expected_explain_substring='anno_to_src_lbl_confirm_i',
+        )
 
 
 class LabelsetEditTest(LabelTest):
