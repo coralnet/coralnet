@@ -6,7 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models.functions import Lower
+from django.db.models.functions import Lower, Upper
 from easy_thumbnails.fields import ThumbnailerImageField
 
 from annotations.model_utils import AnnotationArea
@@ -282,6 +282,8 @@ class Metadata(models.Model):
 
     class Meta:
         constraints = [
+            # Case-insensitive uniqueness, and also an index for ordering by
+            # name (for Browse and for prev/next links).
             models.UniqueConstraint(
                 'source',
                 Lower('name'),
@@ -290,30 +292,37 @@ class Metadata(models.Model):
         ]
 
         indexes = [
-            # Browse pages should find these indexes useful.
+            # Browse:
+            # - Filter by combo of multiple aux-meta fields, or just
+            #   aux1.
+            #   iexact and icontains use UPPER in PostgreSQL.
+            # - Populate aux1 dropdown.
             models.Index(
                 'source',
-                Lower('aux1'),
-                Lower('aux2'),
-                Lower('aux3'),
-                Lower('aux4'),
-                Lower('aux5'),
+                Upper('aux1'),
+                Upper('aux2'),
+                Upper('aux3'),
+                Upper('aux4'),
+                Upper('aux5'),
                 name='metadata_to_src_auxes_i'),
+            # Browse:
+            # - Filter by individual aux2-aux5 fields.
+            # - Populate aux2-aux5 dropdowns.
             models.Index(
                 'source',
-                Lower('aux2'),
+                Upper('aux2'),
                 name='metadata_to_src_aux2_i'),
             models.Index(
                 'source',
-                Lower('aux3'),
+                Upper('aux3'),
                 name='metadata_to_src_aux3_i'),
             models.Index(
                 'source',
-                Lower('aux4'),
+                Upper('aux4'),
                 name='metadata_to_src_aux4_i'),
             models.Index(
                 'source',
-                Lower('aux5'),
+                Upper('aux5'),
                 name='metadata_to_src_aux5_i'),
         ]
 

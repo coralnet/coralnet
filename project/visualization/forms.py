@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import int_list_validator
 from django.db.models import Expression, Q
 import django.db.models.fields as model_fields
-from django.db.models.functions import Lower
+from django.db.models.functions import Lower, Upper
 from django.forms import Form
 from django.forms.fields import (
     BooleanField, CharField, ChoiceField, DateField, MultiValueField)
@@ -445,7 +445,7 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
             choices = (
                 Metadata.objects.filter(source=self.source)
                 # Case insensitive
-                .order_by(Lower(field_name))
+                .order_by(Upper(field_name))
                 .values_list(field_name, flat=True)
                 .distinct()
                 # No point in getting more results than this.

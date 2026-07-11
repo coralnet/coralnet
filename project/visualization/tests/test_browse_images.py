@@ -9,6 +9,7 @@ from django.utils import timezone
 from accounts.utils import get_alleviate_user, get_imported_user
 from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
+from ..forms import ImageSearchForm
 from .utils import (
     BaseBrowsePageTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
 
@@ -1352,6 +1353,53 @@ class IndexesTest(BaseBrowseImagesTest, IndexesMixin):
 
     setup_image_count = 5
 
+    def test_form_init(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', 'Site1', 'Site1', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '5m', '10m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '2-1', '2-2'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q1', 'Q2', 'Q1', 'Q3', 'Q3'])
+        self.update_multiple_metadatas(
+            'aux5',
+            ['4', '3', '1', '1', '3'])
+
+        with self.capture_queries() as cm:
+            # The fields' choices are populated with querysets at form init.
+            ImageSearchForm(source=self.source)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux2"',
+            expected_explain_substring='metadata_to_src_aux2_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux3"',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux4"',
+            expected_explain_substring='metadata_to_src_aux4_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux5"',
+            expected_explain_substring='metadata_to_src_aux5_i',
+        )
+
     def test_sort_by_name_by_default(self):
         self.update_multiple_metadatas(
             'name',
@@ -1385,6 +1433,49 @@ class IndexesTest(BaseBrowseImagesTest, IndexesMixin):
         # For sorting metadata instances that satisfy the search
         self.assert_in_sql_explain(
             'unique_metadata_names_in_source', image_query)
+
+    def test_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+
+        response = self.get_browse(
+            aux3='1-1',
+            # Sort by something other than a metadata field, so that the
+            # metadata filtering happens in a subquery which doesn't have to
+            # be ordered, thus making the query planner pick a filtering index
+            # (not an ordering index) for metadata.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux3 filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_aux3_i', image_query)
+
+    def test_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+
+        response = self.get_browse(
+            aux1='SiteB', aux2='5m', aux3='1-1',
+            # Sort by something other than a metadata field.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux filters, from aux1 on
+        self.assert_in_sql_explain(
+            'metadata_to_src_auxes_i', image_query)
 
 
 class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):

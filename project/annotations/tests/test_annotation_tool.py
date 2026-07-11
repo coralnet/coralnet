@@ -855,6 +855,96 @@ class AnnotationToolIndexesTest(BaseBrowseActionTest, IndexesMixin):
             expected_explain_substring='unique_metadata_names_in_source',
         )
 
+    def test_prev_next_filter_by_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    aux3='1-1',
+                    # Sort by something other than a metadata field, so that
+                    # the metadata filtering happens in a subquery which
+                    # doesn't have to be ordered, thus making the query planner
+                    # pick a filtering index (not an ordering index) for
+                    # metadata.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+
+    def test_prev_next_filter_by_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    aux1='SiteB', aux2='5m', aux3='1-1',
+                    # Sort by something other than a metadata field.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+
 
 class IsAnnotationAllDoneTest(ClientTest):
     @classmethod

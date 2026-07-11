@@ -13,7 +13,7 @@ from annotations.models import Annotation
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
 from images.models import Image
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
 from ..forms import PatchSearchForm
 from .utils import BaseBrowsePageTest
@@ -656,7 +656,7 @@ class QueriesTest(BaseBrowsePatchesTest):
             cls.add_annotations(cls.user, image)
 
     def test(self):
-        # Should run less than 1 query per patch.
+        # Should run less than 1 query per patch on the page.
         with self.assert_queries_less_than(100):
             response = self.get_browse(**self.default_search_params)
 
@@ -665,6 +665,103 @@ class QueriesTest(BaseBrowsePatchesTest):
             [(i, p) for i in range(1, 5+1) for p in range(1, 20+1)],
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowsePatchesTest, IndexesMixin):
+
+    setup_image_count = 5
+    points_per_image = 10
+    reuse_image_file = True
+
+    def test_form_init(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', 'Site1', 'Site1', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '5m', '10m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '2-1', '2-2'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q1', 'Q2', 'Q1', 'Q3', 'Q3'])
+        self.update_multiple_metadatas(
+            'aux5',
+            ['4', '3', '1', '1', '3'])
+
+        with self.capture_queries() as cm:
+            # The fields' choices are populated with querysets at form init.
+            # PatchSearchForm(source=self.source)
+            PatchSearchForm(source=self.source)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux2"',
+            expected_explain_substring='metadata_to_src_aux2_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux3"',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux4"',
+            expected_explain_substring='metadata_to_src_aux4_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux5"',
+            expected_explain_substring='metadata_to_src_aux5_i',
+        )
+
+    def test_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(aux3='1-1')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux3 filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_aux3_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
+
+    def test_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(aux1='SiteB', aux2='5m', aux3='1-1')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux filters, from aux1 on
+        self.assert_in_sql_explain(
+            'metadata_to_src_auxes_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
 
 
 class PatchFormTest(BaseBrowsePatchesTest):
