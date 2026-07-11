@@ -2,6 +2,7 @@ import posixpath
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.postgres.indexes import OpClass
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
@@ -125,6 +126,7 @@ class Image(models.Model):
             # check if file found in storage corresponds to an image in the DB.
             # text_pattern_ops supports 'starts with' searches.
             # https://stackoverflow.com/questions/69332403/postgres-not-using-index-for-start-with-query
+            # Ops are Postgres-only, and ignored for other databases.
             models.Index(
                 fields=['original_file'],
                 name='image_original_file_i',
@@ -324,6 +326,13 @@ class Metadata(models.Model):
                 'source',
                 Upper('aux5'),
                 name='metadata_to_src_aux5_i'),
+            # Partial-matching names, for the 'image name contains' field in
+            # Browse.
+            # Ops are Postgres-only, and ignored for other databases.
+            models.Index(
+                'source',
+                OpClass(Upper('name'), name='text_pattern_ops'),
+                name='metadata_to_src_name_textops_i'),
         ]
 
     def __str__(self):

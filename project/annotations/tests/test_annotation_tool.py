@@ -945,6 +945,46 @@ class AnnotationToolIndexesTest(BaseBrowseActionTest, IndexesMixin):
             expected_explain_substring='metadata_to_src_auxes_i',
         )
 
+    def test_prev_next_filter_by_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    image_name='abc xyz',
+                    # Sort by something other than a metadata field.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
+
 
 class IsAnnotationAllDoneTest(ClientTest):
     @classmethod

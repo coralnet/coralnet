@@ -763,6 +763,24 @@ class IndexesTest(BaseBrowsePatchesTest, IndexesMixin):
         self.assert_in_sql_explain(
             'annotation_to_src_hsh_i', results_query)
 
+    def test_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(image_name='abc xyz')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the name contains filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_name_textops_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
+
 
 class PatchFormTest(BaseBrowsePatchesTest):
 

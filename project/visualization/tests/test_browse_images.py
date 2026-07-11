@@ -1477,6 +1477,23 @@ class IndexesTest(BaseBrowseImagesTest, IndexesMixin):
         self.assert_in_sql_explain(
             'metadata_to_src_auxes_i', image_query)
 
+    def test_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+
+        response = self.get_browse(
+            image_name='abc xyz',
+            # Sort by something other than a metadata field.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the name contains filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_name_textops_i', image_query)
+
 
 class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):
 

@@ -1066,6 +1066,11 @@ INSTALLED_APPS = [
     # separators to numbers
     'django.contrib.humanize',
     'django.contrib.messages',
+    # For using OpClasses in DB index definitions.
+    # https://docs.djangoproject.com/en/5.2/ref/contrib/postgres/indexes/#opclass-expressions
+    # Otherwise, wrong syntax is generated for the index's creation:
+    # https://code.djangoproject.com/ticket/32770
+    'django.contrib.postgres',
     'django.contrib.sessions',
     # Sites framework:
     # https://docs.djangoproject.com/en/dev/ref/contrib/sites/
