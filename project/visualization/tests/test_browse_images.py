@@ -1235,6 +1235,98 @@ class SortTest(BaseBrowseImagesTest):
             response, [self.images[i] for i in [3,2,0,4,1]])
 
 
+class ImageLevelModelsTest(BaseBrowseImagesTest):
+    """
+    If we sort by an Image field, can we filter on Image, Metadata, and
+    ImageAnnotationInfo fields successfully?
+    Same question for sorting by a Metadata field, and by an anno-info field.
+
+    We'll follow this filtering plan to include a diverse set of
+    include/exclude combos, ending up with just 5 and 8 matching all the
+    filters:
+
+    Filter by  1  2  3  4  5  6  7  8  9  10
+    Image      n  n  y  y  y  y  y  y  n  n
+    Metadata   n  n  n  n  y  y  y  y  y  y
+    Annoinfo   n  y  n  y  y  n  n  y  n  y
+    """
+
+    setup_image_count = 10
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        (cls.img1, cls.img2, cls.img3, cls.img4, cls.img5,
+         cls.img6, cls.img7, cls.img8, cls.img9, cls.img10) = cls.images
+
+        cls.update_multiple_metadatas(
+            'aux2',
+            ['Fringing Reef', 'Fringing Reef', '10m', '10m', '5m',
+             '5m', '5m', '5m', '5m', '5m'])
+        for img in [cls.img2, cls.img4, cls.img5, cls.img8, cls.img10]:
+            cls.add_annotations(cls.user, img)
+
+    def test_sort_by_image_field(self):
+
+        response = self.get_browse(
+            # Image (pk) sorting
+            sort_method='upload_date',
+            sort_direction='desc',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img8, self.img5])
+
+    def test_sort_by_metadata_field(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [
+                (self.img5, datetime.date(2012, 4, 2)),
+                (self.img8, datetime.date(2012, 3, 3)),
+            ],
+        )
+
+        response = self.get_browse(
+            # Metadata sorting
+            sort_method='photo_date',
+            sort_direction='',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img8, self.img5])
+
+    def test_sort_by_annoinfo_field(self):
+        self.set_last_annotation(
+            self.img5, dt=datetime.datetime(2012, 3, 2, 0, 0, tzinfo=tz))
+        self.set_last_annotation(
+            self.img8, dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
+
+        response = self.get_browse(
+            # Annoinfo sorting
+            sort_method='last_annotation_date',
+            sort_direction='desc',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img5, self.img8])
+
+
 @override_settings(
     # Require fewer uploads to get multiple pages of results.
     BROWSE_DEFAULT_THUMBNAILS_PER_PAGE=3,
