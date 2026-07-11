@@ -1,12 +1,18 @@
 import datetime
+from functools import reduce
+import operator
 import random
+from typing import Generator
 
 from django.conf import settings
-from django.db.models import Count, Expression, F, OrderBy, Q, Value
+from django.db.models import (
+    Count, Expression, F, Model, OrderBy, Q, QuerySet, Value)
+from django.db.models.functions import Lower
 from django.db.models.lookups import Exact, GreaterThan, IsNull, LessThan
 
 from accounts.utils import get_alleviate_user
 from annotations.model_utils import AnnotationArea
+from annotations.models import ImageAnnotationInfo
 from lib.utils import CacheableValue
 from sources.models import Source
 from .model_utils import PointGen
@@ -28,6 +34,13 @@ def find_dupe_image(source, image_name):
         return None
     else:
         return metadata.image
+
+
+NON_NULL_ORDERING_EXPRS: list[tuple[type, Expression]] = [
+    # pk of any model
+    (Model, F('pk')),
+    (Metadata, Lower(F('name'))),
+]
 
 
 def _get_next_objects_queryset(current_object, queryset):
@@ -82,6 +95,17 @@ def _get_next_objects_queryset(current_object, queryset):
             .values_list(ordering_expr, flat=True)[0]
         )
 
+        # Only complicate the query with NULL handling when the field can
+        # actually take on NULL values.
+        # NULL handling can make PostgreSQL unable to use indexes for
+        # certain queries, hurting performance.
+        non_nullable = any([
+            (issubclass(queryset_model_class, cls)
+             and str(ordering_expr) == str(expr))
+            for cls, expr in NON_NULL_ORDERING_EXPRS
+        ])
+        nullable = not non_nullable
+
         if current_object_ordering_value is None:
             # Nullable fields have a complication: we can't specify
             # `...__gt=None` as a filter kwarg. That gets
@@ -104,10 +128,10 @@ def _get_next_objects_queryset(current_object, queryset):
                     LessThan(ordering_expr, current_object_ordering_value))
             else:
                 # 'greater than current value' (greater value or None)
-                current_arg_after_q = (
-                    Q(GreaterThan(ordering_expr, current_object_ordering_value))
-                    |
-                    Q(IsNull(ordering_expr, True)))
+                current_arg_after_q = Q(
+                    GreaterThan(ordering_expr, current_object_ordering_value))
+                if nullable:
+                    current_arg_after_q |= Q(IsNull(ordering_expr, True))
 
             current_arg_equal_q = Q(
                 Exact(ordering_expr, current_object_ordering_value))
@@ -132,18 +156,23 @@ def get_next_object(current_object, queryset, wrap=False):
     """
     next_objects = _get_next_objects_queryset(current_object, queryset)
 
-    if next_objects.exists():
+    try:
         return next_objects[0]
-    elif wrap:
-        # No matching objects after this object, so we wrap around
-        # to the first object. Assuming we're not AT the first object.
+    except IndexError:
+        pass
+
+    # No matching objects after this object.
+
+    if wrap:
+        # We wrap around to the first object.
+        # Assuming we're not AT the first object.
         first_object = queryset[0]
         if first_object.pk == current_object.pk:
             return None
         else:
             return first_object
     else:
-        # No matching objects after this object, and we're not allowed to wrap.
+        # We're not allowed to wrap.
         return None
 
 
@@ -156,13 +185,13 @@ def get_prev_object(current_object, queryset, wrap=False):
     return get_next_object(current_object, queryset.reverse(), wrap)
 
 
-def get_image_order_placement(current_image, image_queryset):
-    prev_images = _get_next_objects_queryset(
-        current_image, image_queryset.reverse())
+def get_queryset_order_placement(current_instance, queryset):
+    prev_instances = _get_next_objects_queryset(
+        current_instance, queryset.reverse())
 
-    # e.g. if there's 4 images that are ordered before the current image,
-    # then we return 5
-    return prev_images.count() + 1
+    # e.g. if there are 4 instances that are ordered before the
+    # current instance, then we return 5
+    return prev_instances.count() + 1
 
 
 def metadata_obj_to_dict(metadata):
@@ -170,6 +199,224 @@ def metadata_obj_to_dict(metadata):
     Go from Metadata DB object to metadata dict.
     """
     return dict((k, getattr(metadata, k)) for k in Metadata.EDIT_FORM_FIELDS)
+
+
+def image_level_instance_swap(
+    instance: Image | Metadata | ImageAnnotationInfo | None,
+    desired_model: type[Image] | type[Metadata] | type[ImageAnnotationInfo],
+) -> Image | Metadata | ImageAnnotationInfo | None:
+
+    if instance is None:
+        return None
+    if isinstance(instance, desired_model):
+        return instance
+
+    if desired_model is Image:
+        # instance has to be Metadata or ImageAnnotationInfo
+        return instance.image
+    if desired_model is Metadata:
+        if isinstance(instance, Image):
+            return instance.metadata
+        # instance has to be ImageAnnotationInfo here
+        return instance.image.metadata
+    if desired_model is ImageAnnotationInfo:
+        if isinstance(instance, Image):
+            return instance.annoinfo
+        # instance has to be Metadata here
+        return instance.image.annoinfo
+
+    raise AssertionError(
+        f"This function can't convert {instance.__class__.__name__}"
+        f" to {desired_model.__name__}.")
+
+
+def image_level_queryset_iterator(
+    queryset: QuerySet,
+    desired_model: type[Image] | type[Metadata] | type[ImageAnnotationInfo],
+) -> Generator[Image | Metadata | ImageAnnotationInfo, None, None]:
+
+    if queryset.model is Image:
+        queryset_with_related = queryset.select_related(
+            'metadata', 'annoinfo')
+    elif queryset.model is Metadata:
+        queryset_with_related = queryset.select_related(
+            'image', 'image__annoinfo')
+    else:
+        # ImageAnnotationInfo
+        queryset_with_related = queryset.select_related(
+            'image', 'image__metadata')
+
+    for instance in queryset_with_related:
+        yield image_level_instance_swap(instance, desired_model)
+
+
+class ImageLevelQuerySetBuilder:
+    """
+    Wrapper for a QuerySet of an 'image level' model:
+    - Image,
+    - Metadata (which has a 1-1 relation with Image),
+    - or ImageAnnotationInfo (which has a 1-1 relation with Image)
+
+    The 'internal model' is the model used for the main query. Model instances
+    can be obtained as a different image-level model from the internal model.
+
+    For example, you can use an internal model of Metadata, to get the best
+    speedup from database indexes which are tailored towards sorting by the
+    Metadata name field. And then you can get the results as Image instances,
+    using builder.get_unordered_image_queryset(), or
+    builder.iterator_of_model(Image).
+    """
+
+    UnnormalizedModelType = str | type
+    models = [Image, Metadata, ImageAnnotationInfo]
+
+    def __init__(
+        self,
+        source: Source,
+        internal_model: UnnormalizedModelType,
+        sort_args: list,
+    ):
+        self.source = source
+        self.internal_model = self.normalize_model(internal_model)
+        self.sort_args = sort_args
+
+        # We don't initialize as a defaultdict. Initializing like this instead
+        # allows us to catch invalid models when adding/getting Q objects.
+        self.q_objs: dict[type, list[Q]] = dict(
+            (model, []) for model in self.models)
+
+    def normalize_model(self, model):
+        for candidate_model in self.models:
+            if model is candidate_model:
+                return candidate_model
+            if (
+                isinstance(model, str)
+                and candidate_model.__name__.lower() == model.lower()
+            ):
+                return candidate_model
+        raise ValueError(f"Unsupported model (repr: {model})")
+
+    def normalize_model_name(self, model):
+        model_name = model.__name__ if isinstance(model, type) else model
+        return model_name.lower()
+
+    def add_q(
+        self,
+        model: UnnormalizedModelType,
+        q_obj: Q | tuple[str, str | None],
+    ):
+        model = self.normalize_model(model)
+
+        if isinstance(q_obj, tuple):
+            # We allow passing in a tuple instead of a Q, because a tuple can
+            # be easier when the key isn't available in string-literal form.
+            key, value = q_obj
+            q_obj = Q(**{key: value})
+
+        self.q_objs[model].append(q_obj)
+
+    def has_any_filters(self):
+        return any([
+            len(q_objs_for_model) > 0
+            for _model, q_objs_for_model in self.q_objs.items()
+        ])
+
+    def has_any_filters_for_model(self, model: UnnormalizedModelType):
+        model = self.normalize_model(model)
+        return len(self.q_objs[model]) > 0
+
+    def qs_one_models_filters(
+        self, model: UnnormalizedModelType,
+    ):
+        """QuerySet for the given model with only that model's filters."""
+        model = self.normalize_model(model)
+        if model is Image:
+            unfiltered_queryset = self.source.image_set
+        elif model is Metadata:
+            unfiltered_queryset = self.source.metadata_set
+        else:
+            # ImageAnnotationInfo
+            unfiltered_queryset = self.source.imageannotationinfo_set
+
+        # AND all of the filters.
+        return unfiltered_queryset.filter(
+            reduce(operator.and_, self.q_objs[model], Q()))
+
+    def get_ordered_queryset(self):
+
+        sortable_results = self.qs_one_models_filters(self.internal_model)
+
+        if self.internal_model is Image:
+
+            if self.has_any_filters_for_model(Metadata):
+                metadata_qs = self.qs_one_models_filters(Metadata)
+                sortable_results = sortable_results.filter(
+                    metadata__in=metadata_qs)
+
+            if self.has_any_filters_for_model(ImageAnnotationInfo):
+                annoinfo_qs = self.qs_one_models_filters(ImageAnnotationInfo)
+                sortable_results = sortable_results.filter(
+                    annoinfo__in=annoinfo_qs)
+
+        elif self.internal_model is Metadata:
+
+            if self.has_any_filters_for_model(Image):
+                image_qs = self.qs_one_models_filters(Image)
+                sortable_results = sortable_results.filter(
+                    image__in=image_qs)
+
+            if self.has_any_filters_for_model(ImageAnnotationInfo):
+                annoinfo_qs = self.qs_one_models_filters(ImageAnnotationInfo)
+                sortable_results = sortable_results.filter(
+                    image__annoinfo__in=annoinfo_qs)
+
+        else:
+            # ImageAnnotationInfo
+
+            if self.has_any_filters_for_model(Image):
+                image_qs = self.qs_one_models_filters(Image)
+                sortable_results = sortable_results.filter(
+                    image__in=image_qs)
+
+            if self.has_any_filters_for_model(Metadata):
+                metadata_qs = self.qs_one_models_filters(Metadata)
+                sortable_results = sortable_results.filter(
+                    image__metadata__in=metadata_qs)
+
+        return sortable_results.order_by(*self.sort_args)
+
+    def get_unordered_image_queryset(self) -> QuerySet:
+        """
+        Another way to get the form's image search results. This gets
+        an Image QuerySet, making a point to not overcomplicate the query
+        with ordering concerns. The resulting QuerySet is unordered.
+        """
+
+        image_results = self.qs_one_models_filters(Image)
+
+        if self.has_any_filters_for_model(Metadata):
+            metadata_qs = self.qs_one_models_filters(Metadata)
+            image_results = image_results.filter(
+                metadata__in=metadata_qs)
+
+        if self.has_any_filters_for_model(ImageAnnotationInfo):
+            annoinfo_qs = self.qs_one_models_filters(ImageAnnotationInfo)
+            image_results = image_results.filter(
+                annoinfo__in=annoinfo_qs)
+
+        # Clear the ordering. This can speed up queries if image ordering
+        # isn't needed.
+        return image_results.order_by()
+
+    def iterator_of_model(
+        self,
+        desired_model: UnnormalizedModelType,
+    ) -> Generator[Image | Metadata | ImageAnnotationInfo, None, None]:
+        desired_model = self.normalize_model(desired_model)
+
+        queryset = self.get_ordered_queryset()
+        for instance in image_level_queryset_iterator(queryset, desired_model):
+            yield instance
 
 
 def delete_images(image_queryset):

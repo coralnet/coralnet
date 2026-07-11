@@ -71,10 +71,10 @@ def cpcs_to_zip(cpc_strings):
     return zip_stream
 
 
-def get_previous_cpcs_status(image_set):
-    if image_set.exclude(cpc_content='').exists():
+def get_previous_cpcs_status(source):
+    if source.image_set.exclude(cpc_content='').exists():
         # At least 1 image has a previous CPC
-        if image_set.filter(cpc_content='').exists():
+        if source.image_set.filter(cpc_content='').exists():
             # Some, but not all images have previous CPCs
             return 'some'
         else:

@@ -22,7 +22,7 @@ from django.forms.widgets import (
     TextInput,
 )
 
-from accounts.utils import is_robot_user
+from accounts.utils import get_robot_user
 from images.models import Metadata, Point
 from labels.models import LocalLabel
 from lib.forms import EnhancedMultiWidget, RowsFormRenderer
@@ -38,51 +38,58 @@ class AnnotationForm(forms.Form):
         show_machine_annotations = kwargs.pop('show_machine_annotations')
         super().__init__(*args, **kwargs)
 
-        labelFieldMaxLength = LocalLabel._meta.get_field('code').max_length
+        label_field_max_length = LocalLabel._meta.get_field('code').max_length
 
-        for point in Point.objects.filter(image=image).order_by('point_number'):
+        points = (
+            Point.objects.filter(image=image)
+            .order_by('point_number')
+            .select_related('annotation')
+        )
+        label_ids_to_codes = image.source.labelset.global_pk_to_code_dict()
+
+        for point in points:
 
             try:
                 annotation = point.annotation
             except Annotation.DoesNotExist:
                 # This point doesn't have an annotation
-                existingAnnoCode = ''
-                isRobotAnnotation = None
+                existing_anno_code = ''
+                is_robot_annotation = None
             else:
                 # This point has an annotation
-                existingAnnoCode = annotation.label_code
-                isRobotAnnotation = is_robot_user(annotation.user)
+                existing_anno_code = label_ids_to_codes[annotation.label_id]
+                is_robot_annotation = annotation.user_id == get_robot_user().pk
 
-                if isRobotAnnotation and not show_machine_annotations:
+                if is_robot_annotation and not show_machine_annotations:
                     # Is machine annotation and we're not including those
-                    existingAnnoCode = ''
-                    isRobotAnnotation = None
+                    existing_anno_code = ''
+                    is_robot_annotation = None
 
-            pointNum = point.point_number
+            point_num = point.point_number
 
             # Create the text field for annotating a point with a label code.
             # label_1 for point 1, label_23 for point 23, etc.
-            labelFieldName = 'label_' + str(pointNum)
+            label_field_name = 'label_' + str(point_num)
 
-            self.fields[labelFieldName] = CharField(
+            self.fields[label_field_name] = CharField(
                 widget=TextInput(attrs=dict(
                     size=6,
                     readonly='',
                 )),
-                max_length=labelFieldMaxLength,
-                label=str(pointNum),
+                max_length=label_field_max_length,
+                label=str(point_num),
                 required=False,
-                initial=existingAnnoCode,
+                initial=existing_anno_code,
             )
 
             # Create a hidden field to indicate whether a point is robot-annotated or not.
             # robot_1 for point 1, robot_23 for point 23, etc.
-            robotFieldName = 'robot_' + str(pointNum)
+            robot_field_name = 'robot_' + str(point_num)
 
-            self.fields[robotFieldName] = BooleanField(
+            self.fields[robot_field_name] = BooleanField(
                 widget=HiddenInput(),
                 required=False,
-                initial=json.dumps(isRobotAnnotation),
+                initial=json.dumps(is_robot_annotation),
             )
 
 

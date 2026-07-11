@@ -6,14 +6,16 @@ from bs4 import BeautifulSoup
 from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.datastructures import MultiValueDict
 
 from accounts.utils import get_alleviate_user, get_imported_user
 from annotations.models import Annotation
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
 from images.models import Image
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
+from ..forms import PatchSearchForm
 from .utils import BaseBrowsePageTest
 
 tz = timezone.get_current_timezone()
@@ -438,6 +440,20 @@ class FiltersTest(BaseBrowsePatchesTest):
         self.assert_browse_results(
             response, [(2,1), (2,2), (3,1), (3,2)])
 
+    def test_filter_by_name_tokens(self):
+        self.update_multiple_metadatas(
+            'name',
+            [(self.img1, 'ABCXYZ.jpg'),
+             (self.img2, 'xyz.abc'),
+             (self.img3, 'abc.png'),
+             (self.img4, 'xyz.jpg')])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(image_name='abc xyz')
+        self.assert_browse_results(
+            response, [(1,1), (1,2), (2,1), (2,2)])
+
 
 class FormInitializationTest(BaseBrowsePatchesTest):
 
@@ -654,7 +670,7 @@ class QueriesTest(BaseBrowsePatchesTest):
             cls.add_annotations(cls.user, image)
 
     def test(self):
-        # Should run less than 1 query per patch.
+        # Should run less than 1 query per patch on the page.
         with self.assert_queries_less_than(100):
             response = self.get_browse(**self.default_search_params)
 
@@ -663,3 +679,199 @@ class QueriesTest(BaseBrowsePatchesTest):
             [(i, p) for i in range(1, 5+1) for p in range(1, 20+1)],
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowsePatchesTest, IndexesMixin):
+
+    setup_image_count = 5
+    points_per_image = 10
+    reuse_image_file = True
+
+    def test_form_init(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', 'Site1', 'Site1', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '5m', '10m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '2-1', '2-2'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q1', 'Q2', 'Q1', 'Q3', 'Q3'])
+        self.update_multiple_metadatas(
+            'aux5',
+            ['4', '3', '1', '1', '3'])
+
+        with self.capture_queries() as cm:
+            # The fields' choices are populated with querysets at form init.
+            # PatchSearchForm(source=self.source)
+            PatchSearchForm(source=self.source)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux2"',
+            expected_explain_substring='metadata_to_src_aux2_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux3"',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux4"',
+            expected_explain_substring='metadata_to_src_aux4_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux5"',
+            expected_explain_substring='metadata_to_src_aux5_i',
+        )
+
+    def test_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(aux3='1-1')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux3 filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_aux3_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
+
+    def test_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(aux1='SiteB', aux2='5m', aux3='1-1')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux filters, from aux1 on
+        self.assert_in_sql_explain(
+            'metadata_to_src_auxes_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
+
+    def test_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(image_name='abc xyz')
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the name contains filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_name_textops_i', results_query)
+        # For sorting annotations that satisfy the search
+        self.assert_in_sql_explain(
+            'annotation_to_src_hsh_i', results_query)
+
+    def test_filter_by_annotator_user(self):
+        robot = self.create_robot(self.source)
+        for image in self.images:
+            self.add_robot_annotations(robot, image)
+        # 3 manually annotated points by user
+        self.add_annotations(
+            self.user, self.images[0], {1: 'A', 2: 'A'})
+        self.add_annotations(
+            self.user, self.images[3], {1: 'B'})
+
+        response = self.get_browse(
+            patch_annotator_0='annotation_tool',
+            patch_annotator_1=self.user.pk,)
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        self.assert_in_sql_explain(
+            'annotation_to_src_usr_rbtv_i', results_query)
+
+    def test_filter_by_label(self):
+        self.add_annotations(
+            self.user, self.images[0], {1: 'A', 2: 'A'})
+        self.add_annotations(
+            self.user, self.images[1], {1: 'A', 2: 'B'})
+        self.add_annotations(
+            self.user, self.images[2], {1: 'B', 2: 'A'})
+
+        response = self.get_browse(patch_label=self.labels.get(name='A').pk)
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        self.assert_in_sql_explain(
+            'anno_to_src_lbl_confirm_i', results_query)
+
+
+class PatchFormTest(BaseBrowsePatchesTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+    def test_get_annotations_query(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1'),
+             (self.img2, 'Site3'),
+             (self.img3, 'Site3')])
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(search=['true'])), source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertNotIn(
+            'images_image', str(annotation_queryset.query),
+            "Should not have to reference the Image table when there are"
+            " no search args")
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(aux1=['Site3'])),
+            source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertIn(
+            'images_image', str(annotation_queryset.query),
+            "Since there is an image-level search arg, should have to"
+            " reference the Image table instead of just using the"
+            " Annotation.source relation")
+
+        form = PatchSearchForm(
+            MultiValueDict(dict(
+                patch_label=[self.labels.get(name='A').pk])),
+            source=self.source)
+        self.assertTrue(form.is_valid())
+        annotation_queryset = form.get_annotations()
+        self.assertNotIn(
+            'images_image', str(annotation_queryset.query),
+            "Should not have to reference the Image table when there are"
+            " only annotation-level search args, not image-level")

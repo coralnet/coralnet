@@ -12,7 +12,7 @@ from django.utils.html import escape as html_escape
 from accounts.utils import is_alleviate_user, is_robot_user
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, ClientTest, IndexesMixin
 from sources.models import Source
 from visualization.tests.utils import BaseBrowseActionTest
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
@@ -166,11 +166,11 @@ class NavigationTest(BaseBrowseActionTest):
 
         if expected_prev is not None:
             self.assertEqual(
-                response.context['prev_image'].pk, expected_prev.pk)
+                response.context['prev_metadata'].image_id, expected_prev.pk)
 
         if expected_next is not None:
             self.assertEqual(
-                response.context['next_image'].pk, expected_next.pk)
+                response.context['next_metadata'].image_id, expected_next.pk)
 
         if expected_x_of_y_display is not None:
             span = response_soup.find('span', dict(id='image-set-info'))
@@ -748,6 +748,242 @@ class LoadAnnotationFormTest(ClientTest):
         response = self.client.get(resolve_url('annotation_tool', self.img.id))
         self.assert_annotation_form_values_equal(
             response, [('A', 'false'), ('B', 'false'), ('A', 'false')])
+
+
+class AnnotationToolQueriesTest(BaseBrowseActionTest):
+
+    setup_image_count = 2
+    points_per_image = 80
+
+    def test_confirmed(self):
+        self.add_annotations(self.user, self.images[0])
+
+        # Should be less than 1 query per point
+        with self.assert_queries_less_than(80):
+            self.client.force_login(self.user)
+            response = self.client.post(
+                reverse('annotation_tool', args=[self.images[0].pk]))
+
+        # Sanity check that the page was loaded
+        self.assertTemplateUsed(response, 'annotations/annotation_tool.html')
+
+    def test_unconfirmed(self):
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.images[0])
+
+        # Should be less than 1 query per point
+        with self.assert_queries_less_than(80):
+            self.client.force_login(self.user)
+            response = self.client.post(
+                reverse('annotation_tool', args=[self.images[0].pk]))
+
+        # Sanity check that the page was loaded
+        self.assertTemplateUsed(response, 'annotations/annotation_tool.html')
+
+
+class AnnotationToolIndexesTest(BaseBrowseActionTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def load_annotation_tool(self, image, search_kwargs):
+        self.client.force_login(self.user)
+        self.client.post(
+            reverse('annotation_tool', args=[image.pk]), search_kwargs)
+
+    def test_prev_next_sort_by_name_by_default(self):
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(self.images[2], dict())
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") >',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") <',
+                'SELECT "images_metadata"',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+
+    def test_prev_next_sort_by_name_explicitly(self):
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                # Here we have at least one non-default form field value, which
+                # should end up being a separate code path in the view function
+                # compared to not having that. (And said separate code path has
+                # a different line to assign the sort field)
+                dict(sort_direction='desc'),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") >',
+                'SELECT "images_metadata"',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") <',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                'LOWER("images_metadata"."name") >',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+
+    def test_prev_next_filter_by_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    aux3='1-1',
+                    # Sort by something other than a metadata field, so that
+                    # the metadata filtering happens in a subquery which
+                    # doesn't have to be ordered, thus making the query planner
+                    # pick a filtering index (not an ordering index) for
+                    # metadata.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+
+    def test_prev_next_filter_by_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    aux1='SiteB', aux2='5m', aux3='1-1',
+                    # Sort by something other than a metadata field.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+
+    def test_prev_next_filter_by_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+
+        with self.capture_queries() as cm:
+            self.load_annotation_tool(
+                self.images[2],
+                dict(
+                    image_name='abc xyz',
+                    # Sort by something other than a metadata field.
+                    sort_method='upload_date',
+                ),
+            )
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='"images_image"."id" >',
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT "images_image"',
+            ],
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
+        # Number in order
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=[
+                '"images_image"."id" <',
+                'SELECT COUNT(*)',
+            ],
+            expected_explain_substring='metadata_to_src_name_textops_i',
+        )
 
 
 class IsAnnotationAllDoneTest(ClientTest):

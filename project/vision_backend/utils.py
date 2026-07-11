@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from django.conf import settings
 import numpy as np
 from spacer.data_classes import DataLocation
@@ -8,12 +10,12 @@ from spacer.extractors import (
     VGG16CaffeExtractor,
 )
 
-from images.models import Image, Point
+from images.models import Image
 from jobs.models import Job
 from jobs.utils import schedule_job, schedule_job_on_commit
 from labels.models import Label, LocalLabel
 from .common import Extractors
-from .models import Features, Score
+from .models import Features
 
 
 def acc(gt, est):
@@ -26,25 +28,7 @@ def acc(gt, est):
         return sum([(g == e) for (g, e) in zip(gt, est)]) / len(gt)
 
 
-def get_label_scores_for_point(point, ordered=False):
-    """
-    :param point: The Point object to get label scores for. Only the top
-        NBR_SCORES_PER_ANNOTATION scores are available for each point.
-    :param ordered: If True, return the scores in descending order of score
-        value. If False, return in arbitrary order (for performance).
-    :return: {'label': <label code>, 'score': <score number>} for each Score
-        available for this Point.
-    """
-    scores = Score.objects.filter(point=point)
-    if ordered:
-        scores = scores.order_by('-score')
-    return [
-        {'label': score.label_code, 'score': score.score}
-        for score in scores
-    ]
-
-
-def get_label_scores_for_image(image_id):
+def get_label_scores_for_image(image: Image):
     """
     Return all the saved label scores for an image in this format:
     {1: [{'label': 'Acrop', 'score': 14},
@@ -53,10 +37,27 @@ def get_label_scores_for_image(image_id):
      2: [...], ...}
     Where the top-level dict's keys are the point numbers.
     """
-    lpdict = {}
-    for point in Point.objects.filter(image_id=image_id).order_by('id'):
-        lpdict[point.point_number] = get_label_scores_for_point(point)
-    return lpdict
+    label_ids_to_codes = image.source.labelset.global_pk_to_code_dict()
+
+    label_prob_dict = defaultdict(list)
+    score_values_dicts = (
+        image.score_set.order_by('-score')
+        .values('label_id', 'point__point_number', 'score')
+    )
+    for score_values_dict in score_values_dicts:
+        point_number = score_values_dict['point__point_number']
+        label_id = score_values_dict['label_id']
+        score_value = score_values_dict['score']
+
+        # Since the Scores were pulled from the DB in order of highest values
+        # first, each of these per-point dicts also end up having their scores
+        # sorted highest first.
+        label_prob_dict[point_number].append(dict(
+            label=label_ids_to_codes[label_id],
+            score=score_value,
+        ))
+
+    return label_prob_dict
 
 
 def get_alleviate(estlabels, gtlabels, scores):

@@ -167,30 +167,30 @@
 
       <div id="image-navigation">
 
-        {% if prev_image %}
-          <form action="{% url 'annotation_tool' prev_image.id %}"
+        {% if prev_metadata %}
+          <form action="{% url 'annotation_tool' prev_metadata.image_id %}"
                 method="post">
             {% csrf_token %}
             {% for field in hidden_image_set_form %}{{ field }}{% endfor %}
 
             <input type="submit" value="Prev" id="nav-prev-submit" class="link"
-              title="{{ prev_image.get_image_element_title }}" />
+              title="{{ prev_metadata.name }}" />
           </form>
         {% endif %}
 
-        {% if next_image %}
+        {% if next_metadata %}
           |
-          <form action="{% url 'annotation_tool' next_image.id %}"
+          <form action="{% url 'annotation_tool' next_metadata.image_id %}"
                 method="post">
             {% csrf_token %}
             {% for field in hidden_image_set_form %}{{ field }}{% endfor %}
 
             <input type="submit" value="Next" id="nav-next-submit" class="link"
-              title="{{ next_image.get_image_element_title }}" />
+              title="{{ next_metadata.name }}" />
           </form>
         {% endif %}
 
-        {% if not next_image and not prev_image %}
+        {% if not next_metadata and not prev_metadata %}
           <div>No other images in this set</div>
         {% endif %}
 

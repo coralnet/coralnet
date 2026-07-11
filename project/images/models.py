@@ -2,11 +2,13 @@ import posixpath
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.postgres.indexes import OpClass
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
 from django.db import models
-from django.db.models.functions import Lower
+from django.db.models.expressions import Case, Value, When
+from django.db.models.functions import Lower, Upper
 from easy_thumbnails.fields import ThumbnailerImageField
 
 from annotations.model_utils import AnnotationArea
@@ -27,11 +29,16 @@ def get_original_image_upload_path(instance, filename):
     for try_number in range(1, max_tries+1):
         base_name = rand_string(10)
 
-        # The base name should come after the directory separator (forward
-        # slash even on Windows) and before the extension in the full path.
-        pattern = '/' + base_name + '.'
+        # Check for filepath collision. We count it as a collision if
+        # everything besides the extension matches.
+        #
+        # This should take advantage of the image_original_file_i index.
+        starts_with_pattern = settings.IMAGE_FILE_PATTERN.format(
+            name=base_name, extension='')
+        colliding_images = Image.objects.filter(
+            original_file__startswith=starts_with_pattern)
 
-        if Image.objects.filter(original_file__contains=pattern).exists():
+        if colliding_images.exists():
 
             # We have a base name collision with an existing image.
 
@@ -113,6 +120,30 @@ class Image(models.Model):
     # For example, if the image's points were generated while the
     # point-count-limit checks were buggy/deficient.
     unprocessable_reason = models.CharField(default="", max_length=200)
+
+    class Meta:
+        indexes = [
+            # Check if filename-base is taken when uploading a new image /
+            # check if file found in storage corresponds to an image in the DB.
+            # text_pattern_ops supports 'starts with' searches.
+            # https://stackoverflow.com/questions/69332403/postgres-not-using-index-for-start-with-query
+            # Ops are Postgres-only, and ignored for other databases.
+            models.Index(
+                fields=['original_file'],
+                name='image_original_file_i',
+                opclasses=['text_pattern_ops'],
+            ),
+            # Check if any images in a source have non-blank cpc_content, or
+            # if any have blank cpc_content.
+            models.Index(
+                'source',
+                Case(
+                    When(cpc_content='', then=Value(1)),
+                    default=Value(0),
+                ),
+                name='image_source_cpccontentblank_i',
+            ),
+        ]
 
     @property
     def valset(self):
@@ -264,6 +295,8 @@ class Metadata(models.Model):
 
     class Meta:
         constraints = [
+            # Case-insensitive uniqueness, and also an index for ordering by
+            # name (for Browse and for prev/next links).
             models.UniqueConstraint(
                 'source',
                 Lower('name'),
@@ -272,31 +305,45 @@ class Metadata(models.Model):
         ]
 
         indexes = [
-            # Browse pages should find these indexes useful.
+            # Browse:
+            # - Filter by combo of multiple aux-meta fields, or just
+            #   aux1.
+            #   iexact and icontains use UPPER in PostgreSQL.
+            # - Populate aux1 dropdown.
             models.Index(
                 'source',
-                Lower('aux1'),
-                Lower('aux2'),
-                Lower('aux3'),
-                Lower('aux4'),
-                Lower('aux5'),
+                Upper('aux1'),
+                Upper('aux2'),
+                Upper('aux3'),
+                Upper('aux4'),
+                Upper('aux5'),
                 name='metadata_to_src_auxes_i'),
+            # Browse:
+            # - Filter by individual aux2-aux5 fields.
+            # - Populate aux2-aux5 dropdowns.
             models.Index(
                 'source',
-                Lower('aux2'),
+                Upper('aux2'),
                 name='metadata_to_src_aux2_i'),
             models.Index(
                 'source',
-                Lower('aux3'),
+                Upper('aux3'),
                 name='metadata_to_src_aux3_i'),
             models.Index(
                 'source',
-                Lower('aux4'),
+                Upper('aux4'),
                 name='metadata_to_src_aux4_i'),
             models.Index(
                 'source',
-                Lower('aux5'),
+                Upper('aux5'),
                 name='metadata_to_src_aux5_i'),
+            # Partial-matching names, for the 'image name contains' field in
+            # Browse.
+            # Ops are Postgres-only, and ignored for other databases.
+            models.Index(
+                'source',
+                OpClass(Upper('name'), name='text_pattern_ops'),
+                name='metadata_to_src_name_textops_i'),
         ]
 
     def __str__(self):

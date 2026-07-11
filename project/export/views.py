@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
@@ -66,11 +67,11 @@ class SourceCsvExportPrepView(View, ABC):
     def get_export_form(self, source, data):
         raise NotImplementedError
 
-    def write_csv(self, stream, source, image_set, export_form_data):
+    def write_csv(self, stream, source, queryset_builder, export_form_data):
         """
         Write CSV data to the given stream. Return the number of images in the
         CSV data (this may not necessarily match the size of the passed
-        image_set - for example, if unannotated images are not applicable to
+        queryset - for example, if unannotated images are not applicable to
         the export subclass).
         """
         raise NotImplementedError
@@ -95,7 +96,7 @@ class SourceCsvExportPrepView(View, ABC):
         source = get_object_or_404(Source, id=source_id)
 
         try:
-            image_set, applied_search_display = get_request_images(
+            queryset_builder, applied_search_display = get_request_images(
                 request, source)
         except ValidationError as e:
             return JsonResponse(dict(
@@ -115,7 +116,7 @@ class SourceCsvExportPrepView(View, ABC):
 
             csv_stream = StringIO()
             num_images_in_export = self.write_csv(
-                csv_stream, source, image_set, export_form.cleaned_data)
+                csv_stream, source, queryset_builder, export_form.cleaned_data)
             data_sheet = pyexcel.get_sheet(
                 file_type='csv', file_content=csv_stream.getvalue())
             data_sheet.name = "Data"
@@ -149,7 +150,7 @@ class SourceCsvExportPrepView(View, ABC):
             # CSV
             csv_stream = StringIO()
             self.write_csv(
-                csv_stream, source, image_set, export_form.cleaned_data)
+                csv_stream, source, queryset_builder, export_form.cleaned_data)
             session_data = file_to_session_data(
                 filename=self.get_export_filename(source),
                 io_stream=csv_stream,
@@ -250,7 +251,7 @@ class ImageStatsExportPrepView(SourceCsvExportPrepView, ABC):
             return '0.000'
         return s
 
-    def write_csv(self, stream, source, image_set, export_form_data):
+    def write_csv(self, stream, source, queryset_builder, export_form_data):
 
         # Make a dict of global label IDs to string displays for the
         # source's labelset. The form of the string display depends on the
@@ -284,14 +285,13 @@ class ImageStatsExportPrepView(SourceCsvExportPrepView, ABC):
         # Unannotated or partially annotated images probably
         # won't be useful to export, and they'll skew the summary
         # stats as well.
-        image_set = image_set.exclude(
-            annoinfo__status=ImageAnnoStatuses.UNCLASSIFIED.value)
-
-        image_set = image_set.select_related(
-            'annoinfo', 'features', 'metadata')
+        queryset_builder.add_q(
+            'ImageAnnotationInfo',
+            ~Q(status=ImageAnnoStatuses.UNCLASSIFIED.value),
+        )
 
         # One row per image
-        for image in image_set:
+        for image in queryset_builder.iterator_of_model('Image'):
 
             num_annotated_images += 1
 
@@ -346,7 +346,7 @@ def export_metadata(request, source_id):
     source = get_object_or_404(Source, id=source_id)
 
     try:
-        image_set, _ = get_request_images(request, source)
+        queryset_builder, _ = get_request_images(request, source)
     except ValidationError as e:
         messages.error(request, e.message)
         return HttpResponseRedirect(
@@ -362,7 +362,7 @@ def export_metadata(request, source_id):
     writer.writerow(field_names_to_labels.values())
 
     # Metadata, one row per image
-    for image in image_set:
+    for image in queryset_builder.iterator_of_model('Image'):
         row = []
         for field_name in field_names_to_labels.keys():
             # Use getattr on the Metadata model object to get the

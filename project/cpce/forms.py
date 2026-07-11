@@ -91,7 +91,7 @@ class CpcExportForm(Form):
         widget=RadioSelect,
     )
 
-    def __init__(self, source, image_results, *args, **kwargs):
+    def __init__(self, source, *args, **kwargs):
         has_plus_code = (
             source.labelset and labelset_has_plus_code(source.labelset))
         kwargs['initial'] = dict(
@@ -140,7 +140,7 @@ class CpcExportForm(Form):
             initial='no',
             widget=RadioSelect,
         )
-        previous_cpcs_status = get_previous_cpcs_status(image_results)
+        previous_cpcs_status = get_previous_cpcs_status(source)
 
         if previous_cpcs_status == 'all':
 
@@ -151,7 +151,7 @@ class CpcExportForm(Form):
             self.fields['override_filepaths'] = ChoiceField(
                 **override_filepaths_kwargs)
             self.previous_cpcs_help_text = mark_safe(
-               "<strong>All of the images</strong> in this search"
+               "<strong>All of the images</strong> in this source"
                " have previously-uploaded CPC files available.")
 
         elif previous_cpcs_status == 'some':
@@ -164,7 +164,7 @@ class CpcExportForm(Form):
             self.fields['override_filepaths'] = ChoiceField(
                 **override_filepaths_kwargs)
             self.previous_cpcs_help_text = mark_safe(
-                "<strong>Some of the images</strong> in this search"
+                "<strong>Some of the images</strong> in this source"
                 " have previously-uploaded CPC files available.")
 
         else:
@@ -175,7 +175,7 @@ class CpcExportForm(Form):
             self.fields['override_filepaths'] = CharField(
                 widget=HiddenInput(), initial='no')
             self.previous_cpcs_help_text = mark_safe(
-                "<strong>None of the images</strong> in this search"
+                "<strong>None of the images</strong> in this source"
                 " have previously-uploaded CPC files available."
                 " They will use the CPCe environment info in the text fields"
                 " below.")

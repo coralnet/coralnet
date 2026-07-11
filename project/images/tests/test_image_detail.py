@@ -6,7 +6,8 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 
 from annotations.model_utils import AnnotationArea
-from lib.tests.utils import BasePermissionTest, ClientTest, scrambled_run
+from lib.tests.utils import (
+    BasePermissionTest, ClientTest, IndexesMixin, scrambled_run)
 from ..model_utils import PointGen
 from ..models import Image
 
@@ -205,6 +206,44 @@ class ImageDetailTest(ClientTest):
 
         self.add_annotations(self.user, image, {2: 'B'})
         assert_status_text("Confirmed (completed)")
+
+
+class ImageDetailIndexesTest(ClientTest, IndexesMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=2))
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+    def test_prev_next_links(self):
+        for filename in ['1.png', '2.png', '3.png']:
+            self.upload_image(
+                self.user, self.source, image_options=dict(filename=filename))
+        pk2 = Image.objects.get(metadata__name='2.png').pk
+
+        self.client.force_login(self.user)
+
+        with self.capture_queries() as cm:
+            self.client.get(reverse('image_detail', args=[pk2]))
+
+        # Next
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") >',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
+        # Prev
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='LOWER("images_metadata"."name") <',
+            expected_explain_substring='unique_metadata_names_in_source',
+        )
 
 
 class ImageDetailEditTest(ClientTest):

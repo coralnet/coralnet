@@ -6,9 +6,9 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from annotations.tests.utils import UploadAnnotationsCsvTestMixin
-from images.models import Image
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, ClientTest, IndexesMixin
 from visualization.tests.utils import BrowseActionsFormTest
+from ..forms import CpcExportForm
 from ..utils import get_previous_cpcs_status
 
 
@@ -197,7 +197,7 @@ class CPCExportBaseTest(ClientTest):
         self.assertNotEqual(field.attrs.get('type'), 'hidden')
 
 
-class FilepathFieldsTest(CPCExportBaseTest):
+class FilepathFieldsTest(CPCExportBaseTest, UploadAnnotationsCsvTestMixin):
     """
     Ensure the code filepath, image directory, and override filepaths form
     fields work as intended.
@@ -217,17 +217,12 @@ class FilepathFieldsTest(CPCExportBaseTest):
         labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, labels)
 
-        # The X and Y suffixes allow us to group at least two images together
-        # when searching by image name.
         cls.img1 = cls.upload_image(
             cls.user, cls.source,
-            dict(filename='1_X.jpg', width=400, height=300))
+            dict(filename='1.jpg', width=400, height=300))
         cls.img2 = cls.upload_image(
             cls.user, cls.source,
-            dict(filename='2_X.jpg', width=400, height=300))
-        cls.img3 = cls.upload_image(
-            cls.user, cls.source,
-            dict(filename='3_Y.jpg', width=400, height=300))
+            dict(filename='2.jpg', width=400, height=300))
 
     def upload_cpc(self, code_filepath, image_filepath, cpc_filename):
         cpc_lines = [
@@ -258,32 +253,11 @@ class FilepathFieldsTest(CPCExportBaseTest):
             'input', dict(id='id_local_image_dir'))
         self.assertEqual(image_dir_field.attrs.get('value'), image_dir)
 
-    def test_form_init_when_all_images_in_search_have_cpcs(self):
-        # Upload CPC for images 1 and 2
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\1_X.jpg', '1_X.cpc')
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2_X.jpg', '2_X.cpc')
+    def test_form_init_when_all_images_have_cpcs(self):
+        # Upload CPCs for all images
+        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\1.jpg', '1.cpc')
+        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2.jpg', '2.cpc')
 
-        # Search includes images 1 and 2, but not 3
-        self.client.force_login(self.user)
-        request_params = dict(image_name='X')
-        response = self.client.get(
-            reverse('browse_images', args=[self.source.pk]),
-            data=request_params)
-
-        self.assert_form_filepaths_equal(
-            response, r'C:\codefile.txt', r'C:\Reef data')
-        self.assert_field_not_hidden(response, 'override_filepaths')
-        self.assertContains(
-            response,
-            "<strong>All of the images</strong> in this search"
-            " have previously-uploaded CPC files available.")
-
-    def test_form_init_when_some_images_in_search_have_cpcs(self):
-        # Upload CPC for images 1 and 2
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\1_X.jpg', '1_X.cpc')
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2_X.jpg', '2_X.cpc')
-
-        # Search includes all images (1, 2, and 3)
         self.client.force_login(self.user)
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]))
@@ -293,27 +267,52 @@ class FilepathFieldsTest(CPCExportBaseTest):
         self.assert_field_not_hidden(response, 'override_filepaths')
         self.assertContains(
             response,
-            "<strong>Some of the images</strong> in this search"
+            "<strong>All of the images</strong> in this source"
             " have previously-uploaded CPC files available.")
 
-    def test_form_init_when_no_images_in_search_have_cpcs(self):
-        # Upload CPC for images 1 and 2
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\1_X.jpg', '1_X.cpc')
-        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2_X.jpg', '2_X.cpc')
+    def test_form_init_when_some_images_have_cpcs(self):
+        # Upload CPC for 1 of 2 images
+        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2.jpg', '2.cpc')
 
-        # Search includes image 3 only
         self.client.force_login(self.user)
-        request_params = dict(image_name='Y')
         response = self.client.get(
-            reverse('browse_images', args=[self.source.pk]),
-            data=request_params)
+            reverse('browse_images', args=[self.source.pk]))
+
+        self.assert_form_filepaths_equal(
+            response, r'C:\codefile.txt', r'C:\Reef data')
+        self.assert_field_not_hidden(response, 'override_filepaths')
+        self.assertContains(
+            response,
+            "<strong>Some of the images</strong> in this source"
+            " have previously-uploaded CPC files available.")
+
+    def test_form_init_when_no_images_currently_have_cpcs(self):
+        # Upload CPC
+        self.upload_cpc(r'C:\codefile.txt', r'C:\Reef data\2.jpg', '2.cpc')
+        # But then delete it by importing new non-CPC annotations for the image
+        rows = [
+            'Name,Row,Column,Label code'.split(','),
+            '2.jpg,60,60,A'.split(','),
+        ]
+        csv_file = self.make_annotations_file('annotations.csv', rows)
+        self.preview_annotations(self.user, self.source, csv_file)
+        self.upload_annotations(self.user, self.source)
+
+        self.img2.refresh_from_db()
+        self.assertEqual(
+            self.img2.cpc_content, '',
+            "CPC content should be cleared after uploading CSV annotations")
+
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('browse_images', args=[self.source.pk]))
 
         self.assert_form_filepaths_equal(
             response, r'C:\codefile.txt', r'C:\Reef data')
         self.assert_field_hidden(response, 'override_filepaths')
         self.assertContains(
             response,
-            "<strong>None of the images</strong> in this search"
+            "<strong>None of the images</strong> in this source"
             " have previously-uploaded CPC files available.")
 
     def test_form_init_when_no_cpcs_ever_uploaded(self):
@@ -327,17 +326,23 @@ class FilepathFieldsTest(CPCExportBaseTest):
             response, None, None)
         self.assertContains(
             response,
-            "<strong>None of the images</strong> in this search"
+            "<strong>None of the images</strong> in this source"
             " have previously-uploaded CPC files available.")
 
     def test_form_init_uses_values_from_latest_cpc_upload(self):
-        # Upload CPC for images 1 and 2. Use different codefile and image dir
-        # for each.
-        self.upload_cpc(r'C:\codefile_1.txt', r'C:\Reef 1\1_X.jpg', '1_X.cpc')
-        self.upload_cpc(r'C:\codefile_2.txt', r'C:\Reef 2\2_X.jpg', '2_X.cpc')
+        # Upload CPC for image 1.
+        self.upload_cpc(r'C:\codefile_1.txt', r'C:\Reef 1\1.jpg', '1.cpc')
 
-        # All images
         self.client.force_login(self.user)
+        response = self.client.get(
+            reverse('browse_images', args=[self.source.pk]))
+
+        self.assert_form_filepaths_equal(
+            response, r'C:\codefile_1.txt', r'C:\Reef 1')
+
+        # And now for image 2, with a different code file and image dir.
+        self.upload_cpc(r'C:\codefile_2.txt', r'C:\Reef 2\2.jpg', '2.cpc')
+
         response = self.client.get(
             reverse('browse_images', args=[self.source.pk]))
 
@@ -347,7 +352,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
     def test_form_init_uses_values_from_latest_cpc_export(self):
         # Upload a CPC
-        self.upload_cpc(r'C:\codefile_2.txt', r'C:\Reef 2\2_X.jpg', '2_X.cpc')
+        self.upload_cpc(r'C:\codefile_2.txt', r'C:\Reef 2\2.jpg', '2.cpc')
 
         # Do a CPC export
         post_data = self.default_export_params.copy()
@@ -413,7 +418,7 @@ class FilepathFieldsTest(CPCExportBaseTest):
 
     def test_override_filepaths_no(self):
         # Upload a CPC
-        self.upload_cpc(r'C:\uploaded.txt', r'C:\Uploaded\2_X.jpg', '2_X.cpc')
+        self.upload_cpc(r'C:\uploaded.txt', r'C:\Uploaded\2.jpg', '2.cpc')
 
         # Export CPCs for all images, with fields specifying a different
         # codefile and image dir
@@ -425,21 +430,21 @@ class FilepathFieldsTest(CPCExportBaseTest):
         )
         response = self.export_cpcs(post_data)
 
-        cpc_1_content = self.export_response_to_cpc(response, '1_X.cpc')
+        cpc_1_content = self.export_response_to_cpc(response, '1.cpc')
         first_line = cpc_1_content.splitlines()[0]
         self.assertTrue(
-            first_line.startswith(r'"C:\fields.txt","C:\Fields\1_X.jpg",'),
+            first_line.startswith(r'"C:\fields.txt","C:\Fields\1.jpg",'),
             msg="CPC for image 1 should use the form's values")
 
-        cpc_2_content = self.export_response_to_cpc(response, '2_X.cpc')
+        cpc_2_content = self.export_response_to_cpc(response, '2.cpc')
         first_line = cpc_2_content.splitlines()[0]
         self.assertTrue(
-            first_line.startswith(r'"C:\uploaded.txt","C:\Uploaded\2_X.jpg",'),
+            first_line.startswith(r'"C:\uploaded.txt","C:\Uploaded\2.jpg",'),
             msg="CPC for image 2 should use the previously-uploaded values")
 
     def test_override_filepaths_yes(self):
         # Upload a CPC
-        self.upload_cpc(r'C:\uploaded.txt', r'C:\Uploaded\2_X.jpg', '2_X.cpc')
+        self.upload_cpc(r'C:\uploaded.txt', r'C:\Uploaded\2.jpg', '2.cpc')
 
         # Export CPCs for all images, with fields specifying a different
         # codefile and image dir
@@ -451,16 +456,16 @@ class FilepathFieldsTest(CPCExportBaseTest):
         )
         response = self.export_cpcs(post_data)
 
-        cpc_1_content = self.export_response_to_cpc(response, '1_X.cpc')
+        cpc_1_content = self.export_response_to_cpc(response, '1.cpc')
         first_line = cpc_1_content.splitlines()[0]
         self.assertTrue(
-            first_line.startswith(r'"C:\fields.txt","C:\Fields\1_X.jpg",'),
+            first_line.startswith(r'"C:\fields.txt","C:\Fields\1.jpg",'),
             msg="CPC for image 1 should use the form's values")
 
-        cpc_2_content = self.export_response_to_cpc(response, '2_X.cpc')
+        cpc_2_content = self.export_response_to_cpc(response, '2.cpc')
         first_line = cpc_2_content.splitlines()[0]
         self.assertTrue(
-            first_line.startswith(r'"C:\fields.txt","C:\Fields\2_X.jpg",'),
+            first_line.startswith(r'"C:\fields.txt","C:\Fields\2.jpg",'),
             msg="CPC for image 2 should use the form's values")
 
 
@@ -1296,18 +1301,15 @@ class UtilsTest(ClientTest):
         cls.img2 = cls.upload_image(cls.user, cls.source)
 
     def test_get_previous_cpcs_status(self):
-        image_set = Image.objects.filter(source=self.source)
-        self.assertEqual(get_previous_cpcs_status(image_set), 'none')
+        self.assertEqual(get_previous_cpcs_status(self.source), 'none')
 
         self.img1.cpc_content = 'Some CPC file contents go here'
         self.img1.save()
-        image_set = Image.objects.filter(source=self.source)
-        self.assertEqual(get_previous_cpcs_status(image_set), 'some')
+        self.assertEqual(get_previous_cpcs_status(self.source), 'some')
 
         self.img2.cpc_content = 'More CPC file contents go here'
         self.img2.save()
-        image_set = Image.objects.filter(source=self.source)
-        self.assertEqual(get_previous_cpcs_status(image_set), 'all')
+        self.assertEqual(get_previous_cpcs_status(self.source), 'all')
 
 
 class QueriesPerPointTest(CPCExportBaseTest):
@@ -1504,3 +1506,55 @@ class QueriesPerImageTest(CPCExportBaseTest):
             msg="Sanity check: CPC should have the uploaded CPC's path,"
                 " showing that the previously uploaded CPC was used as"
                 " a base")
+
+
+class FilepathFieldsIndexesTest(ClientTest, IndexesMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+
+        cls.img1 = cls.upload_image(cls.user, cls.source)
+        cls.img2 = cls.upload_image(cls.user, cls.source)
+
+    def setUp(self):
+        self.img1.refresh_from_db()
+        self.img2.refresh_from_db()
+
+    def test_none_have_cpc(self):
+        with self.capture_queries() as cm:
+            # The source images' cpc_content fields are checked at form init.
+            CpcExportForm(source=self.source)
+
+        # Checking if any images have non-blank cpc content
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=
+                'AND NOT ("images_image"."cpc_content" = \'\')) LIMIT 1',
+            expected_explain_substring='image_source_cpccontentblank_i',
+        )
+
+    def test_some_have_cpc(self):
+        self.img2.cpc_content = 'some content'
+        self.img2.save()
+
+        with self.capture_queries() as cm:
+            CpcExportForm(source=self.source)
+
+        # Checking if any images have non-blank cpc content
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=
+                'AND NOT ("images_image"."cpc_content" = \'\')) LIMIT 1',
+            expected_explain_substring='image_source_cpccontentblank_i',
+        )
+        # Checking if any images have blank cpc content
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=
+                'AND "images_image"."cpc_content" = \'\') LIMIT 1',
+            expected_explain_substring='image_source_cpccontentblank_i',
+        )

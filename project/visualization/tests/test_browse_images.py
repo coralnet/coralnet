@@ -7,8 +7,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.utils import get_alleviate_user, get_imported_user
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
+from ..forms import ImageSearchForm
 from .utils import (
     BaseBrowsePageTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
 
@@ -1150,9 +1151,10 @@ class SortTest(BaseBrowseImagesTest):
         cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
 
     def test_by_name(self):
+        # Should be AB ac AD ba BB; case insensitive sorting
         self.update_multiple_metadatas(
             'name',
-            ['B', 'A', 'C', 'D', 'E'])
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
 
         response = self.get_browse(
             sort_method='',
@@ -1231,6 +1233,98 @@ class SortTest(BaseBrowseImagesTest):
         )
         self.assert_browse_results(
             response, [self.images[i] for i in [3,2,0,4,1]])
+
+
+class ImageLevelModelsTest(BaseBrowseImagesTest):
+    """
+    If we sort by an Image field, can we filter on Image, Metadata, and
+    ImageAnnotationInfo fields successfully?
+    Same question for sorting by a Metadata field, and by an anno-info field.
+
+    We'll follow this filtering plan to include a diverse set of
+    include/exclude combos, ending up with just 5 and 8 matching all the
+    filters:
+
+    Filter by  1  2  3  4  5  6  7  8  9  10
+    Image      n  n  y  y  y  y  y  y  n  n
+    Metadata   n  n  n  n  y  y  y  y  y  y
+    Annoinfo   n  y  n  y  y  n  n  y  n  y
+    """
+
+    setup_image_count = 10
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        (cls.img1, cls.img2, cls.img3, cls.img4, cls.img5,
+         cls.img6, cls.img7, cls.img8, cls.img9, cls.img10) = cls.images
+
+        cls.update_multiple_metadatas(
+            'aux2',
+            ['Fringing Reef', 'Fringing Reef', '10m', '10m', '5m',
+             '5m', '5m', '5m', '5m', '5m'])
+        for img in [cls.img2, cls.img4, cls.img5, cls.img8, cls.img10]:
+            cls.add_annotations(cls.user, img)
+
+    def test_sort_by_image_field(self):
+
+        response = self.get_browse(
+            # Image (pk) sorting
+            sort_method='upload_date',
+            sort_direction='desc',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img8, self.img5])
+
+    def test_sort_by_metadata_field(self):
+        self.update_multiple_metadatas(
+            'photo_date',
+            [
+                (self.img5, datetime.date(2012, 4, 2)),
+                (self.img8, datetime.date(2012, 3, 3)),
+            ],
+        )
+
+        response = self.get_browse(
+            # Metadata sorting
+            sort_method='photo_date',
+            sort_direction='',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img8, self.img5])
+
+    def test_sort_by_annoinfo_field(self):
+        self.set_last_annotation(
+            self.img5, dt=datetime.datetime(2012, 3, 2, 0, 0, tzinfo=tz))
+        self.set_last_annotation(
+            self.img8, dt=datetime.datetime(2012, 3, 1, 22, 15, tzinfo=tz))
+
+        response = self.get_browse(
+            # Annoinfo sorting
+            sort_method='last_annotation_date',
+            sort_direction='desc',
+            # Image filtering
+            image_id_range=f'{self.img3.pk}_{self.img8.pk}',
+            # Metadata filtering
+            aux2='5m',
+            # Annoinfo filtering
+            annotation_status='confirmed',
+        )
+        self.assert_browse_results(
+            response, [self.img5, self.img8])
 
 
 @override_settings(
@@ -1346,6 +1440,152 @@ class QueriesTest(BaseBrowseImagesTest):
             self.images,
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowseImagesTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def test_form_init(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', 'Site1', 'Site1', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '5m', '10m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '2-1', '2-2'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q1', 'Q2', 'Q1', 'Q3', 'Q3'])
+        self.update_multiple_metadatas(
+            'aux5',
+            ['4', '3', '1', '1', '3'])
+
+        with self.capture_queries() as cm:
+            # The fields' choices are populated with querysets at form init.
+            ImageSearchForm(source=self.source)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux2"',
+            expected_explain_substring='metadata_to_src_aux2_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux3"',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux4"',
+            expected_explain_substring='metadata_to_src_aux4_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux5"',
+            expected_explain_substring='metadata_to_src_aux5_i',
+        )
+
+    def test_sort_by_name_by_default(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # Default sort method is by name.
+        response = self.get_browse()
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', results_query)
+
+    def test_sort_by_name_explicitly(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # Here we have at least one non-default form field value, which should
+        # end up being a separate code path in the view function compared to
+        # not having that. (And said separate code path has a different line
+        # to assign the sort field)
+        response = self.get_browse(
+            sort_method='',
+            sort_direction='desc',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', image_query)
+
+    def test_single_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '', '1-2'])
+
+        response = self.get_browse(
+            aux3='1-1',
+            # Sort by something other than a metadata field, so that the
+            # metadata filtering happens in a subquery which doesn't have to
+            # be ordered, thus making the query planner pick a filtering index
+            # (not an ordering index) for metadata.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux3 filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_aux3_i', image_query)
+
+    def test_multiple_aux_meta(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['SiteA', 'SiteB', 'SiteA', 'SiteB', ''])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '10m', '5m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '1-1', '1-2'])
+
+        response = self.get_browse(
+            aux1='SiteB', aux2='5m', aux3='1-1',
+            # Sort by something other than a metadata field.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the aux filters, from aux1 on
+        self.assert_in_sql_explain(
+            'metadata_to_src_auxes_i', image_query)
+
+    def test_name_contains(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ABCXYZ.jpg', 'xyz.abc', 'abc.png', 'xyz.jpg', '5.jpg'])
+
+        response = self.get_browse(
+            image_name='abc xyz',
+            # Sort by something other than a metadata field.
+            sort_method='upload_date',
+        )
+        page_results = response.context['page_results']
+        image_query = page_results.object_list.query
+
+        # For the metadata subquery which applies the name contains filter
+        self.assert_in_sql_explain(
+            'metadata_to_src_name_textops_i', image_query)
 
 
 class BrowseImagesSeleniumTest(BaseBrowseSeleniumTest):

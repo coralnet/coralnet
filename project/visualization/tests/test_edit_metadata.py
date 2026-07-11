@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 from django.utils import timezone
 
-from lib.tests.utils import BasePermissionTest
+from lib.tests.utils import BasePermissionTest, IndexesMixin
 from sources.models import Source
+from ..forms import MetadataEditSearchForm
 from .utils import BaseBrowsePageTest
 
 
@@ -751,3 +752,73 @@ class QueriesTest(BaseBrowseMetadataTest):
             self.images,
             msg_prefix="Shouldn't have any issues preventing correct results",
         )
+
+
+class IndexesTest(BaseBrowseMetadataTest, IndexesMixin):
+
+    setup_image_count = 5
+
+    def test_form_init(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            ['Site1', 'Site1', 'Site1', 'Site1', 'Site2'])
+        self.update_multiple_metadatas(
+            'aux2',
+            ['FringingReef', '5m', '5m', '10m', '5m'])
+        self.update_multiple_metadatas(
+            'aux3',
+            ['1-1', '1-1', '1-2', '2-1', '2-2'])
+        self.update_multiple_metadatas(
+            'aux4',
+            ['Q1', 'Q2', 'Q1', 'Q3', 'Q3'])
+        self.update_multiple_metadatas(
+            'aux5',
+            ['4', '3', '1', '1', '3'])
+
+        with self.capture_queries() as cm:
+            # The fields' choices are populated with querysets at form init.
+            MetadataEditSearchForm(source=self.source)
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux1"',
+            expected_explain_substring='metadata_to_src_auxes_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux2"',
+            expected_explain_substring='metadata_to_src_aux2_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux3"',
+            expected_explain_substring='metadata_to_src_aux3_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux4"',
+            expected_explain_substring='metadata_to_src_aux4_i',
+        )
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='SELECT DISTINCT "images_metadata"."aux5"',
+            expected_explain_substring='metadata_to_src_aux5_i',
+        )
+
+    def test_sort_by_name(self):
+        self.update_multiple_metadatas(
+            'name',
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
+
+        # No sort option; it's always sorted by name.
+        response = self.get_browse(search='true')
+        metadata_formset = response.context['metadata_formset']
+        results_query = metadata_formset.queryset.query
+
+        # For sorting metadata instances that satisfy the search
+        self.assert_in_sql_explain(
+            'unique_metadata_names_in_source', results_query)
+
+    # Since this page always sorts by name, the metadata index used will
+    # always be the name-sorting index, regardless of whatever metadata-field
+    # filters are applied in the search.

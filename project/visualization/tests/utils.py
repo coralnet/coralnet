@@ -20,6 +20,7 @@ from lib.tests.utils_selenium import (
     BaseSeleniumTest,
 )
 from sources.models import Source
+from upload.utils import upload_image_process
 
 
 class BaseBrowseTest(ClientTest, ABC):
@@ -29,6 +30,10 @@ class BaseBrowseTest(ClientTest, ABC):
     setup_image_count = 5
     # At least 2 lets us have partially annotated images.
     points_per_image = 2
+
+    # False: setup_image_count of 5 means 5 different files.
+    # True: means just 1 file, and all 5 Image instances point to it.
+    reuse_image_file = False
 
     @classmethod
     def setUpTestData(cls):
@@ -43,10 +48,21 @@ class BaseBrowseTest(ClientTest, ABC):
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
         cls.create_labelset(cls.user, cls.source, cls.labels)
 
-        cls.images = [
-            cls.upload_image(cls.user, cls.source)
-            for _ in range(cls.setup_image_count)
-        ]
+        if cls.reuse_image_file:
+            image = cls.upload_image(cls.user, cls.source)
+            cls.images = [image]
+            for image_i in range(cls.setup_image_count - 1):
+                cls.images.append(upload_image_process(
+                    image_file=image.original_file,
+                    image_name=f'reused_img_{image_i}.png',
+                    source=cls.source,
+                    current_user=cls.user,
+                ))
+        else:
+            cls.images = [
+                cls.upload_image(cls.user, cls.source)
+                for _ in range(cls.setup_image_count)
+            ]
 
     @classmethod
     def update_multiple_metadatas(cls, field_name, values):
@@ -59,8 +75,8 @@ class BaseBrowseTest(ClientTest, ABC):
             # Just values, to be paired with the full list of images
             if len(cls.images) != len(values):
                 raise AssertionError(
-                    "If passing only values, number of values must equal"
-                    " number of images.")
+                    f"If passing only values, number of values must equal"
+                    f" number of images. ({len(values)} != {len(cls.images)})")
             image_value_pairs = zip(cls.images, values)
 
         for image, value in image_value_pairs:

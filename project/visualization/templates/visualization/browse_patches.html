@@ -32,7 +32,7 @@
     {% async_media_batch_key request as media_batch_key %}
 
     {# Grid of patches #}
-    {% for annotation in page_results.object_list %}
+    {% for annotation in page_annotations %}
     {% with point=annotation.point %}
       {% patch_async point media_batch_key request as patch_dict %}
 

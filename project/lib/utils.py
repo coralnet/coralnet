@@ -211,14 +211,31 @@ class CustomPaginator(Paginator):
     @cached_property
     def count(self):
         c = getattr(self.object_list, "count", None)
+        # See if we have a QuerySet, using conditional logic similar to
+        # that of Paginator.count().
         if callable(c):
-            # We've figured we have a QuerySet, using logic similar to
-            # that of Paginator.count().
-            # In this case we have a chance to optimize for not too much
-            # UX detriment, by telling the database to stop counting
-            # past a certain limit.
             if self.count_limit:
-                return self.object_list[:self.count_limit].count()
+                queryset_to_count = self.object_list
+                # Clear any ordering that was previously applied to this
+                # QuerySet. It seems that having an ordering slows down the
+                # counting process when it's a subquery that's being counted,
+                # which may be the case when we apply a count limit.
+                #
+                # For example, at this point, queryset_to_count.query may be:
+                # SELECT ... FROM "annotations_annotation"
+                # WHERE "annotations_annotation"."image_id" IN (
+                #   SELECT U0."id" FROM "images_image" U0 INNER JOIN
+                #   "images_metadata" U2 ON (U0."id" = U2."image_id")
+                #   WHERE (U0."source_id" = 13
+                #   AND UPPER(U2."aux1"::text) = UPPER(Site1)))
+                # ORDER BY ... ASC
+                queryset_to_count = queryset_to_count.order_by()
+                # Optimize by telling the database to stop counting
+                # past a certain limit. We can use this in situations where
+                # the user probably won't be too bothered about not knowing
+                # the full count.
+                queryset_to_count = queryset_to_count[:self.count_limit]
+                return queryset_to_count.count()
         # If not a QuerySet, or no count limit, defer to superclass.
         return super().count
 

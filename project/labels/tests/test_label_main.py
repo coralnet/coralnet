@@ -15,6 +15,7 @@ from lib.tests.utils import (
     BasePermissionTest,
     ClientTest,
     HtmlAssertionsMixin,
+    IndexesMixin,
     make_media_url_comparable,
 )
 from lib.utils import context_scoped_cache
@@ -647,6 +648,41 @@ class LabelMainPatchQueriesTest(BaseLabelMainTest):
             response = self.get_example_patches()
 
         self.assertEqual(self.patch_img_element_count(response), 80)
+
+
+class LabelMainPatchIndexesTest(BaseLabelMainTest, IndexesMixin):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=20),
+        )
+
+        cls.labels = cls.create_labels(
+            cls.user, ['A', 'B'], "Group1")
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+        cls.source.refresh_from_db()
+
+        cls.img1 = cls.upload_image(cls.user, cls.source)
+        cls.img2 = cls.upload_image(cls.user, cls.source)
+
+    def test(self):
+        self.add_annotations(self.user, self.img1)
+        self.add_annotations(self.user, self.img2)
+
+        with self.capture_queries() as cm:
+            self.get_example_patches()
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings=
+                'ORDER BY "annotations_annotation"."scrambled_sort_key"',
+            expected_explain_substring='anno_to_lbl_confirm_hsh_i',
+        )
 
 
 class PopularityTest(ClientTest):

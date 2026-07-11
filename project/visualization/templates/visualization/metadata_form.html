@@ -33,7 +33,7 @@ This is a template that is used to render a form for editing metadata
       </tr>
 
       {# One row per image #}
-      {% for metadata_form, checkbox_form, image, status in metadata_rows %}
+      {% for metadata_form, checkbox_form, image_id, status in metadata_rows %}
         <tr>
           {# Checkbox #}
           {% for field in checkbox_form %}
@@ -54,7 +54,7 @@ This is a template that is used to render a form for editing metadata
               </td>
               <td class="status">
                 {# Link and annotation status #}
-                <a href="{% url 'image_detail' image.id %}" target="_blank">
+                <a href="{% url 'image_detail' image_id %}" target="_blank">
                   {{ status }}
                 </a>
               </td>
