@@ -12,7 +12,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from images.models import Image, Metadata
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import (
+    BasePermissionTest, ClientTest, IndexesMixin)
 from lib.tests.utils_data import create_sample_image
 
 
@@ -533,3 +534,26 @@ class StorageNameCollisionTest(UploadProcessTest):
 
         self.assertEqual(len(mail.outbox), 2)
         self.assertProblemMailAsExpected()
+
+
+class IndexesTest(UploadProcessTest, IndexesMixin):
+
+    def test_original_file_i_on_new_upload(self):
+
+        name = 'A.jpg'
+        with self.capture_queries() as cm:
+            self.submit_upload(
+                dict(file=self.sample_image_as_file(name), name=name))
+
+        self.assert_in_raw_query_explain(
+            queries=cm.captured_queries,
+            query_substrings='WHERE "images_image"."original_file"::text LIKE',
+            expected_explain_substring='image_original_file_i',
+        )
+
+    def test_original_file_i_on_storage_cleanup(self):
+        # TODO: A test for a command/task which goes over images
+        #  in file storage and checks if they match with anything in
+        #  the database.
+        #  This should also benefit from image_original_file_i.
+        pass
