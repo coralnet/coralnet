@@ -440,6 +440,20 @@ class FiltersTest(BaseBrowsePatchesTest):
         self.assert_browse_results(
             response, [(2,1), (2,2), (3,1), (3,2)])
 
+    def test_filter_by_name_tokens(self):
+        self.update_multiple_metadatas(
+            'name',
+            [(self.img1, 'ABCXYZ.jpg'),
+             (self.img2, 'xyz.abc'),
+             (self.img3, 'abc.png'),
+             (self.img4, 'xyz.jpg')])
+        for image in self.images:
+            self.add_annotations(self.user, image)
+
+        response = self.get_browse(image_name='abc xyz')
+        self.assert_browse_results(
+            response, [(1,1), (1,2), (2,1), (2,2)])
+
 
 class FormInitializationTest(BaseBrowsePatchesTest):
 

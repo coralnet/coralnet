@@ -1151,9 +1151,10 @@ class SortTest(BaseBrowseImagesTest):
         cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
 
     def test_by_name(self):
+        # Should be AB ac AD ba BB; case insensitive sorting
         self.update_multiple_metadatas(
             'name',
-            ['B', 'A', 'C', 'D', 'E'])
+            ['ac', 'AB', 'AD', 'ba', 'BB'])
 
         response = self.get_browse(
             sort_method='',
