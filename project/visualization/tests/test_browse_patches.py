@@ -781,6 +781,40 @@ class IndexesTest(BaseBrowsePatchesTest, IndexesMixin):
         self.assert_in_sql_explain(
             'annotation_to_src_hsh_i', results_query)
 
+    def test_filter_by_annotator_user(self):
+        robot = self.create_robot(self.source)
+        for image in self.images:
+            self.add_robot_annotations(robot, image)
+        # 3 manually annotated points by user
+        self.add_annotations(
+            self.user, self.images[0], {1: 'A', 2: 'A'})
+        self.add_annotations(
+            self.user, self.images[3], {1: 'B'})
+
+        response = self.get_browse(
+            patch_annotator_0='annotation_tool',
+            patch_annotator_1=self.user.pk,)
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        self.assert_in_sql_explain(
+            'annotation_to_src_usr_rbtv_i', results_query)
+
+    def test_filter_by_label(self):
+        self.add_annotations(
+            self.user, self.images[0], {1: 'A', 2: 'A'})
+        self.add_annotations(
+            self.user, self.images[1], {1: 'A', 2: 'B'})
+        self.add_annotations(
+            self.user, self.images[2], {1: 'B', 2: 'A'})
+
+        response = self.get_browse(patch_label=self.labels.get(name='A').pk)
+        page_results = response.context['page_results']
+        results_query = page_results.object_list.query
+
+        self.assert_in_sql_explain(
+            'anno_to_src_lbl_confirm_i', results_query)
+
 
 class PatchFormTest(BaseBrowsePatchesTest):
 
