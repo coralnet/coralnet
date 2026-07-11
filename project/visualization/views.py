@@ -156,8 +156,7 @@ def browse_images(request, source_id):
         'global_calcification_tables': get_global_calcify_tables(),
         'default_calcification_tables': get_default_calcify_tables(),
 
-        'cpc_export_form': CpcExportForm(
-            source=source, image_results=source.image_set.all()),  # TODO: Fix
+        'cpc_export_form': CpcExportForm(source=source),
     })
 
 

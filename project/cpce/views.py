@@ -169,10 +169,7 @@ class ExportPrepView(View):
                 error=e.message
             ))
 
-        cpc_export_form = CpcExportForm(
-            source,
-            self.queryset_builder.get_unordered_image_queryset(),
-            request.POST)
+        cpc_export_form = CpcExportForm(source, request.POST)
         if not cpc_export_form.is_valid():
             return JsonResponse(dict(
                 error=get_one_form_error(cpc_export_form),

@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import mail_admins
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models.expressions import Case, Value, When
 from django.db.models.functions import Lower, Upper
 from easy_thumbnails.fields import ThumbnailerImageField
 
@@ -131,6 +132,16 @@ class Image(models.Model):
                 fields=['original_file'],
                 name='image_original_file_i',
                 opclasses=['text_pattern_ops'],
+            ),
+            # Check if any images in a source have non-blank cpc_content, or
+            # if any have blank cpc_content.
+            models.Index(
+                'source',
+                Case(
+                    When(cpc_content='', then=Value(1)),
+                    default=Value(0),
+                ),
+                name='image_source_cpccontentblank_i',
             ),
         ]
 
