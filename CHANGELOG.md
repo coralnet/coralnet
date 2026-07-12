@@ -5,10 +5,24 @@ For general instructions on how to update a development environment of CoralNet,
 
 For info about the semantic versioning used here, see `docs/versions.rst`.
 
-When updating a CoralNet environment through multiple versions, make sure to not skip the versions marked with an \* (asterisk). For example, when updating from 1.20 to 1.28, make sure to update like 1.20 > 1.26 > 1.27 > 1.28, and catch up with all the update instructions at each step before moving on.
+When updating a CoralNet environment through multiple versions, make sure to not skip the versions marked with an \* (asterisk).
+
+- For example, when updating from 1.20 to 1.30, don't update directly to the 1.30 code, because 1.26 and 1.27 are marked with \*. Instead, update to the 1.26 code first and follow any release-specific instructions from 1.21 to 1.26; then update to the 1.27 code and follow 1.27's instructions; then update to the 1.30 code and follow the 1.28-1.30 instructions.
 
 "Production:" dates under each version indicate when the production server was updated to that version.
 
+
+## [1.30](https://github.com/coralnet/coralnet/tree/1.30)
+
+Production: 2026-07-11
+
+- New migrations to run: images 0055-0058. These took 2 minutes to run in production.
+
+## [1.29](https://github.com/coralnet/coralnet/tree/1.29)
+
+Production: 2026-06-18
+
+- New migrations to run: annotations 0038-0042. These took around 7 hours to run in production.
 
 ## [1.28](https://github.com/coralnet/coralnet/tree/1.28)
 
