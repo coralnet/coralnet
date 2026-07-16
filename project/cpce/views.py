@@ -549,7 +549,12 @@ def cpc_batch_editor_process_ajax(request):
     )
     for cpc_file in cpc_files:
         # Read in a cpc file
-        cpc_stream = text_file_to_unicode_stream(cpc_file)
+        try:
+            cpc_stream = text_file_to_unicode_stream(cpc_file)
+        except FileProcessError as error:
+            return JsonResponse(dict(
+                error=str(error),
+            ))
         # Edit the cpc file
         filepath = filepath_lookup[cpc_file.name]
         cpc_strings[filepath] = cpc_edit_labels(
