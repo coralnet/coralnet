@@ -1,5 +1,4 @@
 import html
-import math
 import re
 from unittest import skip
 
@@ -279,13 +278,22 @@ class SourceMainBackendColumnTest(BaseTaskTest):
         classifier_1 = self.source.classifier_set.latest('pk')
         self.assertEqual(classifier_1.status, ClassifierStatuses.ACCEPTED.value)
 
-        # Train and reject a classifier. Override settings so that
+        # Ensure the accuracy's greater than zero.
+        classifier_1.accuracy = 0.60
+        classifier_1.save()
+
+        # Train and reject a classifier, so that the last saved is different
+        # from the last trained.
+        #
+        # To do so, override settings so that:
         # 1) we don't need more images to train a new classifier, and
         # 2) it's impossible to improve accuracy enough to accept
-        # another classifier.
+        # another classifier. So here, 60% times 2.0 would be 120%, and it's
+        # impossible to get over 100%.
         with override_settings(
-                NEW_CLASSIFIER_TRAIN_TH=0.0001,
-                NEW_CLASSIFIER_IMPROVEMENT_TH=math.inf):
+            NEW_CLASSIFIER_TRAIN_TH=0.0001,
+            NEW_CLASSIFIER_IMPROVEMENT_TH=2.0,
+        ):
             do_job(
                 'train_classifier', self.source.pk, source_id=self.source.pk)
             self.do_collect_spacer_jobs()
