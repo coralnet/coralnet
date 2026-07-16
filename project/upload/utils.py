@@ -53,11 +53,21 @@ def text_file_to_unicode_stream(text_file):
             except UnicodeDecodeError:
                 pass
 
-        # No known examples thus far result in total failure to decode content.
-        # But if we ever come across one, a reasonable action might be to go
+        # Binary files might reach this case.
+        #
+        # If we could distinguish between binary files vs. unknown text
+        # encodings, a reasonable action for the latter might be to go
         # with the first guess and not be strict about errors:
         # unicode_text = content.decode(encoding_guesses[0], errors='replace')
-        assert unicode_text is not None, "Failed to decode content"
+        # But we're not trying to make that distinction yet.
+        if unicode_text is None:
+            try:
+                name = text_file.name
+            except AttributeError:
+                name = "<file stream>"
+            raise FileProcessError(
+                f"{name}: Failed to decode text file content."
+                " Could it be in a binary format like Excel (XLSX)?")
 
     # Convert the text into a line-by-line stream.
     return StringIO(unicode_text, newline='')
