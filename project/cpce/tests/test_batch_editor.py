@@ -1,10 +1,12 @@
 from io import BytesIO
 import json
+from unittest import mock
 from zipfile import ZipFile
 
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
+from lib.exceptions import FileProcessError
 from lib.tests.utils import BasePermissionTest, ClientTest
 
 
@@ -36,7 +38,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class MainTest(ClientTest):
+class BaseCpcBatchEditTest(ClientTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -67,17 +69,25 @@ class MainTest(ClientTest):
             + point_position_lines + point_label_lines + header_lines
         )
 
-    def batch_edit(self, post_data):
+    def process(self, post_data):
         self.client.force_login(self.user)
-        process_response = self.client.post(
+        return self.client.post(
             reverse('cpce:cpc_batch_editor_process_ajax'),
             post_data,
         )
+
+    def batch_edit(self, post_data):
+        process_response = self.process(post_data)
         timestamp = process_response.json()['session_data_timestamp']
+
+        self.client.force_login(self.user)
         return self.client.get(
             reverse('cpce:cpc_batch_editor_file_serve'),
             dict(session_data_timestamp=timestamp),
         )
+
+
+class MainTest(BaseCpcBatchEditTest):
 
     def test_ids_only(self):
         cpc_lines = self.make_cpc_lines(
@@ -221,3 +231,42 @@ class MainTest(ClientTest):
         self.assertTrue(
             cpc_content.startswith('"2"'),
             "Second CPC's filepath was mapped correctly")
+
+
+def raise_process_error(*_args):
+    raise FileProcessError("A process error")
+
+
+class ErrorCasesTest(BaseCpcBatchEditTest):
+
+    def test_cpc_file_process_error(self):
+
+        # Minimal valid inputs.
+        cpc_lines = self.make_cpc_lines(
+            point_count_line='1',
+            point_position_lines=['0,0']*1,
+            point_label_lines=['"1","A","Notes",""'],
+        )
+        cpc_content = ''.join([line + '\n' for line in cpc_lines])
+        cpc_file = ContentFile(cpc_content, name='1.cpc')
+
+        csv_lines = ['Old ID,New ID', 'A,B']
+        csv_content = ''.join([line + '\n' for line in csv_lines])
+        csv_file = ContentFile(csv_content, name='spec.csv')
+
+        post_data = dict(
+            cpc_files=[cpc_file],
+            cpc_filepaths=json.dumps({'1.cpc': '1.cpc'}),
+            label_spec_fields='id_only',
+            label_spec_csv=csv_file,
+        )
+
+        with mock.patch(
+            'cpce.views.text_file_to_unicode_stream',
+            raise_process_error,
+        ):
+            response = self.process(post_data)
+
+        self.assertDictEqual(
+            response.json(), dict(error="A process error"),
+            "Response JSON should be as expected")
