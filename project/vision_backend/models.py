@@ -224,7 +224,10 @@ class SourceClassifierOptions(models.Model):
 
         # Else, using deployed_classifier.
         # Read feature extractor name from the classifier's source's field.
-        return self.deployed_classifier.source.feature_extractor
+        return (
+            self.deployed_classifier.source
+            .classifier_options.feature_extractor_setting
+        )
 
     def get_deployed_classifier_html(self):
 
