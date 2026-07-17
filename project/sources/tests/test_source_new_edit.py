@@ -1097,7 +1097,7 @@ class SourceEditBackendStatusTest(BaseTaskTest):
 
         source_effnet = cls.create_source(
             cls.user,
-            trains_own_classifier=True,
+            trains_own_classifiers=True,
             feature_extractor_setting=Extractors.EFFICIENTNET.value)
         cls.create_labelset(cls.user, source_effnet, cls.labels)
         cls.effnet_robot = cls.create_robot(source_effnet)
@@ -1105,10 +1105,20 @@ class SourceEditBackendStatusTest(BaseTaskTest):
 
         source_vgg = cls.create_source(
             cls.user,
-            trains_own_classifier=True,
+            trains_own_classifiers=True,
             feature_extractor_setting=Extractors.VGG16.value)
         cls.create_labelset(cls.user, source_vgg, cls.labels)
         cls.vgg_robot = cls.create_robot(source_vgg)
+
+        source_deploy_mode = cls.create_source(
+            cls.user,
+            trains_own_classifiers=False,
+            deployed_classifier=cls.effnet_robot.pk,
+            # This is intentionally different from the deployed classifier's
+            # extractor, so we can check extractor-choice logic.
+            feature_extractor_setting=Extractors.VGG16.value)
+        cls.create_labelset(cls.user, source_deploy_mode, cls.labels)
+        cls.deploy_mode_source_robot = cls.create_robot(source_deploy_mode)
 
     def edit_source(self, **kwargs):
         self.client.force_login(self.user)
@@ -1332,3 +1342,44 @@ class SourceEditBackendStatusTest(BaseTaskTest):
         )
         self.assert_feature_reset()
         self.assert_no_source_check()
+
+    # For these tests, we're interested in seeing if the source's
+    # extractor property computes as expected.
+
+    def test_deploy_mode_with_own_classifier(self):
+        self.do_test(
+            trains_own_classifiers=(True, False),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+            deployed_classifier=(self.own_robot, self.own_robot),
+        )
+
+        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
+        self.assertEqual(
+            self.source.feature_extractor, Extractors.EFFICIENTNET.value,
+            msg="Should not have recursion issues when getting the extractor"
+                " property",
+        )
+
+    def test_deploy_mode_with_another_deploy_mode_source(self):
+        self.do_test(
+            trains_own_classifiers=(True, False),
+            feature_extractor_setting=(
+                Extractors.EFFICIENTNET.value, Extractors.EFFICIENTNET.value),
+            deployed_classifier=(self.own_robot, self.deploy_mode_source_robot),
+        )
+
+        # Sanity check
+        self.assertFalse(
+            self.deploy_mode_source_robot.source
+            .classifier_options.trains_own_classifiers)
+
+        self.source.refresh_from_db()
+        self.source.classifier_options.refresh_from_db()
+        self.assertEqual(
+            self.source.feature_extractor, Extractors.VGG16.value,
+            msg="Should use the extractor of the deployed classifier's source"
+                " (VGG16), not this source's train-mode extractor (EffNet) or"
+                " the classifier's source's deploy-mode extractor (EffNet)",
+        )
