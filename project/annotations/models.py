@@ -28,10 +28,14 @@ class Annotation(models.Model):
     user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL, editable=False, null=True, db_index=False)
-    # Only fill this in if the user is the robot user
+
+    # Only fill this in if the user is the robot user.
+    #
+    # Allow a DB index to be created to speed up the 'set null on delete'
+    # process. Otherwise the reset-classifiers job takes forever.
     robot_version = models.ForeignKey(
         Classifier,
-        on_delete=models.SET_NULL, editable=False, null=True, db_index=False)
+        on_delete=models.SET_NULL, editable=False, null=True)
 
     label = models.ForeignKey(Label, on_delete=models.PROTECT, db_index=False)
     source = models.ForeignKey(
@@ -94,7 +98,7 @@ class Annotation(models.Model):
                 fields=['label', 'confirmed', 'scrambled_sort_key'],
                 name='anno_to_lbl_confirm_hsh_i'),
             # Browse Patches, filtering by unconfirmed or filtering by
-            # individual user / Have at least one index with robot version
+            # individual user
             models.Index(
                 fields=['source', 'user', 'robot_version'],
                 name='annotation_to_src_usr_rbtv_i'),
