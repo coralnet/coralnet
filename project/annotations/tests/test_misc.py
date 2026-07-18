@@ -86,6 +86,12 @@ class PatchOrderingUpdateTaskTest(ClientTest):
         cls.add_annotations(cls.user, cls.image, {1: 'A', 2: 'B', 3: 'A'})
 
     def test(self):
+        annotation_dates = [
+            self.image.annotation_set.get(
+                point__point_number=point_number).annotation_date
+            for point_number in [1, 2, 3]
+        ]
+
         with controlled_sort_hashes(
             seed=10, pk_sequence=[6,7,8],
             mock_target_module='annotations.tasks',
@@ -105,13 +111,24 @@ class PatchOrderingUpdateTaskTest(ClientTest):
             " result of the task"
         )
 
-        for point_number, sum in zip([1, 2, 3], [16, 17, 18]):
+        for point_number, sum, previous_date in zip(
+            [1, 2, 3], [16, 17, 18], annotation_dates
+        ):
             expected_hash = EXPECTED_HASHES[sum]
+            anno = self.image.annotation_set.get(
+                point__point_number=point_number)
+
             self.assertEqual(
-                self.image.annotation_set.get(
-                    point__point_number=point_number).scrambled_sort_key,
+                anno.scrambled_sort_key,
                 expected_hash,
                 f"Sort hash for point {point_number} should be as expected",
+            )
+
+            self.assertEqual(
+                anno.annotation_date,
+                previous_date,
+                f"Annotation date for point {point_number} should not have"
+                f" changed during the sort hash update",
             )
 
 
