@@ -221,7 +221,10 @@ class ImageAnnotationInfo(models.Model):
         previously_confirmed = self.confirmed
         self.status = image_annotation_status(self.image)
 
-        self.save()
+        # Regarding update_fields:
+        # Avoid touching the classifier field here, to avoid conflicts with
+        # any reset classifiers job that might be running.
+        self.save(update_fields={'last_annotation', 'status'})
 
         if self.confirmed and not previously_confirmed:
 

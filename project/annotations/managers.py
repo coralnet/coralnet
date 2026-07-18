@@ -166,10 +166,19 @@ class AnnotationManager(models.Manager):
             annotation.label = label
             if now_confirmed:
                 annotation.user = user_or_robot_version
+                update_fields = {'label', 'user', 'annotation_date'}
             else:
                 annotation.user = get_robot_user()
                 annotation.robot_version = user_or_robot_version
-            annotation.save()
+                update_fields = {
+                    'label', 'robot_version', 'user', 'annotation_date'}
+
+            # Regarding update_fields:
+            # We only update robot_version when applicable; otherwise if a
+            # reset classifiers job is happening right now, then this update
+            # could hang.
+            annotation.save(update_fields=update_fields)
+
             return self.UpdateResultsCodes.CHANGED.value
 
         # Else, there's nothing to save, so don't do anything.
