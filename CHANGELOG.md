@@ -12,6 +12,12 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## [1.31](https://github.com/coralnet/coralnet/tree/1.31)
+
+Production: 2026-07-18
+
+- New migration to run: annotations 0043. It took 15 minutes to run in production.
+
 ## [1.30](https://github.com/coralnet/coralnet/tree/1.30)
 
 Production: 2026-07-11
