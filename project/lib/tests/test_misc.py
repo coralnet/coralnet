@@ -180,6 +180,7 @@ class GoogleAnalyticsTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
     

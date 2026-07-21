@@ -43,6 +43,7 @@ class JobListTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
 
     def test_all_table_columns(self):
@@ -154,6 +155,8 @@ class JobListTest(ClientTest):
 class JobListQueriesTest(ClientTest):
 
     def test(self):
+        self.superuser = self.create_superuser()
+
         api_job_count = 20
         unit_count = 3
 
@@ -196,6 +199,7 @@ class JobDetailTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
         cls.classifier = cls.create_robot(cls.source)

@@ -57,6 +57,7 @@ class ViewLoggingMiddlewareTest(ClientTest):
             f"Should log the expected end message")
 
     def test_user_id(self):
+        self.superuser = self.create_superuser()
         self.client.force_login(self.superuser)
         with self.assertLogs(logger='coralnet_views', level='DEBUG') as cm:
             self.client.get(reverse('index'))

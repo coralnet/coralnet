@@ -6,13 +6,11 @@ from django.shortcuts import resolve_url
 from ..models import BlogPost
 
 
-class BlogTestMixin(object):
+class BlogTestMixin:
 
-    # These lines just exist to prevent an 'Unresolved attribute reference' or
-    # similar IDE warning. The base test classes should end up setting
-    # these in setup methods.
+    # Prevent an 'Unresolved attribute reference' or similar IDE warning.
+    # The base test classes should end up setting this in setup methods.
     client = None
-    superuser = None
 
     @classmethod
     def create_post(cls, **kwargs):

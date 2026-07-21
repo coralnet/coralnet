@@ -79,12 +79,15 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
     create_source: Callable
     create_user: Callable
+    create_superuser: Callable
     user: User
+    superuser: User
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.sources = [
             cls.create_source(cls.user, name="Source 1"),

@@ -503,6 +503,7 @@ class BackendOverviewTest(ClientTest, HtmlAssertionsMixin, TaskTestMixin):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.labels = cls.create_labels(cls.user, ['A', 'B'], "Group1")
 

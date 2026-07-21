@@ -147,6 +147,7 @@ class EmailAllTest(ClientTest):
         # Call the parent's setup (while still using this class as cls)
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.inactive_user = cls.create_user(activate=False)
 

@@ -93,6 +93,8 @@ class LinkTest(ClientTest, BlogTestMixin):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
+
         list_url = resolve_url('blog:post_list')
         cls.blog_home_link_expected_html = \
             '<a href="{list_url}">Blog home</a>'.format(list_url=list_url)

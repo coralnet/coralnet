@@ -93,6 +93,12 @@ class ListedPostsTest(ClientTest, BlogTestMixin):
     """
     Test that the expected posts are listed.
     """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.superuser = cls.create_superuser()
+
     def test_drafts_only_viewable_by_admins(self):
         regular_user = self.create_user()
         self.create_post(is_published=False)

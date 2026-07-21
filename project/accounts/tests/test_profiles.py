@@ -100,6 +100,7 @@ class ProfileListItemCountsTest(ClientTest):
         # Call the parent's setup (while still using this class as cls)
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.url = resolve_url('profile_list')
 
     def test_no_visible_profiles(self):

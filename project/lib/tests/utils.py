@@ -210,9 +210,6 @@ class ClientTest(DataTestMixin, BaseTest):
         # to set up more data before running the class's test functions.
         cls.client = Client()
 
-        # Create a superuser.
-        cls.superuser = cls.create_superuser()
-
         if not settings.TEST_DATABASE_MIGRATE:
             # Create the initial data that the migrations would have created.
             user = User(username=settings.IMPORTED_USERNAME)
@@ -257,6 +254,7 @@ class BasePermissionTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
 
