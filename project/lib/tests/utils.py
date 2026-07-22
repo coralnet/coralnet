@@ -210,15 +210,6 @@ class ClientTest(DataTestMixin, BaseTest):
         # to set up more data before running the class's test functions.
         cls.client = Client()
 
-        if not settings.TEST_DATABASE_MIGRATE:
-            # Create the initial data that the migrations would have created.
-            user = User(username=settings.IMPORTED_USERNAME)
-            user.save()
-            user = User(username=settings.ROBOT_USERNAME)
-            user.save()
-            user = User(username=settings.ALLEVIATE_USERNAME)
-            user.save()
-
     def setUp(self):
         super().setUp()
 

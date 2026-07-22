@@ -274,18 +274,6 @@ else:
 
 DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
 
-# Whether to run migrations as part of the test runner's database setup.
-#
-# True makes it easier to maintain correctness, since the migrations are the
-# first source of truth for creation of initial data, such as the Imported
-# and Alleviate users.
-# False can speed up test database setup, and paper over a DB engine's
-# inability to run all the migrations.
-# The JSONFields in some of the earlier migrations are Postgres-only, hence
-# our definition of the default value.
-TEST_DATABASE_MIGRATE = env.bool(
-    'TEST_DATABASE_MIGRATE', default='postgresql' in DATABASE_ENGINE)
-
 # https://docs.djangoproject.com/en/5.1/ref/models/querysets/#distinct
 # "On PostgreSQL only, you can pass positional arguments (*fields) in order
 # to specify the names of fields to which the DISTINCT should apply.
@@ -313,9 +301,6 @@ DATABASES = {
         # Set to empty string for default (e.g. 5432 for postgresql).
         # Not used with sqlite3.
         'PORT': env('DATABASE_PORT', default=''),
-        'TEST': {
-            'MIGRATE': TEST_DATABASE_MIGRATE,
-        },
     },
 }
 
