@@ -535,6 +535,10 @@ class BasePermissionTest(ClientTest):
 
 class HtmlAssertionsMixin:
 
+    assertEqual: Callable
+    assertHTMLEqual: Callable
+    assertIn: Callable
+
     def _assert_row_values(self, row, expected_row, column_names, row_number):
         cells = row.select('td')
         cell_contents = [
@@ -617,7 +621,13 @@ class HtmlAssertionsMixin:
             msg="Expected top-message should be in page")
 
 
-class EmailAssertionsMixin(TestCase):
+class EmailAssertionsMixin:
+
+    assertEqual: Callable
+    assertGreaterEqual: Callable
+    assertIn: Callable
+    assertNotIn: Callable
+    assertSetEqual: Callable
 
     def assert_no_email(self):
         """
@@ -631,12 +641,12 @@ class EmailAssertionsMixin(TestCase):
 
     def assert_latest_email(
         self,
-        subject: str = None,
-        body_contents: list[str] = None,
-        body_not_contains: list[str] = None,
-        to: list[str] = None,
-        cc: list[str] = None,
-        bcc: list[str] = None,
+        subject: str | None = None,
+        body_contents: list[str] | None = None,
+        body_not_contains: list[str] | None = None,
+        to: list[str] | None = None,
+        cc: list[str] | None = None,
+        bcc: list[str] | None = None,
     ):
         """
         Assert that the latest sent email has the given details. Specify as
@@ -750,6 +760,9 @@ class IndexesMixin(TestCase):
     wrapped in a transaction, so any separate process that would attempt to
     analyze the table shouldn't see what's been done in the transaction.
     https://stackoverflow.com/questions/71651378/what-does-analyze-do-when-used-within-a-transaction
+
+    It also helps that the tables we need to flush don't get initial data from
+    migrations.
     """
 
     @classmethod
