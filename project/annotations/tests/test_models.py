@@ -1,9 +1,8 @@
 from django.conf import settings
-from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
 from images.models import Point
-from lib.tests.utils import CnStandardTest
+from lib.tests.utils import CnMigrationTest, CnStandardTest
 from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
     image_annotation_status,
@@ -270,7 +269,7 @@ class ScrambledSortKeyTest(CnStandardTest):
         self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[17])
 
 
-class PopulateConfirmedMigrationTest(MigrationTest):
+class PopulateConfirmedMigrationTest(CnMigrationTest):
 
     before = [
         ('accounts', '0001_squashed_0012_field_string_attributes_to_unicode'),

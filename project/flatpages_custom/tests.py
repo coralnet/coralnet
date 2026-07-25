@@ -5,10 +5,9 @@ from django.conf import settings
 from django.contrib.flatpages.models import FlatPage
 from django.contrib.sites.models import Site
 from django.urls import reverse
-from django_migration_testcase import MigrationTest
 from reversion.models import Version
 
-from lib.tests.utils import BasePermissionTest, CnStandardTest
+from lib.tests.utils import BasePermissionTest, CnMigrationTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -123,7 +122,7 @@ class FlatpageEditTest(CnStandardTest):
             "markdownx should return a valid image code")
 
 
-class HardcodedFlatpagesMigrationTest(MigrationTest):
+class HardcodedFlatpagesMigrationTest(CnMigrationTest):
 
     before = [('flatpages', '0001_initial'), ('sites', '0001_initial')]
     after = [('flatpages_custom', '0001_add_help_page_if_not_present')]

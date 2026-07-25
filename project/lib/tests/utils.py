@@ -22,6 +22,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 import django_huey
+from django_migration_testcase import MigrationTest
 
 from sources.models import Source
 from ..storage_backends import get_storage_manager
@@ -213,6 +214,10 @@ class ThreadingCompatibleTest(_BaseTest):
         storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
 
         super().setUpTestData()
+
+
+class CnMigrationTest(MigrationTest):
+    serialized_rollback = True
 
 
 class CustomTestRunner(DiscoverRunner):
