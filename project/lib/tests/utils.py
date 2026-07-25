@@ -15,7 +15,7 @@ from django.db import connections
 from django.db.models.sql import RawQuery, Query
 from django.db.utils import DEFAULT_DB_ALIAS
 from django.test import (
-    override_settings, SimpleTestCase, TestCase, TransactionTestCase)
+    override_settings, SimpleTestCase, tag, TestCase, TransactionTestCase)
 from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.test.utils import CaptureQueriesContext
@@ -216,6 +216,7 @@ class ThreadingCompatibleTest(_BaseTest):
         super().setUpTestData()
 
 
+@tag('migration')
 class CnMigrationTest(MigrationTest):
     serialized_rollback = True
 
