@@ -129,17 +129,11 @@ Run ``python manage.py test``. Test failures will be shown as F, and errors will
 
 If you want to run a subset of the tests, you can use ``python manage.py test <app_name>``, or ``python manage.py test <app_name>.<module>.<TestClass>``.
 
+Certain types of tests can be skipped with the ``--exclude-tag`` option; see `Django docs <https://docs.djangoproject.com/en/5.2/topics/testing/tools/#tagging-tests>`__. Some of our tests are tagged with ``selenium`` or ``migration`` because those types of tests can be harder to get working.
+
+- To make Selenium tests work, you first need to download a `webdriver <https://selenium-python.readthedocs.io/installation.html#drivers>`__ for the browser of your choice, then configure ``SELENIUM_BROWSERS`` in your ``.env`` file (again, modeling after the examples in ``.env.dist``).
+
 Note: running the whole test suite with S3 storage can take a long time. As of April 2021, one particular development machine takes 7 minutes to run the test suite with local storage, and 2 hours 40 minutes with S3 storage.
-
-
-Selenium unit tests
-^^^^^^^^^^^^^^^^^^^
-
-There are additional Django unit tests that include browser interactivity by utilizing Selenium. Run these with ``python manage.py selenium_test``. To make this work, you first need to:
-
-- Download a `webdriver <https://selenium-python.readthedocs.io/installation.html#drivers>`__ for the browser of your choice.
-
-- Configure ``SELENIUM_BROWSERS`` in your ``.env`` file (again, modeling after the examples in ``.env.dist``).
 
 
 Django migrations

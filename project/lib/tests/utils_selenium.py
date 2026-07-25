@@ -11,10 +11,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import tag
-from django.test.runner import DiscoverRunner
 from django.urls import reverse
 
-from .utils import CustomTestRunner, ThreadingCompatibleTest
+from .utils import ThreadingCompatibleTest
 
 
 class EC_alert_is_not_present(object):
@@ -177,12 +176,3 @@ class BaseSeleniumTest(StaticLiveServerTestCase, ThreadingCompatibleTest):
         with self.wait_for_page_load():
             self.selenium.find_element(
                 By.CSS_SELECTOR, 'input[value="Sign in"]').click()
-
-
-class SeleniumTestRunner(CustomTestRunner):
-
-    def __init__(self, *args, tags=None, **kwargs):
-        # By default this will only run tests tagged 'selenium'.
-        tags = set(tags or [])
-        tags.add('selenium')
-        DiscoverRunner.__init__(self, *args, tags=list(tags), **kwargs)
