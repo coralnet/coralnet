@@ -2,12 +2,12 @@ import numpy as np
 from spacer.messages import ClassifyReturnMsg
 
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import Score
 from ..task_helpers import add_scores
 
 
-class ImageInitialStatusTest(ClientTest):
+class ImageInitialStatusTest(CnStandardTest):
     """
     Check a newly uploaded image's status (as relevant to the vision backend).
     """
@@ -22,7 +22,7 @@ class ImageInitialStatusTest(ClientTest):
         self.assertFalse(self.img1.features.extracted)
 
 
-class CascadeDeleteTest(ClientTest):
+class CascadeDeleteTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

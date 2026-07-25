@@ -3,7 +3,7 @@ from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
     image_annotation_status,
@@ -20,7 +20,7 @@ image_defaults = dict(
 )
 
 
-class ImageStatusLogicTest(ClientTest):
+class ImageStatusLogicTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -109,7 +109,7 @@ class ImageStatusLogicTest(ClientTest):
             unconfirmed=[], confirmed=[])
 
 
-class AnnoInfoUpdateTest(ClientTest):
+class AnnoInfoUpdateTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -209,7 +209,7 @@ class AnnoInfoUpdateTest(ClientTest):
         # self.assertStatusEqual('unconfirmed')
 
 
-class ScrambledSortKeyTest(ClientTest):
+class ScrambledSortKeyTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

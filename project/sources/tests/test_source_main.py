@@ -7,7 +7,7 @@ from django.test import override_settings
 from django.urls import reverse
 
 from jobs.tests.utils import do_job
-from lib.tests.utils import ClientTest, HtmlAssertionsMixin
+from lib.tests.utils import CnStandardTest, HtmlAssertionsMixin
 from lib.utils import date_display, datetime_display
 from newsfeed.models import NewsItem
 from vision_backend.common import ClassifierStatuses, Extractors
@@ -15,7 +15,7 @@ from vision_backend.tests.tasks.utils import BaseTaskTest
 from ..models import Source
 
 
-class SourceMainTest(ClientTest, HtmlAssertionsMixin):
+class SourceMainTest(CnStandardTest, HtmlAssertionsMixin):
     """
     Test a source's main page.
     """

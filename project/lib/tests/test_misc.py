@@ -7,14 +7,14 @@ from django.core.mail import mail_admins
 from django import forms
 from django.shortcuts import resolve_url
 from django.urls import reverse
+from django.test import SimpleTestCase
 from django.test.client import Client
 from django.test.utils import override_settings
 
 from ..forms import get_one_form_error, get_one_formset_error
 from .utils import (
     BasePermissionTest,
-    BaseTest,
-    ClientTest,
+    CnStandardTest,
     EmailAssertionsMixin,
 )
 
@@ -100,7 +100,7 @@ class PermissionTest(BasePermissionTest):
         self.assertTemplateUsed(response, 'admin_doc/index.html')
 
 
-class IndexTest(ClientTest):
+class IndexTest(CnStandardTest):
     """
     Test the site index page.
     """
@@ -172,7 +172,7 @@ class IndexTest(ClientTest):
             self.assertEqual(annotation_count_mock_obj.call_count, 1)
 
 
-class GoogleAnalyticsTest(ClientTest):
+class GoogleAnalyticsTest(CnStandardTest):
     """
     Testing the google analytics java script plugin.
     """
@@ -232,7 +232,7 @@ class GoogleAnalyticsTest(ClientTest):
         self.assertContains(response, 'google-analytics.com/ga.js')
 
 
-class FormUtilsTest(ClientTest):
+class FormUtilsTest(SimpleTestCase):
     """
     Test the utility functions in forms.py.
     """
@@ -246,13 +246,6 @@ class FormUtilsTest(ClientTest):
             ),
         )
     MyFormSet = forms.formset_factory(MyForm)
-
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        cls.user = cls.create_user()
-        cls.source = cls.create_source(cls.user)
 
     def test_get_one_form_error_with_unicode(self):
         # Instantiate the form with no fields filled in (i.e. a blank dict in
@@ -276,7 +269,7 @@ class FormUtilsTest(ClientTest):
             "My Form: My Field: あいうえお")
 
 
-class InternationalizationTest(ClientTest):
+class InternationalizationTest(CnStandardTest):
     """
     Test internationalization in general.
     """
@@ -313,15 +306,11 @@ class InternationalizationTest(ClientTest):
 
 
 @override_settings(IMPORTED_USERNAME='class_override')
-class TestSettingsDecoratorTest(BaseTest):
+class TestSettingsDecoratorTest(SimpleTestCase):
     """
     Test that we can successfully use settings decorators on test classes
     and test methods.
     """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
     def test_class_override(self):
         # Class decorator should work.
         self.assertEqual(settings.IMPORTED_USERNAME, 'class_override')
@@ -349,7 +338,7 @@ class TestSettingsDecoratorTest(BaseTest):
             settings.IMPORTED_USERNAME, 'method_over_class_override')
 
 
-class AdminsSettingTest(BaseTest, EmailAssertionsMixin):
+class AdminsSettingTest(SimpleTestCase, EmailAssertionsMixin):
     """
     Demonstrate the way settings.py sets the ADMINS setting.
     """

@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from django.shortcuts import resolve_url
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..models import Profile
 
 
@@ -93,7 +93,7 @@ class ProfileListPermissionTest(ProfilePermissionTest):
         self.assertProfileNameOnList(self.superuser, self.user_closed.username)
 
 
-class ProfileListItemCountsTest(ClientTest):
+class ProfileListItemCountsTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -221,7 +221,7 @@ class ProfileEditPermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class ProfileEditTest(ClientTest):
+class ProfileEditTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

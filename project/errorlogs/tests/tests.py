@@ -3,12 +3,12 @@ from unittest import mock
 from django.test.client import Client
 from django.urls import reverse
 
-from lib.tests.utils import BaseTest, ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import ErrorLog
 from ..utils import instantiate_error_log
 
 
-class ErrorLogTest(BaseTest):
+class ErrorLogTest(CnStandardTest):
     """
     Test saving of ErrorLogs, independently of the exception handling process.
     """
@@ -81,7 +81,7 @@ class ErrorLogTest(BaseTest):
                 " and should have its null char replaced")
 
 
-class ExceptionTest(ClientTest):
+class ExceptionTest(CnStandardTest):
     """
     Test ErrorLog saving in the context of exception handling.
     """

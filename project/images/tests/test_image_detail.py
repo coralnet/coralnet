@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from annotations.model_utils import AnnotationArea
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, IndexesMixin, scrambled_run)
+    BasePermissionTest, CnStandardTest, IndexesMixin, scrambled_run)
 from ..model_utils import PointGen
 from ..models import Image
 
@@ -39,7 +39,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
 
-class ImageDetailTest(ClientTest):
+class ImageDetailTest(CnStandardTest):
     """
     Test the image view/detail page.
     """
@@ -208,7 +208,7 @@ class ImageDetailTest(ClientTest):
         assert_status_text("Confirmed (completed)")
 
 
-class ImageDetailIndexesTest(ClientTest, IndexesMixin):
+class ImageDetailIndexesTest(CnStandardTest, IndexesMixin):
 
     @classmethod
     def setUpTestData(cls):
@@ -246,7 +246,7 @@ class ImageDetailIndexesTest(ClientTest, IndexesMixin):
         )
 
 
-class ImageDetailEditTest(ClientTest):
+class ImageDetailEditTest(CnStandardTest):
     """
     Test the image view/detail page.
     """

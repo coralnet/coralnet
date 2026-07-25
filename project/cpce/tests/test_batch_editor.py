@@ -7,7 +7,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from lib.exceptions import FileProcessError
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -38,7 +38,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class BaseCpcBatchEditTest(ClientTest):
+class BaseCpcBatchEditTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

@@ -5,7 +5,7 @@
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from .utils import AnnotationHistoryTestMixin
 
 
@@ -31,7 +31,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_EDIT, template=template)
 
 
-class NoLabelsetTest(ClientTest):
+class NoLabelsetTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -52,7 +52,7 @@ class NoLabelsetTest(ClientTest):
         self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
-class AnnotationHistoryAccessTest(ClientTest, AnnotationHistoryTestMixin):
+class AnnotationHistoryAccessTest(CnStandardTest, AnnotationHistoryTestMixin):
     """
     Test accessing the annotation history page.
     """

@@ -2,18 +2,15 @@ import json
 import random
 import string
 
-from lib.tests.utils import BaseTest
+from django.test import SimpleTestCase
+
 from vision_backend.confmatrix import ConfMatrix
 
 
-class ConfMatrixBasics(BaseTest):
+class ConfMatrixBasics(SimpleTestCase):
     """
     Test the ConfMatrix class.
     """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
     @staticmethod
     def makelabelset(k):
         """Example: if k = 5, this returns ['a', 'b', 'c', 'd', 'e']"""

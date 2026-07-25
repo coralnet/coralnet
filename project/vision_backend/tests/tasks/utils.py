@@ -6,9 +6,8 @@ from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tests.utils import do_job, JobUtilsMixin
 from jobs.utils import abort_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from lib.tests.utils_data import DataTestMixin
-from ...models import Classifier
 
 
 def source_check_is_scheduled(source_id):
@@ -231,7 +230,7 @@ class TaskTestMixin(
     rowcols_with_dupes_included = [(40, 60), (50, 50), (50, 50)]
 
 
-class BaseTaskTest(ClientTest, TaskTestMixin):
+class BaseTaskTest(CnStandardTest, TaskTestMixin):
     """This is more 'batteries included' than TaskTestMixin."""
 
     @classmethod

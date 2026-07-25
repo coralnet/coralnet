@@ -3,7 +3,7 @@ import time
 from bs4 import BeautifulSoup
 from django.shortcuts import resolve_url
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from .utils import BlogTestMixin
 
 
@@ -35,7 +35,7 @@ class PermissionTest(BasePermissionTest, BlogTestMixin):
             deny_type=self.NOT_FOUND)
 
 
-class MarkdownTest(ClientTest, BlogTestMixin):
+class MarkdownTest(CnStandardTest, BlogTestMixin):
     """
     Check that Markdown interpretation is working fine. Just looking at a few
     kinds of Markdown features without being super thorough.
@@ -85,7 +85,7 @@ class MarkdownTest(ClientTest, BlogTestMixin):
             '</p>')
 
 
-class LinkTest(ClientTest, BlogTestMixin):
+class LinkTest(CnStandardTest, BlogTestMixin):
     """
     Check the links on the post detail page.
     """

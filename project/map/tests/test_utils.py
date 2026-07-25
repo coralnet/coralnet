@@ -3,13 +3,13 @@ from django.urls import reverse
 
 from jobs.models import Job
 from jobs.tests.utils import do_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from sources.models import Source
 from ..utils import cacheable_map_sources
 
 
 @override_settings(MAP_IMAGE_COUNT_TIERS=[2, 3, 5])
-class MapSourcesTest(ClientTest):
+class MapSourcesTest(CnStandardTest):
     """
     Test the utility function which gets sources for the map.
     """
@@ -143,7 +143,7 @@ class MapSourcesTest(ClientTest):
 
 
 @override_settings(MAP_IMAGE_COUNT_TIERS=[2, 3, 5])
-class MapSourcesUpdateTest(ClientTest):
+class MapSourcesUpdateTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

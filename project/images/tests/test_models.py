@@ -1,16 +1,13 @@
 from io import BytesIO
-from unittest import mock
 
 import piexif
 from PIL import Image as PILImage
 from django.core.files.base import ContentFile
 from django.db import IntegrityError
-from django.db.models import QuerySet
 from django.test import override_settings
-from django_migration_testcase import MigrationTest
 from easy_thumbnails.files import get_thumbnailer
 
-from lib.tests.utils import BaseTest, ClientTest, spy_decorator
+from lib.tests.utils import CnStandardTest
 from vision_backend.common import Extractors
 from ..model_utils import PointGen
 from ..models import Image, Metadata, Point
@@ -30,7 +27,7 @@ image_defaults = dict(
 )
 
 
-class SourceExtractorPropertyTest(ClientTest):
+class SourceExtractorPropertyTest(CnStandardTest):
     """
     Test the feature_extractor property of the Source model.
     """
@@ -52,7 +49,7 @@ class SourceExtractorPropertyTest(ClientTest):
         self.assertEqual('dummy', self.source.feature_extractor)
 
 
-class ImageExifOrientationTest(ClientTest):
+class ImageExifOrientationTest(CnStandardTest):
     """
     Test images with EXIF orientation.
     """
@@ -131,7 +128,7 @@ class ImageExifOrientationTest(ClientTest):
                 " image, indicating that the thumbnail content is un-rotated")
 
 
-class MetadataUniqueNamesInSourceTest(ClientTest):
+class MetadataUniqueNamesInSourceTest(CnStandardTest):
     """
     Raw-ORM testing for dupe image names.
     """
@@ -178,7 +175,7 @@ class MetadataUniqueNamesInSourceTest(ClientTest):
                 name='1.PNG')
 
 
-class PointGenTest(BaseTest):
+class PointGenTest(CnStandardTest):
 
     def test_point_count_simple_random(self):
         self.assertEqual(
@@ -207,7 +204,7 @@ class PointGenTest(BaseTest):
         )
 
 
-class PointValidationTest(ClientTest):
+class PointValidationTest(CnStandardTest):
 
     def test_bounds_checks(self):
         user = self.create_user()

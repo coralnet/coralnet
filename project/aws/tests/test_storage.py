@@ -6,14 +6,14 @@ import urllib.request
 
 from django.conf import settings
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 
 
 @skipIf(
     not settings.STORAGES['default']['BACKEND']
         == 'aws.storage.MediaStorageS3',
     "Requires S3 storage")
-class S3UrlAccessTest(ClientTest):
+class S3UrlAccessTest(CnStandardTest):
     """
     Test accessing uploaded S3 objects by URL.
     """

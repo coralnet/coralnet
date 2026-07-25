@@ -10,7 +10,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 from images.models import Point
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from .utils import (
     controlled_sort_hashes,
     UploadAnnotationsCsvTestMixin,
@@ -61,7 +61,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class UploadAnnotationsNoLabelsetTest(ClientTest):
+class UploadAnnotationsNoLabelsetTest(CnStandardTest):
     """
     Point/annotation upload attempts with no labelset.
     This should just fail to reach the page.
@@ -340,7 +340,9 @@ class MultipleSourcesTest(
         self.check_other_sources_unaffected(preview_response, upload_response)
 
 
-class UploadAnnotationsContentsTest(ClientTest, UploadAnnotationsCsvTestMixin):
+class UploadAnnotationsContentsTest(
+    CnStandardTest, UploadAnnotationsCsvTestMixin
+):
     """
     Annotation upload edge cases and error cases related to contents.
     """

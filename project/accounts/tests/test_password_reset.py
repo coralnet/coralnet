@@ -3,7 +3,7 @@ from django.core import mail
 from django.urls import reverse
 from django.utils.html import escape
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -40,7 +40,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, template=template)
 
 
-class PasswordResetTest(ClientTest):
+class PasswordResetTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

@@ -10,13 +10,13 @@ from annotations.models import Label
 from api_core.models import ApiJob, ApiJobUnit
 from jobs.models import Job
 from jobs.tests.utils import fabricate_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..common import Extractors
 from ..task_helpers import SpacerClassifyResultHandler
 from ..utils import get_extractor
 
 
-class TestDeployCollector(ClientTest):
+class TestDeployCollector(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

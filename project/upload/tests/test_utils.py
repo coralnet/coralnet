@@ -1,11 +1,12 @@
 from io import BytesIO, StringIO
 
+from django.test import SimpleTestCase
+
 from lib.exceptions import FileProcessError
-from lib.tests.utils import BaseTest
 from ..utils import csv_to_dicts, text_file_to_unicode_stream
 
 
-class CsvToDictsTest(BaseTest):
+class CsvToDictsTest(SimpleTestCase):
 
     def test_missing_optional_column(self):
         lines = [
@@ -63,7 +64,7 @@ class CsvToDictsTest(BaseTest):
             msg="dict should have key for optional column")
 
 
-class TextFileToUnicodeTest(BaseTest):
+class TextFileToUnicodeTest(SimpleTestCase):
 
     def test_chinese_utf8(self):
         byte_stream = BytesIO(

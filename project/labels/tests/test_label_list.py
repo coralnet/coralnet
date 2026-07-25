@@ -4,7 +4,7 @@ from django.urls import reverse
 
 from calcification.tests.utils import create_global_calcify_table
 from jobs.tests.utils import do_job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..models import LabelGroup, Label
 
 
@@ -28,7 +28,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SIGNED_OUT, is_json=True)
 
 
-class LabelListTest(ClientTest):
+class LabelListTest(CnStandardTest):
     """
     Test the label list page.
     """
@@ -147,7 +147,7 @@ class LabelListTest(ClientTest):
             'alt="Has calcification rate data"', str(status_cell_tag))
 
 
-class BaseLabelSearchTest(ClientTest):
+class BaseLabelSearchTest(CnStandardTest):
 
     def assertLabels(self, response, label_names):
         response_pk_set = set(response.json()['label_ids'])
@@ -351,7 +351,7 @@ class LabelSearchOtherFieldsTest(BaseLabelSearchTest):
         self.assertLabels(response, ['A'])
 
 
-class PerformanceTest(ClientTest):
+class PerformanceTest(CnStandardTest):
     """
     Test performance of the label list related views.
     """

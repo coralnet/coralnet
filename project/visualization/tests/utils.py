@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.functional import classproperty
 
 from annotations.models import Annotation
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from lib.tests.utils_selenium import (
     EC_alert_is_not_present,
     EC_javascript_global_var_value,
@@ -23,7 +23,7 @@ from sources.models import Source
 from upload.utils import upload_image_process
 
 
-class BaseBrowseTest(ClientTest, ABC):
+class BaseBrowseTest(CnStandardTest, ABC):
 
     default_search_params = dict(search='true')
 
@@ -319,7 +319,7 @@ class BaseBrowseActionTest(BaseBrowseTest, ABC):
         return self.client.post(self.url, post_data)
 
 
-class BrowseActionsFormTest(ClientTest, ABC):
+class BrowseActionsFormTest(CnStandardTest, ABC):
     """
     Testing states of the Browse Images action forms.
     """

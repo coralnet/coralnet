@@ -3,7 +3,7 @@ from django.urls import reverse
 
 from api_core.models import ApiJob, ApiJobUnit
 from jobs.models import Job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -37,7 +37,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class JobListTest(ClientTest):
+class JobListTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -152,7 +152,7 @@ class JobListTest(ClientTest):
         self.assertEqual(cells_text[3][4], ApiJob.DONE)
 
 
-class JobListQueriesTest(ClientTest):
+class JobListQueriesTest(CnStandardTest):
 
     def test(self):
         self.superuser = self.create_superuser()
@@ -193,7 +193,7 @@ class JobListQueriesTest(ClientTest):
         self.assertEqual(len(job_rows), api_job_count)
 
 
-class JobDetailTest(ClientTest):
+class JobDetailTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

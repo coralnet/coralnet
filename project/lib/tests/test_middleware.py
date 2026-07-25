@@ -4,10 +4,10 @@ from unittest import mock
 from django.test.client import Client
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 
 
-class ViewLoggingMiddlewareTest(ClientTest):
+class ViewLoggingMiddlewareTest(CnStandardTest):
 
     def setUp(self):
         super().setUp()

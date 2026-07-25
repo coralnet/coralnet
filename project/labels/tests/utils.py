@@ -2,12 +2,12 @@ from abc import ABCMeta
 
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import LabelGroup, Label
 
 
 # Abstract class
-class LabelTest(ClientTest, metaclass=ABCMeta):
+class LabelTest(CnStandardTest, metaclass=ABCMeta):
 
     @classmethod
     def create_label_group(cls, group_name):

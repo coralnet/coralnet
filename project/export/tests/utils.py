@@ -1,6 +1,6 @@
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 
 
 class ExportTestMixin:
@@ -51,7 +51,7 @@ class ExportTestMixin:
         self.assertEqual(actual_csv_content, expected_content)
 
 
-class BaseExportTest(ClientTest, ExportTestMixin):
+class BaseExportTest(CnStandardTest, ExportTestMixin):
 
     def export_metadata(self, post_data=None):
         """POST to export_metadata, and return the response."""

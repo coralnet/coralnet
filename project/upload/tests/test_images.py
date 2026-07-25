@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from images.models import Image, Metadata
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, IndexesMixin)
+    BasePermissionTest, CnStandardTest, IndexesMixin)
 from lib.tests.utils_data import create_sample_image
 
 
@@ -50,7 +50,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class PreviewTest(ClientTest):
+class PreviewTest(CnStandardTest):
     """
     Test the upload-image preview view.
     """
@@ -153,7 +153,7 @@ class PreviewTest(ClientTest):
         ])
 
 
-class UploadProcessTest(ClientTest):
+class UploadProcessTest(CnStandardTest):
     """
     Tests for the image upload itself (not the preview).
     """

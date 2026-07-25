@@ -10,7 +10,7 @@ from jobs.models import Job
 from jobs.tests.utils import do_job, fabricate_job, JobUtilsMixin
 from labels.models import Label
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run)
+    BasePermissionTest, CnStandardTest, HtmlAssertionsMixin, scrambled_run)
 from ..models import SourceCheckRequestEvent
 from .tasks.utils import source_check_is_scheduled, TaskTestMixin
 
@@ -57,7 +57,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class BackendMainTest(ClientTest):
+class BackendMainTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -384,7 +384,9 @@ class BackendMainConfusionMatrixExportTest(BaseExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class RequestSourceCheckTest(ClientTest, HtmlAssertionsMixin, JobUtilsMixin):
+class RequestSourceCheckTest(
+    CnStandardTest, HtmlAssertionsMixin, JobUtilsMixin
+):
 
     @classmethod
     def setUpTestData(cls):
@@ -497,7 +499,7 @@ class RequestSourceCheckTest(ClientTest, HtmlAssertionsMixin, JobUtilsMixin):
         self.assertTrue(source_check_is_scheduled(self.source.pk))
 
 
-class BackendOverviewTest(ClientTest, HtmlAssertionsMixin, TaskTestMixin):
+class BackendOverviewTest(CnStandardTest, HtmlAssertionsMixin, TaskTestMixin):
 
     @classmethod
     def setUpTestData(cls):

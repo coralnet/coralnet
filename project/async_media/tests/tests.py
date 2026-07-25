@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from collections import defaultdict
 import os
 from unittest import skipIf
@@ -13,7 +14,7 @@ from easy_thumbnails.files import get_thumbnailer
 from images.models import Point
 from jobs.models import Job
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, make_media_url_comparable)
+    BasePermissionTest, CnStandardTest, make_media_url_comparable)
 from visualization.utils import generate_patch_if_doesnt_exist, get_patch_url
 
 
@@ -32,9 +33,13 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, is_json=True)
 
 
-class AsyncMediaTest(ClientTest):
+class AsyncMediaTest(CnStandardTest, ABC):
 
     browse_url: str
+
+    @abstractmethod
+    def load_browse_and_get_media(self):
+        raise NotImplementedError
 
     def load_browse_and_get_media_keys(self) -> list[tuple[str, list[str]]]:
         thumb_images = self.load_browse_and_get_media()

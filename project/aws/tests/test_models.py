@@ -1,9 +1,9 @@
 from jobs.utils import schedule_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import BatchJob
 
 
-class CascadeDeleteTest(ClientTest):
+class CascadeDeleteTest(CnStandardTest):
 
     def test_job_batchjob_cascade(self):
         """

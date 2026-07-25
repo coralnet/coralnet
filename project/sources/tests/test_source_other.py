@@ -2,7 +2,7 @@ from unittest import mock
 
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..models import Source
 
 
@@ -30,7 +30,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
 
-class SourceAboutTest(ClientTest):
+class SourceAboutTest(CnStandardTest):
     """
     Test the About Sources page.
     """
@@ -78,7 +78,7 @@ class SourceAboutTest(ClientTest):
         self.assertNotContains(response, self.private_source.name)
 
 
-class SourceListTest(ClientTest):
+class SourceListTest(CnStandardTest):
     """
     Test the source list page (except the map).
     """
@@ -227,7 +227,7 @@ class SourceListTest(ClientTest):
             self.assertEqual(annotation_count_mock_obj.call_count, 1)
 
 
-class SourceDetailBoxTest(ClientTest):
+class SourceDetailBoxTest(CnStandardTest):
     """
     Test the map's source detail popup box.
     """

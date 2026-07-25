@@ -3,7 +3,7 @@ import time
 from bs4 import BeautifulSoup
 from django.shortcuts import resolve_url
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from .utils import BlogTestMixin
 
 
@@ -18,7 +18,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, template=template)
 
 
-class FooterLinkTest(ClientTest):
+class FooterLinkTest(CnStandardTest):
     """This isn't exactly a test of the blog, but of the site footer that's on
     every page. This still seemed like an OK place to put the test though."""
 
@@ -33,7 +33,7 @@ class FooterLinkTest(ClientTest):
             post_list_link, "Footer has a link to the post list")
 
 
-class PostPreviewTest(ClientTest, BlogTestMixin):
+class PostPreviewTest(CnStandardTest, BlogTestMixin):
 
     def test_auto_preview(self):
         # > 26 words
@@ -89,7 +89,7 @@ class PostPreviewTest(ClientTest, BlogTestMixin):
             "More... link is as expected")
 
 
-class ListedPostsTest(ClientTest, BlogTestMixin):
+class ListedPostsTest(CnStandardTest, BlogTestMixin):
     """
     Test that the expected posts are listed.
     """

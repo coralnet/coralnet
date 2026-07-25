@@ -12,7 +12,7 @@ from django.utils.html import escape as html_escape
 from accounts.utils import is_alleviate_user, is_robot_user
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
-from lib.tests.utils import BasePermissionTest, ClientTest, IndexesMixin
+from lib.tests.utils import BasePermissionTest, CnStandardTest, IndexesMixin
 from sources.models import Source
 from visualization.tests.utils import BaseBrowseActionTest
 from ..models import Annotation, AnnotationToolAccess, AnnotationToolSettings
@@ -70,7 +70,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class NoLabelsetTest(ClientTest):
+class NoLabelsetTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -91,7 +91,7 @@ class NoLabelsetTest(ClientTest):
         self.assertTemplateUsed(response, 'labels/labelset_required.html')
 
 
-class LoadImageTest(ClientTest):
+class LoadImageTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -568,7 +568,7 @@ class NavigationTest(BaseBrowseActionTest):
             expected_search_display=False)
 
 
-class ReturnToBrowseTest(ClientTest):
+class ReturnToBrowseTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -642,7 +642,7 @@ class ReturnToBrowseTest(ClientTest):
         )
 
 
-class LoadAnnotationFormTest(ClientTest):
+class LoadAnnotationFormTest(CnStandardTest):
     """
     Test that the annotation form (with one label-code field per point)
     loads the existing annotations correctly.
@@ -986,7 +986,7 @@ class AnnotationToolIndexesTest(BaseBrowseActionTest, IndexesMixin):
         )
 
 
-class IsAnnotationAllDoneTest(ClientTest):
+class IsAnnotationAllDoneTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -1041,7 +1041,7 @@ class IsAnnotationAllDoneTest(ClientTest):
         self.assertTrue(response['all_done'])
 
 
-class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
+class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
     """Test submitting the annotation form which is available at the right side
     of the annotation tool."""
     @classmethod
@@ -1553,7 +1553,7 @@ class SaveAnnotationsTest(ClientTest, AnnotationHistoryTestMixin):
         self.assert_didnt_save_anything()
 
 
-class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
+class AlleviateTest(CnStandardTest, AnnotationHistoryTestMixin):
     """Test the Alleviate feature, where confident-enough machine annotations
     get auto-confirmed when entering the annotation tool."""
     @classmethod
@@ -1800,7 +1800,7 @@ class AlleviateTest(ClientTest, AnnotationHistoryTestMixin):
         )
 
 
-class SettingsTest(ClientTest):
+class SettingsTest(CnStandardTest):
     """
     Test annotation tool settings.
     """

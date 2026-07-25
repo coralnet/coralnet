@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..models import CalcifyRateTable
 from .utils import (
     create_global_calcify_table, create_source_calcify_table,
@@ -81,7 +81,7 @@ class PermissionTest(BasePermissionTest):
         self.assertFalse(button_is_present())
 
 
-class TableDeleteTest(ClientTest):
+class TableDeleteTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

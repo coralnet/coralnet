@@ -8,7 +8,7 @@ from django.urls import reverse
 from django_migration_testcase import MigrationTest
 from reversion.models import Version
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -22,7 +22,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
 
-class FlatpagesTest(ClientTest):
+class FlatpagesTest(CnStandardTest):
     """
     Test flatpages in general.
     """
@@ -88,7 +88,7 @@ class FlatpagesTest(ClientTest):
         self.assertTemplateUsed(response, 'flatpages/default.html')
 
 
-class FlatpageEditTest(ClientTest):
+class FlatpageEditTest(CnStandardTest):
     """
     Test aspects of editing flatpages.
     """

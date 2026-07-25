@@ -2,16 +2,15 @@ import datetime
 
 from django.test import override_settings
 from django.utils import timezone
-from django_migration_testcase import MigrationTest
 
 from jobs.models import Job
 from jobs.tests.utils import do_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import ApiJob, ApiJobUnit
 
 
 @override_settings(JOB_MAX_DAYS=30)
-class JobCleanupTest(ClientTest):
+class JobCleanupTest(CnStandardTest):
     """
     Test cleanup of old API jobs.
     """

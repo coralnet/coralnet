@@ -13,7 +13,7 @@ from django.urls import reverse
 from accounts.utils import get_imported_user
 from images.model_utils import PointGen
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..model_utils import (
     AnnotationArea, cacheable_annotation_hash_salt, scrambled_sort_hash)
 from ..models import Annotation, AnnotationUploadEvent
@@ -154,7 +154,7 @@ class AnnotationHistoryTestMixin:
 
 
 class UploadAnnotationsGeneralCasesTest(
-        ClientTest, AnnotationHistoryTestMixin, ABC):
+        CnStandardTest, AnnotationHistoryTestMixin, ABC):
     """
     Testing general functionality for uploading annotations.
     This class is agnostic to the upload format. Subclasses may be
@@ -609,7 +609,7 @@ class UploadAnnotationsGeneralCasesTest(
         )
 
 
-class UploadAnnotationsMultipleSourcesTest(ClientTest, ABC):
+class UploadAnnotationsMultipleSourcesTest(CnStandardTest, ABC):
     """
     Test involving multiple sources.
     """
@@ -715,7 +715,7 @@ class UploadAnnotationsMultipleSourcesTest(ClientTest, ABC):
         })
 
 
-class UploadAnnotationsFormatTest(ClientTest, ABC):
+class UploadAnnotationsFormatTest(CnStandardTest, ABC):
     """
     Tests (mostly error cases) related to file format, which apply regardless
     of what the format specifically is.
@@ -787,7 +787,7 @@ class UploadAnnotationsFormatTest(ClientTest, ABC):
         })
 
 
-class UploadAnnotationsQueriesPerPointTest(ClientTest, ABC):
+class UploadAnnotationsQueriesPerPointTest(CnStandardTest, ABC):
 
     @classmethod
     def setUpTestData(cls):
@@ -827,7 +827,7 @@ class UploadAnnotationsQueriesPerPointTest(ClientTest, ABC):
             yield labelset_codes[i % len(labelset_codes)]
 
 
-class UploadAnnotationsQueriesPerImageTest(ClientTest, ABC):
+class UploadAnnotationsQueriesPerImageTest(CnStandardTest, ABC):
 
     @classmethod
     def setUpTestData(cls):

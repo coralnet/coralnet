@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from images.models import Image
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -41,7 +41,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class UploadMetadataTest(ClientTest):
+class UploadMetadataTest(CnStandardTest):
     """
     Metadata upload and preview.
     """
@@ -641,7 +641,7 @@ class UploadMetadataTest(ClientTest):
         self.assertEqual(meta1.latitude, '42.67')
 
 
-class UploadMetadataMultipleSourcesTest(ClientTest):
+class UploadMetadataMultipleSourcesTest(CnStandardTest):
     """
     Test involving multiple sources.
     """
@@ -760,7 +760,7 @@ class UploadMetadataMultipleSourcesTest(ClientTest):
         self.assertEqual(meta2_s2.aux1, 'SiteB')
 
 
-class UploadMetadataPreviewTest(ClientTest):
+class UploadMetadataPreviewTest(CnStandardTest):
     """
     Tests only pertaining to metadata preview.
     """
@@ -852,7 +852,7 @@ class UploadMetadataPreviewTest(ClientTest):
         )
 
 
-class UploadMetadataErrorTest(ClientTest):
+class UploadMetadataErrorTest(CnStandardTest):
     """
     Metadata upload, error cases.
     """
@@ -927,7 +927,7 @@ class UploadMetadataErrorTest(ClientTest):
         )
 
 
-class UploadMetadataPreviewErrorTest(ClientTest):
+class UploadMetadataPreviewErrorTest(CnStandardTest):
     """
     Metadata upload preview, error cases (mainly related to CSV content).
     """
@@ -1168,7 +1168,7 @@ class UploadMetadataPreviewErrorTest(ClientTest):
         )
 
 
-class UploadMetadataPreviewFormatTest(ClientTest):
+class UploadMetadataPreviewFormatTest(CnStandardTest):
     """
     Metadata upload preview, special cases or error cases with CSV formats.
     """
