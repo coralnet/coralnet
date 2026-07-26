@@ -18,11 +18,11 @@ from ..utils import (
     context_scoped_cache,
     scoped_cache_context_var,
 )
-from .utils import BaseTest, ClientTest
+from .utils import CnStandardTest
 from .utils_data import sample_image_as_file
 
 
-class TestSettingsStorageTest(BaseTest):
+class TestStorageSettingsTest(CnStandardTest):
     """
     Test the file storage settings logic used during unit tests.
     """
@@ -111,7 +111,7 @@ class TestSettingsStorageTest(BaseTest):
             self.thumbnail_storage.exists('3.png.40x40_q85.jpg'))
 
 
-class CacheTest(BaseTest):
+class CacheTest(CnStandardTest):
 
     def test_cull_expired_items_on_set(self):
         """
@@ -152,7 +152,7 @@ class CacheTest(BaseTest):
         storage_manager.remove_temp_dir(cache_dir)
 
 
-class ContextScopedCacheTest(ClientTest):
+class ContextScopedCacheTest(CnStandardTest):
 
     def test_scope_not_active(self):
         self.assertIsNone(

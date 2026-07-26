@@ -11,7 +11,7 @@ from rest_framework import status
 from api_core.tests.utils import APITestMixin
 from jobs.tasks import run_scheduled_jobs_until_empty
 from jobs.utils import start_job
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from lib.tests.utils_data import create_sample_image
 from sources.models import Source
 from vision_backend.tests.tasks.utils import TaskTestMixin
@@ -58,7 +58,7 @@ class DeployTestMixin(APITestMixin, TaskTestMixin):
                 start_job(unit.internal_job)
 
 
-class DeployBaseTest(ClientTest, DeployTestMixin, metaclass=ABCMeta):
+class DeployBaseTest(CnStandardTest, DeployTestMixin, metaclass=ABCMeta):
 
     @classmethod
     def setUpTestData(cls):

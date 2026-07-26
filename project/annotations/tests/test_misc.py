@@ -7,7 +7,7 @@ from django.urls import reverse
 from annotations.tests.utils import (
     controlled_sort_hashes, EXPECTED_HASHES)
 from jobs.tests.utils import do_job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..model_utils import (
     AnnotationArea, cacheable_annotation_hash_salt)
 from ..utils import cacheable_annotation_count
@@ -30,7 +30,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, template=template)
 
 
-class SitewideAnnotationCountTest(ClientTest):
+class SitewideAnnotationCountTest(CnStandardTest):
     """
     Test the task which computes the site-wide annotation count.
     """
@@ -70,7 +70,7 @@ class SitewideAnnotationCountTest(ClientTest):
         self.assertEqual(cacheable_annotation_count.get(), 3)
 
 
-class PatchOrderingUpdateTaskTest(ClientTest):
+class PatchOrderingUpdateTaskTest(CnStandardTest):
     """
     Test the task which updates the pseudo-random hashes used for ordering
     annotation patches.
@@ -132,7 +132,7 @@ class PatchOrderingUpdateTaskTest(ClientTest):
             )
 
 
-class AnnotationAreaEditTest(ClientTest):
+class AnnotationAreaEditTest(CnStandardTest):
     """
     Test the annotation area edit page.
     """
@@ -276,7 +276,7 @@ class AnnotationAreaEditTest(ClientTest):
     # TODO: Test blank fields
 
 
-class PointGenTest(ClientTest):
+class PointGenTest(CnStandardTest):
     """
     Test generation of annotation points.
     """

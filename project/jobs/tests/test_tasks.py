@@ -9,7 +9,7 @@ from django.utils import timezone
 from api_core.models import ApiJob, ApiJobUnit
 from aws.models import BatchJob
 from config.constants import SpacerJobSpec
-from lib.tests.utils import BaseTest
+from lib.tests.utils import CnStandardTest
 from ..models import Job
 from ..tasks import (
     clean_up_old_jobs,
@@ -31,7 +31,7 @@ def return_arg_test(arg):
     return str(arg)
 
 
-class RunScheduledJobsTest(BaseTest):
+class RunScheduledJobsTest(CnStandardTest):
 
     @staticmethod
     def do_run_job():
@@ -123,7 +123,7 @@ class RunScheduledJobsTest(BaseTest):
 
 
 @override_settings(JOB_MAX_DAYS=30)
-class CleanupTaskTest(BaseTest):
+class CleanupTaskTest(CnStandardTest):
 
     @staticmethod
     def run_and_get_result():
@@ -241,7 +241,7 @@ class CleanupTaskTest(BaseTest):
             "Should clean up no-unit job")
 
 
-class ReportStuckJobsTest(BaseTest):
+class ReportStuckJobsTest(CnStandardTest):
     """
     Test the report_stuck_jobs task.
     """
@@ -384,7 +384,7 @@ class ReportStuckJobsTest(BaseTest):
             sent_email.body)
 
 
-class SchedulePeriodicJobsTest(BaseTest):
+class SchedulePeriodicJobsTest(CnStandardTest):
     """
     Test the schedule_periodic_jobs task.
     """

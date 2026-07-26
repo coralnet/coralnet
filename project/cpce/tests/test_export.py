@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from annotations.tests.utils import UploadAnnotationsCsvTestMixin
-from lib.tests.utils import BasePermissionTest, ClientTest, IndexesMixin
+from lib.tests.utils import BasePermissionTest, CnStandardTest, IndexesMixin
 from visualization.tests.utils import BrowseActionsFormTest
 from ..forms import CpcExportForm
 from ..utils import get_previous_cpcs_status
@@ -33,7 +33,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class NoLabelsetTest(ClientTest):
+class NoLabelsetTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -77,7 +77,7 @@ class FormAvailabilityTest(BrowseActionsFormTest):
         self.assert_form_absent(response)
 
 
-class CPCExportBaseTest(ClientTest):
+class CPCExportBaseTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -1285,7 +1285,7 @@ class DiscardCPCAfterPointsChangeTest(
             msg="img2's CPC content should be unchanged")
 
 
-class UtilsTest(ClientTest):
+class UtilsTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -1508,7 +1508,7 @@ class QueriesPerImageTest(CPCExportBaseTest):
                 " a base")
 
 
-class FilepathFieldsIndexesTest(ClientTest, IndexesMixin):
+class FilepathFieldsIndexesTest(CnStandardTest, IndexesMixin):
 
     @classmethod
     def setUpTestData(cls):

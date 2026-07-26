@@ -7,13 +7,13 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from vision_backend_api.tests.utils import DeployBaseTest
 from ..models import ApiJob, UserApiLimits
 from .utils import APITestMixin, BaseAPIPermissionTest
 
 
-class BaseAPITest(ClientTest, APITestMixin):
+class BaseAPITest(CnStandardTest, APITestMixin):
     pass
 
 

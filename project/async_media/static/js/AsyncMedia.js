@@ -37,6 +37,7 @@ class AsyncMedia {
         let csrfToken =
             document.querySelector('[name=csrfmiddlewaretoken]').value;
         let startGenerationPromises = [];
+        let navigatingAway = false;
         this.poller = new Poller(
             this.pollForMedia.bind(this), this.INITIAL_POLL_INTERVAL);
 
@@ -52,9 +53,9 @@ class AsyncMedia {
                     headers: {'X-CSRFToken': csrfToken},
                     // Do not send CSRF token to another domain.
                     mode: 'same-origin',
-                }
-            )
-                .then((response) => {
+                },
+                // Callback
+                (response) => {
                     if (response.hasOwnProperty('error')) {
                         throw new Error(
                             `Problem generating images: ${response['error']}`);
@@ -68,12 +69,35 @@ class AsyncMedia {
                         delete this.mediaBatches[mediaBatchKey];
                     }
                     return response;
-                });
+                },
+                // More options
+                {
+                    errorHandler: (err) => {
+                        if (
+                            err.toString() === 'TypeError: NetworkError'
+                            + ' when attempting to fetch resource.'
+                        ) {
+                            // This'll happen when navigating away from the
+                            // page while still waiting for this request.
+                            // Catch the error and short-circuit the
+                            // generation request.
+                            navigatingAway = true;
+                            return;
+                        }
+                        // Throw other errors.
+                        throw err;
+                    },
+                },
+            );
             startGenerationPromises.push(promise);
         }
 
         return Promise.all(startGenerationPromises)
             .then(() => {
+                if (navigatingAway) {
+                    return 'navigating_away';
+                }
+
                 if (Object.keys(this.mediaBatches).length === 0) {
                     // All batches started generation previously.
                     return 'already_started_generating';

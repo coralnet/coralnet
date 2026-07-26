@@ -210,6 +210,23 @@ QUnit.module("Main", (hooks) => {
             "startGeneratingAsyncMedia status should be as expected");
     });
 
+    test("network error", async function(assert) {
+
+        fetchMock.post(
+            globalThis.startMediaGenerationURL,
+            () => {
+                throw new TypeError(
+                    "NetworkError when attempting to fetch resource.")
+            },
+        );
+
+        let asyncMedia = new AsyncMedia();
+        let status = await asyncMedia.startGeneratingAsyncMedia();
+        assert.equal(
+            status, 'navigating_away',
+            "startGeneratingAsyncMedia status should be as expected");
+    });
+
     test("problem loading", async function(assert) {
 
         fetchMock.post(

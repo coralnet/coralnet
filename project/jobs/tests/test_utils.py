@@ -5,7 +5,7 @@ from unittest import mock
 from django.test.utils import override_settings
 
 from errorlogs.tests.utils import ErrorReportTestMixin
-from lib.tests.utils import BaseTest, EmailAssertionsMixin
+from lib.tests.utils import CnStandardTest, EmailAssertionsMixin
 from ..exceptions import JobError
 from ..models import Job
 from ..utils import (
@@ -19,7 +19,9 @@ from ..utils import (
 from .utils import fabricate_job
 
 
-class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
+class ScheduleJobTest(
+    CnStandardTest, EmailAssertionsMixin, ErrorReportTestMixin
+):
 
     def test_when_already_pending(self):
         fabricate_job('name', 'arg')
@@ -196,7 +198,7 @@ class ScheduleJobTest(BaseTest, EmailAssertionsMixin, ErrorReportTestMixin):
         )
 
 
-class BulkCreateJobsTest(BaseTest):
+class BulkCreateJobsTest(CnStandardTest):
 
     def test(self):
         jobs = bulk_create_jobs(
@@ -214,7 +216,7 @@ class BulkCreateJobsTest(BaseTest):
         self.assertEqual(len(jobs), 3)
 
 
-class FinishJobTest(BaseTest):
+class FinishJobTest(CnStandardTest):
 
     @override_settings(ENABLE_PERIODIC_JOBS=True)
     def test_periodic_job_schedules_another_run(self):
@@ -270,7 +272,9 @@ def job_starter_example(arg1, job_id):
         raise ValueError(f"A ValueError (ID: {job_id})")
 
 
-class JobDecoratorTest(BaseTest, ErrorReportTestMixin, EmailAssertionsMixin):
+class JobDecoratorTest(
+    CnStandardTest, ErrorReportTestMixin, EmailAssertionsMixin
+):
 
     def test_full_completion(self):
         full_job_example('some_arg')

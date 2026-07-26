@@ -1,10 +1,10 @@
 from django.db import IntegrityError
 
-from lib.tests.utils import BaseTest
+from lib.tests.utils import CnStandardTest
 from ..models import Label, LabelGroup, LabelSet, LocalLabel
 
 
-class LocalLabelTest(BaseTest):
+class LocalLabelTest(CnStandardTest):
 
     def test_unique(self):
         """

@@ -6,11 +6,11 @@ from django.urls import reverse
 
 from annotations.models import Annotation
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from .utils import UploadAnnotationsCsvTestMixin
 
 
-class AnnotationsCSVFormatTest(ClientTest, UploadAnnotationsCsvTestMixin):
+class AnnotationsCSVFormatTest(CnStandardTest, UploadAnnotationsCsvTestMixin):
     """
     Tests (mostly error cases) specific to CSV format.
     """

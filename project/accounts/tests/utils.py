@@ -1,10 +1,10 @@
 from django.core import mail
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 
 
-class BaseAccountsTest(ClientTest):
+class BaseAccountsTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

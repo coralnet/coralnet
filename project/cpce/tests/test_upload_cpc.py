@@ -11,11 +11,11 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from accounts.utils import get_imported_user
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from .utils import UploadAnnotationsCpcTestMixin
 
 
-class CPCPixelScaleFactorTest(ClientTest, UploadAnnotationsCpcTestMixin):
+class CPCPixelScaleFactorTest(CnStandardTest, UploadAnnotationsCpcTestMixin):
     """
     Tests CPC pixel scale factor detection, based on line 1 of the CPC.
     """
@@ -133,7 +133,7 @@ class CPCPixelScaleFactorTest(ClientTest, UploadAnnotationsCpcTestMixin):
         self.assertSetEqual(values_set, {(80, 60, 1)})
 
 
-class LabelMappingTest(ClientTest, UploadAnnotationsCpcTestMixin):
+class LabelMappingTest(CnStandardTest, UploadAnnotationsCpcTestMixin):
     """
     Ensure the label_mapping preference works.
     """
@@ -278,7 +278,7 @@ class LabelMappingTest(ClientTest, UploadAnnotationsCpcTestMixin):
             "Should select ID and notes by default")
 
 
-class SaveCPCInfoTest(ClientTest, UploadAnnotationsCpcTestMixin):
+class SaveCPCInfoTest(CnStandardTest, UploadAnnotationsCpcTestMixin):
     """
     Tests for saving of CPC file info when uploading CPCs.
     """
@@ -417,7 +417,7 @@ class SaveCPCInfoTest(ClientTest, UploadAnnotationsCpcTestMixin):
             self.source.cpce_image_dir, r'C:\Reef Surveys')
 
 
-class CPCImageMatchingTest(ClientTest, UploadAnnotationsCpcTestMixin):
+class CPCImageMatchingTest(CnStandardTest, UploadAnnotationsCpcTestMixin):
     """
     Tests for matching uploaded CPCs to images in the source.
     """

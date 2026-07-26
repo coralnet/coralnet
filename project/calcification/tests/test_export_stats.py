@@ -4,7 +4,7 @@ import pyexcel
 
 from export.tests.utils import BaseExportTest
 from labels.models import LocalLabel
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from visualization.tests.utils import BrowseActionsFormTest
 from .utils import (
     create_global_calcify_table, create_source_calcify_table,
@@ -42,7 +42,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class NoLabelsetTest(ClientTest):
+class NoLabelsetTest(CnStandardTest):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -877,7 +877,7 @@ class UnicodeTest(BaseCalcifyStatsExportTest):
         self.assert_csv_content_equal(response.content, expected_lines)
 
 
-class BrowseFormsTest(ClientTest):
+class BrowseFormsTest(CnStandardTest):
     """
     Test how the calcification related forms are rendered on Browse.
     """

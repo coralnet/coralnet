@@ -4,7 +4,7 @@ from django.conf import settings
 from django.core import mail
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -44,7 +44,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, template=template)
 
 
-class EmailChangeTest(ClientTest):
+class EmailChangeTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

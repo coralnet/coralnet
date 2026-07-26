@@ -14,13 +14,15 @@ from django.conf import settings
 from django.db import connections
 from django.db.models.sql import RawQuery, Query
 from django.db.utils import DEFAULT_DB_ALIAS
-from django.test import override_settings, TestCase
+from django.test import (
+    override_settings, SimpleTestCase, tag, TestCase, TransactionTestCase)
 from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 import django_huey
+from django_migration_testcase import MigrationTest
 
 from sources.models import Source
 from ..storage_backends import get_storage_manager
@@ -34,20 +36,203 @@ def run_raw_query(query_str, using=DEFAULT_DB_ALIAS):
     return query._execute_query()
 
 
+class _AssertQueriesLessThanContext(CaptureQueriesContext):
+    """
+    Similar to Django's _AssertNumQueriesContext, but checks less-than
+    instead of equality.
+    """
+    def __init__(self, test_case, num, connection):
+        self.test_case = test_case
+        self.num = num
+        super().__init__(connection)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        super().__exit__(exc_type, exc_value, traceback)
+        if exc_type is not None:
+            return
+        executed = len(self)
+        queries_string = '\n'.join(
+            f"{i}. {query['sql']}"
+            for i, query in enumerate(self.captured_queries, start=1)
+        )
+        self.test_case.assertLess(
+            executed,
+            self.num,
+            f"{executed} queries executed, less than {self.num} expected"
+            f"\nCaptured queries were:"
+            f"\n{queries_string}"
+        )
+
+
+class _BaseTest(DataTestMixin, TestCase):
+    """
+    Base automated-test class.
+    """
+
+    # Assertion errors have the raw error followed by the
+    # msg argument, if present.
+    longMessage = True
+
+    client: Client
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        # Test client. Subclasses' setUpTestData() calls can use this client
+        # to set up more data before running the class's test functions.
+        cls.client = Client()
+
+    def setUp(self):
+        # Some site functionality uses the cache for performance, but leaving
+        # the cache uncleared between cache-using tests can mess up test
+        # behavior/results.
+        # This includes tests involving Django REST Framework, which uses the
+        # cache to track throttling stats.
+        cache.clear()
+
+        super().setUp()
+
+        # Test client. By setting this in setUp(), we initialize this before
+        # each test function, so that stuff like login status gets reset
+        # between tests.
+        self.client = Client()
+
+    def assert_queries_less_than(
+            self, num, func=None, *args, using=DEFAULT_DB_ALIAS, **kwargs):
+        """
+        Similar to Django's assertNumQueries(), but checks less-than
+        instead of equality.
+        For example, to check that we don't do O(n) queries, we might
+        assert that the number of queries is less than n (which should be
+        a valid test for large enough n).
+        """
+        conn = connections[using]
+
+        context = _AssertQueriesLessThanContext(self, num, conn)
+        if func is None:
+            return context
+
+        with context:
+            func(*args, **kwargs)
+
+    def assertStatusOK(self, response, msg=None):
+        """Assert that an HTTP response's status is 200 OK."""
+        self.assertEqual(response.status_code, 200, msg)
+
+
+class CnStandardTest(_BaseTest):
+    """
+    This is the _BaseTest subclass which keeps the Django TestCase behavior of
+    wrapping each test class, and each test method, in a transaction.
+
+    The implemented methods here manage the file-storage directory's contents
+    as if they also had 'transactions' wrapped around each class and method.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Empty contents of the test storage dir.
+        storage_manager = get_storage_manager()
+        storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
+
+        # Call the super setUpClass(), which includes the call to
+        # setUpTestData().
+        super().setUpClass()
+
+        # Now that setUpTestData() is done, save the contents of the test
+        # storage dir.
+        storage_manager.empty_temp_dir(settings.POST_SETUPTESTDATA_STATE_DIR)
+        storage_manager.copy_dir(
+            settings.TEST_STORAGE_DIR, settings.POST_SETUPTESTDATA_STATE_DIR)
+
+    def setUp(self):
+        # Reset the storage dir contents to the post-setUpTestData contents,
+        # thus undoing any changes from previous test methods.
+        storage_manager = get_storage_manager()
+        storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
+        storage_manager.copy_dir(
+            settings.POST_SETUPTESTDATA_STATE_DIR, settings.TEST_STORAGE_DIR)
+
+        super().setUp()
+
+
+class ThreadingCompatibleTest(_BaseTest):
+    """
+    This class does not wrap test classes or test methods in transactions.
+
+    A key use case is being able to run multiple threads in a test.
+    When we make each thread commit their database changes, the threads
+    are able to see each other's changes.
+    """
+
+    # When tests aren't wrapped in transactions, we need this option toggled
+    # on to properly handle the initial data created in our migrations.
+    # https://docs.djangoproject.com/en/5.2/topics/testing/overview/#rollback-emulation
+    serialized_rollback = True
+
+    @classmethod
+    def _databases_support_transactions(cls):
+        """
+        We repurpose this method from TestCase: it's not that our DB doesn't
+        support transactions, but we just don't want to use transactions.
+
+        Django's typical way of deciding that is inheriting from TestCase
+        vs. TransactionTestCase, but we do just want TestCase for everything
+        because its setUpTestData() API is convenient to use for everything.
+        """
+        return False
+
+    def _fixture_setup(self):
+        """
+        This is meant to match TestCase._fixture_setup(), except for reversing
+        the order of the superclass _fixture_setup() call and the
+        setUpTestData() call.
+        Our setUpTestData() methods do generally depend on the initial data
+        (e.g. Site, special Users) existing first.
+        """
+        if not self._databases_support_transactions():
+            # If the backend does not support transactions, we should reload
+            # class data before each test
+            result = TransactionTestCase._fixture_setup(self)
+            self.setUpTestData()
+            return result
+
+        if self.reset_sequences:
+            raise TypeError(
+                "reset_sequences cannot be used on TestCase instances")
+        self.atomics = self._enter_atomics()
+
+    @classmethod
+    def setUpTestData(cls):
+        """
+        For this test class, setUpTestData() runs during pre-setup of each
+        test method. Here we ensure the storage dir's contents are cleared
+        before each time that runs.
+        """
+        storage_manager = get_storage_manager()
+        storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
+
+        super().setUpTestData()
+
+
+@tag('migration')
+class CnMigrationTest(MigrationTest):
+    serialized_rollback = True
+
+
 class CustomTestRunner(DiscoverRunner):
 
-    def __init__(self, *args, tags=None, exclude_tags=None, **kwargs):
-        # By default this will run all tests except those tagged 'selenium'.
-        # However, additional tags or exclude_tags can be specified in
-        # the command options to do things differently. You can even
-        # override the selenium-exclusion by including 'selenium' in the
-        # tags option.
-        tags = set(tags or [])
-        exclude_tags = set(exclude_tags or [])
-        if 'selenium' not in tags:
-            exclude_tags.add('selenium')
-        super().__init__(
-            *args, tags=list(tags), exclude_tags=list(exclude_tags), **kwargs)
+    # Django's default here is (TestCase, SimpleTestCase), running all
+    # (Django) TestCase instances first to ensure those start with a clean
+    # database.
+    # https://docs.djangoproject.com/en/5.2/topics/testing/overview/#order-of-tests
+    #
+    # Basically, the intention is to run tests that work in a transaction
+    # first, and then tests that don't after.
+    # However, we have to redefine this attribute to achieve the same
+    # intention with the way we've set up test classes.
+    reorder_by = (CnStandardTest, SimpleTestCase)
 
     def run_tests(self, test_labels, **kwargs):
         # Make tasks run synchronously. This is needed since the
@@ -87,158 +272,13 @@ class CustomTestRunner(DiscoverRunner):
         return return_code
 
 
-class StorageDirTest(TestCase):
-    """
-    Ensures that the test storage directories defined in the test runner
-    are used as they should be.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        skipped = getattr(cls, "__unittest_skip__", False)
-        if skipped:
-            # This test class is being skipped. Don't bother with storage dirs.
-            super().setUpClass()
-            return
-
-        # Empty contents of the test storage dir.
-        storage_manager = get_storage_manager()
-        storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
-
-        # Call the super setUpClass(), which includes the call to
-        # setUpTestData().
-        super().setUpClass()
-
-        # Now that setUpTestData() is done, save the contents of the test
-        # storage dir.
-        storage_manager.empty_temp_dir(settings.POST_SETUPTESTDATA_STATE_DIR)
-        storage_manager.copy_dir(
-            settings.TEST_STORAGE_DIR, settings.POST_SETUPTESTDATA_STATE_DIR)
-
-    def setUp(self):
-        # Reset the storage dir contents to the post-setUpTestData contents,
-        # thus undoing any changes from previous test methods.
-        storage_manager = get_storage_manager()
-        storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
-        storage_manager.copy_dir(
-            settings.POST_SETUPTESTDATA_STATE_DIR, settings.TEST_STORAGE_DIR)
-
-        super().setUp()
-
-
-class _AssertQueriesLessThanContext(CaptureQueriesContext):
-    """
-    Similar to Django's _AssertNumQueriesContext, but checks less-than
-    instead of equality.
-    """
-    def __init__(self, test_case, num, connection):
-        self.test_case = test_case
-        self.num = num
-        super().__init__(connection)
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        super().__exit__(exc_type, exc_value, traceback)
-        if exc_type is not None:
-            return
-        executed = len(self)
-        queries_string = '\n'.join(
-            f"{i}. {query['sql']}"
-            for i, query in enumerate(self.captured_queries, start=1)
-        )
-        self.test_case.assertLess(
-            executed,
-            self.num,
-            f"{executed} queries executed, less than {self.num} expected"
-            f"\nCaptured queries were:"
-            f"\n{queries_string}"
-        )
-
-
-class BaseTest(StorageDirTest):
-    """
-    Base automated-test class.
-    """
-
-    # Assertion errors have the raw error followed by the
-    # msg argument, if present.
-    longMessage = True
-
-    def setUp(self):
-        # Some site functionality uses the cache for performance, but leaving
-        # the cache uncleared between cache-using tests can mess up test
-        # behavior/results.
-        # This includes tests involving Django REST Framework, which uses the
-        # cache to track throttling stats.
-        cache.clear()
-
-        super().setUp()
-
-    def assert_queries_less_than(
-            self, num, func=None, *args, using=DEFAULT_DB_ALIAS, **kwargs):
-        """
-        Similar to Django's assertNumQueries(), but checks less-than
-        instead of equality.
-        For example, to check that we don't do O(n) queries, we might
-        assert that the number of queries is less than n (which should be
-        a valid test for large enough n).
-        """
-        conn = connections[using]
-
-        context = _AssertQueriesLessThanContext(self, num, conn)
-        if func is None:
-            return context
-
-        with context:
-            func(*args, **kwargs)
-
-
-class ClientTest(DataTestMixin, BaseTest):
-    """
-    Unit testing class that uses the test client.
-    The mixin provides many convenience functions for setting up data.
-    """
-    PERMISSION_DENIED_TEMPLATE = 'permission_denied.html'
-    NOT_FOUND_TEMPLATE = '404.html'
-
-    client: Client
-
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
-        # Test client. Subclasses' setUpTestData() calls can use this client
-        # to set up more data before running the class's test functions.
-        cls.client = Client()
-
-        # Create a superuser.
-        cls.superuser = cls.create_superuser()
-
-        if not settings.TEST_DATABASE_MIGRATE:
-            # Create the initial data that the migrations would have created.
-            user = User(username=settings.IMPORTED_USERNAME)
-            user.save()
-            user = User(username=settings.ROBOT_USERNAME)
-            user.save()
-            user = User(username=settings.ALLEVIATE_USERNAME)
-            user.save()
-
-    def setUp(self):
-        super().setUp()
-
-        # Test client. By setting this in setUp(), we initialize this before
-        # each test function, so that stuff like login status gets reset
-        # between tests.
-        self.client = Client()
-
-    def assertStatusOK(self, response, msg=None):
-        """Assert that an HTTP response's status is 200 OK."""
-        self.assertEqual(response.status_code, 200, msg)
-
-
-class BasePermissionTest(ClientTest):
+class BasePermissionTest(CnStandardTest):
     """
     Test view permissions.
     """
+
+    PERMISSION_DENIED_TEMPLATE = 'permission_denied.html'
+    NOT_FOUND_TEMPLATE = '404.html'
 
     # Permission levels
     SIGNED_OUT = 1
@@ -257,6 +297,7 @@ class BasePermissionTest(ClientTest):
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
 
@@ -546,6 +587,10 @@ class BasePermissionTest(ClientTest):
 
 class HtmlAssertionsMixin:
 
+    assertEqual: Callable
+    assertHTMLEqual: Callable
+    assertIn: Callable
+
     def _assert_row_values(self, row, expected_row, column_names, row_number):
         cells = row.select('td')
         cell_contents = [
@@ -628,7 +673,13 @@ class HtmlAssertionsMixin:
             msg="Expected top-message should be in page")
 
 
-class EmailAssertionsMixin(TestCase):
+class EmailAssertionsMixin:
+
+    assertEqual: Callable
+    assertGreaterEqual: Callable
+    assertIn: Callable
+    assertNotIn: Callable
+    assertSetEqual: Callable
 
     def assert_no_email(self):
         """
@@ -642,12 +693,12 @@ class EmailAssertionsMixin(TestCase):
 
     def assert_latest_email(
         self,
-        subject: str = None,
-        body_contents: list[str] = None,
-        body_not_contains: list[str] = None,
-        to: list[str] = None,
-        cc: list[str] = None,
-        bcc: list[str] = None,
+        subject: str | None = None,
+        body_contents: list[str] | None = None,
+        body_not_contains: list[str] | None = None,
+        to: list[str] | None = None,
+        cc: list[str] | None = None,
+        bcc: list[str] | None = None,
     ):
         """
         Assert that the latest sent email has the given details. Specify as
@@ -761,6 +812,9 @@ class IndexesMixin(TestCase):
     wrapped in a transaction, so any separate process that would attempt to
     analyze the table shouldn't see what's been done in the transaction.
     https://stackoverflow.com/questions/71651378/what-does-analyze-do-when-used-within-a-transaction
+
+    It also helps that the tables we need to flush don't get initial data from
+    migrations.
     """
 
     @classmethod
@@ -875,11 +929,9 @@ class IndexesMixin(TestCase):
         )
 
 
-class ManagementCommandTest(ClientTest):
+class ManagementCommandTest(CnStandardTest):
     """
     Testing management commands.
-    Inherits from ClientTest because the client is still useful for setting up
-    data.
     """
     @classmethod
     def call_command_and_get_output(

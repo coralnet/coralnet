@@ -11,10 +11,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import tag
-from django.test.runner import DiscoverRunner
 from django.urls import reverse
 
-from .utils import ClientTest, CustomTestRunner
+from .utils import ThreadingCompatibleTest
 
 
 class EC_alert_is_not_present(object):
@@ -47,38 +46,20 @@ class EC_javascript_global_var_value(object):
 
 
 @tag('selenium')
-class BaseSeleniumTest(StaticLiveServerTestCase, ClientTest):
+class BaseSeleniumTest(StaticLiveServerTestCase, ThreadingCompatibleTest):
     """
     Unit testing class for running tests in the browser with Selenium.
 
-    It's recommended to only run these tests with SeleniumTestRunner.
-    Do that with `python manage.py selenium_test` (not manage.py test).
-    It'll use that test runner class to run all the tests that are tagged
-    'selenium'.
-    Also, manage.py test will skip the tests tagged 'selenium' by default.
-    The special part about SeleniumTestRunner is that it uses SQLite to
-    stay single-threaded. Explanation on why that's important:
-
     This class inherits StaticLiveServerTestCase for the live-server
-    functionality, and (a subclass of) TestCase to achieve test-function
-    isolation using uncommitted transactions.
-    StaticLiveServerTestCase does not have the latter feature. The reason is
-    that live server tests use separate threads, which may use separate
-    DB connections, which may end up in inconsistent states. To avoid
-    this, it inherits from TransactionTestCase, which makes each connection
-    commit all their transactions.
-    But if there is only one DB connection possible, then this inconsistency
-    concern is not present, and we can use TestCase's feature.
+    functionality. However, StaticLiveServerTestCase inherits from
+    TransactionTestCase, and we still want (Django) TestCase for its
+    setUpTestData() hook. So we do multiple inheritance with
+    StaticLiveServerTestCase + our applicable subclass of TestCase.
 
-    We want TestCase because:
-    1) Our initial data, such as Robot and Alleviate users, might get
-    erased (and not re-created) between tests if TestCase is not used,
-    as explained here:
-    https://stackoverflow.com/questions/29378328/
-    2) The ClientUtilsMixin's utility methods are all classmethods which are
-    supposed to be called in setUpTestData(). TestCase is what provides the
-    setUpTestData() hook.
-    Related discussion: https://code.djangoproject.com/ticket/23640
+    Our applicable subclass of TestCase is ThreadingCompatibleTest, because
+    live server tests are always multi-threaded. If we try to do things with
+    single-threaded assumptions, such as wrapping the entire test in a
+    database transaction, then these tests break.
     """
     selenium = None
 
@@ -195,12 +176,3 @@ class BaseSeleniumTest(StaticLiveServerTestCase, ClientTest):
         with self.wait_for_page_load():
             self.selenium.find_element(
                 By.CSS_SELECTOR, 'input[value="Sign in"]').click()
-
-
-class SeleniumTestRunner(CustomTestRunner):
-
-    def __init__(self, *args, tags=None, **kwargs):
-        # By default this will only run tests tagged 'selenium'.
-        tags = set(tags or [])
-        tags.add('selenium')
-        DiscoverRunner.__init__(self, *args, tags=list(tags), **kwargs)

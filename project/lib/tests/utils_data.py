@@ -26,8 +26,8 @@ User = get_user_model()
 
 class DataTestMixin:
     """
-    Convenience methods a ClientTest can use to set up model instances
-    and related data.
+    Convenience methods to set up model instances and related data.
+    The class just needs to have a `client` attribute.
     """
 
     client: Client

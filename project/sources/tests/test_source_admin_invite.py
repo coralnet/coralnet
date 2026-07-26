@@ -1,7 +1,7 @@
 from django.urls import reverse
 
 from images.models import Image, Metadata
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from vision_backend.models import Features
 from ..models import Source, SourceInvite
 
@@ -280,7 +280,7 @@ class RemoveMemberTest(BasePermissionTest):
             reverse('source_admin', args=[self.source.pk]), self.user_admin)
 
 
-class DeleteSourceTest(ClientTest):
+class DeleteSourceTest(CnStandardTest):
     """
     Test source deletion.
     """

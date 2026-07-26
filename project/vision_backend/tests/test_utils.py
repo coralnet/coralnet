@@ -1,14 +1,15 @@
 import random
 
+from django.test import SimpleTestCase
 import numpy as np
 
 from labels.models import Label
-from lib.tests.utils import BaseTest, ClientTest
+from lib.tests.utils import CnStandardTest
 from sources.models import Source
 from vision_backend import utils
 
 
-class TestLabelSetMapper(ClientTest):
+class TestLabelSetMapper(CnStandardTest):
     """
     Test labelset_mapper
     """
@@ -180,7 +181,7 @@ class TestLabelSetMapper(ClientTest):
             utils.labelset_mapper('mystery_labelmode', pklist, self.source)
 
 
-class LabelMapTester(BaseTest):
+class LabelMapTester(SimpleTestCase):
     """
     Test map_labels
     """
@@ -211,7 +212,7 @@ class LabelMapTester(BaseTest):
             self.assertEqual(member, -1)
 
 
-class AlleviateTester(BaseTest):
+class AlleviateTester(SimpleTestCase):
     """
     Test get_alleviate
     """

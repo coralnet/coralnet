@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from django.core.files.base import ContentFile
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..models import CalcifyRateTable
 from .utils import (
     create_global_calcify_table, grid_of_tables_html_to_tuples)
@@ -57,7 +57,7 @@ class PermissionTest(BasePermissionTest):
         self.assertFalse(button_is_present())
 
 
-class TableUploadTest(ClientTest):
+class TableUploadTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

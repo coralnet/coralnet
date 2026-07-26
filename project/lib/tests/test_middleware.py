@@ -4,10 +4,10 @@ from unittest import mock
 from django.test.client import Client
 from django.urls import reverse
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 
 
-class ViewLoggingMiddlewareTest(ClientTest):
+class ViewLoggingMiddlewareTest(CnStandardTest):
 
     def setUp(self):
         super().setUp()
@@ -57,6 +57,7 @@ class ViewLoggingMiddlewareTest(ClientTest):
             f"Should log the expected end message")
 
     def test_user_id(self):
+        self.superuser = self.create_superuser()
         self.client.force_login(self.superuser)
         with self.assertLogs(logger='coralnet_views', level='DEBUG') as cm:
             self.client.get(reverse('index'))

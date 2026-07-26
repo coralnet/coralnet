@@ -4,12 +4,13 @@
 
 from io import StringIO
 
+from django.test import SimpleTestCase
+
 from lib.exceptions import FileProcessError
-from lib.tests.utils import BaseTest
 from ..utils import CpcFileContent
 
 
-class CpcFormatTest(BaseTest):
+class CpcFormatTest(SimpleTestCase):
 
     @classmethod
     def read_cpc_as_lines(

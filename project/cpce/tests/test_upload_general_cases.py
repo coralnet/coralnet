@@ -17,7 +17,7 @@ from annotations.tests.utils import (
     UploadAnnotationsQueriesPerPointTest,
 )
 from images.models import Point
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from .utils import UploadAnnotationsCpcTestMixin
 
 
@@ -60,7 +60,7 @@ class PermissionTest(BasePermissionTest):
             url, self.SOURCE_EDIT, is_json=True, post_data={})
 
 
-class NoLabelsetTest(ClientTest):
+class NoLabelsetTest(CnStandardTest):
     """
     Point/annotation upload attempts with no labelset.
     This should just fail to reach the page.
@@ -410,7 +410,9 @@ class MultipleSourcesTest(
         self.check_other_sources_unaffected(preview_response, upload_response)
 
 
-class ContentsEdgeAndErrorCasesTest(ClientTest, UploadAnnotationsCpcTestMixin):
+class ContentsEdgeAndErrorCasesTest(
+    CnStandardTest, UploadAnnotationsCpcTestMixin
+):
     """
     Annotation upload edge cases and error cases related to contents.
     """

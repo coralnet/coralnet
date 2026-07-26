@@ -3,14 +3,13 @@
 # although it's not the best thing from a dependencies/app-coupling standpoint.
 
 from django.core.exceptions import ValidationError
-from django_migration_testcase import MigrationTest
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnMigrationTest, CnStandardTest
 from vision_backend.models import ClassifyImageEvent
 from ..models import Event
 
 
-class ModelSaveTest(ClientTest):
+class ModelSaveTest(CnStandardTest):
 
     def test_subclass_sets_type(self):
         user = self.create_user()
@@ -46,7 +45,7 @@ class ModelSaveTest(ClientTest):
             "This event type requires the image_id field.")
 
 
-class ManagerTest(ClientTest):
+class ManagerTest(CnStandardTest):
 
     def test_queryset_default_filtering(self):
         user = self.create_user()
@@ -83,7 +82,7 @@ class ManagerTest(ClientTest):
         )
 
 
-class MigrateClassifyImageEventToOtherAppTest(MigrationTest):
+class MigrateClassifyImageEventToOtherAppTest(CnMigrationTest):
 
     before = [
         ('events', '0002_event_type_no_choices'),

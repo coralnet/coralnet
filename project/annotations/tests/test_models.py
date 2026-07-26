@@ -1,9 +1,8 @@
 from django.conf import settings
-from django_migration_testcase import MigrationTest
 
 from accounts.utils import get_robot_user
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnMigrationTest, CnStandardTest
 from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
     image_annotation_status,
@@ -20,7 +19,7 @@ image_defaults = dict(
 )
 
 
-class ImageStatusLogicTest(ClientTest):
+class ImageStatusLogicTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -109,7 +108,7 @@ class ImageStatusLogicTest(ClientTest):
             unconfirmed=[], confirmed=[])
 
 
-class AnnoInfoUpdateTest(ClientTest):
+class AnnoInfoUpdateTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -209,7 +208,7 @@ class AnnoInfoUpdateTest(ClientTest):
         # self.assertStatusEqual('unconfirmed')
 
 
-class ScrambledSortKeyTest(ClientTest):
+class ScrambledSortKeyTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -270,7 +269,7 @@ class ScrambledSortKeyTest(ClientTest):
         self.assertEqual(anno_2.scrambled_sort_key, EXPECTED_HASHES[17])
 
 
-class PopulateConfirmedMigrationTest(MigrationTest):
+class PopulateConfirmedMigrationTest(CnMigrationTest):
 
     before = [
         ('accounts', '0001_squashed_0012_field_string_attributes_to_unicode'),

@@ -96,8 +96,7 @@ except ValueError:
         f"Unsupported SETTINGS_BASE value: {env('SETTINGS_BASE')}"
         f" (supported values are: {', '.join([b.value for b in Bases])})")
 
-_TESTING = 'test' in sys.argv or 'selenium_test' in sys.argv
-_SELENIUM = 'selenium_test' in sys.argv
+_TESTING = 'test' in sys.argv
 
 
 #
@@ -262,29 +261,7 @@ EMAIL_SIZE_SOFT_LIMIT = 100000
 # Database related
 #
 
-if _SELENIUM:
-    _DEFAULT_DATABASE_ENGINE = 'django.db.backends.sqlite3'
-    _DATABASE_NAME = env(
-        'SELENIUM_DATABASE_PATH',
-        default=str(TMP_DIR / f"test_{env('DATABASE_NAME')}.sqlite3"),
-    )
-else:
-    _DEFAULT_DATABASE_ENGINE = 'django.db.backends.postgresql'
-    _DATABASE_NAME = env('DATABASE_NAME')
-
-DATABASE_ENGINE = env('DATABASE_ENGINE', default=_DEFAULT_DATABASE_ENGINE)
-
-# Whether to run migrations as part of the test runner's database setup.
-#
-# True makes it easier to maintain correctness, since the migrations are the
-# first source of truth for creation of initial data, such as the Imported
-# and Alleviate users.
-# False can speed up test database setup, and paper over a DB engine's
-# inability to run all the migrations.
-# The JSONFields in some of the earlier migrations are Postgres-only, hence
-# our definition of the default value.
-TEST_DATABASE_MIGRATE = env.bool(
-    'TEST_DATABASE_MIGRATE', default='postgresql' in DATABASE_ENGINE)
+DATABASE_ENGINE = env('DATABASE_ENGINE', default='django.db.backends.postgresql')
 
 # https://docs.djangoproject.com/en/5.1/ref/models/querysets/#distinct
 # "On PostgreSQL only, you can pass positional arguments (*fields) in order
@@ -303,7 +280,7 @@ DATABASES = {
         # the non_atomic_requests decorator.
         'ATOMIC_REQUESTS': True,
         # Database name, or path to database file if using sqlite3.
-        'NAME': _DATABASE_NAME,
+        'NAME': env('DATABASE_NAME'),
         # Not used with sqlite3.
         'USER': env('DATABASE_USER'),
         # Not used with sqlite3.
@@ -313,9 +290,6 @@ DATABASES = {
         # Set to empty string for default (e.g. 5432 for postgresql).
         # Not used with sqlite3.
         'PORT': env('DATABASE_PORT', default=''),
-        'TEST': {
-            'MIGRATE': TEST_DATABASE_MIGRATE,
-        },
     },
 }
 

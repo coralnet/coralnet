@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from api_core.models import ApiJob, ApiJobUnit
 from lib.tests.utils import (
-    BasePermissionTest, ClientTest, HtmlAssertionsMixin, scrambled_run
+    BasePermissionTest, CnStandardTest, HtmlAssertionsMixin, scrambled_run
 )
 from ..models import Job
 from ..utils import abort_job
@@ -79,12 +79,15 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
 
     create_source: Callable
     create_user: Callable
+    create_superuser: Callable
     user: User
+    superuser: User
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.sources = [
             cls.create_source(cls.user, name="Source 1"),
@@ -137,7 +140,7 @@ class JobViewTestMixin(HtmlAssertionsMixin, ABC):
         return job
 
 
-class JobSummaryTest(JobViewTestMixin, ClientTest):
+class JobSummaryTest(JobViewTestMixin, CnStandardTest):
 
     def get_response(self, data=None):
         self.client.force_login(self.superuser)
@@ -1038,7 +1041,7 @@ class JobListTestsMixin(JobViewTestMixin, ABC):
             self.get_response(data=dict(sort='unknown_sort')), message)
 
 
-class AllJobsListTest(JobListTestsMixin, ClientTest):
+class AllJobsListTest(JobListTestsMixin, CnStandardTest):
 
     def get_response(self, data=None):
         self.client.force_login(self.superuser)
@@ -1074,7 +1077,7 @@ class AllJobsListTest(JobListTestsMixin, ClientTest):
         )
 
 
-class SourceJobListTest(JobListTestsMixin, ClientTest):
+class SourceJobListTest(JobListTestsMixin, CnStandardTest):
 
     def get_response(self, data=None):
         self.client.force_login(self.user)
@@ -1205,7 +1208,7 @@ class SourceJobListTest(JobListTestsMixin, ClientTest):
         )
 
 
-class NonSourceJobListTest(JobListTestsMixin, ClientTest):
+class NonSourceJobListTest(JobListTestsMixin, CnStandardTest):
 
     @property
     def view_shows_source_jobs(self):
@@ -1232,7 +1235,7 @@ class NonSourceJobListTest(JobListTestsMixin, ClientTest):
         )
 
 
-class BackgroundJobStatusTest(JobViewTestMixin, ClientTest):
+class BackgroundJobStatusTest(JobViewTestMixin, CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

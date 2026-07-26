@@ -5,10 +5,9 @@ from django.conf import settings
 from django.contrib.flatpages.models import FlatPage
 from django.contrib.sites.models import Site
 from django.urls import reverse
-from django_migration_testcase import MigrationTest
 from reversion.models import Version
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnMigrationTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -22,14 +21,10 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SIGNED_OUT, template=template)
 
 
-class FlatpagesTest(ClientTest):
+class FlatpagesTest(CnStandardTest):
     """
     Test flatpages in general.
     """
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-
     def test_new_flatpage(self):
         """Create a flatpage and view it at its URL."""
         page = FlatPage(
@@ -73,6 +68,7 @@ class FlatpagesTest(ClientTest):
     def test_versioning(self):
         """django-reversion should create versions of flatpages when saving
         via the admin interface."""
+        self.superuser = self.create_superuser()
         self.client.force_login(self.superuser)
         data = dict(
             url='/help/faq/', title="FAQ", content="FAQ contents go here.",
@@ -91,11 +87,12 @@ class FlatpagesTest(ClientTest):
         self.assertTemplateUsed(response, 'flatpages/default.html')
 
 
-class FlatpageEditTest(ClientTest):
+class FlatpageEditTest(CnStandardTest):
     """
     Test aspects of editing flatpages.
     """
     def test_flatpage_editor_has_markdownx_widget(self):
+        self.superuser = self.create_superuser()
         self.client.force_login(self.superuser)
         response = self.client.get('/admin/flatpages/flatpage/add/')
         self.assertContains(
@@ -125,7 +122,7 @@ class FlatpageEditTest(ClientTest):
             "markdownx should return a valid image code")
 
 
-class HardcodedFlatpagesMigrationTest(MigrationTest):
+class HardcodedFlatpagesMigrationTest(CnMigrationTest):
 
     before = [('flatpages', '0001_initial'), ('sites', '0001_initial')]
     after = [('flatpages_custom', '0001_add_help_page_if_not_present')]

@@ -4,7 +4,7 @@ from django.test.client import Client
 from django.urls import reverse
 from rest_framework import status
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from sources.models import Source
 
 
@@ -81,7 +81,7 @@ class APITestMixin:
             "Response error detail should be as expected")
 
 
-class BaseAPIPermissionTest(ClientTest, APITestMixin):
+class BaseAPIPermissionTest(CnStandardTest, APITestMixin):
     """
     Test view permissions.
 

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.urls import reverse
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from lib.tests.utils_selenium import BaseSeleniumTest
 from ..hashers import SHA1PasswordHasher
 from .utils import BaseAccountsTest
@@ -255,7 +255,7 @@ class PasswordTest(BaseAccountsTest):
         self.assert_sign_in_success(response, self.user)
 
 
-class SignOutTest(ClientTest):
+class SignOutTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

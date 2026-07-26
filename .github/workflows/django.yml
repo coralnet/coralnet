@@ -22,6 +22,9 @@ jobs:
       # this must be explicitly specified for CI for some reason.
       CORALNET_DATABASE_HOST: localhost
       CORALNET_SECRET_KEY: ci-secret-key
+      # Available browsers and drivers:
+      # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md#browsers-and-drivers
+      CORALNET_SELENIUM_BROWSERS: '[{"name": "Firefox", "webdriver": "${{ vars.GECKOWEBDRIVER }}", "cli_args": ["-headless"]}, {"name": "Chrome", "webdriver": "${{ vars.CHROMEWEBDRIVER }}", "cli_args": ["--headless"]}]'
 
     services:
       postgres:

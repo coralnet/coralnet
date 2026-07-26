@@ -10,11 +10,11 @@ from django.core.files.storage import default_storage
 from django.test import override_settings
 
 from images.models import Point
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from visualization.utils import generate_patch_if_doesnt_exist, get_patch_path
 
 
-class LabelPatchGenerationTest(ClientTest):
+class LabelPatchGenerationTest(CnStandardTest):
     """
     Test basics of patch generation, including supporting different color
     spaces.
@@ -88,7 +88,7 @@ def always_save_png(self, fp, format=None, **params):
     LABELPATCH_SIZE_FRACTION=0.2,
     POINT_PATCH_FILE_PATTERN=(
         '{full_image_path}.pointpk{point_pk}.thumbnail.png'))
-class PatchCropTest(ClientTest):
+class PatchCropTest(CnStandardTest):
     """
     Test that patch generation does cropping pixel-perfectly.
 

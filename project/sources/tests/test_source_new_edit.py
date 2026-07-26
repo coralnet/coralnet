@@ -7,7 +7,7 @@ from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from jobs.models import Job
 from jobs.tests.utils import do_job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from vision_backend.common import ClassifierStatuses, Extractors
 from vision_backend.tests.tasks.utils import (
     BaseTaskTest, source_check_is_scheduled)
@@ -43,7 +43,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SOURCE_ADMIN, template=template)
 
 
-class BaseSourceTest(ClientTest):
+class BaseSourceTest(CnStandardTest):
 
     form_template: str
 
@@ -1047,7 +1047,7 @@ class SourceEditTest(BaseSourceTest):
         self.assertNotContains(response, "Currently selected:")
 
 
-class SourceFormFieldAvailability(ClientTest):
+class SourceFormFieldAvailability(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):

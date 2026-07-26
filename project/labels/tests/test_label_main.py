@@ -13,7 +13,7 @@ from calcification.tests.utils import create_global_calcify_table
 from jobs.tests.utils import do_job
 from lib.tests.utils import (
     BasePermissionTest,
-    ClientTest,
+    CnStandardTest,
     HtmlAssertionsMixin,
     IndexesMixin,
     make_media_url_comparable,
@@ -47,7 +47,7 @@ class PermissionTest(BasePermissionTest):
         self.assertPermissionLevel(url, self.SIGNED_OUT, is_json=True)
 
 
-class BaseLabelMainTest(ClientTest):
+class BaseLabelMainTest(CnStandardTest):
 
     @classmethod
     def create_source_with_labelset(cls, user, label_names):
@@ -685,7 +685,7 @@ class LabelMainPatchIndexesTest(BaseLabelMainTest, IndexesMixin):
         )
 
 
-class PopularityTest(ClientTest):
+class PopularityTest(CnStandardTest):
     """Tests related to label popularity values."""
 
     @classmethod

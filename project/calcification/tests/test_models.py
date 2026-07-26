@@ -1,10 +1,10 @@
 from django.db import IntegrityError
 
-from lib.tests.utils import ClientTest
+from lib.tests.utils import CnStandardTest
 from ..models import CalcifyRateTable
 
 
-class RateTableUniqueTest(ClientTest):
+class RateTableUniqueTest(CnStandardTest):
     """Test calcification rate table uniqueness constraints."""
 
     @classmethod

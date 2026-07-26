@@ -15,12 +15,12 @@ from storages.backends.s3 import S3Storage
 from labels.models import LabelGroup, Label, LabelSet, LocalLabel
 from sources.models import Source
 from vision_backend.common import Extractors
-from .tests.utils import ClientTest
+from .tests.utils import CnStandardTest
 
 User = get_user_model()
 
 
-class VisionBackendRegressionTest(ClientTest):
+class VisionBackendRegressionTest(CnStandardTest):
     """
     Management class for vision backend regression tests.
     This class relies on a specific regression test fixture layout.

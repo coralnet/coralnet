@@ -12,6 +12,10 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.32 (WIP)
+
+- The `SELENIUM_BROWSERS` env value is now mandatory for running `manage.py test` without tag exclusions.
+
 ## [1.31](https://github.com/coralnet/coralnet/tree/1.31)
 
 Production: 2026-07-18

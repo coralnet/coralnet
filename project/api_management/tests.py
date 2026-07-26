@@ -3,7 +3,7 @@ from django.urls import reverse
 
 from api_core.models import ApiJob, ApiJobUnit
 from jobs.models import Job
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -37,12 +37,13 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class JobListTest(ClientTest):
+class JobListTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
 
     def test_all_table_columns(self):
@@ -151,9 +152,11 @@ class JobListTest(ClientTest):
         self.assertEqual(cells_text[3][4], ApiJob.DONE)
 
 
-class JobListQueriesTest(ClientTest):
+class JobListQueriesTest(CnStandardTest):
 
     def test(self):
+        self.superuser = self.create_superuser()
+
         api_job_count = 20
         unit_count = 3
 
@@ -190,12 +193,13 @@ class JobListQueriesTest(ClientTest):
         self.assertEqual(len(job_rows), api_job_count)
 
 
-class JobDetailTest(ClientTest):
+class JobDetailTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.source = cls.create_source(cls.user)
         cls.classifier = cls.create_robot(cls.source)

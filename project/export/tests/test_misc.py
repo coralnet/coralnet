@@ -4,7 +4,7 @@ from zipfile import ZipFile
 from django.urls import reverse
 from django.utils.html import escape as html_escape
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 from ..utils import write_zip
 
 
@@ -33,7 +33,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class SessionErrorTest(ClientTest):
+class SessionErrorTest(CnStandardTest):
     """Test session-related error cases on the serve view."""
     @classmethod
     def setUpTestData(cls):
@@ -102,7 +102,7 @@ class SessionErrorTest(ClientTest):
         )
 
 
-class ZipTest(ClientTest):
+class ZipTest(CnStandardTest):
 
     def test_write_zip(self):
         zip_stream = BytesIO()

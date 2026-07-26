@@ -2,7 +2,7 @@ from django.core import mail
 from django.urls import reverse
 from django.utils.html import escape
 
-from lib.tests.utils import BasePermissionTest, ClientTest
+from lib.tests.utils import BasePermissionTest, CnStandardTest
 
 
 class PermissionTest(BasePermissionTest):
@@ -32,7 +32,7 @@ class PermissionTest(BasePermissionTest):
             deny_type=self.REQUIRE_LOGIN)
 
 
-class PasswordChangeTest(ClientTest):
+class PasswordChangeTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
@@ -140,13 +140,14 @@ class PasswordChangeTest(ClientTest):
             int(self.client.session['_auth_user_id']), self.user.pk)
 
 
-class EmailAllTest(ClientTest):
+class EmailAllTest(CnStandardTest):
 
     @classmethod
     def setUpTestData(cls):
         # Call the parent's setup (while still using this class as cls)
         super().setUpTestData()
 
+        cls.superuser = cls.create_superuser()
         cls.user = cls.create_user()
         cls.inactive_user = cls.create_user(activate=False)
 
