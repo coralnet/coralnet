@@ -16,15 +16,20 @@ class Event(models.Model):
 
     details = models.JSONField()
 
-    # Not using foreign keys since we don't want to delete an Event if a
-    # Source, User, etc. is deleted.
-    # Such entities can then be displayed on the Event as <User 123> or
-    # <Source 456> for example. This allows identifying related deleted
-    # events while keeping a layer of anonymity (compared to, say, saving
-    # usernames instead of user IDs).
-
     # User who did ("created") the action, if applicable.
-    creator_id = models.BigIntegerField(null=True, blank=True)
+    creator = models.ForeignKey(
+        User, on_delete=models.SET_NULL, editable=False, null=True)
+
+    # Not using foreign keys for sources, images, and classifiers. That way
+    # when they're deleted, they are still on the Event as <Source 123> or
+    # <Image 456> for example.
+    # This allows identifying related deleted events while keeping a
+    # layer of anonymity (compared to, say, saving source names instead of
+    # source IDs).
+    #
+    # We don't save IDs for deleted users though, because we want to be more
+    # respectful of tracking in that regard.
+
     # Source this event pertains to, if any.
     source_id = models.BigIntegerField(null=True, blank=True)
     # Image this event pertains to, if any.
@@ -35,7 +40,7 @@ class Event(models.Model):
     date = models.DateTimeField(auto_now_add=True, editable=False)
 
     type_for_subclass: str = None
-    required_id_fields: list[str] = []
+    required_relation_fields: list[str] = []
 
     class Meta:
         indexes = [
@@ -54,7 +59,7 @@ class Event(models.Model):
             if (update_fields := kwargs.get('update_fields')) is not None:
                 kwargs['update_fields'] = {'type'}.union(update_fields)
 
-        for field_name in self.required_id_fields:
+        for field_name in self.required_relation_fields:
             if not getattr(self, field_name):
                 raise ValidationError(
                     f"This event type requires the {field_name} field.",

@@ -273,7 +273,7 @@ class AnnotationUploadEvent(Event):
         proxy = True
 
     type_for_subclass = 'annotation_upload'
-    required_id_fields = ['source_id', 'image_id', 'creator_id']
+    required_relation_fields = ['source_id', 'image_id', 'creator']
 
     def annotation_history_entry(self, labelset_dict):
         point_events = []
