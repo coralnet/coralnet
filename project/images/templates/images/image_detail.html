@@ -63,34 +63,39 @@
     <div class="details">
         <h3>Annotation and point location status</h3>
 
-        <ul>
-        <li>
         <div class="tutorial-message">
         {% include "images/help_manipulate_annotations.html" %}
         </div>
-        </li>
-        <li>Point generation method: {{ image.point_gen_method_display }}
-        </li>
-        <li>{% if not point_gen_method_synced %}
-        <i>[NOTE! The point gen. method for this image is different from the source default. The source default is: {{ image.source.point_gen_method_display }}] </i>
-        {% endif %} 
-        </li>
-        <li>Annotation area: {{ image.annotation_area_display }}
+
+        <ul id="point-status-detail-list">
+          <li>Point generation method: {{ image.point_gen_method_display }}
+          </li>
+          {% if not point_gen_method_synced %}
+            <li>
+              <i>[NOTE! The point gen. method for this image is different from the source default. The source default is: {{ image.source.point_gen_method_display }}] </i>
+            </li>
+          {% endif %}
+
+          <li>Annotation area: {{ image.annotation_area_display }}
             {% if "source_edit" in source_perms and annotation_area_editable %}
               (<a href="{% url 'annotation_area_edit' image.id %}">Edit</a>)
             {% endif %}
-        </li>
-        <li>{% if not annotation_area_synced %}
-        <i>[NOTE! The annotation area for this image is different from the source default. The source default is: {{ image.source.annotation_area_display }}] </i>
-        {% endif %} 
-        </li>
-        <li>Annotation status: <b>{{ annotation_status }}</b>
-        </li>
-        {% if image.annoinfo.last_annotation %}
-          <li>
-            Last annotation update: {{ image.annoinfo.last_annotation.user }} on {{ image.annoinfo.last_annotation.annotation_date }}
           </li>
-        {% endif %}
+          {% if not annotation_area_synced %}
+            <li>
+              <i>[NOTE! The annotation area for this image is different from the source default. The source default is: {{ image.source.annotation_area_display }}] </i>
+            </li>
+          {% endif %}
+
+          <li>
+            Annotation status: <b>{{ annotation_status }}</b>
+          </li>
+
+          {% if image.annoinfo.last_annotation %}
+            <li>
+              Last annotation update: {{ image.annoinfo.last_annotation.user|default:"(Deleted user)" }} on {{ image.annoinfo.last_annotation.annotation_date }}
+            </li>
+          {% endif %}
         </ul>
 
         {% if "source_edit" in source_perms %}
@@ -142,7 +147,7 @@
         <li>Name: {{ image.metadata.name }}</li>
         <li>Full resolution: {{ image.original_width }} x {{ image.original_height }} pixels</li>
         <li>Upload date: {{ image.upload_date }}</li>
-        <li>Uploaded by: {{ image.uploaded_by|default:"(Unknown)" }}</li>
+        <li>Uploaded by: {{ image.uploaded_by|default:"(Deleted user)" }}</li>
 
         {% for other_field in other_fields %}
             {% if other_field.value %}

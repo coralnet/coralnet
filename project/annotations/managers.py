@@ -4,7 +4,7 @@ from typing import Union
 from django.conf import settings
 from django.db import models
 
-from accounts.utils import get_robot_user, is_robot_user
+from accounts.utils import get_robot_user
 from images.models import Image
 from .model_utils import scrambled_sort_hash
 
@@ -145,8 +145,9 @@ class AnnotationManager(models.Manager):
             new_annotation.save()
             return self.UpdateResultsCodes.ADDED.value
 
-        # An annotation for this point exists in the database
-        previously_confirmed = not is_robot_user(annotation.user)
+        # An annotation for this point exists in the database.
+
+        previously_confirmed = annotation.user_id != get_robot_user().pk
 
         if previously_confirmed and not now_confirmed:
             # Never overwrite confirmed with unconfirmed.
