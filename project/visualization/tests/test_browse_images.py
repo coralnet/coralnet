@@ -831,11 +831,14 @@ class DateSearchTest(BaseBrowseImagesTest):
 
 class LastAnnotatorSearchTest(BaseBrowseImagesTest):
 
+    setup_image_count = 8
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+        (cls.img1, cls.img2, cls.img3, cls.img4,
+            cls.img5, cls.img6, cls.img7, cls.img8) = cls.images
 
     def test_filter_by_annotator_any(self):
         # Regular user
@@ -864,18 +867,31 @@ class LastAnnotatorSearchTest(BaseBrowseImagesTest):
             self.user, self.source, user2, Source.PermTypes.EDIT.code)
         self.add_annotations(user2, self.img2, {1: 'A', 2: 'B'})
 
-        # Non annotation tool
-        self.set_last_annotation(self.img3, annotator=get_imported_user())
-        self.set_last_annotation(self.img4, annotator=get_alleviate_user())
-        robot = self.create_robot(self.source)
-        self.add_robot_annotations(robot, self.img5)
+        # Former source member
+        user3 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user3, Source.PermTypes.EDIT.code)
+        self.add_annotations(user3, self.img3, {1: 'A', 2: 'B'})
+        self.source.remove_role(user3)
 
-        # Unannotated
-        self.upload_image(self.user, self.source)
+        # Deleted user
+        user4 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user4, Source.PermTypes.EDIT.code)
+        self.add_annotations(user4, self.img4, {1: 'A', 2: 'B'})
+        user4.delete()
+
+        # Non annotation tool
+        self.set_last_annotation(self.img5, annotator=get_imported_user())
+        self.set_last_annotation(self.img6, annotator=get_alleviate_user())
+        robot = self.create_robot(self.source)
+        self.add_robot_annotations(robot, self.img7)
+
+        # img8 is left unannotated
 
         response = self.get_browse(last_annotator_0='annotation_tool')
         self.assert_browse_results(
-            response, [self.img1, self.img2])
+            response, [self.img1, self.img2, self.img3, self.img4])
 
     def test_filter_by_annotator_tool_specific_user(self):
         self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})
