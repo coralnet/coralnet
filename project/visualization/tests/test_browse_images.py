@@ -857,6 +857,15 @@ class LastAnnotatorSearchTest(BaseBrowseImagesTest):
             msg_prefix="Should include both annotated"
                        " and non-annotated images")
 
+        response = self.get_browse(
+            last_annotator_0='',
+            last_annotator_1=self.user.pk,
+        )
+        self.assert_browse_results(
+            response, self.images,
+            msg_prefix="Should safely ignore the second field if the first"
+                       " field doesn't filter")
+
     def test_filter_by_annotator_tool_any_user(self):
         # Tool user
         self.add_annotations(self.user, self.img1, {1: 'A', 2: 'B'})

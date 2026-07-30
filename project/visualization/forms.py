@@ -344,9 +344,9 @@ class AnnotatorFilterField(MultiValueField):
                 getattr(self, field_name) for field_name in self.field_order],
             require_all_fields=False, **kwargs)
 
-    def compress(self, data_list) -> Q | None:
+    def compress(self, data_list) -> Q:
         if not data_list:
-            return None
+            return Q()
 
         annotation_method, annotation_tool_user = data_list
 
@@ -376,6 +376,10 @@ class AnnotatorFilterField(MultiValueField):
             return Q(**{self.annotator_lookup: get_imported_user()})
         elif annotation_method == 'machine':
             return Q(**{self.annotator_lookup: get_robot_user()})
+
+        # We could get here if annotation_method is blank but the user
+        # is not blank.
+        return Q()
 
 
 class NullWidget(Widget):
@@ -796,9 +800,9 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         """
         filters_used = []
         for key, value in self.cleaned_data.items():
-            if value == '' or value == dict():
+            if value == '' or value == dict() or value == Q():
                 # Not filtering by this field. '' is the basic field case,
-                # dict() is the MultiValueField case.
+                # dict() and Q() are the MultiValueField cases.
                 pass
             elif key in ['search', 'sort_method', 'sort_direction']:
                 pass
@@ -1050,10 +1054,10 @@ class PatchSearchForm(BaseImageSearchForm):
         # Multi-value fields have their values in the form of
         # search kwargs or a Q (depending on the field).
         field_kwargs = data['patch_annotation_date']
-        if field_kwargs is not None:
+        if field_kwargs != dict():
             results = results.filter(**field_kwargs)
         q_obj = data['patch_annotator']
-        if q_obj is not None:
+        if q_obj != Q():
             results = results.filter(q_obj)
 
         return results
