@@ -273,6 +273,30 @@ class LabelMainTest(BaseLabelMainTest):
                 popularity_str, popularity_bar_html),
             response.content.decode())
 
+    def test_creator_was_deleted(self):
+        user2 = self.create_user()
+
+        group = LabelGroup(name="Group 1", code='G1')
+        group.save()
+        label = Label(
+            name="Label A",
+            default_code='A',
+            group=group,
+            description="This is a\nmultiline description.",
+            thumbnail=self.sample_image_as_file('_.png'),
+            created_by=user2,
+        )
+        label.save()
+
+        user2.delete()
+
+        response = self.get_label_main()
+
+        # It says Unknown instead of Deleted user, because there is another
+        # null-creator case: in the past we have created labels
+        # programmatically without assigning a creator.
+        self.assertContains(response, "Created By: (Unknown)")
+
     def test_label_stats_caching(self):
         """
         Load page when cache entry is absent:
