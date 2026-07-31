@@ -20,22 +20,21 @@ class Annotation(models.Model):
 
     annotation_date = models.DateTimeField(
         blank=True, auto_now=True, editable=False)
-    point = models.OneToOneField(Point, on_delete=models.CASCADE, editable=False)
+    point = models.OneToOneField(
+        Point, on_delete=models.CASCADE, editable=False)
     image = models.ForeignKey(
         Image, on_delete=models.CASCADE, editable=False, db_index=False)
 
     # The user who made this annotation
     user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL, editable=False, null=True, db_index=False)
+        User, on_delete=models.SET_NULL, editable=False, null=True)
 
     # Only fill this in if the user is the robot user.
     #
     # Allow a DB index to be created to speed up the 'set null on delete'
     # process. Otherwise the reset-classifiers job takes forever.
     robot_version = models.ForeignKey(
-        Classifier,
-        on_delete=models.SET_NULL, editable=False, null=True)
+        Classifier, on_delete=models.SET_NULL, editable=False, null=True)
 
     label = models.ForeignKey(Label, on_delete=models.PROTECT, db_index=False)
     source = models.ForeignKey(
@@ -274,7 +273,7 @@ class AnnotationUploadEvent(Event):
         proxy = True
 
     type_for_subclass = 'annotation_upload'
-    required_id_fields = ['source_id', 'image_id', 'creator_id']
+    required_relation_fields = ['source_id', 'image_id', 'creator']
 
     def annotation_history_entry(self, labelset_dict):
         point_events = []

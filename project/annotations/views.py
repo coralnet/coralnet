@@ -610,11 +610,12 @@ def annotation_history(request, image_id):
 
     for access in AnnotationToolAccess.objects.filter(image=image):
         # Create a log entry for each annotation tool access
+        user_str = access.user.username if access.user else "(Deleted user)"
         event_str = "Accessed annotation tool"
         event_log.append(
             dict(
                 date=access.access_date,
-                user=access.user.username,
+                user=user_str,
                 events=[event_str],
             )
         )

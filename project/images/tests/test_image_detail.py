@@ -3,11 +3,14 @@
 import datetime
 
 from bs4 import BeautifulSoup
+from django.template.defaultfilters import date as date_template_filter
 from django.urls import reverse
+from django.utils import timezone
 
 from annotations.model_utils import AnnotationArea
 from lib.tests.utils import (
     BasePermissionTest, CnStandardTest, IndexesMixin, scrambled_run)
+from sources.models import Source
 from ..model_utils import PointGen
 from ..models import Image
 
@@ -206,6 +209,68 @@ class ImageDetailTest(CnStandardTest):
 
         self.add_annotations(self.user, image, {2: 'B'})
         assert_status_text("Confirmed (completed)")
+
+    def test_last_annotation_text(self):
+        image = self.upload_image(self.user, self.source)
+
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+
+        def load_page():
+            return self.client.get(reverse('image_detail', args=[image.pk]))
+
+        def details_ul_html():
+            response_soup = BeautifulSoup(load_page().content, 'html.parser')
+            # Here we're careful to exclude the help text. We want to only look
+            # in the list of details proper.
+            ul_soup = response_soup.find('ul', id='point-status-detail-list')
+            return str(ul_soup)
+
+        def assert_last_annotation_text(expected_text):
+            self.assertInHTML(
+                f"<li>Last annotation update: {expected_text}</li>",
+                details_ul_html(),
+            )
+
+        def annotation_date(point_number):
+            date_obj = image.annotation_set.get(
+                point__point_number=point_number).annotation_date
+            return date_template_filter(
+                date_obj.astimezone(
+                    timezone.get_current_timezone()), 'N j, Y, P')
+
+        self.assertNotIn(
+            "Last annotation update", details_ul_html(),
+            msg="Shouldn't have any annotation yet")
+
+        self.add_annotations(self.user, image, {1: 'B', 2: 'A'})
+        assert_last_annotation_text(
+            f"{self.user.username} on {annotation_date(1)}")
+        self.add_annotations(user2, image, {2: 'B'})
+        assert_last_annotation_text(
+            f"{user2.username} on {annotation_date(2)}")
+
+        user2.delete()
+        assert_last_annotation_text(
+            f"(Deleted user) on {annotation_date(2)}")
+
+    def test_uploaded_by_text(self):
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        image = self.upload_image(user2, self.source)
+
+        def assert_uploaded_by_text(expected_text):
+            response = self.client.get(reverse('image_detail', args=[image.pk]))
+            self.assertInHTML(
+                f"<li>Uploaded by: {expected_text}</li>",
+                response.content.decode())
+
+        assert_uploaded_by_text(user2.username)
+
+        user2.delete()
+        assert_uploaded_by_text("(Deleted user)")
 
 
 class ImageDetailIndexesTest(CnStandardTest, IndexesMixin):

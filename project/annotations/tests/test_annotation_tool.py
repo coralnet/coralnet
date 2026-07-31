@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.shortcuts import resolve_url
+from django.template.defaultfilters import date as date_template_filter
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape as html_escape
@@ -662,6 +663,10 @@ class LoadAnnotationFormTest(CnStandardTest):
 
         cls.img = cls.upload_image(cls.user, cls.source)
 
+    def load_tool(self):
+        self.client.force_login(self.user)
+        return self.client.get(reverse('annotation_tool', args=[self.img.pk]))
+
     def assert_annotation_form_values_equal(
             self, response, expected_form_values):
 
@@ -680,8 +685,7 @@ class LoadAnnotationFormTest(CnStandardTest):
             self.assertEqual(robot_field.attrs.get('value'), is_robot)
 
     def test_all_annotations_blank(self):
-        self.client.force_login(self.user)
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [(None, 'null'), (None, 'null'), (None, 'null')])
 
@@ -689,22 +693,18 @@ class LoadAnnotationFormTest(CnStandardTest):
         robot = self.create_robot(self.source)
         self.add_robot_annotations(robot, self.img, {1: 'A', 2: 'B', 3: 'A'})
 
-        # Create a settings object with default settings
+        # Create a settings object that says to show machine annotations.
         self.user.annotationtoolsettings = AnnotationToolSettings()
-        self.user.annotationtoolsettings.save()
-        self.client.force_login(self.user)
-
-        # Showing machine annotations
         self.user.annotationtoolsettings.show_machine_annotations = True
         self.user.annotationtoolsettings.save()
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [('A', 'true'), ('B', 'true'), ('A', 'true')])
 
-        # Not showing machine annotations
+        # Now not showing machine annotations.
         self.user.annotationtoolsettings.show_machine_annotations = False
         self.user.annotationtoolsettings.save()
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [(None, 'null'), (None, 'null'), (None, 'null')])
 
@@ -712,8 +712,7 @@ class LoadAnnotationFormTest(CnStandardTest):
         annotations = {1: 'A', 3: 'B'}
         self.add_annotations(self.user, self.img, annotations)
 
-        self.client.force_login(self.user)
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [('A', 'false'), (None, 'null'), ('B', 'false')])
 
@@ -722,32 +721,102 @@ class LoadAnnotationFormTest(CnStandardTest):
         self.add_robot_annotations(robot, self.img, {1: 'A', 2: 'B', 3: 'A'})
         self.add_annotations(self.user, self.img, {1: 'B', 2: 'B'})
 
-        # Create a settings object with default settings
+        # Create a settings object that says to show machine annotations.
         self.user.annotationtoolsettings = AnnotationToolSettings()
-        self.user.annotationtoolsettings.save()
-        self.client.force_login(self.user)
-
-        # Showing machine annotations
         self.user.annotationtoolsettings.show_machine_annotations = True
         self.user.annotationtoolsettings.save()
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [('B', 'false'), ('B', 'false'), ('A', 'true')])
 
-        # Not showing machine annotations
+        # Now not showing machine annotations.
         self.user.annotationtoolsettings.show_machine_annotations = False
         self.user.annotationtoolsettings.save()
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [('B', 'false'), ('B', 'false'), (None, 'null')])
 
     def test_all_confirmed(self):
         self.add_annotations(self.user, self.img, {1: 'A', 2: 'B', 3: 'A'})
 
-        self.client.force_login(self.user)
-        response = self.client.get(resolve_url('annotation_tool', self.img.id))
+        response = self.load_tool()
         self.assert_annotation_form_values_equal(
             response, [('A', 'false'), ('B', 'false'), ('A', 'false')])
+
+    def test_annotations_by_deleted_user(self):
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+
+        self.add_annotations(self.user, self.img, {1: 'A'})
+        self.add_annotations(user2, self.img, {2: 'B', 3: 'A'})
+        user2.delete()
+
+        # Should load the annotations as if they had non-deleted non-robot
+        # users on them.
+        response = self.load_tool()
+        self.assert_annotation_form_values_equal(
+            response, [('A', 'false'), ('B', 'false'), ('A', 'false')])
+
+
+class ImageDetailsTest(CnStandardTest):
+    """
+    Test the display of basic image details on the annotation tool page.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+
+        cls.source = cls.create_source(
+            cls.user, visibility=Source.VisibilityTypes.PUBLIC,
+            default_point_generation_method=dict(type='simple', points=3),
+        )
+        labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, labels)
+
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_last_annotation(self):
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+
+        def load_tool():
+            self.client.force_login(self.user)
+            return self.client.get(
+                reverse('annotation_tool', args=[self.image.pk]))
+
+        def assert_last_annotation_text(expected_text):
+            self.assertInHTML(
+                f"<li>Last annotation update: {expected_text}</li>",
+                load_tool().content.decode())
+
+        def annotation_date(point_number):
+            date_obj = self.image.annotation_set.get(
+                point__point_number=point_number).annotation_date
+            return date_template_filter(
+                date_obj.astimezone(
+                    timezone.get_current_timezone()), 'N j, Y, P')
+
+        response = load_tool()
+        self.assertNotContains(
+            response, "Last annotation update",
+            msg_prefix="Shouldn't have any annotation yet")
+
+        self.add_annotations(self.user, self.image, {1: 'B', 2: 'A'})
+        assert_last_annotation_text(
+            f"{self.user.username} on {annotation_date(1)}")
+        self.add_annotations(user2, self.image, {2: 'B', 3: 'A'})
+        assert_last_annotation_text(
+            f"{user2.username} on {annotation_date(2)}")
+
+        user2.delete()
+        assert_last_annotation_text(
+            f"(Deleted user) on {str(annotation_date(2))}")
+
+    # TODO: Tests for other details besides last annotation
 
 
 class AnnotationToolQueriesTest(BaseBrowseActionTest):
@@ -1206,12 +1275,12 @@ class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
         )
 
     def test_change_a_confirmed_annotation(self):
-        self.add_annotations(self.user, self.img, {1: 'A'})
+        self.add_annotations(self.user, self.img, {1: 'A', 2: 'B'})
 
-        # Change 1
+        # Change 1, leave 2 the same
         data = dict(
-            label_1='B', label_2='', label_3='',
-            robot_1='false', robot_2='null', robot_3='null',
+            label_1='B', label_2='B', label_3='',
+            robot_1='false', robot_2='false', robot_3='null',
         )
         self.client.force_login(self.user)
         response = self.client.post(self.url, data).json()
@@ -1222,6 +1291,11 @@ class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
         self.assertEqual(annotation_1.label_code, 'B')
         self.assertEqual(annotation_1.user.username, self.user.username)
         self.assertTrue(annotation_1.confirmed)
+        annotation_2 = Annotation.objects.get(
+            image__pk=self.img.pk, point__point_number=2)
+        self.assertEqual(annotation_2.label_code, 'B')
+        self.assertEqual(annotation_2.user.username, self.user.username)
+        self.assertTrue(annotation_2.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -1229,24 +1303,24 @@ class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
             [
                 ['Point 1: B',
                  f'{self.user.username}'],
-                ['Point 1: A',
+                ['Point 1: A<br/>Point 2: B',
                  f'{self.user.username}'],
             ]
         )
 
     def test_change_a_confirmed_annotation_from_another_user(self):
-        # Add 1 as admin
-        self.add_annotations(self.user, self.img, {1: 'A'})
+        # Add 1 and 2 as admin
+        self.add_annotations(self.user, self.img, {1: 'A', 2: 'B'})
 
         # Create other user and add them to the source
         other_user = self.create_user()
         self.add_source_member(
             self.user, self.source, other_user, Source.PermTypes.EDIT.code)
 
-        # Change 1 as other user
+        # Change 1 as other user, leave 2 the same
         data = dict(
-            label_1='B', label_2='', label_3='',
-            robot_1='false', robot_2='null', robot_3='null',
+            label_1='B', label_2='B', label_3='',
+            robot_1='false', robot_2='false', robot_3='null',
         )
         self.client.force_login(other_user)
         response = self.client.post(self.url, data).json()
@@ -1257,6 +1331,11 @@ class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
         self.assertEqual(annotation_1.label_code, 'B')
         self.assertEqual(annotation_1.user.username, other_user.username)
         self.assertTrue(annotation_1.confirmed)
+        annotation_2 = Annotation.objects.get(
+            image__pk=self.img.pk, point__point_number=2)
+        self.assertEqual(annotation_2.label_code, 'B')
+        self.assertEqual(annotation_2.user.username, self.user.username)
+        self.assertTrue(annotation_2.confirmed)
 
         response = self.view_history(self.user)
         self.assert_history_table_equals(
@@ -1264,8 +1343,51 @@ class SaveAnnotationsTest(CnStandardTest, AnnotationHistoryTestMixin):
             [
                 ['Point 1: B',
                  f'{other_user.username}'],
-                ['Point 1: A',
+                ['Point 1: A<br/>Point 2: B',
                  f'{self.user.username}'],
+            ]
+        )
+
+    def test_change_a_confirmed_annotation_from_a_deleted_user(self):
+        # Create other user and add them to the source
+        other_user = self.create_user()
+        self.add_source_member(
+            self.user, self.source, other_user, Source.PermTypes.EDIT.code)
+
+        # Add 1 and 2 as other user
+        self.add_annotations(other_user, self.img, {1: 'A', 2: 'B'})
+
+        # Delete that user
+        other_user.delete()
+
+        # Change 1 as admin user, leave 2 the same
+        data = dict(
+            label_1='B', label_2='B', label_3='',
+            robot_1='false', robot_2='false', robot_3='null',
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(self.url, data).json()
+        self.assertTrue('error' not in response)
+
+        annotation_1 = Annotation.objects.get(
+            image__pk=self.img.pk, point__point_number=1)
+        self.assertEqual(annotation_1.label_code, 'B')
+        self.assertEqual(annotation_1.user.username, self.user.username)
+        self.assertTrue(annotation_1.confirmed)
+        annotation_2 = Annotation.objects.get(
+            image__pk=self.img.pk, point__point_number=2)
+        self.assertEqual(annotation_2.label_code, 'B')
+        self.assertIsNone(annotation_2.user)
+        self.assertTrue(annotation_2.confirmed)
+
+        response = self.view_history(self.user)
+        self.assert_history_table_equals(
+            response,
+            [
+                ['Point 1: B',
+                 f'{self.user.username}'],
+                ['Point 1: A<br/>Point 2: B',
+                 f'(Deleted user)'],
             ]
         )
 

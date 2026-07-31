@@ -300,7 +300,7 @@ class ClassifyImageEvent(Event):
         proxy = True
 
     type_for_subclass = 'classify_image'
-    required_id_fields = ['source_id', 'image_id', 'classifier_id']
+    required_relation_fields = ['source_id', 'image_id', 'classifier_id']
 
     def annotation_history_entry(self, labelset_dict):
         from annotations.models import Annotation
@@ -378,4 +378,4 @@ class SourceCheckRequestEvent(Event):
         proxy = True
 
     type_for_subclass = 'source_check_request'
-    required_id_fields = ['source_id']
+    required_relation_fields = ['source_id']

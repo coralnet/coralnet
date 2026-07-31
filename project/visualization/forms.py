@@ -344,30 +344,42 @@ class AnnotatorFilterField(MultiValueField):
                 getattr(self, field_name) for field_name in self.field_order],
             require_all_fields=False, **kwargs)
 
-    def compress(self, data_list):
+    def compress(self, data_list) -> Q:
         if not data_list:
-            return dict()
+            return Q()
 
         annotation_method, annotation_tool_user = data_list
-        queryset_kwargs = dict()
 
         if annotation_method == 'annotation_tool':
             if annotation_tool_user:
-                queryset_kwargs[self.annotator_lookup] = annotation_tool_user
+                return Q(**{self.annotator_lookup: annotation_tool_user})
             else:
-                # Any annotation tool user
-                user_field = self.fields[
-                    self.field_order.index('annotation_tool_user')]
-                queryset_kwargs[self.annotator_lookup + '__in'] = \
-                    user_field.queryset
-        elif annotation_method == 'alleviate':
-            queryset_kwargs[self.annotator_lookup] = get_alleviate_user()
-        elif annotation_method == 'imported':
-            queryset_kwargs[self.annotator_lookup] = get_imported_user()
-        elif annotation_method == 'machine':
-            queryset_kwargs[self.annotator_lookup] = get_robot_user()
+                # Any annotation tool user. This can include former source
+                # members or even deleted users.
+                non_tool_users = [
+                    get_alleviate_user(),
+                    get_imported_user(),
+                    get_robot_user(),
+                ]
+                q_obj = ~Q(**{self.annotator_lookup + '__in': non_tool_users})
 
-        return queryset_kwargs
+                if self.annotator_lookup == 'last_annotation__user':
+                    # The image needs to have AN annotation, but again,
+                    # the annotation can have user of null (meaning deleted).
+                    q_obj &= Q(last_annotation__isnull=False)
+
+                return q_obj
+
+        elif annotation_method == 'alleviate':
+            return Q(**{self.annotator_lookup: get_alleviate_user()})
+        elif annotation_method == 'imported':
+            return Q(**{self.annotator_lookup: get_imported_user()})
+        elif annotation_method == 'machine':
+            return Q(**{self.annotator_lookup: get_robot_user()})
+
+        # We could get here if annotation_method is blank but the user
+        # is not blank.
+        return Q()
 
 
 class NullWidget(Widget):
@@ -616,16 +628,16 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
 
         search_kwargs = self.cleaned_data
 
-        # Multi-value fields already have their values in the form of
-        # search kwargs.
-        # Just be sure to associate the kwargs with the correct model.
+        # Multi-value fields have their values in the form of
+        # search kwargs or a Q (depending on the field).
+        # Be sure to associate the kwargs with the correct model.
 
         if photo_date_kwargs := search_kwargs.get('photo_date', None):
             qs_builder.add_q(Metadata, Q(**photo_date_kwargs))
         if last_annotated_kwargs := search_kwargs.get('last_annotated', None):
             qs_builder.add_q(ImageAnnotationInfo, Q(**last_annotated_kwargs))
-        if last_annotator_kwargs := search_kwargs.get('last_annotator', None):
-            qs_builder.add_q(ImageAnnotationInfo, Q(**last_annotator_kwargs))
+        if last_annotator_q := search_kwargs.get('last_annotator', None):
+            qs_builder.add_q(ImageAnnotationInfo, last_annotator_q)
 
         # Metadata string-fields.
 
@@ -788,9 +800,9 @@ class BaseImageSearchForm(FieldsetsFormComponent, Form):
         """
         filters_used = []
         for key, value in self.cleaned_data.items():
-            if value == '' or value == dict():
+            if value == '' or value == dict() or value == Q():
                 # Not filtering by this field. '' is the basic field case,
-                # dict() is the MultiValueField case.
+                # dict() and Q() are the MultiValueField cases.
                 pass
             elif key in ['search', 'sort_method', 'sort_direction']:
                 pass
@@ -1039,11 +1051,14 @@ class PatchSearchForm(BaseImageSearchForm):
         elif data['patch_annotation_status'] == 'confirmed':
             results = results.confirmed()
 
-        # For multi-value fields, the search kwargs are the cleaned data.
-        for field_name in ['patch_annotation_date', 'patch_annotator']:
-            field_kwargs = data.get(field_name, None)
-            if field_kwargs:
-                results = results.filter(**field_kwargs)
+        # Multi-value fields have their values in the form of
+        # search kwargs or a Q (depending on the field).
+        field_kwargs = data['patch_annotation_date']
+        if field_kwargs != dict():
+            results = results.filter(**field_kwargs)
+        q_obj = data['patch_annotator']
+        if q_obj != Q():
+            results = results.filter(q_obj)
 
         return results
 

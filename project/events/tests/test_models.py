@@ -3,6 +3,7 @@
 # although it's not the best thing from a dependencies/app-coupling standpoint.
 
 from django.core.exceptions import ValidationError
+from django.db.models import Model
 
 from lib.tests.utils import CnMigrationTest, CnStandardTest
 from vision_backend.models import ClassifyImageEvent
@@ -82,29 +83,76 @@ class ManagerTest(CnStandardTest):
         )
 
 
-class MigrateClassifyImageEventToOtherAppTest(CnMigrationTest):
+class PopulateCreatorForeignKeyTest(CnMigrationTest):
 
     before = [
-        ('events', '0002_event_type_no_choices'),
+        ('events', '0006_event_add_creator_fk'),
     ]
     after = [
-        ('events', '0003_delete_classifyimageevent'),
+        ('events', '0007_event_populate_creator_fk'),
     ]
-    available_apps = ['events']
 
-    def test_dont_delete_events(self):
-        """
-        Since it's just a proxy model being moved, no instances should
-        get deleted.
-        """
+    def test(self):
         Event = self.get_model_before('events.Event')
-        event = Event(type='classify_image', details="Some details")
-        event.save()
-        event_id = event.pk
+        User = self.get_model_before('auth.User')
+
+        user_1 = User(username='user1')
+        user_1.save()
+        user_2 = User(username='user2')
+        user_2.save()
+
+        user_3 = User(username='user3')
+        user_3.save()
+        deleted_user_id = user_3.pk
+        user_3.delete()
+
+        # 2 events with existing user, 2 events with deleted user,
+        # 2 events with null user.
+        # Don't use Event.save() because that'll check for the new
+        # creator field, which isn't populated yet.
+        existing_1 = Event(
+            type='annotation_upload', creator_id=user_1.pk, details={})
+        Model.save(existing_1)
+        existing_2 = Event(
+            type='annotation_upload', creator_id=user_2.pk, details={})
+        Model.save(existing_2)
+        deleted_1 = Event(
+            type='annotation_upload', creator_id=deleted_user_id, details={})
+        Model.save(deleted_1)
+        deleted_2 = Event(
+            type='annotation_upload', creator_id=deleted_user_id, details={})
+        Model.save(deleted_2)
+        null_1 = Event(type='annotation_upload', creator_id=None, details={})
+        Model.save(null_1)
+        null_2 = Event(type='annotation_upload', creator_id=None, details={})
+        Model.save(null_2)
+
+        try:
+            self.run_migration()
+        except RuntimeError as e:
+            self.assertEqual(
+                str(e),
+                f"User of ID {deleted_user_id} doesn't exist. Delete the"
+                f" Events with this creator_id, then re-run this migration.")
+
+        # Revise the Events to prevent the error.
+        deleted_1.creator_id = None
+        Model.save(deleted_1)
+        deleted_2.creator_id = None
+        Model.save(deleted_2)
 
         self.run_migration()
 
-        Event = self.get_model_after('events.Event')
-        # This shouldn't get DoesNotExist
-        event = Event.objects.get(pk=event_id)
-        self.assertEqual(event.type, 'classify_image')
+        # Check new field's values on each Event.
+        existing_1 = Event.objects.get(pk=existing_1.pk)
+        self.assertEqual(existing_1.creator_new_id, user_1.pk)
+        existing_2 = Event.objects.get(pk=existing_2.pk)
+        self.assertEqual(existing_2.creator_new_id, user_2.pk)
+        deleted_1 = Event.objects.get(pk=deleted_1.pk)
+        self.assertIsNone(deleted_1.creator_new_id)
+        deleted_2 = Event.objects.get(pk=deleted_2.pk)
+        self.assertIsNone(deleted_2.creator_new_id)
+        null_1 = Event.objects.get(pk=null_1.pk)
+        self.assertIsNone(null_1.creator_new_id)
+        null_2 = Event.objects.get(pk=null_2.pk)
+        self.assertIsNone(null_2.creator_new_id)

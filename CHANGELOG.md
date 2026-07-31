@@ -16,6 +16,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
 
 - The `SELENIUM_BROWSERS` env value is now mandatory for running `manage.py test` without tag exclusions.
 
+- New migrations to run: annotations 0044, events 0006-0009
+
 ## [1.31](https://github.com/coralnet/coralnet/tree/1.31)
 
 Production: 2026-07-18

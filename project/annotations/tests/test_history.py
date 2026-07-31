@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils.html import escape as html_escape
 
 from lib.tests.utils import BasePermissionTest, CnStandardTest
+from sources.models import Source
 from .utils import AnnotationHistoryTestMixin
 
 
@@ -75,7 +76,24 @@ class AnnotationHistoryAccessTest(CnStandardTest, AnnotationHistoryTestMixin):
         self.assert_history_table_equals(
             response,
             [
-                ['Accessed annotation tool',
-                 '{name}'.format(name=self.user.username)],
+                ["Accessed annotation tool",
+                 self.user.username],
+            ]
+        )
+
+    def test_access_event_deleted_user(self):
+        user2 = self.create_user()
+        self.add_source_member(
+            self.user, self.source, user2, Source.PermTypes.EDIT.code)
+        self.client.force_login(user2)
+        self.client.get(reverse('annotation_tool', args=[self.img.pk]))
+        user2.delete()
+
+        response = self.view_history(self.user)
+        self.assert_history_table_equals(
+            response,
+            [
+                ["Accessed annotation tool",
+                 "(Deleted user)"],
             ]
         )

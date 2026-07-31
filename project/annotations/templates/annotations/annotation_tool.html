@@ -235,7 +235,7 @@
 
     {% if image.annoinfo.last_annotation %}
       <li>
-        Last annotation update: {{ image.annoinfo.last_annotation.user }} on {{ image.annoinfo.last_annotation.annotation_date }}
+        Last annotation update: {{ image.annoinfo.last_annotation.user|default:"(Deleted user)" }} on {{ image.annoinfo.last_annotation.annotation_date }}
       </li>
     {% endif %}
 </ul>

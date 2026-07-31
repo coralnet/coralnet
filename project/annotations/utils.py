@@ -7,7 +7,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 
 from accounts.utils import (
-    get_alleviate_user, get_imported_user, get_robot_user, is_robot_user)
+    get_alleviate_user, get_imported_user, get_robot_user)
 from events.models import Event
 from images.model_utils import PointGen
 from images.models import Image, Point
@@ -51,24 +51,6 @@ def label_ids_with_confirmed_annotations_in_source(source):
     values = source.annotation_set.confirmed().values_list(
         'label_id', flat=True).distinct()
     return list(values)
-
-
-def get_annotation_user_display(anno):
-    """
-    anno - an annotations.Annotation model.
-
-    Returns a string representing the user who made the annotation.
-    """
-    if not anno.user:
-        return "(Unknown user)"
-
-    elif is_robot_user(anno.user):
-        if not anno.robot_version:
-            return "(Robot, unknown version)"
-        return "Robot {v}".format(v=anno.robot_version)
-
-    else:
-        return anno.user.username
 
 
 def get_annotation_version_user_display(anno_version, date_created):

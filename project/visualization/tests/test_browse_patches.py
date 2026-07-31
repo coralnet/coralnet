@@ -39,13 +39,13 @@ class BaseBrowsePatchesTest(BaseBrowsePageTest):
 
     url_name = 'browse_patches'
 
-    all_possible_results = [
-        (1,1), (1,2),
-        (2,1), (2,2),
-        (3,1), (3,2),
-        (4,1), (4,2),
-        (5,1), (5,2),
-    ]
+    @property
+    def all_possible_results(self):
+        return [
+            (image_n, point_n)
+            for image_n in range(1, self.setup_image_count + 1)
+            for point_n in range(1, self.points_per_image + 1)
+        ]
 
     @classmethod
     def setUpTestData(cls):
@@ -146,11 +146,14 @@ class BaseBrowsePatchesTest(BaseBrowsePageTest):
 
 class FiltersTest(BaseBrowsePatchesTest):
 
+    setup_image_count = 7
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
 
-        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+        (cls.img1, cls.img2, cls.img3, cls.img4, cls.img5,
+            cls.img6, cls.img7) = cls.images
 
     def test_no_submit(self):
         """Page landing, no search performed yet."""
@@ -226,7 +229,7 @@ class FiltersTest(BaseBrowsePatchesTest):
         robot = self.create_robot(self.source)
         for image in self.images:
             self.add_robot_annotations(robot, image)
-        # 3 manually annotated points; the other 7 remain
+        # 3 manually annotated points; the others remain
         # robot annotated.
         self.add_annotations(
             self.user, self.img1, {1: 'A', 2: 'A'})
@@ -241,7 +244,7 @@ class FiltersTest(BaseBrowsePatchesTest):
         robot = self.create_robot(self.source)
         for image in self.images:
             self.add_robot_annotations(robot, image)
-        # 3 manually annotated points; the other 7 remain
+        # 3 manually annotated points; the others remain
         # robot annotated.
         self.add_annotations(
             self.user, self.img1, {1: 'A', 2: 'A'})
@@ -250,7 +253,9 @@ class FiltersTest(BaseBrowsePatchesTest):
 
         response = self.get_browse(patch_annotation_status='unconfirmed')
         self.assert_browse_results(
-            response, [(2,1), (2,2), (3,1), (3,2), (4,2), (5,1), (5,2)])
+            response,
+            [(2,1), (2,2), (3,1), (3,2), (4,2), (5,1), (5,2),
+             (6,1), (6,2), (7,1), (7,2)])
 
     def test_filter_by_label(self):
         self.add_annotations(
@@ -367,16 +372,30 @@ class FiltersTest(BaseBrowsePatchesTest):
         self.add_annotations(self.user, self.img2)
         self.add_annotations(self.user_editor, self.img3)
 
+        # Tool user: former source member
+        former_member = self.create_user()
+        self.add_source_member(
+            self.user, self.source, former_member, Source.PermTypes.EDIT.code)
+        self.add_annotations(former_member, self.img4, {1: 'A', 2: 'B'})
+        self.source.remove_role(former_member)
+
+        # Tool user: deleted
+        deleted_user = self.create_user()
+        self.add_source_member(
+            self.user, self.source, deleted_user, Source.PermTypes.EDIT.code)
+        self.add_annotations(deleted_user, self.img5, {1: 'A', 2: 'B'})
+        deleted_user.delete()
+
         # Not robot, but not annotation tool
-        self.set_annotation(4, 1, annotator=get_imported_user())
-        self.set_annotation(4, 2, annotator=get_imported_user())
-        self.set_annotation(5, 1, annotator=get_alleviate_user())
-        self.set_annotation(5, 2, annotator=get_alleviate_user())
+        self.set_annotation(6, 1, annotator=get_imported_user())
+        self.set_annotation(6, 2, annotator=get_imported_user())
+        self.set_annotation(7, 1, annotator=get_alleviate_user())
+        self.set_annotation(7, 2, annotator=get_alleviate_user())
 
         # Annotation tool, any user
         response = self.get_browse(patch_annotator_0='annotation_tool')
         self.assert_browse_results(
-            response, [(2,1), (2,2), (3,1), (3,2)])
+            response, [(2,1), (2,2), (3,1), (3,2), (4,1), (4,2), (5,1), (5,2)])
 
         # Annotation tool, specific user
         response = self.get_browse(
@@ -391,14 +410,14 @@ class FiltersTest(BaseBrowsePatchesTest):
             patch_annotator_0='imported',
         )
         self.assert_browse_results(
-            response, [(4,1), (4,2)])
+            response, [(6,1), (6,2)])
 
         # Alleviate
         response = self.get_browse(
             patch_annotator_0='alleviate',
         )
         self.assert_browse_results(
-            response, [(5,1), (5,2)])
+            response, [(7,1), (7,2)])
 
     def test_annotator_tool_choices(self):
         self.add_annotations(self.user, self.img1)
