@@ -18,6 +18,9 @@ When updating a CoralNet environment through multiple versions, make sure to not
 
 - New migrations to run: annotations 0044, events 0006-0009
 
+- Updates to required packages:
+  - Pillow 12.1.1 -> 12.3.0
+
 ## [1.31](https://github.com/coralnet/coralnet/tree/1.31)
 
 Production: 2026-07-18
