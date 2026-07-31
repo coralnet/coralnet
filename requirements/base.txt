@@ -29,12 +29,15 @@ django-environ@git+https://github.com/coralnet/django-environ.git@0.11.2+coralne
 django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet
 
 # Python Imaging Library
-# (A currently active, package friendly fork of the old PIL; endorsed by Django)
-# We match whatever version of numpy pyspacer uses for development, for optimal
-# consistency.
+# Started as a fork of the old unmaintained PIL; Pillow has become very widely
+# used, and Django requires it for its ImageFields.
+# Ideally we'd match whatever version of Pillow pyspacer uses for development,
+# for optimal consistency. However, it may get a bit out of sync due to the
+# frequent updates Pillow tends to need. A package that reads various complex
+# file formats makes for a large attack surface.
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
 # Compat: Python 3.10-3.14
-Pillow==12.1.1
+Pillow==12.3.0
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
