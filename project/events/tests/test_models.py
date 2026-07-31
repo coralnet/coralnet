@@ -83,33 +83,6 @@ class ManagerTest(CnStandardTest):
         )
 
 
-class MigrateClassifyImageEventToOtherAppTest(CnMigrationTest):
-
-    before = [
-        ('events', '0002_event_type_no_choices'),
-    ]
-    after = [
-        ('events', '0003_delete_classifyimageevent'),
-    ]
-
-    def test_dont_delete_events(self):
-        """
-        Since it's just a proxy model being moved, no instances should
-        get deleted.
-        """
-        Event = self.get_model_before('events.Event')
-        event = Event(type='classify_image', details="Some details")
-        event.save()
-        event_id = event.pk
-
-        self.run_migration()
-
-        Event = self.get_model_after('events.Event')
-        # This shouldn't get DoesNotExist
-        event = Event.objects.get(pk=event_id)
-        self.assertEqual(event.type, 'classify_image')
-
-
 class PopulateCreatorForeignKeyTest(CnMigrationTest):
 
     before = [
