@@ -269,6 +269,43 @@ class DeleteAnnotationsTest(ImageDetailActionBaseTest):
             img.annoinfo.last_annotation,
             msg="Should not have a last annotation")
 
+    def test_other_images_unaffected(self):
+        """
+        Like test_success(), but checking that another image wasn't affected.
+        """
+        image1 = self.upload_image(self.user, self.source)
+        image2 = self.upload_image(self.user, self.source)
+
+        for image in [image1, image2]:
+            self.add_annotations(self.user, image, {1: 'A', 2: 'B'})
+            image.annoinfo.refresh_from_db()
+            self.assertEqual(
+                image.annotation_set.count(), 2, msg="Should have annotations")
+            self.assertEqual(
+                image.annoinfo.status, 'confirmed',
+                msg="Should be confirmed")
+
+        response = self.post_to_action_view(self.user, image1)
+        self.assertContains(
+            response, "Successfully removed all annotations from this image.",
+            msg_prefix="Page should show the success message")
+
+        image1.annoinfo.refresh_from_db()
+        self.assertEqual(
+            image1.annotation_set.count(), 0,
+            msg="Annotations should be deleted")
+        self.assertEqual(
+            image1.annoinfo.status, 'unclassified',
+            msg="Should be unclassified")
+
+        image2.annoinfo.refresh_from_db()
+        self.assertEqual(
+            image2.annotation_set.count(), 2,
+            msg="Annotations should not be deleted")
+        self.assertEqual(
+            image2.annoinfo.status, 'confirmed',
+            msg="Should be confirmed")
+
     def test_show_button_if_all_points_have_confirmed_annotations(self):
         self.add_annotations(self.user, self.img, {1: 'A', 2: 'B'})
 
@@ -351,6 +388,46 @@ class RegeneratePointsTest(ImageDetailActionBaseTest):
         self.assertIsNone(
             img.annoinfo.last_annotation,
             msg="Should not have a last annotation")
+
+    @staticmethod
+    def point_pks(image):
+        return list(image.point_set.values_list('pk', flat=True))
+
+    def test_other_images_unaffected(self):
+        """
+        Like test_success(), but checking that another image wasn't affected.
+        """
+        image1 = self.upload_image(self.user, self.source)
+        image2 = self.upload_image(self.user, self.source)
+
+        image1_old_point_pks = self.point_pks(image1)
+        self.assertGreater(
+            len(image1_old_point_pks), 0, msg="Should have points")
+
+        image2_old_point_pks = self.point_pks(image2)
+        self.assertGreater(
+            len(image2_old_point_pks), 0, msg="Should have points")
+
+        response = self.post_to_action_view(self.user, image1)
+        self.assertContains(
+            response, "Successfully regenerated point locations.",
+            msg_prefix="Page should show the success message")
+
+        image1_new_point_pks = self.point_pks(image1)
+        self.assertGreater(
+            len(image1_new_point_pks), 0, msg="Should still have points")
+        self.assertTrue(
+            [new_pk not in image1_old_point_pks
+             for new_pk in image1_new_point_pks],
+            msg="New points should have different IDs from the old ones")
+
+        image2_new_point_pks = self.point_pks(image2)
+        self.assertGreater(
+            len(image2_new_point_pks), 0, msg="Should still have points")
+        self.assertTrue(
+            [new_pk in image2_old_point_pks
+             for new_pk in image2_new_point_pks],
+            msg="New points should have same IDs as the old ones")
 
     def test_deny_if_all_points_have_confirmed_annotations(self):
         self.add_annotations(self.user, self.img, {1: 'A', 2: 'B'})

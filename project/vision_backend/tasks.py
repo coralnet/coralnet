@@ -714,8 +714,8 @@ def reset_classifiers_for_source(source_id):
     # We do this before deleting Classifiers, since Annotations have FKs to
     # Classifiers, but not vice versa. So this order should reduce a bit of
     # work, and also makes more sense from a data consistency standpoint.
-    Annotation.objects.filter(
-        source_id=source_id).unconfirmed().delete_in_chunks()
+    source = Source.objects.get(pk=source_id)
+    Annotation.objects.delete_unconfirmed_for_source(source)
 
     # There are SET_NULL FKs to Classifiers, so this fetches all classifiers to
     # implement setting null. But that's okay since there aren't many

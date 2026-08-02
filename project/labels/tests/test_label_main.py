@@ -548,8 +548,10 @@ class LabelMainPatchesTest(BaseLabelMainTest):
         self.update_cache_and_get_result()
 
         # Delete 2 of the 5 annotations.
-        self.image.annotation_set \
-            .filter(point__point_number__in=[2, 4]).delete()
+        for annotation in self.image.annotation_set.filter(
+            point__point_number__in=[2, 4]
+        ):
+            annotation.delete()
 
         remaining_annotations = set(
             self.image.annotation_set.select_related('point'))

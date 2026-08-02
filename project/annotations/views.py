@@ -204,7 +204,7 @@ def batch_delete_annotations_ajax(request, source_id):
         return JsonResponse(dict(error=e.message))
 
     # Delete annotations.
-    Annotation.objects.filter(image__in=image_set).delete_in_chunks()
+    Annotation.objects.delete_for_image_set(image_set)
 
     # This should appear on the next browse load.
     messages.success(
@@ -725,9 +725,7 @@ class AnnotationsUploadConfirmView(View):
             image = Image.objects.get(pk=image_id, source=source)
 
             # Delete previous annotations and points for this image.
-            # Calling delete() on these querysets is more efficient
-            # than calling delete() on each of the individual objects.
-            Annotation.objects.filter(image=image).delete()
+            Annotation.objects.delete_for_image(image)
             Point.objects.filter(image=image).delete()
 
             # Create new points and annotations.

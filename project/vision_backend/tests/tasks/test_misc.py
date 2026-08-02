@@ -2,10 +2,10 @@ import datetime
 import json
 from unittest import mock
 
+from django.db.models import QuerySet
 from django.test.utils import override_settings
 from django.urls import reverse
 
-from annotations.managers import AnnotationQuerySet
 from annotations.models import Annotation
 from jobs.models import Job
 from jobs.tasks import run_scheduled_jobs, run_scheduled_jobs_until_empty
@@ -105,25 +105,27 @@ class ResetClassifiersForSourceTest(BaseTaskTest):
 
         self.upload_data_and_train_classifier()
 
-        for _ in range(5):
+        for _ in range(9):
             self.upload_image_and_machine_classify()
         self.assertEqual(
-            self.source.annotation_set.unconfirmed().count(), 25,
-            "Should have 5x5 = 25 unconfirmed annotations")
+            self.source.annotation_set.unconfirmed().count(), 45,
+            "Should have 9x5 = 45 unconfirmed annotations")
 
         # Finish the scheduled source check.
         run_scheduled_jobs()
 
         # Reset classifiers, while tracking how many chunks are used when
         # deleting the unconfirmed annotations.
-        annotation_delete = spy_decorator(AnnotationQuerySet.delete)
-        with mock.patch.object(AnnotationQuerySet, 'delete', annotation_delete):
+        queryset_delete = spy_decorator(QuerySet.delete)
+        with mock.patch.object(QuerySet, 'delete', queryset_delete):
             do_job(
                 'reset_classifiers_for_source', self.source.pk,
                 source_id=self.source.pk)
         self.assertEqual(
-            annotation_delete.mock_obj.call_count, 3,
-            msg="Should require 3 chunks of 10 to delete 25 annotations"
+            queryset_delete.mock_obj.call_count, 5+2,
+            msg="Should require 5 chunks of 10 to delete 45 annotations,"
+                " and there are 2 other QuerySet.delete() calls for Scores"
+                " and Classifiers, for 5+2 = 7 calls total"
         )
 
         self.assertEqual(

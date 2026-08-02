@@ -1,5 +1,5 @@
 # These tests should be one-to-one with
-# annotations/tests/test_annotations_general_cases.py.
+# annotations/tests/test_upload_general_cases.py.
 
 import codecs
 from unittest import mock
@@ -768,8 +768,8 @@ class QueriesPerImageTest(
         # Number of queries should be linear in image count, but with
         # not TOO large of a constant factor.
         # TODO: Improve this. At this time of writing, it can't get under
-        #  40 queries per image.
-        with self.assert_queries_less_than(20*50):
+        #  50 queries per image.
+        with self.assert_queries_less_than(20*60):
             self.preview_annotations(
                 self.user, self.source, cpc_files)
             self.upload_annotations(self.user, self.source)

@@ -1,15 +1,15 @@
 from enum import Enum
 from typing import Union
 
-from django.conf import settings
-from django.db import models
+from django.db.models import Manager, QuerySet
 
 from accounts.utils import get_robot_user
 from images.models import Image
-from .model_utils import scrambled_sort_hash
+from lib.utils import delete_queryset_in_chunks
+from .model_utils import ImageAnnoStatuses, scrambled_sort_hash
 
 
-class AnnotationQuerySet(models.QuerySet):
+class AnnotationQuerySet(QuerySet):
 
     def confirmed(self):
         """Confirmed annotations only."""
@@ -19,43 +19,25 @@ class AnnotationQuerySet(models.QuerySet):
         """Unconfirmed annotations only."""
         return self.filter(confirmed=False)
 
-    def delete_in_chunks(self):
-        """
-        Deletion would induce Django to fetch all Annotations to be deleted,
-        at the very least because there are SET_NULL FKs to Annotations. This
-        could run us out of memory in some cases with production amounts of
-        Annotations. This method allows deleting in chunks so that's not a
-        concern.
-        Pattern is from https://stackoverflow.com/questions/60736901/
-        We also use only() to reduce what's fetched.
-        """
-        queryset = self.only('pk')
-
-        while True:
-            chunk_pks = queryset[:settings.QUERYSET_CHUNK_SIZE].values('pk')
-            if chunk_pks:
-                self.model.objects.filter(pk__in=chunk_pks).only('pk').delete()
-            else:
-                break
-
     def delete(self):
         """
-        Batch-delete Annotations. Note that when this is used,
-        Annotation.delete() will not be called for each individual Annotation,
-        so we make sure to do the equivalent actions here.
+        When we delete Annotations, we want to update the relevant Images'
+        annotation-progress fields, while also being mindful of performance.
+        The way we ensure this is to make the Annotation deletion API more
+        specific, providing other functions like delete_for_image() and
+        delete_for_image_set(), while disabling this generic delete()
+        method so it can't be used by accident.
+
+        When we do really want to use a generic delete (should be rare), we
+        can still either delete the Annotations one by one, or we can do:
+        QuerySet.delete(my_annotation_queryset)
+        followed by some other code to update the ImageAnnotationInfo fields.
         """
-        # Get all the images corresponding to these annotations.
-        images = Image.objects.filter(annotation__in=self).distinct()
-        # Evaluate the queryset before deleting the annotations.
-        images = list(images)
-        # Delete the annotations.
-        return_values = super().delete()
-
-        # The images' annotation progress info may need updating.
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
-
-        return return_values
+        raise TypeError(
+            "Use delete_for_image(), delete_for_image_set(),"
+            " or delete_unconfirmed_for_source() instead."
+            " Or delete the Annotations one by one."
+        )
 
     def bulk_create(self, objs, *args, **kwargs):
         """
@@ -83,7 +65,7 @@ class AnnotationQuerySet(models.QuerySet):
         return new_annotations
 
 
-class AnnotationManager(models.Manager):
+class AnnotationManager(Manager):
 
     # TODO: CoralNet 1.15 changed 'updated' to 'changed', and 'no change' to
     #  'not changed'. At some point, a data migration should be written to
@@ -184,3 +166,29 @@ class AnnotationManager(models.Manager):
 
         # Else, there's nothing to save, so don't do anything.
         return self.UpdateResultsCodes.NOT_CHANGED.value
+
+    def delete_for_image(self, image: Image):
+        QuerySet.delete(self.model.objects.filter(image=image))
+
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()
+
+    def delete_for_image_set(self, image_queryset: QuerySet):
+        images = list(image_queryset)
+
+        delete_queryset_in_chunks(
+            self.model.objects.filter(image__in=image_queryset))
+
+        # Annotation progress info may need updating.
+        for image in images:
+            image.annoinfo.update_annotation_progress_fields()
+
+    def delete_unconfirmed_for_source(self, source: 'Source'):
+        delete_queryset_in_chunks(
+            self.model.objects.filter(source=source, confirmed=False))
+
+        # Annotation progress info may need updating.
+        for annoinfo in source.imageannotationinfo_set.filter(
+            status=ImageAnnoStatuses.UNCONFIRMED.value
+        ):
+            annoinfo.update_annotation_progress_fields()
