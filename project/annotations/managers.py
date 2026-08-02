@@ -39,31 +39,6 @@ class AnnotationQuerySet(QuerySet):
             " Or delete the Annotations one by one."
         )
 
-    def bulk_create(self, objs, *args, **kwargs):
-        """
-        Only use this for annotation creation cases where
-        django-reversion isn't needed, since this skips save() signals.
-        """
-        for obj in objs:
-            # confirmed field is generally expected to be set here instead of
-            # by the caller.
-            obj.confirmed = obj.user != get_robot_user()
-
-        new_annotations = super().bulk_create(objs, *args, **kwargs)
-
-        # Once saved, the objs have IDs. Set scrambled_sort_key using
-        # scrambled_sort_hash(), which uses the objs' IDs.
-        for anno in new_annotations:
-            anno.scrambled_sort_key = scrambled_sort_hash(anno)
-        self.bulk_update(new_annotations, ['scrambled_sort_key'])
-
-        images = Image.objects.filter(
-            annotation__in=new_annotations).distinct()
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
-
-        return new_annotations
-
 
 class AnnotationManager(Manager):
 
@@ -192,3 +167,53 @@ class AnnotationManager(Manager):
             status=ImageAnnoStatuses.UNCONFIRMED.value
         ):
             annoinfo.update_annotation_progress_fields()
+
+    def bulk_create(self, objs, *args, **kwargs):
+        """
+        Similar idea to AnnotationQuerySet.delete().
+        """
+        raise TypeError(
+            "Use bulk_create_for_image() instead."
+            " Or create the Annotations one by one."
+        )
+
+    def bulk_create_for_image(self, objs, image: Image):
+        """
+        Only use this for annotation creation cases where
+        django-reversion isn't needed, since this skips save() signals.
+        """
+        for obj in objs:
+            # confirmed field is generally expected to be set here instead of
+            # by the caller.
+            obj.confirmed = obj.user != get_robot_user()
+
+            # image field can be set either by the caller or here. But it
+            # shouldn't be set to a different Image.
+            # We will, however, just trust that the Points referenced by
+            # the Annotations belong to this same image. Since checking
+            # Points adds a performance concern.
+            if obj.image_id is None:
+                obj.image = image
+            elif obj.image_id != image.pk:
+                raise ValueError(
+                    f"Args have clashing Images:"
+                    f" ID {obj.image_id} vs. ID {image.pk}")
+
+            # We do also check that the Source matches.
+            if obj.source_id != obj.image.source_id:
+                raise ValueError(
+                    f"Args have clashing Sources:"
+                    f" ID {obj.source_id} vs. ID {obj.image.source_id}")
+
+        new_annotations = Manager.bulk_create(self, objs)
+
+        # Once saved, the objs have IDs. Set scrambled_sort_key using
+        # scrambled_sort_hash(), which uses the objs' IDs.
+        for anno in new_annotations:
+            anno.scrambled_sort_key = scrambled_sort_hash(anno)
+        self.bulk_update(new_annotations, ['scrambled_sort_key'])
+
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()
+
+        return new_annotations

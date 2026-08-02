@@ -347,7 +347,7 @@ def import_annotations(image, event_creator_id, annotation_dicts):
     # Bulk-create bypasses the django-reversion signals,
     # which is what we want in this case (trying to obsolete
     # reversion for annotations).
-    Annotation.objects.bulk_create(new_annotations)
+    Annotation.objects.bulk_create_for_image(new_annotations, image)
 
     # Instead of a django-reversion revision, we'll create our
     # own Event.

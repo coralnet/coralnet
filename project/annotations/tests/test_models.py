@@ -150,7 +150,7 @@ class AnnoInfoUpdateTest(CnStandardTest):
         point.delete()
         self.assert_status_equal('confirmed')
 
-    def test_point_bulk_create_delete(self):
+    def test_point_bulk_create(self):
         self.assert_status_equal('confirmed', msg="Sanity check")
 
         points = [
@@ -206,35 +206,161 @@ class AnnoInfoUpdateTest(CnStandardTest):
         self.assert_status_equal('confirmed')
         self.assert_image2_status_equal('unclassified')
 
-    # Whenever django-reversion is replaced and bulk creation of
-    # Annotations is viable again, the below code can be used to test
-    # bulk creation.
+    def test_annotation_bulk_create_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
-    # annotations = [
-    #     Annotation(
-    #         source=self.image.source,
-    #         image=self.image,
-    #         point=self.image.point_set.get(point_number=1),
-    #         label=self.labels.get(name='A'),
-    #         user=get_robot_user(),
-    #     ),
-    #     Annotation(
-    #         source=self.image.source,
-    #         image=self.image,
-    #         point=self.image.point_set.get(point_number=2),
-    #         label=self.labels.get(name='A'),
-    #         user=get_robot_user(),
-    #     ),
-    #     Annotation(
-    #         source=self.image.source,
-    #         image=self.image,
-    #         point=self.image.point_set.get(point_number=3),
-    #         label=self.labels.get(name='A'),
-    #         user=get_robot_user(),
-    #     ),
-    # ]
-    # Annotation.objects.bulk_create(annotations)
-    # self.assertStatusEqual('unconfirmed')
+        Annotation.objects.delete_for_image(self.image)
+        self.assert_status_equal('unclassified', msg="Sanity check")
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=self.image.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+        self.assert_status_equal('confirmed')
+
+
+class AnnotationCreateTest(CnStandardTest):
+    """
+    Aspects of Annotation creation methods other than annoinfo fields.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=3),
+        )
+
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_image_fks_present(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(self.image.annotation_set.count(), 3)
+
+    def test_image_fks_present_but_mismatched(self):
+        image2 = self.upload_image(self.user, self.source)
+
+        annotations = [
+            Annotation(
+                point=image2.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=image2,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Images:"
+            f" ID {image2.pk} vs. ID {self.image.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_image_fks_present_but_source_mismatched(self):
+        source2 = self.create_source(self.user)
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=source2,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Sources:"
+            f" ID {source2.pk} vs. ID {self.source.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_image_fks_absent(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(self.image.annotation_set.count(), 3)
+
+    def test_image_fks_absent_but_source_mismatched(self):
+        source2 = self.create_source(self.user)
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=source2,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Sources:"
+            f" ID {source2.pk} vs. ID {self.source.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_bulk_create_error(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(TypeError) as cm:
+            Annotation.objects.bulk_create(annotations)
+
+        self.assertEqual(
+            str(cm.exception),
+            "Use bulk_create_for_image() instead."
+            " Or create the Annotations one by one.")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
 
 
 class ScrambledSortKeyTest(CnStandardTest):
