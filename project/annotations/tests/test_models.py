@@ -104,7 +104,7 @@ class ImageStatusLogicTest(CnStandardTest):
             unconfirmed=[], confirmed=[1, 2, 3])
 
     def test_has_no_points(self):
-        self.image.point_set.delete()
+        Point.objects.delete_for_image(self.image)
         self.do_test(
             'unclassified', 'not_started',
             unconfirmed=[], confirmed=[])
@@ -157,11 +157,15 @@ class AnnoInfoUpdateTest(CnStandardTest):
             Point(image=self.image, row=10, column=10, point_number=4),
             Point(image=self.image, row=20, column=20, point_number=5),
         ]
-        points = Point.objects.bulk_create(points)
+        Point.objects.bulk_create(points)
         self.assert_status_equal('unclassified')
 
-        Point.objects.filter(pk__in=[p.pk for p in points]).delete()
-        self.assert_status_equal('confirmed')
+    def test_point_delete_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
+
+        Point.objects.delete_for_image(self.image)
+        self.assertEqual(self.image.point_set.count(), 0, msg="Sanity check")
+        self.assert_status_equal('unclassified')
 
     def test_annotation_save(self):
         self.assert_status_equal('confirmed', msg="Sanity check")

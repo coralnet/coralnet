@@ -1,9 +1,9 @@
-from django.db import models
+from django.db.models import Manager, QuerySet
 
 from annotations.model_utils import ImageAnnoStatuses
 
 
-class ImageQuerySet(models.QuerySet):
+class ImageQuerySet(QuerySet):
 
     def confirmed(self):
         """Confirmed annotation status only."""
@@ -38,23 +38,26 @@ class ImageQuerySet(models.QuerySet):
         return self.filter(features__extracted=False, unprocessable_reason="")
 
 
-class PointQuerySet(models.QuerySet):
+class PointQuerySet(QuerySet):
 
     def delete(self):
-        """Batch-delete Points."""
-        from .models import Image
+        """
+        When we delete Points, we want to update the relevant Images'
+        annotation-progress fields, while also being mindful of performance.
+        The way we ensure this is to make the Annotation deletion API more
+        specific, providing other functions like delete_for_image(),
+        while disabling this generic delete() method so it can't
+        be used by accident.
 
-        # Get all the images corresponding to these points.
-        images = Image.objects.filter(point__in=self).distinct()
-        # Evaluate the queryset before deleting the points.
-        images = list(images)
-        # Delete the points.
-        return_values = super().delete()
-
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
-
-        return return_values
+        When we do really want to use a generic delete (should be rare), we
+        can still either delete the Points one by one, or we can do:
+        QuerySet.delete(my_point_queryset)
+        followed by some other code to update the ImageAnnotationInfo fields.
+        """
+        raise TypeError(
+            "Use delete_for_image() instead."
+            " Or delete the Points one by one."
+        )
 
     def bulk_create(self, *args, **kwargs):
         from .models import Image
@@ -66,3 +69,12 @@ class PointQuerySet(models.QuerySet):
             image.annoinfo.update_annotation_progress_fields()
 
         return new_points
+
+
+class PointManager(Manager):
+
+    def delete_for_image(self, image: 'Image'):
+        QuerySet.delete(self.model.objects.filter(image=image))
+
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()

@@ -726,7 +726,7 @@ class AnnotationsUploadConfirmView(View):
 
             # Delete previous annotations and points for this image.
             Annotation.objects.delete_for_image(image)
-            Point.objects.filter(image=image).delete()
+            Point.objects.delete_for_image(image)
 
             # Create new points and annotations.
             import_annotations(
