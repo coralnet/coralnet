@@ -12,11 +12,13 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.32 (WIP)
+## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
+
+Production: 2026-08-02
 
 - The `SELENIUM_BROWSERS` env value is now mandatory for running `manage.py test` without tag exclusions.
 
-- New migrations to run: annotations 0044, events 0006-0009
+- New migrations to run: annotations 0044, events 0006-0009. These took less than 15 minutes to run in production.
 
 - Updates to required packages:
   - Pillow 12.1.1 -> 12.3.0
