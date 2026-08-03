@@ -150,14 +150,14 @@ class AnnoInfoUpdateTest(CnStandardTest):
         point.delete()
         self.assert_status_equal('confirmed')
 
-    def test_point_bulk_create(self):
+    def test_point_bulk_create_for_image(self):
         self.assert_status_equal('confirmed', msg="Sanity check")
 
         points = [
             Point(image=self.image, row=10, column=10, point_number=4),
             Point(image=self.image, row=20, column=20, point_number=5),
         ]
-        Point.objects.bulk_create(points)
+        Point.objects.bulk_create_for_image(points, self.image)
         self.assert_status_equal('unclassified')
 
     def test_point_delete_for_image(self):

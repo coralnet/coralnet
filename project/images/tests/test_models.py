@@ -175,7 +175,7 @@ class MetadataUniqueNamesInSourceTest(CnStandardTest):
                 name='1.PNG')
 
 
-class PointGenTest(CnStandardTest):
+class PointGenUtilTest(CnStandardTest):
 
     def test_point_count_simple_random(self):
         self.assertEqual(
@@ -202,6 +202,69 @@ class PointGenTest(CnStandardTest):
             PointGen(type='imported', points=40).total_points,
             40,
         )
+
+
+class PointCreateTest(CnStandardTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(cls.user)
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_image_fks_present(self):
+        Point.objects.delete_for_image(self.image)
+        self.assertEqual(self.image.point_set.count(), 0, msg="Sanity check")
+
+        points = [
+            Point(
+                point_number=num, row=num, column=num,
+                image=self.image,
+            )
+            for num in [1,2,3]
+        ]
+        Point.objects.bulk_create_for_image(points, self.image)
+
+        self.assertEqual(self.image.point_set.count(), 3)
+
+    def test_image_fks_present_but_mismatched(self):
+        Point.objects.delete_for_image(self.image)
+        self.assertEqual(self.image.point_set.count(), 0, msg="Sanity check")
+
+        image2 = self.upload_image(self.user, self.source)
+
+        points = [
+            Point(
+                point_number=num, row=num, column=num,
+                image=image2,
+            )
+            for num in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Point.objects.bulk_create_for_image(points, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Images:"
+            f" ID {image2.pk} vs. ID {self.image.pk}")
+
+        self.assertEqual(self.image.point_set.count(), 0)
+
+    def test_image_fks_absent(self):
+        Point.objects.delete_for_image(self.image)
+        self.assertEqual(self.image.point_set.count(), 0, msg="Sanity check")
+
+        points = [
+            Point(
+                point_number=num, row=num, column=num,
+            )
+            for num in [1,2,3]
+        ]
+        Point.objects.bulk_create_for_image(points, self.image)
+
+        self.assertEqual(self.image.point_set.count(), 3)
 
 
 class PointValidationTest(CnStandardTest):

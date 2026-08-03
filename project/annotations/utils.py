@@ -325,7 +325,7 @@ def import_annotations(image, event_creator_id, annotation_dicts):
             point_number=num, image=image)
         new_points.append(point)
     # Save to DB with an efficient bulk operation.
-    Point.objects.bulk_create(new_points)
+    Point.objects.bulk_create_for_image(new_points, image)
 
     # Mapping of newly-saved points.
     point_numbers_to_ids = dict(

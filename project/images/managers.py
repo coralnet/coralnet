@@ -59,17 +59,6 @@ class PointQuerySet(QuerySet):
             " Or delete the Points one by one."
         )
 
-    def bulk_create(self, *args, **kwargs):
-        from .models import Image
-
-        new_points = super().bulk_create(*args, **kwargs)
-
-        images = Image.objects.filter(point__in=new_points).distinct()
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
-
-        return new_points
-
 
 class PointManager(Manager):
 
@@ -78,3 +67,30 @@ class PointManager(Manager):
 
         # Annotation progress info may need updating.
         image.annoinfo.update_annotation_progress_fields()
+
+    def bulk_create(self, objs, *args, **kwargs):
+        """
+        Similar idea to PointQuerySet.delete().
+        """
+        raise TypeError(
+            "Use bulk_create_for_image() instead."
+            " Or create the Points one by one."
+        )
+
+    def bulk_create_for_image(self, objs, image: 'Image'):
+        for obj in objs:
+            # image field can be set either by the caller or here. But it
+            # shouldn't be set to a different Image.
+            if obj.image_id is None:
+                obj.image = image
+            elif obj.image_id != image.pk:
+                raise ValueError(
+                    f"Args have clashing Images:"
+                    f" ID {obj.image_id} vs. ID {image.pk}")
+
+        new_points = Manager.bulk_create(self, objs)
+
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()
+
+        return new_points
