@@ -165,9 +165,17 @@ def get_next_object(current_object, queryset, wrap=False):
 
     if wrap:
         # We wrap around to the first object.
-        # Assuming we're not AT the first object.
-        first_object = queryset[0]
+        try:
+            first_object = queryset[0]
+        except IndexError:
+            # Even the current image isn't part of the queryset. Example:
+            # user searched for unclassified images, entered annotation tool,
+            # finished the final image, closed browser, then reloaded the
+            # page via reopening browser.
+            return None
+
         if first_object.pk == current_object.pk:
+            # We are at the first object, so this is the only object.
             return None
         else:
             return first_object
