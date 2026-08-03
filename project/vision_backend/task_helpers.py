@@ -129,7 +129,7 @@ def add_annotations(image_id: int,
         #  done on the Annotation History page at some point.
 
     if create_all:
-        Annotation.objects.bulk_create(create_all_list)
+        Annotation.objects.bulk_create_for_image(create_all_list, img)
 
     event = ClassifyImageEvent(
         source_id=img.source_id,

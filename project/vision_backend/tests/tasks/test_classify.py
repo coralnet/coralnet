@@ -330,7 +330,7 @@ class SourceCheckImageCasesTest(BaseTaskTest):
             self.classifier_2,
             fill_classifier_field=True,
         )
-        self.img1.annotation_set.delete()
+        Annotation.objects.delete_for_image(self.img1)
         # Even though the field says the classifier's already visited
         # img1, the annotations being deleted indicates it needs a
         # revisit.

@@ -1,7 +1,7 @@
 from django.conf import settings
 
 from accounts.utils import get_robot_user
-from images.models import Point
+from images.models import Image, Point
 from lib.tests.utils import CnMigrationTest, CnStandardTest
 from lib.tests.utils_data import sample_image_as_file
 from ..model_utils import (
@@ -49,8 +49,10 @@ class ImageStatusLogicTest(CnStandardTest):
             # all first, then delete the ones we don't want for the
             # purposes of the test.
             self.add_robot_annotations(self.classifier, self.image)
-            self.image.annotation_set.exclude(
-                point__point_number__in=unconfirmed).delete()
+            for annotation in self.image.annotation_set.exclude(
+                point__point_number__in=unconfirmed
+            ):
+                annotation.delete()
         if confirmed:
             self.add_annotations(
                 self.user, self.image,
@@ -102,7 +104,7 @@ class ImageStatusLogicTest(CnStandardTest):
             unconfirmed=[], confirmed=[1, 2, 3])
 
     def test_has_no_points(self):
-        self.image.point_set.delete()
+        Point.objects.delete_for_image(self.image)
         self.do_test(
             'unclassified', 'not_started',
             unconfirmed=[], confirmed=[])
@@ -125,87 +127,240 @@ class AnnoInfoUpdateTest(CnStandardTest):
 
         cls.image = cls.upload_image(cls.user, cls.source)
         cls.add_annotations(cls.user, cls.image)
+        cls.image2 = cls.upload_image(cls.user, cls.source)
+        cls.add_robot_annotations(cls.create_robot(cls.source), cls.image2)
 
-    def assertStatusEqual(self, expected_status, msg=None):
+    def assert_status_equal(self, expected_status, msg=None):
         self.image.annoinfo.refresh_from_db()
         self.assertEqual(
             self.image.annoinfo.status, expected_status, msg=msg)
 
+    def assert_image2_status_equal(self, expected_status, msg=None):
+        self.image2.annoinfo.refresh_from_db()
+        self.assertEqual(
+            self.image2.annoinfo.status, expected_status, msg=msg)
+
     def test_point_save_delete(self):
-        self.assertStatusEqual('confirmed', msg="Sanity check")
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
         point = Point(image=self.image, row=10, column=10, point_number=4)
         point.save()
-        self.assertStatusEqual('unclassified')
+        self.assert_status_equal('unclassified')
 
         point.delete()
-        self.assertStatusEqual('confirmed')
+        self.assert_status_equal('confirmed')
 
-    def test_point_bulk_create_delete(self):
-        self.assertStatusEqual('confirmed', msg="Sanity check")
+    def test_point_bulk_create_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
         points = [
             Point(image=self.image, row=10, column=10, point_number=4),
             Point(image=self.image, row=20, column=20, point_number=5),
         ]
-        points = Point.objects.bulk_create(points)
-        self.assertStatusEqual('unclassified')
+        Point.objects.bulk_create_for_image(points, self.image)
+        self.assert_status_equal('unclassified')
 
-        Point.objects.filter(pk__in=[p.pk for p in points]).delete()
-        self.assertStatusEqual('confirmed')
+    def test_point_delete_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
+
+        Point.objects.delete_for_image(self.image)
+        self.assertEqual(self.image.point_set.count(), 0, msg="Sanity check")
+        self.assert_status_equal('unclassified')
 
     def test_annotation_save(self):
-        self.assertStatusEqual('confirmed', msg="Sanity check")
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
         annotation = Annotation.objects.get(
             image=self.image, point__point_number=1)
         annotation.user = get_robot_user()
         annotation.save()
-        self.assertStatusEqual('unconfirmed')
+        self.assert_status_equal('unconfirmed')
 
     def test_annotation_delete(self):
-        self.assertStatusEqual('confirmed', msg="Sanity check")
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
         annotation = Annotation.objects.get(
             image=self.image, point__point_number=1)
         annotation.delete()
-        self.assertStatusEqual('unclassified')
+        self.assert_status_equal('unclassified')
 
-    def test_annotation_bulk_delete(self):
-        self.assertStatusEqual('confirmed', msg="Sanity check")
+    def test_annotations_delete_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
 
-        self.image.annotation_set.delete()
-        self.assertStatusEqual('unclassified')
+        Annotation.objects.delete_for_image(self.image)
+        self.assert_status_equal('unclassified')
 
-        # Whenever django-reversion is replaced and bulk creation of
-        # Annotations is viable again, the below code can be used to test
-        # bulk creation.
+    def test_annotations_delete_for_image_set(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
+        self.assert_image2_status_equal('unconfirmed', msg="Sanity check")
 
-        # annotations = [
-        #     Annotation(
-        #         source=self.image.source,
-        #         image=self.image,
-        #         point=self.image.point_set.get(point_number=1),
-        #         label=self.labels.get(name='A'),
-        #         user=get_robot_user(),
-        #     ),
-        #     Annotation(
-        #         source=self.image.source,
-        #         image=self.image,
-        #         point=self.image.point_set.get(point_number=2),
-        #         label=self.labels.get(name='A'),
-        #         user=get_robot_user(),
-        #     ),
-        #     Annotation(
-        #         source=self.image.source,
-        #         image=self.image,
-        #         point=self.image.point_set.get(point_number=3),
-        #         label=self.labels.get(name='A'),
-        #         user=get_robot_user(),
-        #     ),
-        # ]
-        # Annotation.objects.bulk_create(annotations)
-        # self.assertStatusEqual('unconfirmed')
+        Annotation.objects.delete_for_image_set(Image.objects.all())
+        self.assert_status_equal('unclassified')
+        self.assert_image2_status_equal('unclassified')
+
+    def test_annotations_delete_unconfirmed_for_source(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
+        self.assert_image2_status_equal('unconfirmed', msg="Sanity check")
+
+        Annotation.objects.delete_unconfirmed_for_source(self.source)
+        self.assert_status_equal('confirmed')
+        self.assert_image2_status_equal('unclassified')
+
+    def test_annotation_bulk_create_for_image(self):
+        self.assert_status_equal('confirmed', msg="Sanity check")
+
+        Annotation.objects.delete_for_image(self.image)
+        self.assert_status_equal('unclassified', msg="Sanity check")
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=self.image.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+        self.assert_status_equal('confirmed')
+
+
+class AnnotationCreateTest(CnStandardTest):
+    """
+    Aspects of Annotation creation methods other than annoinfo fields.
+    """
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.user = cls.create_user()
+        cls.source = cls.create_source(
+            cls.user,
+            default_point_generation_method=dict(type='simple', points=3),
+        )
+
+        cls.labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
+        cls.create_labelset(cls.user, cls.source, cls.labels)
+
+        cls.image = cls.upload_image(cls.user, cls.source)
+
+    def test_image_fks_present(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(self.image.annotation_set.count(), 3)
+
+    def test_image_fks_present_but_mismatched(self):
+        image2 = self.upload_image(self.user, self.source)
+
+        annotations = [
+            Annotation(
+                point=image2.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=image2,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Images:"
+            f" ID {image2.pk} vs. ID {self.image.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_image_fks_present_but_source_mismatched(self):
+        source2 = self.create_source(self.user)
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=source2,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Sources:"
+            f" ID {source2.pk} vs. ID {self.source.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_image_fks_absent(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(self.image.annotation_set.count(), 3)
+
+    def test_image_fks_absent_but_source_mismatched(self):
+        source2 = self.create_source(self.user)
+
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                source=source2,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(ValueError) as cm:
+            Annotation.objects.bulk_create_for_image(annotations, self.image)
+
+        self.assertEqual(
+            str(cm.exception),
+            f"Args have clashing Sources:"
+            f" ID {source2.pk} vs. ID {self.source.pk}")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
+
+    def test_bulk_create_error(self):
+        annotations = [
+            Annotation(
+                point=self.image.point_set.get(point_number=point_number),
+                label=self.labels.get(name='A'),
+                user=self.user,
+                image=self.image,
+                source=self.source,
+            )
+            for point_number in [1,2,3]
+        ]
+        with self.assertRaises(TypeError) as cm:
+            Annotation.objects.bulk_create(annotations)
+
+        self.assertEqual(
+            str(cm.exception),
+            "Use bulk_create_for_image() instead."
+            " Or create the Annotations one by one.")
+
+        self.assertEqual(self.image.annotation_set.count(), 0)
 
 
 class ScrambledSortKeyTest(CnStandardTest):

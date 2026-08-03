@@ -462,10 +462,13 @@ class UploadAnnotationsGeneralCasesTest(
 
         self.img1.annoinfo.refresh_from_db()
         self.assertIsNotNone(self.img1.annoinfo.last_annotation)
+        self.assertTrue(self.img1.annoinfo.confirmed)
         self.img2.annoinfo.refresh_from_db()
         self.assertIsNone(self.img2.annoinfo.last_annotation)
+        self.assertFalse(self.img2.annoinfo.confirmed)
         self.img3.annoinfo.refresh_from_db()
         self.assertIsNotNone(self.img3.annoinfo.last_annotation)
+        self.assertTrue(self.img3.annoinfo.confirmed)
 
     def check_label_codes_different_case(
             self, preview_response, upload_response):

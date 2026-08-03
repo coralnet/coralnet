@@ -1,9 +1,9 @@
-from django.db import models
+from django.db.models import Manager, QuerySet
 
 from annotations.model_utils import ImageAnnoStatuses
 
 
-class ImageQuerySet(models.QuerySet):
+class ImageQuerySet(QuerySet):
 
     def confirmed(self):
         """Confirmed annotation status only."""
@@ -38,31 +38,59 @@ class ImageQuerySet(models.QuerySet):
         return self.filter(features__extracted=False, unprocessable_reason="")
 
 
-class PointQuerySet(models.QuerySet):
+class PointQuerySet(QuerySet):
 
     def delete(self):
-        """Batch-delete Points."""
-        from .models import Image
+        """
+        When we delete Points, we want to update the relevant Images'
+        annotation-progress fields, while also being mindful of performance.
+        The way we ensure this is to make the Annotation deletion API more
+        specific, providing other functions like delete_for_image(),
+        while disabling this generic delete() method so it can't
+        be used by accident.
 
-        # Get all the images corresponding to these points.
-        images = Image.objects.filter(point__in=self).distinct()
-        # Evaluate the queryset before deleting the points.
-        images = list(images)
-        # Delete the points.
-        return_values = super().delete()
+        When we do really want to use a generic delete (should be rare), we
+        can still either delete the Points one by one, or we can do:
+        QuerySet.delete(my_point_queryset)
+        followed by some other code to update the ImageAnnotationInfo fields.
+        """
+        raise TypeError(
+            "Use delete_for_image() instead."
+            " Or delete the Points one by one."
+        )
 
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
 
-        return return_values
+class PointManager(Manager):
 
-    def bulk_create(self, *args, **kwargs):
-        from .models import Image
+    def delete_for_image(self, image: 'Image'):
+        QuerySet.delete(self.model.objects.filter(image=image))
 
-        new_points = super().bulk_create(*args, **kwargs)
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()
 
-        images = Image.objects.filter(point__in=new_points).distinct()
-        for image in images:
-            image.annoinfo.update_annotation_progress_fields()
+    def bulk_create(self, objs, *args, **kwargs):
+        """
+        Similar idea to PointQuerySet.delete().
+        """
+        raise TypeError(
+            "Use bulk_create_for_image() instead."
+            " Or create the Points one by one."
+        )
+
+    def bulk_create_for_image(self, objs, image: 'Image'):
+        for obj in objs:
+            # image field can be set either by the caller or here. But it
+            # shouldn't be set to a different Image.
+            if obj.image_id is None:
+                obj.image = image
+            elif obj.image_id != image.pk:
+                raise ValueError(
+                    f"Args have clashing Images:"
+                    f" ID {obj.image_id} vs. ID {image.pk}")
+
+        new_points = Manager.bulk_create(self, objs)
+
+        # Annotation progress info may need updating.
+        image.annoinfo.update_annotation_progress_fields()
 
         return new_points

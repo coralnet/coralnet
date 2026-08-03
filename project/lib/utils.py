@@ -9,8 +9,10 @@ import string
 from typing import Any, Callable
 import urllib.parse
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Page, Paginator, EmptyPage, InvalidPage
+from django.db.models import QuerySet
 from django.template.defaultfilters import date as date_template_filter
 from django.utils import timezone
 
@@ -278,3 +280,33 @@ def rand_string(num_of_chars):
     return ''.join(
         random.choice(string.ascii_lowercase + string.digits)
         for _ in range(num_of_chars))
+
+
+def delete_queryset_in_chunks(queryset: QuerySet):
+    """
+    Calling delete() on a QuerySet may induce Django to fetch all instances to
+    be deleted, for example if there are SET_NULL FKs pointing to the
+    instances being deleted.
+    This could run us out of memory in some cases, like when deleting close to
+    millions of Annotations. This method allows deleting in chunks so that's
+    not a concern.
+    Pattern is from https://stackoverflow.com/questions/60736901/
+    And similar here https://forum.djangoproject.com/t/incremental-bulk-deletion/40833/2
+    We also use only() to reduce what's fetched.
+    """
+    queryset = queryset.only('pk')
+
+    while True:
+        chunk_pks = queryset[:settings.QUERYSET_CHUNK_SIZE].values('pk')
+        if not chunk_pks:
+            break
+
+        chunk_queryset = queryset.model.objects.filter(
+            pk__in=chunk_pks).only('pk')
+
+        # On our main use case thus far, deleting Annotations, we've defined
+        # AnnotationQuerySet.delete() to simply raise an error, so that it's
+        # not naively used (which leads to bookkeeping fields not being
+        # updated + potentially awful performance).
+        # So here we explicitly call the generic QuerySet.delete() instead.
+        QuerySet.delete(chunk_queryset)

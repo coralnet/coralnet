@@ -154,7 +154,7 @@ def image_delete_annotations(request, image_id):
     """
     image = get_object_or_404(Image, id=image_id)
 
-    Annotation.objects.filter(image=image).delete()
+    Annotation.objects.delete_for_image(image)
 
     messages.success(
         request, 'Successfully removed all annotations from this image.')

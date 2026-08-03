@@ -6,7 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
 from selenium.webdriver.support.ui import WebDriverWait
-from django.test.utils import override_settings
+from django.db import connections
+from django.db.models import QuerySet
+from django.db.utils import DEFAULT_DB_ALIAS
+from django.test.utils import CaptureQueriesContext, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -16,7 +19,6 @@ from sources.models import Source
 from vision_backend.tests.tasks.utils import TaskTestMixin
 from visualization.tests.utils import (
     BaseBrowseActionTest, BaseBrowseSeleniumTest, BrowseActionsFormTest)
-from ..managers import AnnotationQuerySet
 
 
 tz = timezone.get_current_timezone()
@@ -55,6 +57,9 @@ class BaseDeleteTest(BaseBrowseActionTest):
         self.assertFalse(
             image.annoinfo.confirmed,
             f"Image {image.metadata.name} should not be confirmed anymore")
+        self.assertIsNone(
+            image.annoinfo.last_annotation,
+            f"Image {image.metadata.name} should not have a last annotation")
 
     def assert_annotations_not_deleted(
         self, image, expected_count=2, expect_confirmed=True,
@@ -69,6 +74,9 @@ class BaseDeleteTest(BaseBrowseActionTest):
             self.assertTrue(
                 image.annoinfo.confirmed,
                 f"Image {image.metadata.name} should still be confirmed")
+        self.assertIsNotNone(
+            image.annoinfo.last_annotation,
+            f"Image {image.metadata.name} should have a last annotation")
 
     def assert_confirmation_message(self, count):
         """
@@ -287,14 +295,14 @@ class SuccessTest(BaseDeleteTest):
 
         # Delete for all images, while tracking how many chunks are used
         # when deleting.
-        annotation_delete = spy_decorator(AnnotationQuerySet.delete)
-        with mock.patch.object(AnnotationQuerySet, 'delete', annotation_delete):
+        queryset_delete = spy_decorator(QuerySet.delete)
+        with mock.patch.object(QuerySet, 'delete', queryset_delete):
             self.client.force_login(self.user)
             self.client.post(
                 self.url, self.default_search_params | dict(result_count=7))
 
         self.assertEqual(
-            annotation_delete.mock_obj.call_count, 4,
+            queryset_delete.mock_obj.call_count, 4,
             msg="Should require 4 chunks of 4 to delete 14 annotations"
         )
 
@@ -566,6 +574,54 @@ class ErrorTest(BaseDeleteTest):
 
         for image in self.images:
             self.assert_annotations_not_deleted(image)
+
+
+class QueriesTest(BaseDeleteTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        cls.img1, cls.img2, cls.img3, cls.img4, cls.img5 = cls.images
+
+        # Allow assertion messages to refer to the images by name.
+        cls.update_multiple_metadatas(
+            'name',
+            ['img1', 'img2', 'img3', 'img4', 'img5'],
+        )
+
+    def setUp(self):
+        super().setUp()
+
+        for image in self.images:
+            image.refresh_from_db()
+            self.add_annotations(self.user, image, {1: 'A', 2: 'B'})
+
+    def test_delete_all_query_complexity(self):
+        """
+        Delete annotations for all images in the source, and check that the
+        queries for doing so aren't too complex.
+        """
+        conn = connections[DEFAULT_DB_ALIAS]
+        self.client.force_login(self.user)
+        with CaptureQueriesContext(conn) as cm:
+            response = self.client.post(
+                self.url,
+                self.default_search_params | dict(result_count=5),
+            )
+        self.assertDictEqual(response.json(), dict(success=True))
+
+        # We had a really slow query here which had 3 levels of nested
+        # subqueries, making for 4 SELECTs in the query's SQL.
+        #
+        # Hopefully checking for the number of SELECTs like this doesn't
+        # pick up any queries that are actually OK.
+        for query in cm.captured_queries:
+            self.assertLess(
+                query['sql'].count('SELECT'), 4,
+                msg=f"Shouldn't have too many nested subqueries."
+                    f" Query is:\n{query['sql']}"
+            )
 
 
 # Make it easy to get multiple pages of results.

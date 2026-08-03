@@ -14,7 +14,7 @@ from easy_thumbnails.fields import ThumbnailerImageField
 from annotations.model_utils import AnnotationArea
 from lib.utils import rand_string
 from sources.models import Source
-from .managers import ImageQuerySet, PointQuerySet
+from .managers import ImageQuerySet, PointManager, PointQuerySet
 from .model_utils import PointGen
 
 
@@ -360,7 +360,7 @@ class Metadata(models.Model):
 
 
 class Point(models.Model):
-    objects = PointQuerySet.as_manager()
+    objects = PointManager.from_queryset(PointQuerySet)()
 
     row = models.IntegerField()
     column = models.IntegerField()
