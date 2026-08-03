@@ -159,17 +159,21 @@ class NavigationTest(BaseBrowseActionTest):
 
     def assert_navigation_details(
             self, search_kwargs, current_image,
-            expected_prev=None, expected_next=None,
+            expected_prev, expected_next,
             expected_x_of_y_display=None, expected_search_display=None):
 
         response = self.enter_annotation_tool(search_kwargs, current_image)
         response_soup = BeautifulSoup(response.content, 'html.parser')
 
-        if expected_prev is not None:
+        if expected_prev is None:
+            self.assertIsNone(response.context['prev_metadata'])
+        else:
             self.assertEqual(
                 response.context['prev_metadata'].image_id, expected_prev.pk)
 
-        if expected_next is not None:
+        if expected_next is None:
+            self.assertIsNone(response.context['next_metadata'])
+        else:
             self.assertEqual(
                 response.context['next_metadata'].image_id, expected_next.pk)
 
@@ -193,12 +197,63 @@ class NavigationTest(BaseBrowseActionTest):
     def test_next_wrap_to_first(self):
         self.assert_navigation_details(
             dict(), self.img5,
-            expected_next=self.img1)
+            expected_prev=self.img4, expected_next=self.img1)
 
     def test_prev_wrap_to_last(self):
         self.assert_navigation_details(
             dict(), self.img1,
-            expected_prev=self.img5)
+            expected_prev=self.img5, expected_next=self.img2)
+
+    def test_only_image_in_search(self):
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img2, 'Site2')])
+        self.assert_navigation_details(
+            dict(aux1='Site2'), self.img2,
+            expected_prev=None, expected_next=None,
+            expected_x_of_y_display="Image 1 of 1",
+            expected_search_display="Filtering by aux1;"
+                                    " Sorting by name, ascending")
+
+    def test_not_in_search(self):
+        """
+        This is possible if the user searched for unclassified images,
+        came to an image in the annotation tool and annotated it,
+        then later used the Back button in their browser to try to return to
+        that image.
+        """
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img2, 'Site2'), (self.img3, 'Site2')])
+        self.assert_navigation_details(
+            dict(aux1='Site2'), self.img5,
+            expected_prev=self.img3, expected_next=self.img2,
+            # Yes this is nonsensical, but it's not really worth the effort
+            # to improve this edge case.
+            expected_x_of_y_display="Image 3 of 2",
+            expected_search_display="Filtering by aux1;"
+                                    " Sorting by name, ascending")
+
+    def test_nothing_in_search(self):
+        """
+        Like 'not in search', this is possible when using the Back button
+        in the browser. Or when reloading the page after some other work,
+        possibly an auto-reload after closing the browser.
+        """
+        self.update_multiple_metadatas(
+            'aux1',
+            [(self.img1, 'Site1')])
+        self.update_multiple_metadatas(
+            'aux2',
+            [(self.img2, 'Transect2')])
+        self.assert_navigation_details(
+            dict(aux1='Site1', aux2='Transect2'), self.img3,
+            expected_prev=None, expected_next=None,
+            # Yes this is nonsensical, but it's not really worth the effort
+            # to improve this edge case.
+            expected_x_of_y_display="Image 1 of 0",
+            expected_search_display="Filtering by aux1, aux2;"
+                                    " Sorting by name, ascending")
 
     # Specific filters.
     # These filters should be tested more thoroughly in test_browse_images.py,
@@ -215,7 +270,7 @@ class NavigationTest(BaseBrowseActionTest):
         # img3 next -> img2
         self.assert_navigation_details(
             dict(aux1='Site3'), self.img3,
-            expected_next=self.img2,
+            expected_prev=self.img2, expected_next=self.img2,
             expected_x_of_y_display="Image 2 of 2",
             expected_search_display="Filtering by aux1;"
                                     " Sorting by name, ascending")
@@ -229,7 +284,7 @@ class NavigationTest(BaseBrowseActionTest):
 
         self.assert_navigation_details(
             dict(photo_date_0='year', photo_date_1=2012), self.img2,
-            expected_prev=self.img3,
+            expected_prev=self.img3, expected_next=self.img3,
             expected_x_of_y_display="Image 1 of 2",
             expected_search_display="Filtering by photo date;"
                                     " Sorting by name, ascending")
@@ -254,7 +309,7 @@ class NavigationTest(BaseBrowseActionTest):
                 last_annotated_4=datetime.date(2012, 3, 20),
             ),
             self.img4,
-            expected_next=self.img2,
+            expected_prev=self.img3, expected_next=self.img2,
             expected_x_of_y_display="Image 3 of 3",
             expected_search_display="Filtering by last annotation date;"
                                     " Sorting by name, ascending")
@@ -273,6 +328,7 @@ class NavigationTest(BaseBrowseActionTest):
                 last_annotator_1=user2.pk,
             ),
             self.img2,
+            expected_prev=None, expected_next=None,
             expected_x_of_y_display="Image 1 of 1",
             expected_search_display="Filtering by last annotator;"
                                     " Sorting by name, ascending")
@@ -318,6 +374,7 @@ class NavigationTest(BaseBrowseActionTest):
         self.assert_navigation_details(
             dict(photo_date_0='year', photo_date_1=2013, aux4='A4'),
             self.img2,
+            expected_prev=None, expected_next=None,
             expected_x_of_y_display="Image 1 of 1",
             expected_search_display=(
                 "Filtering by photo date, aux4; Sorting by name, ascending"),
