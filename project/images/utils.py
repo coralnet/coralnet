@@ -443,15 +443,13 @@ def delete_image(img: Image):
     img.delete()
 
 
-def calculate_points(annotation_area, point_gen_spec):
+def calculate_points(
+    annotation_area: AnnotationArea, point_gen_spec: PointGen,
+) -> list[Point]:
     """
     Calculate points for an image. This doesn't actually
-    insert anything in the database; it just generates the
-    row, column for each point number.
-
-    Returns the points as a list of dicts; each dict
-    represents a point, and has keys "row", "column",
-    and "point_number".
+    insert anything in the database; it just returns Points that are ready to
+    be saved other than missing an image-FK value.
     """
 
     points = []
@@ -463,7 +461,6 @@ def calculate_points(annotation_area, point_gen_spec):
 
     annoarea_height = annoarea_max_row - annoarea_min_row + 1
     annoarea_width = annoarea_max_col - annoarea_min_col + 1
-
 
     if point_gen_spec.type == PointGen.Types.SIMPLE.value:
 
@@ -502,7 +499,7 @@ def calculate_points(annotation_area, point_gen_spec):
             for c in range(cell_columns_for_numbering):
                 for p in cell[r][c]:
 
-                    points.append(dict(
+                    points.append(Point(
                         row=p['row'], column=p['column'],
                         point_number=point_num,
                     ))
@@ -532,7 +529,7 @@ def calculate_points(annotation_area, point_gen_spec):
                     row = random.randint(row_min, row_max)
                     column = random.randint(col_min, col_max)
 
-                    points.append(dict(
+                    points.append(Point(
                         row=row, column=column, point_number=point_num,
                     ))
                     point_num += 1
@@ -557,7 +554,7 @@ def calculate_points(annotation_area, point_gen_spec):
                     // point_gen_spec.cell_columns) + annoarea_min_col - 1
                 col_mid = (col_min+col_max) // 2
 
-                points.append(dict(
+                points.append(Point(
                     row=row_mid, column=col_mid, point_number=point_num,
                 ))
                 point_num += 1
@@ -591,16 +588,13 @@ def generate_points(img, usesourcemethod=True):
         point_gen_method = img.source.default_point_generation_method
     else:
         point_gen_method = img.point_generation_method
-    
     new_points = calculate_points(
         annotation_area=anno_area,
         point_gen_spec=PointGen.from_db_value(point_gen_method),
     )
 
-    # Delete old points for this image, if any.
-    old_points = Point.objects.filter(image=img)
-    for old_point in old_points:
-        old_point.delete()
+    # Delete the old points for this image.
+    Point.objects.delete_for_image(img)
 
     # Any CPC (Coral Point Count file) we had saved previously no longer has
     # the correct point positions, so we'll just discard the CPC.
@@ -609,12 +603,7 @@ def generate_points(img, usesourcemethod=True):
     img.save()
 
     # Save the newly calculated points.
-    for new_point in new_points:
-        Point(row=new_point['row'],
-              column=new_point['column'],
-              point_number=new_point['point_number'],
-              image=img,
-        ).save()
+    Point.objects.bulk_create_for_image(new_points, img)
 
 
 def get_carousel_images():
