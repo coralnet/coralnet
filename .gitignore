@@ -35,3 +35,5 @@ coralnet_sqlite_database
 # Misc
 /misc_not_versioncontrolled/*
 /tmp/*
+.vscode/settings.json
+.vscode/launch.json
