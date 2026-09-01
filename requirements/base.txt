@@ -127,7 +127,7 @@ django-storages[s3]==1.14.4
 # REST API framework.
 # Changelog: https://www.django-rest-framework.org/community/release-notes/
 # Compat: Python 3.6-3.12, Django 4.2-5.0
-djangorestframework==3.15.2
+djangorestframework==3.17.2
 
 # Writing tests for database migrations.
 # https://github.com/plumdog/django_migration_testcase/
