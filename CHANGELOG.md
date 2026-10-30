@@ -12,6 +12,13 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## 1.33 (WIP)
+
+- Updates to required packages:
+
+  - New: `psycopg[binary]>=3.3.6,<3.4`
+  - No longer needed: `psycopg2-binary`
+
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
 Production: 2026-08-02

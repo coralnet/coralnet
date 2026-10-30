@@ -88,28 +88,12 @@ django-registration==3.4
 django-reversion==5.1.0
 
 # Allow Django to connect to a PostgreSQL database.
-# Changelog: https://www.psycopg.org/docs/news.html
+# Changelog: https://www.psycopg.org/psycopg3/docs/news.html
 #
 # See here for versions Django supports:
 # https://docs.djangoproject.com/en/dev/ref/databases/#postgresql-notes
-#
-# About psycopg2-binary vs. psycopg2:
-# psycopg2 separates source and binary releases into separate packages
-# (psycopg2 and psycopg2-binary respectively) starting from 2.7, with the
-# intention of emphasizing that they consider the binary unsafe for production.
-# This decision was from a threading-related segfault issue, although not an
-# easily replicated one:
-# https://github.com/psycopg/psycopg2/issues/543
-# And it appears they may have fixed the issue, but are playing it safe until
-# someone who can replicate the issue can confirm it's fixed:
-# https://github.com/psycopg/psycopg2-wheels/pull/8/files
-# All things considered, we'll use the binary in all environments for
-# simplicity of installation. However, if we encounter any segfaults
-# in huey workers, we should revisit this.
-#
-# About psycopg 2 versus 3:
-# Django <=4.1 doesn't support 3, but support is planned in Django 4.2.
-psycopg2-binary>=2.9.6,<2.10
+# Compat: Python 3.10-3.15, Django 4.2+
+psycopg[binary]>=3.3.6,<3.4
 
 # Amazon Web Services SDK for Python
 # Changelog: https://github.com/boto/boto3/blob/develop/CHANGELOG.rst
