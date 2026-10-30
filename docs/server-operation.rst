@@ -34,7 +34,7 @@ If you are upgrading the major version (2 -> 3) or minor version (3.9 -> 3.10), 
 
 Upgrading PostgreSQL
 --------------------
-See the `PostgreSQL docs <https://www.postgresql.org/docs/14/upgrading.html>`__. Basically:
+See the `PostgreSQL docs <https://www.postgresql.org/docs/18/upgrading.html>`__. Basically:
 
 - Install the new PostgreSQL server version alongside the existing version.
 
@@ -44,13 +44,13 @@ See the `PostgreSQL docs <https://www.postgresql.org/docs/14/upgrading.html>`__.
 
 - Then assuming you don't want to start from a fresh database, there are a few options to actually migrate the data:
 
-  - `pg_upgrade <https://www.postgresql.org/docs/14/pgupgrade.html>`__
+  - `pg_upgrade <https://www.postgresql.org/docs/18/pgupgrade.html>`__ - this ports the entire contents/config of a database cluster from the old install to the new install.
 
-  - `dumpall <https://www.postgresql.org/docs/14/app-pg-dumpall.html>`__ followed by a restore using ``psql`` with the ``--file`` option. You might try this instead of pg_upgrade if your new database cluster is already non-empty.
+  - `dumpall <https://www.postgresql.org/docs/18/app-pg-dumpall.html>`__ followed by a restore using ``psql`` with the ``--file`` option. You might try this instead of pg_upgrade if your new database cluster is already non-empty.
 
   - ``pg_dump`` followed by a restore on each individual database. You might try this if you don't want to port all databases over, if there are issues with porting login roles, or if you only have one or two databases to port anyway.
 
-  To handle the multiple password prompts during the migration process, you can either try configuring a `pgpass <https://www.postgresql.org/docs/14/libpq-pgpass.html>`__ file, or you can just enter the password each time you're prompted.
+  To handle the multiple password prompts during the migration process, you can either: use peer authentication if that works for your system (should work and be used by default on Ubuntu), try configuring a `pgpass <https://www.postgresql.org/docs/18/libpq-pgpass.html>`__ file, or just enter the password each time you're prompted (can be a lot).
 
 
 Server scripts

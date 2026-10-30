@@ -14,6 +14,10 @@ When updating a CoralNet environment through multiple versions, make sure to not
 
 ## 1.33 (WIP)
 
+- PostgreSQL version has been updated from 14 to 18. See Server Operation > Upgrading PostgreSQL in the CoralNet docs.
+
+  - Starting with 18, new database clusters enable data checksums by default. Upgrading may get a failure message like "old cluster does not use data checksums but the new one does". If so, try using [pg_checksums](https://www.postgresql.org/docs/current/app-pgchecksums.html) to disable checksums on the 18 cluster, then upgrade from 14 to 18, then re-enable checksums on the 18 cluster.
+
 - Updates to required packages:
 
   - New: `psycopg[binary]>=3.3.6,<3.4`
