@@ -23,7 +23,10 @@ When updating a CoralNet environment through multiple versions, make sure to not
 - Updates to required packages:
 
   - New: `psycopg[binary]>=3.3.6,<3.4`
-  - No longer needed: `psycopg2-binary`
+  - No longer used: `psycopg2-binary`
+  - pyexcel 0.6.7 -> 0.7.6
+  - openpyxl 3.0.10 -> 3.1.5
+  - pyexcel-xlsx 0.6.0 -> 0.6.1
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 

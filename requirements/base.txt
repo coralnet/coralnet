@@ -48,21 +48,19 @@ piexif==1.1.3
 
 # Working with Excel and other spreadsheet formats.
 # Changelog: https://github.com/pyexcel/pyexcel/blob/dev/CHANGELOG.rst
-# Compat: Python 3.6-3.9 (per GitHub actions)
-pyexcel==0.6.7
+# Compat: Python 3.9-3.14 (per GitHub actions)
+pyexcel==0.7.6
 
-# Requirement of pyexcel-xlsx
-# Version is pinned below 3.1.0 to resolve this issue:
-# https://github.com/pyexcel/pyexcel-xlsx/issues/52
-# Changelog: https://openpyxl.readthedocs.io/en/stable/changes.html
-# Compat: Python 3.6-3.9 (per tox.ini)
-openpyxl==3.0.10
+# Requirement of pyexcel-xlsx.
+# Changelog: https://foss.heptapod.net/openpyxl/openpyxl/-/blob/branch/default/doc/changes.rst
+# Compat: Python 3.8-3.13 (per tox.ini)
+openpyxl==3.1.5
 
 # xlsx support in pyexcel.
 # Changelog: https://github.com/pyexcel/pyexcel-xlsx/blob/dev/CHANGELOG.rst
-# Compat: Officially only Python 3.6-3.8 (per setup.py) due to scarce updates
-# since 2020; use with caution.
-pyexcel-xlsx==0.6.0
+# Compat: Officially only Python 3.6-3.9 (per setup.py / GitHub actions) due
+# to scarce updates since 2020; use with caution.
+pyexcel-xlsx==0.6.1
 
 # Markdown support in the blog and other places.
 # Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/changelog.md
