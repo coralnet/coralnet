@@ -64,8 +64,8 @@ pyexcel-xlsx==0.6.1
 
 # Markdown support in the blog and other places.
 # Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/changelog.md
-# Compat: Python 3.7-3.11
-Markdown>=3.4.3,<3.5
+# Compat: Python 3.11-3.15 (per changelog)
+Markdown>=3.11.2,<3.12
 
 # Generates thumbnails, which are smaller versions of images.
 # Changelog: https://github.com/SmileyChris/easy-thumbnails/blob/master/CHANGES.rst
@@ -191,8 +191,10 @@ tqdm==4.66.5
 # the Markdown package (such as tables). Also includes a fancy Markdown editor,
 # with live preview and drag-and-drop image uploads.
 # Changelog: https://github.com/neutronX/django-markdownx/releases
-# Compat: Python 3.6-3.10, Django 3.0-4.2, Markdown unspecified (per setup.py)
-django-markdownx>=4.0.7,<4.1
+# Watch out for Python versions getting dropped even in patch releases.
+# Compat: Python 3.10-3.14, Django 4.2-6.0 (per setup.py),
+#  Pillow and Markdown unspecified (per requirements)
+django-markdownx==4.0.11
 
 # Scientific computing
 # We match whatever version of numpy pyspacer uses for development, for optimal

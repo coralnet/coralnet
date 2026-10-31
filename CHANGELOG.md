@@ -27,6 +27,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - pyexcel 0.6.7 -> 0.7.6
   - openpyxl 3.0.10 -> 3.1.5
   - pyexcel-xlsx 0.6.0 -> 0.6.1
+  - Markdown `>=3.4.3,<3.5` -> `>=3.11.2,<3.12`
+  - django-markdownx `>=4.0.7,<4.1` -> 4.0.11
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
