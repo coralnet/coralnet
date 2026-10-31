@@ -50,10 +50,9 @@ class Command(BaseCommand):
         if span_end_str:
             self.span_end = datetime.datetime.fromisoformat(span_end_str)
             if not self.span_end.tzinfo:
-                self.span_end = self.span_end.replace(
-                    tzinfo=datetime.timezone.utc)
+                self.span_end = self.span_end.replace(tzinfo=datetime.UTC)
         else:
-            self.span_end = datetime.datetime.now(datetime.timezone.utc)
+            self.span_end = datetime.datetime.now(datetime.UTC)
 
         self.span_days = options['span_days']
         span_length = datetime.timedelta(days=self.span_days)
@@ -180,7 +179,7 @@ class Command(BaseCommand):
         # self.date_trunc_function operates in the active timezone,
         # so we temporarily set the active timezone to UTC
         # to make everything else easier.
-        activate_timezone(datetime.timezone.utc)
+        activate_timezone(datetime.UTC)
         completed_api_job_units = (
             ApiJobUnit.objects
             .filter(
@@ -331,7 +330,7 @@ class Command(BaseCommand):
         self.save_plot(fig)
 
     def do_turnaround_time(self):
-        activate_timezone(datetime.timezone.utc)
+        activate_timezone(datetime.UTC)
         background_jobs = Job.objects.filter(
             job_name__in=get_job_names_by_task_queue()['background'])
         completed_bg_jobs = (

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import functools
 import inspect
 from logging import getLogger
@@ -126,7 +126,7 @@ def schedule_job(
 
     if delay is None:
         delay = random_job_delay()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     scheduled_start_date = now + delay
 
     if created:
@@ -183,7 +183,7 @@ def bulk_create_jobs(
     multiple threads might try to queue classification for that image
     at the same time.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     jobs = [
         Job(
@@ -248,7 +248,7 @@ def abort_job(job_id: int):
 
 def finish_jobs(jobs_details: list[dict]):
     jobs = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for job_details in jobs_details:
         job = job_details['job']
@@ -378,8 +378,7 @@ class JobDecorator:
                 self.run_task_wrapper(task_func, task_args)
 
             # Log a message after task exit.
-            elapsed_seconds = (
-                datetime.now() - start_time).total_seconds()
+            elapsed_seconds = (datetime.now() - start_time).total_seconds()
             self.log_debug([
                 task_id,
                 'task',
@@ -486,7 +485,7 @@ class JobDecorator:
             return None
 
         job.status = Job.Status.IN_PROGRESS
-        job.start_date = datetime.now(timezone.utc)
+        job.start_date = datetime.now(UTC)
         job.save()
         return job
 
@@ -508,7 +507,7 @@ class JobDecorator:
 
         if created:
             job.status = Job.Status.IN_PROGRESS
-            job.start_date = datetime.now(timezone.utc)
+            job.start_date = datetime.now(UTC)
             job.save()
             return job
         else:
@@ -709,7 +708,7 @@ def next_run_delay(interval: float, offset: float = 0) -> timedelta:
     1/2 hour offset for the other), or pass in a specific date's timestamp to
     induce runs at specific times of day / days of week.
     """
-    now_timestamp = datetime.now(timezone.utc).timestamp()
+    now_timestamp = datetime.now(UTC).timestamp()
     interval_count = math.ceil((now_timestamp - offset) / interval)
     next_run_timestamp = offset + (interval_count * interval)
     delay_in_seconds = max(next_run_timestamp - now_timestamp, 0)

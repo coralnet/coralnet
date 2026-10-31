@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import re
 from typing import Union
 from unittest.case import TestCase
@@ -37,20 +37,19 @@ def fabricate_job(
 
     # Accept naive datetimes as UTC.
     if start_date and start_date.tzinfo is None:
-        start_date = start_date.replace(tzinfo=timezone.utc)
+        start_date = start_date.replace(tzinfo=UTC)
     if create_date and create_date.tzinfo is None:
-        create_date = create_date.replace(tzinfo=timezone.utc)
+        create_date = create_date.replace(tzinfo=UTC)
     if modify_date and modify_date.tzinfo is None:
-        modify_date = modify_date.replace(tzinfo=timezone.utc)
+        modify_date = modify_date.replace(tzinfo=UTC)
 
     if scheduled_start_date:
         if scheduled_start_date.tzinfo is None:
-            scheduled_start_date = scheduled_start_date.replace(
-                tzinfo=timezone.utc)
+            scheduled_start_date = scheduled_start_date.replace(tzinfo=UTC)
     elif delay:
         # For some callers, specifying delay is more convenient than
         # specifying scheduled start date.
-        scheduled_start_date = datetime.now(timezone.utc) + delay
+        scheduled_start_date = datetime.now(UTC) + delay
 
     job_kwargs = {
         key: value for key, value in kwargs.items()
@@ -99,7 +98,7 @@ def do_job(
     job, created = get_or_create_job(
         name, *task_args, source_id=source_id, user=user)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if created:
         started = start_job(job)

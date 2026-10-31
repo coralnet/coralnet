@@ -907,7 +907,7 @@ class LegacyHistoryCasesTest(BaseTaskTest, AnnotationHistoryTestMixin):
         # Set the event date to before CoralNet 1.15's date.
         event = ClassifyImageEvent.objects.latest('pk')
         event.date = datetime.datetime(
-            2024, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
+            2024, 10, 20, 0, 0, tzinfo=datetime.UTC)
         event.save()
 
         response = self.view_history(self.user, img=img)
@@ -928,7 +928,7 @@ class LegacyHistoryCasesTest(BaseTaskTest, AnnotationHistoryTestMixin):
         # being from a CoralNet alpha classifier.
         revision = Revision.objects.latest('pk')
         revision.date_created = datetime.datetime(
-            2016, 11, 19, 0, tzinfo=datetime.timezone.utc)
+            2016, 11, 19, 0, tzinfo=datetime.UTC)
         revision.save()
 
         response = self.view_history(self.user, img=img)

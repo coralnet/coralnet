@@ -66,7 +66,7 @@ def get_maintenance_details():
             params = json.load(json_file)
             return dict(
                 time=datetime.datetime.fromtimestamp(
-                    params['timestamp'], datetime.timezone.utc),
+                    params['timestamp'], datetime.UTC),
                 message=params['message'],
             )
     except IOError:
