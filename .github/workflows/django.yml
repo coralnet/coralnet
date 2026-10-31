@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        python-version: [ "3.10" ]
+        python-version: [ "3.12" ]
     env:
       DJANGO_SETTINGS_MODULE: config.settings
       CORALNET_SETTINGS_BASE: dev-local
