@@ -48,19 +48,25 @@ piexif==1.1.3
 
 # Working with Excel and other spreadsheet formats.
 # Changelog: https://github.com/pyexcel/pyexcel/blob/dev/CHANGELOG.rst
+# Compat: Python 3.6-3.9 (per GitHub actions)
 pyexcel==0.6.7
 
 # Requirement of pyexcel-xlsx
 # Version is pinned below 3.1.0 to resolve this issue:
 # https://github.com/pyexcel/pyexcel-xlsx/issues/52
+# Changelog: https://openpyxl.readthedocs.io/en/stable/changes.html
+# Compat: Python 3.6-3.9 (per tox.ini)
 openpyxl==3.0.10
 
 # xlsx support in pyexcel.
 # Changelog: https://github.com/pyexcel/pyexcel-xlsx/blob/dev/CHANGELOG.rst
+# Compat: Officially only Python 3.6-3.8 (per setup.py) due to scarce updates
+# since 2020; use with caution.
 pyexcel-xlsx==0.6.0
 
 # Markdown support in the blog and other places.
-# Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/change_log/index.md
+# Changelog: https://github.com/Python-Markdown/markdown/blob/master/docs/changelog.md
+# Compat: Python 3.7-3.11
 Markdown>=3.4.3,<3.5
 
 # Generates thumbnails, which are smaller versions of images.
@@ -78,13 +84,13 @@ easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coral
 
 # Add email activation to user registration process;
 # unlike in userena, this is implemented without additional models.
-# Changelog: https://django-registration.readthedocs.io/en/stable/upgrade.html
+# Changelog: https://django-registration.readthedocs.io/en/stable/changelog.html
 # Compat: Python 3.7-3.11, Django 3.2-4.2
 django-registration==3.4
 
 # Versioning of database objects.
 # Changelog: https://github.com/etianen/django-reversion/blob/master/CHANGELOG.rst
-# Compat: Python 3.7-3.11, Django 4.2-5.0
+# Compat: Python 3.8-3.12, Django 4.2-5.0 (per GitHub actions and setup.py)
 django-reversion==5.1.0
 
 # Allow Django to connect to a PostgreSQL database.
@@ -120,18 +126,25 @@ django-migration-testcase==0.0.15
 # We use this as an alternative file-based Django cache backend, to avoid
 # certain issues of the first-party backend (mainly, culling entries
 # randomly).
-# https://github.com/grantjenks/python-diskcache
+# https://github.com/grantjenks/python-diskcache (no changelog)
+# Compat: Python 3.8-3.11, Django 4.2 (per tox.ini)
 diskcache==5.6.3
 
 # Character encoding detection.
 # Which is a hard problem, so we ask 2 different libraries for their opinions.
-# cchardet is a faster version of chardet, but is no longer maintained:
-# https://github.com/PyYoshi/cChardet/issues/77
+#
+# Compat: Python 3.7-3.11 (per setup.cfg)
+# TODO: we used to use cchardet, a faster version of chardet, but then it was
+#  unmaintained for a while. But now it's back, so switch back.
+#  https://github.com/PyYoshi/cChardet
 chardet>=5.1.0,<5.2
+# https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md
+# Compat: Python 3.7-3.11 (per changelog)
 charset-normalizer>=3.1.0,<3.2
 
 # HTML parsing.
-# Changelog: https://bazaar.launchpad.net/~leonardr/beautifulsoup/bs4/view/head:/CHANGELOG
+# https://git.launchpad.net/beautifulsoup/tree/CHANGELOG
+# 403? https://bugs.launchpad.net/beautifulsoup/+bug/2170569
 #
 # Also comes with a character encoding detection tool called "Unicode, Dammit":
 # https://www.crummy.com/software/BeautifulSoup/bs4/doc/#unicode-dammit
@@ -151,11 +164,13 @@ selenium==4.33.0
 # Python interface to Redis, an in-memory data store which can be a
 # message broker among other things.
 # Changelog: https://github.com/redis/redis-py/releases
+# Compat: Python 3.7-3.11 (per setup.py)
 redis>=4.5.4,<4.6
 
 # Asynchronous tasks.
 # Changelog: https://github.com/coleifer/huey/blob/master/CHANGELOG.md
 # Requires: redis
+# Compat: Up to Python 3.11 (per GitHub actions), redis 3.0+ (per setup.py)
 huey>=2.4.5,<2.5
 
 # Extension of huey's contrib.djhuey package that allows tasks to be
@@ -166,6 +181,7 @@ django-huey>=1.1.2,<1.2
 
 # Process management. Doesn't run on Windows (but it can still be installed).
 # Changelog: https://github.com/Supervisor/supervisor/blob/master/CHANGES.rst
+# Compat: Up to Python 3.10 (per setup.py)
 supervisor>=4.2.5,<4.3
 
 # Progress bar for CLI
@@ -177,7 +193,7 @@ tqdm==4.66.5
 # the Markdown package (such as tables). Also includes a fancy Markdown editor,
 # with live preview and drag-and-drop image uploads.
 # Changelog: https://github.com/neutronX/django-markdownx/releases
-# Compat: Python 3.6-3.10, Django 3.0-4.2, Markdown unspecified
+# Compat: Python 3.6-3.10, Django 3.0-4.2, Markdown unspecified (per setup.py)
 django-markdownx>=4.0.7,<4.1
 
 # Scientific computing
