@@ -80,11 +80,10 @@ Markdown>=3.11.2,<3.12
 # its thing.
 easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet
 
-# Add email activation to user registration process;
-# unlike in userena, this is implemented without additional models.
+# Add email-based activation to the user registration process.
 # Changelog: https://django-registration.readthedocs.io/en/stable/changelog.html
-# Compat: Python 3.7-3.11, Django 3.2-4.2
-django-registration==3.4
+# Compat: Python 3.9-3.13, Django 4.2-5.2
+django-registration==5.2.1
 
 # Versioning of database objects.
 # Changelog: https://github.com/etianen/django-reversion/blob/master/CHANGELOG.rst

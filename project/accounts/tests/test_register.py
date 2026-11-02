@@ -8,7 +8,8 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from lib.tests.utils import BasePermissionTest
-from .utils import BaseAccountsTest
+from .bases import BaseAccountsTest
+from .utils import link_from_text
 
 User = get_user_model()
 
@@ -31,8 +32,8 @@ class PermissionTest(BasePermissionTest):
             url, self.SIGNED_OUT, template=template)
 
     def test_activate(self):
-        url = reverse('django_registration_activate', args=['a'])
-        template = 'django_registration/activation_failed.html'
+        url = reverse('django_registration_activate')
+        template = 'django_registration/activation_form.html'
 
         self.assertPermissionLevel(
             url, self.SIGNED_OUT, template=template)
@@ -438,72 +439,93 @@ class RegisterTest(BaseAccountsTest):
 
 class ActivateTest(BaseAccountsTest):
 
+    def assert_form_error_code(self, response, expected_code):
+        self.assertIn('activation_key', response.context['form'].errors)
+        activation_key_errors = (
+            response.context['form'].errors['activation_key'].data)
+        self.assertEqual(len(activation_key_errors), 1)
+        self.assertEqual(activation_key_errors[0].code, expected_code)
+
     def test_success(self):
         activation_link = self.register_and_get_activation_link()
 
         # Navigate to the activation link.
-        response = self.client.get(activation_link, follow=True)
+        get_response = self.client.get(activation_link)
+        self.assertTemplateUsed(
+            get_response, 'django_registration/activation_form.html')
+        self.assertIsNotNone(
+            get_response.context['form'])
+        self.assertIsNone(
+            get_response.context.get('activation_error'))
+
+        user = User.objects.get(username='alice')
+        self.assertFalse(user.is_active, msg="Shouldn't yet be active")
+
+        # Submit the activation form.
+        response = self.client.submit_activation(activation_link)
         self.assertTemplateUsed(
             response, 'django_registration/activation_complete.html')
 
-        # The user should be active.
         user = User.objects.get(username='alice')
-        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_active, msg="Should now be active")
 
     def test_bad_key(self):
         activation_link = self.register_and_get_activation_link()
 
-        # Chop characters off of the end of the URL to get an invalid key.
-        # (Note that the last char is a slash, so must chop at least 2.)
-        response = self.client.get(activation_link[:-3], follow=True)
+        # Chop characters off of the key to get an invalid key.
+        key = self.client.activation_key_from_link(activation_link)
+        response = self.client.submit_activation_with_key(key[:-3])
 
         self.assertTemplateUsed(
-            response, 'django_registration/activation_failed.html',
-            msg_prefix="Should get the activation failure template"
+            response, 'django_registration/activation_form.html',
+            msg_prefix="Should still be on the form template, not the complete"
+                       " template",
         )
-        self.assertEqual(
-            response.context['activation_error']['code'], 'invalid_key')
+        self.assert_form_error_code(response, 'invalid_key')
         self.assertContains(
-            response, "Sorry, this activation link doesn't seem to be valid.")
+            response,
+            escape("Sorry, this activation link doesn't seem to be valid."),
+        )
 
-        # The user should still be inactive.
         user = User.objects.get(username='alice')
-        self.assertFalse(user.is_active)
+        self.assertFalse(user.is_active, msg="Should still be inactive")
 
     def test_expired_key(self):
         # Have an activation-key expiration time of 0.5 seconds
         with self.settings(ACCOUNT_ACTIVATION_DAYS=(0.5 / 86400.0)):
             activation_link = self.register_and_get_activation_link()
 
-            # Wait 1 second before using the confirmation link
+            # Wait 1 second before submitting activation.
             time.sleep(1)
-            response = self.client.get(activation_link, follow=True)
+            response = self.client.submit_activation(activation_link)
 
         self.assertTemplateUsed(
-            response, 'django_registration/activation_failed.html')
-        self.assertEqual(
-            response.context['activation_error']['code'], 'expired')
+            response, 'django_registration/activation_form.html')
+        self.assert_form_error_code(response, 'expired')
         self.assertContains(response, "Sorry, this activation link expired.")
+        resend_url = reverse('activation_resend')
+        self.assertContains(
+            response,
+            f' <a href="{resend_url}">send you another activation email</a>.')
 
-        # The user should still be inactive.
         user = User.objects.get(username='alice')
-        self.assertFalse(user.is_active)
+        self.assertFalse(user.is_active, msg="Should still be inactive")
 
     def test_already_activated(self):
         activation_link = self.register_and_get_activation_link()
 
         # Activate.
-        self.client.get(activation_link, follow=True)
+        self.client.submit_activation(activation_link)
 
         # The user should now be active.
         user = User.objects.get(username='alice')
         self.assertTrue(user.is_active)
 
-        # Attempt to activate again. Should get the failure template because
-        # the user is already active.
-        response = self.client.get(activation_link, follow=True)
+        # Attempt to activate again. Should fail because the user
+        # is already active.
+        response = self.client.submit_activation(activation_link)
         self.assertTemplateUsed(
-            response, 'django_registration/activation_failed.html')
+            response, 'django_registration/activation_form.html')
         self.assertEqual(
             response.context['activation_error']['code'], 'already_activated')
         self.assertContains(response, "Your account's already active!")
@@ -531,13 +553,7 @@ class ActivationResendTest(BaseAccountsTest):
         self.assertEqual(latest_activation_email.to[0], 'alice123@example.com')
 
         # Activate with this email's activation link.
-        activation_link = None
-        for word in latest_activation_email.body.split():
-            if '://' in word:
-                activation_link = word
-                break
-        self.assertIsNotNone(activation_link)
-        self.client.get(activation_link)
-        # The user should be active.
+        activation_link = link_from_text(latest_activation_email.body)
+        self.client.submit_activation(activation_link)
         user = User.objects.get(username='alice')
-        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_active, msg="Should now be active")

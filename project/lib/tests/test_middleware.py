@@ -9,6 +9,8 @@ from lib.tests.utils import CnStandardTest
 
 class ViewLoggingMiddlewareTest(CnStandardTest):
 
+    client: Client
+
     def setUp(self):
         super().setUp()
 

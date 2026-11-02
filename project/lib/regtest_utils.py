@@ -25,6 +25,7 @@ class VisionBackendRegressionTest(CnStandardTest):
     Management class for vision backend regression tests.
     This class relies on a specific regression test fixture layout.
     """
+    client: Client
 
     def __init__(self, source_id, name_suffix, use_vgg16):
 

@@ -16,7 +16,6 @@ from django.db.models.sql import RawQuery, Query
 from django.db.utils import DEFAULT_DB_ALIAS
 from django.test import (
     override_settings, SimpleTestCase, tag, TestCase, TransactionTestCase)
-from django.test.client import Client
 from django.test.runner import DiscoverRunner
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -26,7 +25,7 @@ from django_migration_testcase import MigrationTest
 
 from sources.models import Source
 from ..storage_backends import get_storage_manager
-from .utils_data import DataTestMixin
+from .utils_data import CnClient, DataTestMixin
 
 User = get_user_model()
 
@@ -73,7 +72,7 @@ class _BaseTest(DataTestMixin, TestCase):
     # msg argument, if present.
     longMessage = True
 
-    client: Client
+    client: CnClient
 
     @classmethod
     def setUpTestData(cls):
@@ -81,7 +80,7 @@ class _BaseTest(DataTestMixin, TestCase):
 
         # Test client. Subclasses' setUpTestData() calls can use this client
         # to set up more data before running the class's test functions.
-        cls.client = Client()
+        cls.client = CnClient()
 
     def setUp(self):
         # Some site functionality uses the cache for performance, but leaving
@@ -96,7 +95,7 @@ class _BaseTest(DataTestMixin, TestCase):
         # Test client. By setting this in setUp(), we initialize this before
         # each test function, so that stuff like login status gets reset
         # between tests.
-        self.client = Client()
+        self.client = CnClient()
 
     def assert_queries_less_than(
             self, num, func=None, *args, using=DEFAULT_DB_ALIAS, **kwargs):

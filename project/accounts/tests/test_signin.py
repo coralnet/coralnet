@@ -5,7 +5,7 @@ from django.urls import reverse
 from lib.tests.utils import BasePermissionTest, CnStandardTest
 from lib.tests.utils_selenium import BaseSeleniumTest
 from ..hashers import SHA1PasswordHasher
-from .utils import BaseAccountsTest
+from .bases import BaseAccountsTest
 
 User = get_user_model()
 

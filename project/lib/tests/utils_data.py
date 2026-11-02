@@ -12,6 +12,8 @@ from django.test.client import Client
 from django.urls import reverse
 from spacer.messages import ClassifyReturnMsg
 
+from accounts.tests.clients import AccountsClientMixin
+from accounts.tests.utils import link_from_text
 from annotations.model_utils import AnnotationArea
 from images.model_utils import PointGen
 from images.models import Image, Point
@@ -24,13 +26,20 @@ import vision_backend.task_helpers as backend_task_helpers
 User = get_user_model()
 
 
+class CnClient(Client, AccountsClientMixin):
+    """
+    Test client with various CoralNet functionality.
+    """
+    pass
+
+
 class DataTestMixin:
     """
     Convenience methods to set up model instances and related data.
     The class just needs to have a `client` attribute.
     """
 
-    client: Client
+    client: CnClient
 
     user_count = 0
 
@@ -69,12 +78,8 @@ class DataTestMixin:
 
         if activate:
             activation_email = mail.outbox[-1]
-            activation_link = None
-            for word in activation_email.body.split():
-                if '://' in word:
-                    activation_link = word
-                    break
-            cls.client.get(activation_link)
+            activation_link = link_from_text(activation_email.body)
+            cls.client.submit_activation(activation_link)
 
         return User.objects.get(username=username)
 
