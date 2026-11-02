@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator, validate_email
 from django.forms import Form, ModelForm
 from django.forms.fields import BooleanField, CharField, EmailField
-from django.forms.widgets import Textarea, TextInput
+from django.forms.widgets import HiddenInput, Textarea, TextInput
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django_registration.backends.activation.forms import (
@@ -193,6 +193,13 @@ class ActivationForm(DjangoRegActivationForm):
         " in the email you received."
         " Some email viewers may have problems detecting the end of the link"
         " when there are special characters in it.")
+
+    activation_key = CharField(
+        label="Activation key",
+        # Doesn't make sense to make the key editable, or to show its field
+        # to the user at all.
+        widget=HiddenInput(),
+    )
 
 
 class ActivationResendForm(Form):
