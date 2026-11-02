@@ -5,6 +5,7 @@ from django.core import mail
 from django.urls import reverse
 
 from lib.tests.utils import BasePermissionTest, CnStandardTest
+from .utils import link_from_text
 
 
 class PermissionTest(BasePermissionTest):
@@ -63,15 +64,9 @@ class EmailChangeTest(CnStandardTest):
             email='new.email.address@example.com'))
 
         confirmation_email = mail.outbox[-2]
-        # Confirmation link: should be the first link (first "word" with '://')
+        # Confirmation link: should be the first link
         # in the confirmation email.
-        confirmation_link = None
-        for word in confirmation_email.body.split():
-            if '://' in word:
-                confirmation_link = word
-                break
-        self.assertIsNotNone(confirmation_link)
-        return confirmation_link
+        return link_from_text(confirmation_email.body)
 
     def test_submit(self):
         self.client.force_login(self.user)

@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils.html import escape
 
 from lib.tests.utils import BasePermissionTest, CnStandardTest
+from .utils import link_from_text
 
 
 class PermissionTest(BasePermissionTest):
@@ -57,15 +58,8 @@ class PasswordResetTest(CnStandardTest):
             email='email.address@example.com'))
 
         instructions_email = mail.outbox[-1]
-        # Reset link: should be the first link (first "word" with '://')
-        # in the email.
-        reset_link = None
-        for word in instructions_email.body.split():
-            if '://' in word:
-                reset_link = word
-                break
-        self.assertIsNotNone(reset_link)
-        return reset_link
+        # Reset link: should be the first link in the email.
+        return link_from_text(instructions_email.body)
 
     def test_submit(self):
         response = self.client.post(
