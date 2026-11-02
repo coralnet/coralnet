@@ -130,14 +130,12 @@ diskcache==5.6.3
 # Character encoding detection.
 # Which is a hard problem, so we ask 2 different libraries for their opinions.
 #
-# Compat: Python 3.7-3.11 (per setup.cfg)
-# TODO: we used to use cchardet, a faster version of chardet, but then it was
-#  unmaintained for a while. But now it's back, so switch back.
-#  https://github.com/PyYoshi/cChardet
-chardet>=5.1.0,<5.2
+# https://github.com/PyYoshi/cChardet/blob/master/CHANGES.md
+# Compat: Python 3.11-3.15 (per changelog)
+cchardet==2.4.0
 # https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md
-# Compat: Python 3.7-3.11 (per changelog)
-charset-normalizer>=3.1.0,<3.2
+# Compat: Python 3.7-3.15 (per pyproject.toml)
+charset-normalizer>=3.5.2,<3.6
 
 # HTML parsing.
 # https://git.launchpad.net/beautifulsoup/tree/CHANGELOG

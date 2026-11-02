@@ -23,13 +23,16 @@ When updating a CoralNet environment through multiple versions, make sure to not
 - Updates to required packages:
 
   - New: `psycopg[binary]>=3.3.6,<3.4`
+  - New: `cchardet==2.4.0`
   - No longer used: `psycopg2-binary`
+  - No longer used: `chardet`
   - pyexcel 0.6.7 -> 0.7.6
   - openpyxl 3.0.10 -> 3.1.5
   - pyexcel-xlsx 0.6.0 -> 0.6.1
   - Markdown `>=3.4.3,<3.5` -> `>=3.11.2,<3.12`
   - django-markdownx `>=4.0.7,<4.1` -> 4.0.11
   - django-registration 3.4 -> 5.2.1
+  - charset-normalizer `>=3.1.0,<3.2` -> `>=3.5.2,<3.6`
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
