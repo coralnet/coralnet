@@ -148,13 +148,38 @@ Ensure your virtual environment is activated, and run ``python manage.py runserv
 Navigate to your localhost web server, e.g. ``http://127.0.0.1:8000/``, in your browser.
 
 
-Testing that it works
----------------------
+Trying the website
+------------------
 Register and activate a user using the website's views. If you're using the development server, you should see the activation email in the console running Django.
 
-Try creating a source, uploading images, making a labelset, making annotations, checking annotation history, and browsing patches. Test any other pages that come to mind.
+You can now try some site functions such as:
 
-If you don't have a superuser yet, use ``python manage.py createsuperuser`` to create one. Log in as a superuser and try checking out the admin interface at ``<site domain>/admin/``.
+- Creating a source
+- Uploading images to the source
+- Creating a labelset for the source, and also creating labels from this page
+- The annotation tool
+- Checking annotation history
+
+If you don't have a superuser yet, use ``python manage.py createsuperuser`` to create one. Log in as a superuser and try checking out the admin interface at Admin Tools > Admin site.
+
+
+Asynchronous jobs
+-----------------
+Some site functions - such as training classifiers, generating certain image thumbnails, and computing label popularities - are defined as asynchronous jobs. However, the default CoralNet settings (for dev environments) force these jobs to run synchronously, in the same process as the web server. Aside from the responsiveness concern of this setup, this setup also cannot automatically run every type of async job. So with this setup you will either have to queue up some jobs manually in the shell, or you will be missing some functionality.
+
+To instead set these up as asynchronous jobs, you need to have additional processes running in parallel with the webserver process:
+
+1. A `Redis <https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/>`__ server. The Redis server version should be compatible with the `version of the redis-py package <https://github.com/redis/redis-py#supported-redis-versions>`__ that you installed earlier.
+
+2. A django-huey realtime task queue, with at least one worker process: ``python manage.py djangohuey --queue realtime --workers 1``
+
+3. A django-huey background task queue, with at least one worker process: ``python manage.py djangohuey --queue background --workers 1``
+
+And finally, you need the setting ``HUEY_IMMEDIATE=False``. If you created a ``.env`` file based on ``.env.dist``, there is already a line for this which you can just un-comment.
+
+For more djangohuey command options, see the options documentation for the `huey command <https://huey.readthedocs.io/en/latest/consumer.html#consumer-options>`__; the djangohuey command accepts the same options.
+
+Note that, unlike the runserver process, the djangohuey process won't automatically restart when you edit the project's Python files. So you'll need to manually restart those processes after making any changes.
 
 
 PyCharm configuration
