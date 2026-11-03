@@ -176,8 +176,8 @@ django-huey>=1.3.1,<1.4
 
 # Process management. Doesn't run on Windows (but it can still be installed).
 # Changelog: https://github.com/Supervisor/supervisor/blob/master/CHANGES.rst
-# Compat: Up to Python 3.10 (per setup.py)
-supervisor>=4.2.5,<4.3
+# Compat: Up to Python 3.13 (per setup.py)
+supervisor>=4.3.0,<4.4
 
 # Progress bar for CLI
 # Changelog: https://tqdm.github.io/releases/
