@@ -202,8 +202,8 @@ numpy==2.2.6
 
 # Plotting; used in management commands.
 # Changelog: https://github.com/matplotlib/matplotlib/releases
-# Compat: Python 3.10-3.13, numpy>=1.23, Pillow>=8
-matplotlib==3.10.0
+# Compat: Python 3.11-3.14, numpy>=1.25, Pillow>=9 (per pyproject.toml)
+matplotlib>=3.11.2,<3.12
 
 # Machine-learning backend behind coralnet
 # This can be installed from a local directory (not just PyPI), as long as

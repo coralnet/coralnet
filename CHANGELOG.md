@@ -38,6 +38,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - huey `>=2.4.5,<2.5` -> `>=2.5.5,<2.6`
   - django-huey `>=1.1.2,<1.2` -> `>=1.3.1,<1.4`
   - supervisor `>=4.2.5,<4.3` -> `>=4.3.0,<4.4`
+  - matplotlib 3.10.0 -> `>=3.11.2,<3.12`
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
