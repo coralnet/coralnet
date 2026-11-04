@@ -299,7 +299,7 @@ class BaseBrowsePageTest(BaseBrowseTest, ABC):
         for simplicity.
         """
         response_soup = BeautifulSoup(response.content, 'html.parser')
-        page_links_soup = response_soup.findAll(
+        page_links_soup = response_soup.find_all(
             'a', class_='prev-next-page')
 
         self.assertEqual(

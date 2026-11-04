@@ -55,7 +55,7 @@ def grid_of_tables_html_to_tuples(html):
             # Description
             cells[1].text,
             # Download/Delete forms
-            cells[2].findAll('form')[0].attrs.get('action'),
-            cells[2].findAll('form')[1].attrs.get('action'),
+            cells[2].find_all('form')[0].attrs.get('action'),
+            cells[2].find_all('form')[1].attrs.get('action'),
         ))
     return tuples
