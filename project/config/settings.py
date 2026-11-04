@@ -1333,6 +1333,10 @@ if os.name == 'nt' and not HUEY_IMMEDIATE:
 # The name of the class to use for starting the test suite.
 TEST_RUNNER = 'lib.tests.utils.CustomTestRunner'
 
+# Transitional setting. Opts into using "https" as the new default value of
+# URLField.assume_scheme. Remove this setting in Django 6.0+.
+FORMS_URLFIELD_ASSUME_HTTPS = True
+
 
 #
 # Other settings from third-party packages besides Django

@@ -2,11 +2,11 @@
 # pip show <package-name>
 
 
-# Compat: Python 3.8-3.12
+# Compat: Python 3.10-3.13
 #
 # The patch versions generally have quite useful fixes.
 # But occasionally they do have breaking changes, so watch out.
-Django>=4.2.16,<5.0
+Django>=5.1.15,<5.2
 
 # Define environment-specific Django config in a .env file or
 # environment variables.
