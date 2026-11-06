@@ -28,8 +28,8 @@ django-guardian==3.5.2
 # frequent updates Pillow tends to need. A package that reads various complex
 # file formats makes for a large attack surface.
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-# Compat: Python 3.10-3.14
-Pillow==12.3.0
+# Compat: Python 3.11-3.15 (per changelog)
+Pillow==13.0.0
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
