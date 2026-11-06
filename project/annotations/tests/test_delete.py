@@ -630,20 +630,16 @@ class SeleniumTest(BaseBrowseSeleniumTest):
 
     setup_image_count = 5
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
+    def setUp(self):
+        super().setUp()
 
         # Be able to test a filtered Browse page.
         # When filtered by aux1='X', should still bring up multiple pages,
         # with the first page being different from an unfiltered first page.
-        cls.update_multiple_metadatas('aux1', ['X', 'X', 'Y', 'X', 'X'])
+        self.update_multiple_metadatas('aux1', ['X', 'X', 'Y', 'X', 'X'])
 
-        cls.img1_pk, cls.img2_pk, cls.img3_pk, cls.img4_pk, cls.img5_pk = [
-            img.pk for img in cls.images]
-
-    def setUp(self):
-        super().setUp()
+        self.img1_pk, self.img2_pk, self.img3_pk, self.img4_pk, self.img5_pk = [
+            img.pk for img in self.images]
 
         for image in self.images:
             image.refresh_from_db()

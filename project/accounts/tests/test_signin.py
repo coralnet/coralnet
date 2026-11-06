@@ -124,12 +124,10 @@ class SignInTest(BaseAccountsTest):
 
 class StaySignedInTest(BaseSeleniumTest):
 
-    @classmethod
-    def setUpTestData(cls):
-        # Call the parent's setup (while still using this class as cls)
-        super().setUpTestData()
+    def setUp(self):
+        super().setUp()
 
-        cls.user = cls.create_user(
+        self.user = self.create_user(
             username='testUsername', password='testPassword',
             email='tester@example.org')
 
