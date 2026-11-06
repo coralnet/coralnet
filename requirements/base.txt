@@ -16,12 +16,9 @@ django-environ==0.13.0
 
 # Per-object permissions for Django.
 # e.g. "can edit this source" not just "can edit sources"
-# Changelog: https://github.com/django-guardian/django-guardian/blob/devel/CHANGES
-# Compat: Python 3.8-3.12, Django 4.1-5.0
-#
-# Django 4.2+ support hasn't been merged yet, but the PR (816) seems done,
-# so we use a fork with a version defined at the tip of that PR.
-django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet
+# Changelog: https://github.com/django-guardian/django-guardian/releases
+# Compat: Python 3.10-3.14, Django 3.2-6.0 (per pyproject.toml)
+django-guardian==3.5.2
 
 # Python Imaging Library
 # Started as a fork of the old unmaintained PIL; Pillow has become very widely

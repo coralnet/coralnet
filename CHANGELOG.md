@@ -28,6 +28,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - No longer used: `chardet`
   - Django `>=4.2.16,<5.0` -> `>=5.2.19,<6.0`
   - django-environ `@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet` -> 0.13.0
+  - django-guardian `@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet` -> 3.5.2
   - pyexcel 0.6.7 -> 0.7.6
   - openpyxl 3.0.10 -> 3.1.5
   - pyexcel-xlsx 0.6.0 -> 0.6.1
@@ -41,6 +42,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - django-huey `>=1.1.2,<1.2` -> `>=1.3.1,<1.4`
   - supervisor `>=4.2.5,<4.3` -> `>=4.3.0,<4.4`
   - matplotlib 3.10.0 -> `>=3.11.2,<3.12`
+
+- New migration to run: guardian 0003
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
