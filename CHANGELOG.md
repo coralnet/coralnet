@@ -27,6 +27,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - No longer used: `psycopg2-binary`
   - No longer used: `chardet`
   - Django `>=4.2.16,<5.0` -> `>=5.2.19,<6.0`
+  - django-environ `@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet` -> 0.13.0
   - pyexcel 0.6.7 -> 0.7.6
   - openpyxl 3.0.10 -> 3.1.5
   - pyexcel-xlsx 0.6.0 -> 0.6.1

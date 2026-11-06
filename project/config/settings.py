@@ -89,12 +89,8 @@ class Bases(Enum):
     DEV_S3 = 'dev-s3'
 
 
-try:
-    SETTINGS_BASE = Bases(env('SETTINGS_BASE'))
-except ValueError:
-    raise ImproperlyConfigured(
-        f"Unsupported SETTINGS_BASE value: {env('SETTINGS_BASE')}"
-        f" (supported values are: {', '.join([b.value for b in Bases])})")
+SETTINGS_BASE = Bases(env.str(
+    'SETTINGS_BASE', choices=[b.value for b in Bases]))
 
 _TESTING = 'test' in sys.argv
 

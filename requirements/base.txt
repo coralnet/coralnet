@@ -11,13 +11,8 @@ Django>=5.2.19,<6.0
 # Define environment-specific Django config in a .env file or
 # environment variables.
 # Changelog: https://django-environ.readthedocs.io/en/latest/changelog.html
-# Compat: Python 3.6-3.12, Django 2.2-5.0
-#
-# The release that added Django 4.2 made the SECRET_KEY setting unstable,
-# and a fix to that has been merged, but isn't in a release yet.
-# (See PR 500 in django-environ.)
-# So we use a fork with a version defined after that PR.
-django-environ@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet
+# Compat: Python 3.10-3.14, Django 2.2-6.0 (per tox.ini)
+django-environ==0.13.0
 
 # Per-object permissions for Django.
 # e.g. "can edit this source" not just "can edit sources"
