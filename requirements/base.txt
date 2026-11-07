@@ -61,7 +61,7 @@ Markdown>=3.11.2,<3.12
 
 # Generates thumbnails, which are smaller versions of images.
 # Changelog: https://github.com/SmileyChris/easy-thumbnails/blob/master/CHANGES.rst
-# Compat: Python 3.8-3.12, Django 4.2-5.0, Pillow any version
+# Compat: Python 3.9-3.13, Django 4.2-5.2, Pillow any version (per setup.py)
 #
 # Starting in 2.7.0, this app sets PIL.ImageFile.LOAD_TRUNCATED_IMAGES to False
 # after each image read, which would force us to set it to True before each of
@@ -70,7 +70,7 @@ Markdown>=3.11.2,<3.12
 # So we use our own fork of easy-thumbnails, which changes the behavior to
 # restore the previous LOAD_TRUNCATED_IMAGES value after easy-thumbnails does
 # its thing.
-easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet
+easy-thumbnails@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet
 
 # Add email-based activation to the user registration process.
 # Changelog: https://django-registration.readthedocs.io/en/stable/changelog.html

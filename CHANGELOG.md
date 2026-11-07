@@ -35,6 +35,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - pyexcel-xlsx 0.6.0 -> 0.6.1
   - Markdown `>=3.4.3,<3.5` -> `>=3.11.2,<3.12`
   - django-markdownx `>=4.0.7,<4.1` -> 4.0.11
+  - easy-thumbnails `@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet` -> `@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet`
   - django-registration 3.4 -> 5.2.1
   - charset-normalizer `>=3.1.0,<3.2` -> `>=3.5.2,<3.6`
   - beautifulsoup4 `>=4.11.1,<4.12` -> 4.15.0
