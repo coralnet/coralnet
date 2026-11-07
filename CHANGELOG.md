@@ -38,6 +38,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - easy-thumbnails `@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet` -> `@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet`
   - django-registration 3.4 -> 5.2.1
   - django-reversion 5.1.0 -> 6.5.1
+  - `django-storages[s3]` 1.14.4 -> 1.14.6
   - charset-normalizer `>=3.1.0,<3.2` -> `>=3.5.2,<3.6`
   - beautifulsoup4 `>=4.11.1,<4.12` -> 4.15.0
   - redis `>=4.5.4,<4.6` -> `>=5.3.1,<5.4`
