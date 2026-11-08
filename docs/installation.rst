@@ -5,10 +5,10 @@ Installation
 PostgreSQL installation
 -----------------------
 
-Download and install the PostgreSQL server/core, 14.x.
+Download and install the PostgreSQL server/core, 18.x.
 
-- On Linux, the package will probably be ``postgresql-14``.
-- During the setup process, make sure you keep track of the root password.
+- On Linux, the package will probably be ``postgresql-18``.
+- During the setup process, make sure you keep track of any password(s) you create.
 
 Locate and open the client program that came with PostgreSQL. Windows has pgAdmin, while Linux should have the command-line ``postgresql-client`` or the GUI pgAdmin as options (may be distributed separately).
 
