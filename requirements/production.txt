@@ -4,10 +4,11 @@
 
 # WSGI HTTP server - The layer above Django, and below the overall web
 # server (e.g. nginx)
-# Changelog: http://docs.gunicorn.org/en/stable/news.html
-# Compat: Python 3.7-3.12
-gunicorn==23.0.0
+# Changelog: https://gunicorn.org/news/
+# Compat: Python 3.10-3.13 (per pyproject.toml)
+gunicorn==26.2.0
 
 # For sending emails.
-# Compat: Python 3.8-3.12, Django 3.2-5.0
-django-ses==4.4.0
+# Changelog: https://github.com/django-ses/django-ses/blob/main/CHANGES.md
+# Compat: Python 3.8-3.14, Django 3.2-6.1 (per pyproject.toml)
+django-ses==4.9.0
