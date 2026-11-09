@@ -9,7 +9,13 @@
 coverage
 
 # reStructuredText documentation.
-Sphinx>=5.0
+# https://www.sphinx-doc.org/en/master/changes/index.html
+# This version floor is what furo asks for as of 2025/12.
+Sphinx>=7.0
+
+# Sphinx theme that supports light/dark modes.
+# https://github.com/pradyunsg/furo
+furo
 
 # Allows pre-commit hooks for syntax linting.
 pre-commit==2.10.1
