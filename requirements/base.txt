@@ -2,31 +2,23 @@
 # pip show <package-name>
 
 
-# Compat: Python 3.8-3.12
+# Compat: Python 3.10-3.14
 #
 # The patch versions generally have quite useful fixes.
 # But occasionally they do have breaking changes, so watch out.
-Django>=4.2.16,<5.0
+Django>=5.2.19,<6.0
 
 # Define environment-specific Django config in a .env file or
 # environment variables.
 # Changelog: https://django-environ.readthedocs.io/en/latest/changelog.html
-# Compat: Python 3.6-3.12, Django 2.2-5.0
-#
-# The release that added Django 4.2 made the SECRET_KEY setting unstable,
-# and a fix to that has been merged, but isn't in a release yet.
-# (See PR 500 in django-environ.)
-# So we use a fork with a version defined after that PR.
-django-environ@git+https://github.com/coralnet/django-environ.git@0.11.2+coralnet
+# Compat: Python 3.10-3.14, Django 2.2-6.0 (per tox.ini)
+django-environ==0.13.0
 
 # Per-object permissions for Django.
 # e.g. "can edit this source" not just "can edit sources"
-# Changelog: https://github.com/django-guardian/django-guardian/blob/devel/CHANGES
-# Compat: Python 3.8-3.12, Django 4.1-5.0
-#
-# Django 4.2+ support hasn't been merged yet, but the PR (816) seems done,
-# so we use a fork with a version defined at the tip of that PR.
-django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+coralnet
+# Changelog: https://github.com/django-guardian/django-guardian/releases
+# Compat: Python 3.10-3.14, Django 3.2-6.0 (per pyproject.toml)
+django-guardian==3.5.2
 
 # Python Imaging Library
 # Started as a fork of the old unmaintained PIL; Pillow has become very widely
@@ -36,8 +28,8 @@ django-guardian@git+https://github.com/StephenChan/django-guardian.git@2.4.0+cor
 # frequent updates Pillow tends to need. A package that reads various complex
 # file formats makes for a large attack surface.
 # Changelog: https://pillow.readthedocs.io/en/stable/releasenotes/index.html
-# Compat: Python 3.10-3.14
-Pillow==12.3.0
+# Compat: Python 3.11-3.15 (per changelog)
+Pillow==13.0.0
 
 # Image EXIF reading/writing
 # Could be replaced with Pillow once Pillow is 6.0 or higher, since they
@@ -69,7 +61,7 @@ Markdown>=3.11.2,<3.12
 
 # Generates thumbnails, which are smaller versions of images.
 # Changelog: https://github.com/SmileyChris/easy-thumbnails/blob/master/CHANGES.rst
-# Compat: Python 3.8-3.12, Django 4.2-5.0, Pillow any version
+# Compat: Python 3.9-3.13, Django 4.2-5.2, Pillow any version (per setup.py)
 #
 # Starting in 2.7.0, this app sets PIL.ImageFile.LOAD_TRUNCATED_IMAGES to False
 # after each image read, which would force us to set it to True before each of
@@ -78,7 +70,7 @@ Markdown>=3.11.2,<3.12
 # So we use our own fork of easy-thumbnails, which changes the behavior to
 # restore the previous LOAD_TRUNCATED_IMAGES value after easy-thumbnails does
 # its thing.
-easy-thumbnails@git+https://github.com/StephenChan/easy-thumbnails.git@2.9+coralnet
+easy-thumbnails@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet
 
 # Add email-based activation to the user registration process.
 # Changelog: https://django-registration.readthedocs.io/en/stable/changelog.html
@@ -87,8 +79,8 @@ django-registration==5.2.1
 
 # Versioning of database objects.
 # Changelog: https://github.com/etianen/django-reversion/blob/master/CHANGELOG.rst
-# Compat: Python 3.8-3.12, Django 4.2-5.0 (per GitHub actions and setup.py)
-django-reversion==5.1.0
+# Compat: Python 3.11-3.15, Django 5.2-6.1 (per GitHub actions and setup.py)
+django-reversion==6.5.1
 
 # Allow Django to connect to a PostgreSQL database.
 # Changelog: https://www.psycopg.org/psycopg3/docs/news.html
@@ -108,13 +100,14 @@ boto3>=1.34.162,<1.35
 # Even if a dev machine doesn't use S3, we still want this installed to make
 # module imports work.
 # Changelog: https://github.com/jschneier/django-storages/blob/master/CHANGELOG.rst
-# Compat: Python 3.7-3.12, Django 4.1-5.0
-django-storages[s3]==1.14.4
+# Compat: Python 3.7-3.12, Django 3.2-5.1 (but Django 5.2 was later added to
+# supported versions without any other code changes)
+django-storages[s3]==1.14.6
 
 # REST API framework.
 # Changelog: https://www.django-rest-framework.org/community/release-notes/
-# Compat: Python 3.6-3.12, Django 4.2-5.0
-djangorestframework==3.15.2
+# Compat: Python 3.10-3.15, Django 5.2-6.1 (per changelog and pyproject.toml)
+djangorestframework==3.18.3
 
 # Writing tests for database migrations.
 # https://github.com/plumdog/django_migration_testcase/
@@ -202,8 +195,8 @@ numpy==2.2.6
 
 # Plotting; used in management commands.
 # Changelog: https://github.com/matplotlib/matplotlib/releases
-# Compat: Python 3.10-3.13, numpy>=1.23, Pillow>=8
-matplotlib==3.10.0
+# Compat: Python 3.11-3.14, numpy>=1.25, Pillow>=9 (per pyproject.toml)
+matplotlib>=3.11.2,<3.12
 
 # Machine-learning backend behind coralnet
 # This can be installed from a local directory (not just PyPI), as long as

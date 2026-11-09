@@ -384,31 +384,29 @@ class BaseBrowseSeleniumTest(BaseSeleniumTest, ABC):
     setup_image_count = 5
     points_per_image = 2
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
+    def setUp(self):
+        super().setUp()
 
-        cls.username = 'userA'
-        cls.password = 'BrowseTest'
-        cls.user = cls.create_user(
-            username=cls.username, password=cls.password)
-        cls.source = cls.create_source(
-            cls.user,
+        self.username = 'userA'
+        self.password = 'BrowseTest'
+        self.user = self.create_user(
+            username=self.username, password=self.password)
+        self.source = self.create_source(
+            self.user,
             default_point_generation_method=dict(
-                type='simple', points=cls.points_per_image),
+                type='simple', points=self.points_per_image),
         )
-        labels = cls.create_labels(cls.user, ['A', 'B'], 'GroupA')
-        cls.create_labelset(cls.user, cls.source, labels)
+        labels = self.create_labels(self.user, ['A', 'B'], 'GroupA')
+        self.create_labelset(self.user, self.source, labels)
 
-        cls.browse_url = reverse('browse_images', args=[cls.source.pk])
+        self.browse_url = reverse('browse_images', args=[self.source.pk])
 
-        cls.images = [
-            cls.upload_image(cls.user, cls.source)
-            for _ in range(cls.setup_image_count)
+        self.images = [
+            self.upload_image(self.user, self.source)
+            for _ in range(self.setup_image_count)
         ]
 
-    @classmethod
-    def update_multiple_metadatas(cls, field_name, values):
+    def update_multiple_metadatas(self, field_name, values):
         """Update a particular metadata field on multiple images."""
 
         if isinstance(values[0], tuple):
@@ -416,11 +414,11 @@ class BaseBrowseSeleniumTest(BaseSeleniumTest, ABC):
             image_value_pairs = values
         else:
             # Just values, to be paired with the full list of images
-            if len(cls.images) != len(values):
+            if len(self.images) != len(values):
                 raise AssertionError(
                     "If passing only values, number of values must equal"
                     " number of images.")
-            image_value_pairs = zip(cls.images, values)
+            image_value_pairs = zip(self.images, values)
 
         for image, value in image_value_pairs:
             setattr(image.metadata, field_name, value)

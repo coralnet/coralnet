@@ -14,8 +14,7 @@ from django.conf import settings
 from django.db import connections
 from django.db.models.sql import RawQuery, Query
 from django.db.utils import DEFAULT_DB_ALIAS
-from django.test import (
-    override_settings, SimpleTestCase, tag, TestCase, TransactionTestCase)
+from django.test import override_settings, SimpleTestCase, tag, TestCase
 from django.test.runner import DiscoverRunner
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -72,7 +71,7 @@ class _BaseTest(DataTestMixin, TestCase):
     # msg argument, if present.
     longMessage = True
 
-    client: CnClient
+    client_class = CnClient
 
     @classmethod
     def setUpTestData(cls):
@@ -80,7 +79,10 @@ class _BaseTest(DataTestMixin, TestCase):
 
         # Test client. Subclasses' setUpTestData() calls can use this client
         # to set up more data before running the class's test functions.
-        cls.client = CnClient()
+        #
+        # Django's TestCase internals do client instantiation, but it
+        # happens too late for the usage we're concerned about here.
+        cls.client = cls.client_class()
 
     def setUp(self):
         # Some site functionality uses the cache for performance, but leaving
@@ -92,10 +94,11 @@ class _BaseTest(DataTestMixin, TestCase):
 
         super().setUp()
 
-        # Test client. By setting this in setUp(), we initialize this before
-        # each test function, so that stuff like login status gets reset
-        # between tests.
-        self.client = CnClient()
+        # The test client is instantiated at the start of each test class.
+        # Here, at the start of each test method, we'd like to at least reset
+        # the client's state, so that test behavior is not affected by the
+        # order of tests.
+        self.client.logout()
 
     def assert_queries_less_than(
             self, num, func=None, *args, using=DEFAULT_DB_ALIAS, **kwargs):
@@ -177,42 +180,26 @@ class ThreadingCompatibleTest(_BaseTest):
         support transactions, but we just don't want to use transactions.
 
         Django's typical way of deciding that is inheriting from TestCase
-        vs. TransactionTestCase, but we do just want TestCase for everything
-        because its setUpTestData() API is convenient to use for everything.
+        vs. TransactionTestCase, but we base everything off of TestCase
+        just to simplify inheritance / boost DRY between our test classes.
         """
         return False
 
-    def _fixture_setup(self):
+    def setUp(self):
         """
-        This is meant to match TestCase._fixture_setup(), except for reversing
-        the order of the superclass _fixture_setup() call and the
-        setUpTestData() call.
-        Our setUpTestData() methods do generally depend on the initial data
-        (e.g. Site, special Users) existing first.
-        """
-        if not self._databases_support_transactions():
-            # If the backend does not support transactions, we should reload
-            # class data before each test
-            result = TransactionTestCase._fixture_setup(self)
-            self.setUpTestData()
-            return result
+        For this test class, due to the lack of transactions, all data is set
+        up anew before each test method. We therefore rely on setUp() instead
+        of setUpTestData() for simplicity (setUpTestData() would have the
+        downside of needing hacky method overriding to get the timing right,
+        and no upside).
 
-        if self.reset_sequences:
-            raise TypeError(
-                "reset_sequences cannot be used on TestCase instances")
-        self.atomics = self._enter_atomics()
-
-    @classmethod
-    def setUpTestData(cls):
-        """
-        For this test class, setUpTestData() runs during pre-setup of each
-        test method. Here we ensure the storage dir's contents are cleared
-        before each time that runs.
+        Here we ensure the storage dir's contents are cleared
+        before data is set up.
         """
         storage_manager = get_storage_manager()
         storage_manager.empty_temp_dir(settings.TEST_STORAGE_DIR)
 
-        super().setUpTestData()
+        super().setUp()
 
 
 @tag('migration')

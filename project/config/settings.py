@@ -89,12 +89,8 @@ class Bases(Enum):
     DEV_S3 = 'dev-s3'
 
 
-try:
-    SETTINGS_BASE = Bases(env('SETTINGS_BASE'))
-except ValueError:
-    raise ImproperlyConfigured(
-        f"Unsupported SETTINGS_BASE value: {env('SETTINGS_BASE')}"
-        f" (supported values are: {', '.join([b.value for b in Bases])})")
+SETTINGS_BASE = Bases(env.str(
+    'SETTINGS_BASE', choices=[b.value for b in Bases]))
 
 _TESTING = 'test' in sys.argv
 
@@ -1332,6 +1328,10 @@ if os.name == 'nt' and not HUEY_IMMEDIATE:
 
 # The name of the class to use for starting the test suite.
 TEST_RUNNER = 'lib.tests.utils.CustomTestRunner'
+
+# Transitional setting. Opts into using "https" as the new default value of
+# URLField.assume_scheme. Remove this setting in Django 6.0+.
+FORMS_URLFIELD_ASSUME_HTTPS = True
 
 
 #
