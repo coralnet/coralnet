@@ -232,9 +232,13 @@ class ResetFeaturesTest(ManagementCommandTest, TaskTestMixin):
                 'vision_backend', 'vb_reset_features',
                 args=['some_mode', 1, 2],
             )
-        self.assertEqual(
-            "Error: argument mode: invalid choice: 'some_mode'"
-            " (choose from 'source_ids', 'image_ids')",
+        # We assert on the first part of the error message, not the entire
+        # message. Because in Python 3.12.8, the later part of the message
+        # changed from having quotes to not having quotes.
+        # https://github.com/python/cpython/pull/117766
+        # https://docs.python.org/release/3.12.8/whatsnew/changelog.html#library
+        self.assertIn(
+            "Error: argument mode: invalid choice: 'some_mode'",
             context.exception.args[0],
             "Should raise the appropriate error",
         )
