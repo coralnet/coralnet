@@ -11,13 +11,14 @@ from django.template.loader import render_to_string
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
-
-from django_registration.backends.activation.views \
-    import RegistrationView as ThirdPartyRegistrationView
+from django_registration.backends.activation.views import (
+    ActivationView as DjangoRegActivationView,
+    RegistrationView as DjangoRegRegistrationView,
+)
 
 from lib.utils import paginate
 from .forms import (
-    ActivationResendForm, EmailAllForm, EmailChangeForm,
+    ActivationForm, ActivationResendForm, EmailAllForm, EmailChangeForm,
     HoneypotForm, ProfileEditForm, ProfileUserEditForm,
     RegistrationForm, RegistrationProfileForm)
 from .models import Profile
@@ -44,7 +45,7 @@ class LoginView(DefaultLoginView):
         return response
 
 
-class BaseRegistrationView(ThirdPartyRegistrationView):
+class BaseRegistrationView(DjangoRegRegistrationView):
     def get_email_context(self, activation_key):
         """
         Build the template context used for the activation email.
@@ -131,6 +132,10 @@ class RegistrationView(BaseRegistrationView):
             to=[email_address],
         )
         already_exists_email.send()
+
+
+class ActivationView(DjangoRegActivationView):
+    form_class = ActivationForm
 
 
 class ActivationResendView(BaseRegistrationView):

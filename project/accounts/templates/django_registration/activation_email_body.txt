@@ -1,6 +1,6 @@
 {% autoescape off %}
 Thanks for trying out CoralNet! Please activate your new account using this link:
-{{ request.scheme }}://{{ request.get_host }}{% url 'django_registration_activate' activation_key %}
+{{ request.scheme }}://{{ request.get_host }}{% url 'django_registration_activate' %}?activation_key={{ activation_key }}
 
 This activation link will be valid for {{ expiration_days }} days.
 

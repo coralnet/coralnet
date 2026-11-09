@@ -2,13 +2,17 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import (
     AuthenticationForm as DefaultAuthenticationForm)
 from django.contrib.auth.validators import ASCIIUsernameValidator
-from django.core.validators import (
-    MaxLengthValidator, validate_email, ValidationError)
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator, validate_email
 from django.forms import Form, ModelForm
 from django.forms.fields import BooleanField, CharField, EmailField
-from django.forms.widgets import Textarea, TextInput
+from django.forms.widgets import HiddenInput, Textarea, TextInput
+from django.urls import reverse
+from django.utils.safestring import mark_safe
+from django_registration.backends.activation.forms import (
+    ActivationForm as DjangoRegActivationForm)
 from django_registration.forms import (
-    RegistrationForm as DefaultRegistrationForm)
+    RegistrationForm as DjangoRegRegistrationForm)
 
 from .models import Profile
 
@@ -42,12 +46,12 @@ class AuthenticationForm(DefaultAuthenticationForm):
         self.fields['username'].label = "Username or Email"
 
 
-class RegistrationForm(DefaultRegistrationForm):
+class RegistrationForm(DjangoRegRegistrationForm):
 
     agree_to_privacy_policy = BooleanField(
         required=True, label="I agree to the privacy policy")
 
-    class Meta(DefaultRegistrationForm.Meta):
+    class Meta(DjangoRegRegistrationForm.Meta):
         # Include first_name and last_name.
         fields = [
             User.USERNAME_FIELD,
@@ -165,6 +169,37 @@ class HoneypotForm(Form):
                 "If you're human, don't fill in the hidden trap field.",
                 code='robot_trap')
         return value
+
+
+class ActivationForm(DjangoRegActivationForm):
+
+    @property
+    def EXPIRED_MESSAGE(self):
+        """
+        We override the superclass's message constant with this property so
+        that we can use reverse() to get a URL.
+        But unfortunately we are breaking Python naming conventions with this
+        all-caps method.
+        """
+        resend_url = reverse('activation_resend')
+        return mark_safe(
+            "Sorry, this activation link expired. We can"
+            f' <a href="{resend_url}">send you another activation email</a>.'
+        )
+
+    INVALID_KEY_MESSAGE = (
+        "Sorry, this activation link doesn't seem to be valid."
+        " Try double checking that you used the entire activation link"
+        " in the email you received."
+        " Some email viewers may have problems detecting the end of the link"
+        " when there are special characters in it.")
+
+    activation_key = CharField(
+        label="Activation key",
+        # Doesn't make sense to make the key editable, or to show its field
+        # to the user at all.
+        widget=HiddenInput(),
+    )
 
 
 class ActivationResendForm(Form):

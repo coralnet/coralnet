@@ -85,6 +85,7 @@ class ExceptionTest(CnStandardTest):
     """
     Test ErrorLog saving in the context of exception handling.
     """
+    client: Client
 
     @staticmethod
     def mock_render(*args):

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.views.generic.base import TemplateView
+
 from . import views
 from .forms import AuthenticationForm
 
@@ -23,8 +24,11 @@ urlpatterns = [
     path('register/',
          views.register,
          name='django_registration_register'),
+    path('activate/',
+        views.ActivationView.as_view(),
+        name="django_registration_activate"),
 
-    # django-registration URLs, such as account activation.
+    # django-registration URLs, such as activation completion.
     path('', include('django_registration.backends.activation.urls')),
 
     # django.contrib.auth URLs, such as login and password reset.
