@@ -47,6 +47,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - django-huey `>=1.1.2,<1.2` -> `>=1.3.1,<1.4`
   - supervisor `>=4.2.5,<4.3` -> `>=4.3.0,<4.4`
   - matplotlib 3.10.0 -> `>=3.11.2,<3.12`
+  - (Dev only) New: `furo`
+  - (Dev only) Sphinx `>=5.0` -> `>=7.0`
 
 - New migration to run: guardian 0003
 
