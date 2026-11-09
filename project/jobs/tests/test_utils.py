@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import re
 from unittest import mock
 
@@ -130,7 +130,7 @@ class ScheduleJobTest(
             ["Error info:\n\nAn error"],
         )
         self.assertAlmostEqual(
-            datetime.now(timezone.utc) + timedelta(days=3),
+            datetime.now(UTC) + timedelta(days=3),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
             msg="Latest job should be pushed back to 3 days in the future",
@@ -158,7 +158,7 @@ class ScheduleJobTest(
             ["Error info:\n\nAn error"],
         )
         self.assertAlmostEqual(
-            datetime.now(timezone.utc) + timedelta(days=5),
+            datetime.now(UTC) + timedelta(days=5),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
             msg=(
@@ -175,7 +175,7 @@ class ScheduleJobTest(
             schedule_job('name', 'arg', delay=timedelta(days=2))
             job.refresh_from_db()
             self.assertAlmostEqual(
-                datetime.now(timezone.utc) + timedelta(days=2),
+                datetime.now(UTC) + timedelta(days=2),
                 job.scheduled_start_date,
                 delta=timedelta(minutes=10),
                 msg="Start date should have been expedited",
@@ -191,7 +191,7 @@ class ScheduleJobTest(
         schedule_job('name', 'arg', delay=timedelta(days=2))
         job.refresh_from_db()
         self.assertAlmostEqual(
-            datetime.now(timezone.utc) + timedelta(days=5),
+            datetime.now(UTC) + timedelta(days=5),
             job.scheduled_start_date,
             delta=timedelta(minutes=10),
             msg="Start date shouldn't have been expedited",

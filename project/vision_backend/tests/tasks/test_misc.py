@@ -407,7 +407,7 @@ class CollectSpacerJobsTest(BaseTaskTest):
         image_2 = self.upload_image(self.user, self.source)
         run_scheduled_jobs_until_empty()
 
-        time_before_collect = datetime.datetime.now(datetime.timezone.utc)
+        time_before_collect = datetime.datetime.now(datetime.UTC)
 
         # Collect.
         self.do_collect_spacer_jobs()

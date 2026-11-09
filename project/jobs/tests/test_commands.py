@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 import json
 
 from django.conf import settings
@@ -130,7 +130,7 @@ class RecentStatsTest(ManagementCommandTest, DeployTestMixin, ExportTestMixin):
 
         # Accept naive datetimes as UTC.
         if modify_date.tzinfo is None:
-            modify_date = modify_date.replace(tzinfo=timezone.utc)
+            modify_date = modify_date.replace(tzinfo=UTC)
 
         # But fake the date values and statuses.
         internal_jobs = Job.objects.filter(apijobunit__parent=api_job)
@@ -141,10 +141,8 @@ class RecentStatsTest(ManagementCommandTest, DeployTestMixin, ExportTestMixin):
             # To prove that start date and create date aren't considered,
             # we'll always make these two dates out of the analysis range,
             # i.e. before the year 2000.
-            create_date=datetime(
-                1999, 12, 28, 0, 0, tzinfo=timezone.utc),
-            start_date=datetime(
-                1999, 12, 29, 0, 0, tzinfo=timezone.utc),
+            create_date=datetime(1999, 12, 28, 0, 0, tzinfo=UTC),
+            start_date=datetime(1999, 12, 29, 0, 0, tzinfo=UTC),
             # When we use QuerySet.update() instead of Model.save(), the
             # modify date doesn't get auto-updated to the current date,
             # allowing us to set a custom value.
@@ -169,7 +167,7 @@ class RecentStatsTest(ManagementCommandTest, DeployTestMixin, ExportTestMixin):
             # Accept naive datetimes as UTC.
             if kwargs['scheduled_start_date'].tzinfo is None:
                 kwargs['scheduled_start_date'] = (
-                    kwargs['scheduled_start_date'].replace(tzinfo=timezone.utc))
+                    kwargs['scheduled_start_date'].replace(tzinfo=UTC))
 
         return fabricate_job(**kwargs)
 
@@ -483,7 +481,7 @@ class RecentStatsTest(ManagementCommandTest, DeployTestMixin, ExportTestMixin):
         """
         Default args are current date and 30 days.
         """
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         five_minutes_ago = now - timedelta(minutes=5)
         # These two datetimes are guaranteed to land on different calendar
         # days regardless of DST. First datetime is within the timespan,

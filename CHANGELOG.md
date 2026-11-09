@@ -14,6 +14,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
 
 ## 1.33 (WIP)
 
+- Python version has been updated from 3.10 to 3.12. See Server Operation > Upgrading Python in the CoralNet docs.
+
 - PostgreSQL version has been updated from 14 to 18. See Server Operation > Upgrading PostgreSQL in the CoralNet docs.
 
   - Starting with 18, new database clusters enable data checksums by default. Upgrading may get a failure message like "old cluster does not use data checksums but the new one does". If so, try using [pg_checksums](https://www.postgresql.org/docs/current/app-pgchecksums.html) to disable checksums on the 18 cluster, then upgrade from 14 to 18, then re-enable checksums on the 18 cluster.
@@ -21,7 +23,12 @@ When updating a CoralNet environment through multiple versions, make sure to not
 - Updates to required packages:
 
   - New: `psycopg[binary]>=3.3.6,<3.4`
-  - No longer needed: `psycopg2-binary`
+  - No longer used: `psycopg2-binary`
+  - pyexcel 0.6.7 -> 0.7.6
+  - openpyxl 3.0.10 -> 3.1.5
+  - pyexcel-xlsx 0.6.0 -> 0.6.1
+  - Markdown `>=3.4.3,<3.5` -> `>=3.11.2,<3.12`
+  - django-markdownx `>=4.0.7,<4.1` -> 4.0.11
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 

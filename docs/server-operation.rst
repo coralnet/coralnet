@@ -21,13 +21,16 @@ Updating to the latest repository code
 
 Upgrading Python
 ----------------
-If you are just upgrading the patch version (3.10.0 -> 3.10.1), you should be able to just download and install the new version, allowing it to overwrite your old version. (`Source <https://stackoverflow.com/a/17954487/>`__)
+If you are just upgrading the patch version (3.12.0 -> 3.12.1), you should be able to just download and install the new version, allowing it to overwrite your old version. (`Source <https://stackoverflow.com/a/17954487/>`__)
 
 - If using Windows, you should also create a new virtual environment using the new version, because venv on Windows will probably copy core files/scripts over instead of using symlinks.
 
-If you are upgrading the major version (2 -> 3) or minor version (3.9 -> 3.10), then it's basically like setting up Python from scratch:
+If you are upgrading the major version (2 -> 3) or minor version (3.11 -> 3.12), then it's basically like setting up Python from scratch:
 
-- Download and install the new version. It should install in a separate location, such as ``python310`` instead of ``python39``.
+- Download and install the new version. It should install in a separate location, such as ``python312`` instead of ``python311``.
+
+  - Tools like pyenv can help to manage multiple Python installations on one machine. For example, on Linux, normally it can be a pain to manually clean up the files from a Python source installation that you no longer need; but it can be done in one easy command with pyenv.
+
 - :ref:`Create a new virtual environment <virtual_environment>` using the new Python version.
 - :ref:`Install packages <python-packages>` in that new virtual environment.
 

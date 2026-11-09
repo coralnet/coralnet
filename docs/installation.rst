@@ -51,7 +51,7 @@ If you're going to make any contributions:
 
 Python
 ------
-This project uses Python 3.10.x, so download and install that.
+This project uses Python 3.12.x, so download and install that.
 
 Since this project has many third-party dependencies, and requires specific versions of those dependencies, it's highly recommended to install dependencies in some kind of separate environment rather than being tied to the Python installation (which you may be using for other projects besides CoralNet). Tools such as venv, virtualenv, or conda can achieve this.
 

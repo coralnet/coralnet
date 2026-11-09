@@ -93,8 +93,7 @@ class CalcifyStatsExportPrepView(ImageStatsExportPrepView):
 
     def get_export_filename(self, source, suffix='.csv'):
         # Current date as YYYY-MM-DD
-        current_date = datetime.datetime.now(
-            datetime.timezone.utc).strftime('%Y-%m-%d')
+        current_date = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d')
         return f'{source.name} - Calcification rates - {current_date}{suffix}'
 
     def get_export_form(self, source, data):

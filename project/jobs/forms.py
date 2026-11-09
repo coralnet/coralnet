@@ -76,12 +76,12 @@ class BaseJobForm(forms.Form):
                         status__in=[Job.Status.PENDING, Job.Status.IN_PROGRESS],
                         then=datetime.datetime(
                             year=datetime.MAXYEAR, month=12, day=30,
-                            tzinfo=datetime.timezone.utc),
+                            tzinfo=datetime.UTC),
                     ),
                     # For completed jobs.
                     default=datetime.datetime(
                         year=datetime.MAXYEAR, month=12, day=31,
-                        tzinfo=datetime.timezone.utc),
+                        tzinfo=datetime.UTC),
                     output_field=models.fields.DateTimeField(),
                 ),
             )
@@ -108,7 +108,7 @@ class BaseJobForm(forms.Form):
                     ),
                     default=datetime.datetime(
                         year=datetime.MINYEAR, month=1, day=1,
-                        tzinfo=datetime.timezone.utc),
+                        tzinfo=datetime.UTC),
                     output_field=models.fields.DateTimeField(),
                 ),
             )
