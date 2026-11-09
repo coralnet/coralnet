@@ -49,6 +49,8 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - matplotlib 3.10.0 -> `>=3.11.2,<3.12`
   - (Dev only) New: `furo`
   - (Dev only) Sphinx `>=5.0` -> `>=7.0`
+  - (Production only) gunicorn 23.0.0 -> 26.2.0
+  - (Production only) django-ses 4.4.0 -> 4.9.0
 
 - New migration to run: guardian 0003
 
