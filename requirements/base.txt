@@ -156,25 +156,28 @@ selenium==4.33.0
 # Python interface to Redis, an in-memory data store which can be a
 # message broker among other things.
 # Changelog: https://github.com/redis/redis-py/releases
-# Compat: Python 3.7-3.11 (per setup.py)
-redis>=4.5.4,<4.6
+# Compat: Python 3.8-3.12 (per setup.py), Redis server 5.0-7.4
+# (per readme; for now we'd like to support Ubuntu 24.04's default version
+# of redis-server, which is 7.0.15)
+redis>=5.3.1,<5.4
 
 # Asynchronous tasks.
 # Changelog: https://github.com/coleifer/huey/blob/master/CHANGELOG.md
 # Requires: redis
-# Compat: Up to Python 3.11 (per GitHub actions), redis 3.0+ (per setup.py)
-huey>=2.4.5,<2.5
+# Compat: Python 3.8-3.13 (per GitHub actions), redis 3.0+ (per setup.py)
+huey>=2.5.5,<2.6
 
 # Extension of huey's contrib.djhuey package that allows tasks to be
 # allocated to multiple queues.
 # Changelog: https://github.com/gaiacoop/django-huey/blob/main/CHANGELOG.md
-# Compat: Python 3.8-3.12, Django 3.2-5.0, huey 2.0+
-django-huey>=1.1.2,<1.2
+# Compat: Python 3.8-3.12 (per GitHub actions), Django 3.2-5.0, huey 2.4-2.5
+# (per readme)
+django-huey>=1.3.1,<1.4
 
 # Process management. Doesn't run on Windows (but it can still be installed).
 # Changelog: https://github.com/Supervisor/supervisor/blob/master/CHANGES.rst
-# Compat: Up to Python 3.10 (per setup.py)
-supervisor>=4.2.5,<4.3
+# Compat: Up to Python 3.13 (per setup.py)
+supervisor>=4.3.0,<4.4
 
 # Progress bar for CLI
 # Changelog: https://tqdm.github.io/releases/
