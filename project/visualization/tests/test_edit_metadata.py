@@ -60,7 +60,7 @@ class BaseBrowseMetadataTest(BaseBrowsePageTest):
         msg_prefix="Listed images should be the expected ones",
     ):
         table = self.get_results_table(response)
-        status_cells = table.findAll('td', class_='status')
+        status_cells = table.find_all('td', class_='status')
         status_cell_hrefs = [
             cell.find('a').attrs.get('href') for cell in status_cells]
         expected_status_cell_hrefs = [

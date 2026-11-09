@@ -4,7 +4,7 @@ import csv
 from io import StringIO
 from typing import Callable, Dict, List, Optional
 
-import chardet
+import cchardet
 import charset_normalizer
 
 from annotations.models import ImageAnnotationInfo
@@ -29,16 +29,16 @@ def text_file_to_unicode_stream(text_file):
         # content is in byte form.
         # Detect charset and convert to Unicode.
 
-        chardet_opinion = chardet.detect(content)['encoding']
+        cchardet_opinion = cchardet.detect(content)['encoding']
         normalizer_opinion = charset_normalizer.detect(content)['encoding']
-        if chardet_opinion == normalizer_opinion:
+        if cchardet_opinion == normalizer_opinion:
             # chardet and charset-normalizer agree; prioritize
             # their guess, with utf-8 as a fallback.
-            encoding_guesses = [chardet_opinion, 'utf-8']
+            encoding_guesses = [cchardet_opinion, 'utf-8']
         else:
             # They disagree; prioritize utf-8, using their guesses as
             # fallbacks.
-            encoding_guesses = ['utf-8', normalizer_opinion, chardet_opinion]
+            encoding_guesses = ['utf-8', cchardet_opinion, normalizer_opinion]
 
         # It's possible that either opinion ended up as None.
         encoding_guesses = [g for g in encoding_guesses if g is not None]

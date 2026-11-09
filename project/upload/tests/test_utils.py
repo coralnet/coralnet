@@ -77,8 +77,12 @@ class TextFileToUnicodeTest(SimpleTestCase):
             unicode_stream.read(), '1.專案計畫\\10.後灣主題計畫\\20150610~11_HW')
 
     def test_chinese_big5(self):
-        # This came up in production. chardet and charset-normalizer should
-        # agree on Big5. Fails to decode as utf-8.
+        # This came up in production.
+        #
+        # cchardet 2.4.0 says BIG5 (zh) with 83% confidence. This
+        # decodes correctly.
+        # charset-normalizer 3.5.2 says cp932 (Japanese) with 100% confidence.
+        # This decodes incorrectly.
         byte_stream = BytesIO(
             b'1.\xb1M\xae\xd7\xadp\xb5e\\'
             b'10.\xab\xe1\xc6W\xa5D\xc3D\xadp\xb5e\\20140619~20_HW'
@@ -88,9 +92,12 @@ class TextFileToUnicodeTest(SimpleTestCase):
             unicode_stream.read(), '1.專案計畫\\10.後灣主題計畫\\20140619~20_HW')
 
     def test_xe9(self):
-        # This came up in production. chardet says ISO-8859-1,
-        # charset-normalizer says windows-1250, and fails to decode as utf-8.
-        # (Can decode as either of the first 2 guesses.)
+        # This came up in production.
+        #
+        # cchardet 2.4.0 says ISO-8859-2 (hu) with 91% confidence. This
+        # decodes correctly.
+        # charset-normalizer 3.5.2 says cp1006 (Farsi) with 80% confidence.
+        # This decodes incorrectly.
         byte_stream = BytesIO(
             b'Tri\xe9\\1 H\xe9lice'
         )
@@ -100,9 +107,10 @@ class TextFileToUnicodeTest(SimpleTestCase):
     def test_binary_file(self):
         # Example start of an Excel (XLSX) file.
         #
-        # Including only about 20% of this resulted in ISO-8859-1,
-        # and including about 50% resulted in MacCyrillic. So it does need
-        # to be about this long to make the encoding guesser give up.
+        # cchardet 2.4.0 says BIG5 (zh) with 75% confidence. This fails to
+        # decode.
+        # charset-normalizer 3.5.2 gives up. This is what we want. It's
+        # binary, not text.
         byte_stream = BytesIO(
             b'PK\x03\x04\x14\x00\x08\x08\x08\x00\xac\xbb\xec\\\x00\x00'
             b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x1a\x00\x00\x00'
