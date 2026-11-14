@@ -12,7 +12,9 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
-## 1.33 (WIP)
+## [1.33](https://github.com/coralnet/coralnet/tree/1.33)
+
+Production: 2026-11-14
 
 - Python version has been updated from 3.10 to 3.12. See Server Operation > Upgrading Python in the CoralNet docs.
 
@@ -52,7 +54,7 @@ When updating a CoralNet environment through multiple versions, make sure to not
   - (Production only) gunicorn 23.0.0 -> 26.2.0
   - (Production only) django-ses 4.4.0 -> 4.9.0
 
-- New migration to run: guardian 0003
+- New migration to run: guardian 0003. This finished instantly in production.
 
 ## [1.32](https://github.com/coralnet/coralnet/tree/1.32)
 
