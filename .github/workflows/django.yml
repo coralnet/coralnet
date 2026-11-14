@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         python-version: [ "3.12" ]
@@ -23,7 +23,7 @@ jobs:
       CORALNET_DATABASE_HOST: localhost
       CORALNET_SECRET_KEY: ci-secret-key
       # Available browsers and drivers:
-      # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md#browsers-and-drivers
+      # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md#browsers-and-drivers
       CORALNET_SELENIUM_BROWSERS: '[{"name": "Firefox", "webdriver": "${{ vars.GECKOWEBDRIVER }}", "cli_args": ["-headless"]}, {"name": "Chrome", "webdriver": "${{ vars.CHROMEWEBDRIVER }}", "cli_args": ["--headless"]}]'
 
     services:
