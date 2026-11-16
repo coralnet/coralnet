@@ -12,6 +12,13 @@ When updating a CoralNet environment through multiple versions, make sure to not
 "Production:" dates under each version indicate when the production server was updated to that version.
 
 
+## [1.34](https://github.com/coralnet/coralnet/tree/1.34)
+
+Production: 2026-11-16
+
+- Updates to required packages: easy-thumbnails `@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet` -> `@git+https://github.com/coralnet/easy-thumbnails.git@2.10.1+coralnet2`
+
+
 ## [1.33](https://github.com/coralnet/coralnet/tree/1.33)
 
 Production: 2026-11-14
